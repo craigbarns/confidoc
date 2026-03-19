@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Storage service (local / MinIO)."""
 
 from datetime import datetime, timezone
+from io import BytesIO
 from pathlib import Path
 from uuid import uuid4
 
@@ -25,7 +26,6 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
         )
         if not client.bucket_exists(settings.MINIO_BUCKET):
             client.make_bucket(settings.MINIO_BUCKET)
-        from io import BytesIO
 
         data = BytesIO(content)
         client.put_object(
@@ -41,3 +41,22 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
     target = local_dir / f"{uuid4()}.{extension}"
     target.write_bytes(content)
     return ("local", str(target))
+
+
+def read_bytes(storage_backend: str, storage_key: str) -> bytes:
+    """Lit un fichier depuis le backend de stockage."""
+    if storage_backend == "minio":
+        client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_USE_SSL,
+        )
+        response = client.get_object(settings.MINIO_BUCKET, storage_key)
+        try:
+            return response.read()
+        finally:
+            response.close()
+            response.release_conn()
+
+    return Path(storage_key).read_bytes()
