@@ -8,7 +8,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import desc, delete as sql_delete, select, update
+from sqlalchemy import delete, desc, select, update
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
@@ -450,5 +450,5 @@ async def delete_document(
     delete_bytes(document.storage_backend, document.storage_key)
 
     # 2) Supprimer la base (cascade sur versions/detections)
-    await db.execute(sql_delete(Document).where(Document.id == document.id))
+    await db.execute(delete(Document).where(Document.id == document.id))
     await db.commit()
