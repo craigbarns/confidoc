@@ -16,7 +16,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels ".[processing]"
+    pip wheel --no-cache-dir --wheel-dir /build/wheels ".[processing]"
 
 FROM python:3.11-slim-bookworm
 
