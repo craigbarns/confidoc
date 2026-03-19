@@ -16,6 +16,7 @@ from app.services.anonymization_service import (
     classify_document_type,
     extract_text_from_file,
 )
+from app.services.hf_ner_assist_service import propose_spans_huggingface_ner
 from app.services.llm_assist_service import build_snippets, propose_spans_mistral
 
 
@@ -76,12 +77,18 @@ async def build_anonymization_preview(
             {"start": s["start"], "end": s["end"], "sha256": s["sha256"]} for s in snippets
         ]
 
+        llm_model = settings.MISTRAL_MODEL
+        propose_fn = propose_spans_mistral
+        if settings.LLM_PROVIDER == "huggingface":
+            llm_model = settings.HF_MODEL
+            propose_fn = propose_spans_huggingface_ner
+
         llm_req_obj = LlmRequest(
             document_id=document.id,
             created_by_user_id=document.uploaded_by_user_id,
             preview_version_id=None,
             provider=settings.LLM_PROVIDER,
-            model=settings.MISTRAL_MODEL,
+            model=llm_model,
             profile=profile,
             snippets_meta={"snippets": snippets_meta},
             status="completed",
@@ -93,7 +100,7 @@ async def build_anonymization_preview(
 
         try:
             for s in snippets:
-                spans = await propose_spans_mistral(s["text"])
+                spans = await propose_fn(s["text"])
                 for span in spans:
                     conf = float(span.get("confidence", 0.0))
                     if conf < settings.LLM_CONFIDENCE_THRESHOLD:

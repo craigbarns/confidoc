@@ -75,12 +75,19 @@ class Settings(BaseSettings):
 
     # ---- LLM Assistive (V2) ----
     # Vise uniquement les suggestions de spans (pas d'automatisation définitive).
+    # Note: le nom "LLM" est conservé par compatibilité, mais on peut provider NER aussi.
     LLM_ASSISTIVE_ENABLED: bool = False
-    LLM_PROVIDER: Literal["mistral"] = "mistral"
+    LLM_PROVIDER: Literal["mistral", "huggingface"] = "mistral"
     # Secrets: à fournir via Railway Secrets / variables d'environnement.
     MISTRAL_API_KEY: str = ""
     MISTRAL_BASE_URL: str = "https://api.mistral.ai"
     MISTRAL_MODEL: str = "mistral-small-latest"
+
+    # Hugging Face NER assistif (API gérée en UE)
+    HF_API_KEY: str = ""
+    HF_INFERENCE_URL: str = ""  # ex: https://<endpoint>.endpoints.huggingface.cloud or https://api-inference.huggingface.co/models/<model>
+    HF_MODEL: str = "ner-fr-assist"
+    HF_TASK: str = "ner"
 
     # Contraintes RGPD / minimisation
     LLM_MIN_DETECTIONS: int = 2
