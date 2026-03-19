@@ -71,6 +71,7 @@ async def upload_ui() -> str:
       <option value="moderate" selected>Modéré</option>
       <option value="strict">Strict</option>
       <option value="dataset_strict">Dataset strict</option>
+      <option value="dataset_accounting">Dataset comptable (garde montants)</option>
     </select>
     <label style="margin-top:8px"><input id="autoAnonymize" type="checkbox" checked style="width:auto; margin-right:8px" /> Anonymiser automatiquement après upload</label>
     <input id="fileInput" type="file" />

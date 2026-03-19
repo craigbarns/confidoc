@@ -94,7 +94,7 @@ async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
-    profile: Literal["moderate", "strict", "dataset_strict"] = Query(default="moderate"),
+    profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting"] = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> AnonymizeResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
@@ -252,7 +252,7 @@ async def export_dataset(
     db: DbSession,
 ) -> JSONResponse:
     """Export RGPD-friendly pour dataset:
-    - applique le profil 'dataset_strict' (masque dates + montants)
+    - applique le profil 'dataset_accounting' (garde montants)
     - ne renvoie jamais les valeurs originales (pas de value_excerpt)
     - renvoie spans cohérents avec le texte anonymisé.
     """
@@ -276,7 +276,7 @@ async def export_dataset(
     effective_type = classify_document_type(original_text, document.original_filename)
     dataset_text, detections = anonymize_text(
         original_text,
-        profile="dataset_strict",
+        profile="dataset_accounting",
         document_type=effective_type,
     )
 
@@ -334,7 +334,7 @@ async def export_dataset(
     payload = {
         "document_id": str(document.id),
         "doc_type": effective_type,
-        "profile": "dataset_strict",
+        "profile": "dataset_accounting",
         "anonymized_text": dataset_text,
         "entities": entities,
         "quality": {

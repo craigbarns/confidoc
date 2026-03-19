@@ -112,12 +112,17 @@ def _detect_entities(text: str, profile: str = "moderate", document_type: str = 
             }
         )
 
-    is_strict = profile in {"strict", "dataset_strict"}
+    is_strict = profile in {"strict", "dataset_strict", "dataset_accounting"}
 
     # Strict mode: ajoute des règles supplémentaires.
     # Dataset strict: ces règles s'appliquent aussi aux types "unknown" pour éviter toute fuite.
-    if is_strict and (profile == "dataset_strict" or document_type in {"invoice", "generic"}):
+    if is_strict and (profile in {"dataset_strict", "dataset_accounting"} or document_type in {"invoice", "generic"}):
         for entity_type, pattern, replacement in STRICT_ONLY_PATTERNS:
+            # Profil dataset comptable: on garde l'utilité métier des montants.
+            # RGPD: les montants ne sont généralement pas des données identifiantes,
+            # contrairement aux champs PII/identité; on conserve donc [AMOUNT] tel quel.
+            if profile == "dataset_accounting" and entity_type in {"amount_eur", "amount_plain"}:
+                continue
             for match in pattern.finditer(text):
                 matches.append(
                     {

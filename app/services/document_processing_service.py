@@ -61,7 +61,7 @@ async def build_anonymization_preview(
 
     should_call_llm = (
         settings.LLM_ASSISTIVE_ENABLED
-        and profile in {"moderate", "strict"}
+        and profile in {"moderate", "strict", "dataset_accounting"}
         and len(detections) < settings.LLM_MIN_DETECTIONS
         and original_text
     )
@@ -116,6 +116,10 @@ async def build_anonymization_preview(
                         "replacement": span["replacement_token"],
                         "confidence": conf,
                     }
+
+                    # Profil dataset comptable: ne pas proposer/ajouter de remplacements de montants.
+                    if profile == "dataset_accounting" and cand.get("replacement") == "[AMOUNT]":
+                        continue
 
                     if any(overlaps(cand, existing) for existing in detections):
                         continue
