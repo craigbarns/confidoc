@@ -112,7 +112,11 @@ def _detect_entities(text: str, profile: str = "moderate", document_type: str = 
             }
         )
 
-    if profile == "strict" and document_type in {"invoice", "generic"}:
+    is_strict = profile in {"strict", "dataset_strict"}
+
+    # Strict mode: ajoute des règles supplémentaires.
+    # Dataset strict: ces règles s'appliquent aussi aux types "unknown" pour éviter toute fuite.
+    if is_strict and (profile == "dataset_strict" or document_type in {"invoice", "generic"}):
         for entity_type, pattern, replacement in STRICT_ONLY_PATTERNS:
             for match in pattern.finditer(text):
                 matches.append(
@@ -124,36 +128,47 @@ def _detect_entities(text: str, profile: str = "moderate", document_type: str = 
                         "replacement": replacement,
                     }
                 )
-        # Invoice strict mode: aggressively mask identity block before "Désignation"
-        desig_idx = text.lower().find("désignation")
-        header_zone = text[:desig_idx] if desig_idx > 0 else text[:1200]
-        for line in header_zone.splitlines():
-            clean = line.strip()
-            if not clean:
-                continue
-            is_upper_heavy = sum(c.isupper() for c in clean) >= max(5, int(len(clean) * 0.5))
-            has_digits = any(ch.isdigit() for ch in clean)
-            looks_identity = (
-                ("sci" in clean.lower() or "sas" in clean.lower() or "sarl" in clean.lower())
-                or ("terrasses" in clean.lower() or "rue" in clean.lower() or "avenue" in clean.lower())
-                or re.search(r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b", clean) is not None
-                or (is_upper_heavy and not has_digits and len(clean) >= 6)
-            )
-            if not looks_identity:
-                continue
-            start = text.find(line)
-            if start < 0:
-                continue
-            end = start + len(line)
-            matches.append(
-                {
-                    "entity_type": "invoice_identity_block",
-                    "start_index": start,
-                    "end_index": end,
-                    "value_excerpt": line,
-                    "replacement": "[IDENTITY]",
-                }
-            )
+        # Identity block heuristique: facture-like docs (souvent comptables).
+        if document_type in {"invoice", "generic"}:
+            desig_idx = text.lower().find("désignation")
+            header_zone = text[:desig_idx] if desig_idx > 0 else text[:1200]
+            for line in header_zone.splitlines():
+                clean = line.strip()
+                if not clean:
+                    continue
+                is_upper_heavy = sum(c.isupper() for c in clean) >= max(
+                    5, int(len(clean) * 0.5)
+                )
+                has_digits = any(ch.isdigit() for ch in clean)
+                looks_identity = (
+                    ("sci" in clean.lower() or "sas" in clean.lower() or "sarl" in clean.lower())
+                    or (
+                        "terrasses" in clean.lower()
+                        or "rue" in clean.lower()
+                        or "avenue" in clean.lower()
+                    )
+                    or re.search(
+                        r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b",
+                        clean,
+                    )
+                    is not None
+                    or (is_upper_heavy and not has_digits and len(clean) >= 6)
+                )
+                if not looks_identity:
+                    continue
+                start = text.find(line)
+                if start < 0:
+                    continue
+                end = start + len(line)
+                matches.append(
+                    {
+                        "entity_type": "invoice_identity_block",
+                        "start_index": start,
+                        "end_index": end,
+                        "value_excerpt": line,
+                        "replacement": "[IDENTITY]",
+                    }
+                )
 
     # Keep longest match first, then left-to-right
     matches.sort(key=lambda m: (m["start_index"], -(m["end_index"] - m["start_index"])))

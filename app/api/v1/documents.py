@@ -6,7 +6,7 @@ from io import BytesIO
 from typing import Literal
 
 from fastapi import APIRouter, Query, status
-from fastapi.responses import PlainTextResponse, StreamingResponse
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import desc, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -21,6 +21,11 @@ from app.schemas.document import (
     DocumentResponse,
 )
 from app.services.document_processing_service import build_anonymization_preview
+from app.services.anonymization_service import (
+    anonymize_text,
+    classify_document_type,
+    extract_text_from_file,
+)
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import read_bytes
 
@@ -87,7 +92,7 @@ async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
-    profile: Literal["moderate", "strict"] = Query(default="moderate"),
+    profile: Literal["moderate", "strict", "dataset_strict"] = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> AnonymizeResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
@@ -222,3 +227,68 @@ async def export_redacted_pdf(document_id: str, current_user: CurrentUser, db: D
     download_name = f"redacted_{document.original_filename}"
     headers = {"Content-Disposition": f'attachment; filename="{download_name}"'}
     return StreamingResponse(BytesIO(redacted_bytes), media_type="application/pdf", headers=headers)
+
+
+@router.get(
+    "/{document_id}/export-dataset",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter un enregistrement dataset (texte anonymisé + spans)",
+)
+async def export_dataset(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    """Export RGPD-friendly pour dataset:
+    - applique le profil 'dataset_strict' (masque dates + montants)
+    - ne renvoie jamais les valeurs originales (pas de value_excerpt)
+    - renvoie spans cohérents avec le texte anonymisé.
+    """
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    original_text: str | None = None
+    original_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original_version = original_result.scalar_one_or_none()
+    if original_version:
+        original_text = original_version.content_text
+
+    if original_text is None:
+        original_bytes = read_bytes(document.storage_backend, document.storage_key)
+        original_text = extract_text_from_file(original_bytes, document.extension) or ""
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    dataset_text, detections = anonymize_text(
+        original_text,
+        profile="dataset_strict",
+        document_type=effective_type,
+    )
+
+    entities = [
+        {
+            "entity_type": item["entity_type"],
+            "start": item["start_index"],
+            "end": item["end_index"],
+            "replacement_token": item["replacement"],
+        }
+        for item in detections
+    ]
+
+    needs_review = len(entities) == 0
+    payload = {
+        "document_id": str(document.id),
+        "doc_type": effective_type,
+        "profile": "dataset_strict",
+        "anonymized_text": dataset_text,
+        "entities": entities,
+        "quality": {
+            "detections_count": len(entities),
+            "needs_review": needs_review,
+        },
+    }
+    return JSONResponse(payload)
