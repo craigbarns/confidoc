@@ -76,12 +76,18 @@ async def upload_ui() -> str:
           headers: { "Content-Type": "application/json" },
           body: JSON.stringify({ email, password })
         });
-        const data = await res.json();
+        const raw = await res.text();
+        let data;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch {
+          data = { raw };
+        }
         show(data);
 
         if (!res.ok) {
           loginStatus.className = "err";
-          loginStatus.textContent = "Echec login";
+          loginStatus.textContent = `Echec login (${res.status})`;
           return;
         }
 
@@ -118,12 +124,18 @@ async def upload_ui() -> str:
           headers: { "Authorization": `Bearer ${accessToken}` },
           body: form
         });
-        const data = await res.json();
+        const raw = await res.text();
+        let data;
+        try {
+          data = raw ? JSON.parse(raw) : {};
+        } catch {
+          data = { raw };
+        }
         show(data);
 
         if (!res.ok) {
           uploadStatus.className = "err";
-          uploadStatus.textContent = "Upload échoué";
+          uploadStatus.textContent = `Upload échoué (${res.status})`;
           return;
         }
 

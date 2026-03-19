@@ -2,11 +2,20 @@
 
 from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
+from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.exceptions import http_400
 from app.core.logging import get_logger
-from app.schemas.auth import LoginRequest, RefreshRequest, TokenResponse
+from app.core.security import get_password_hash
+from app.models.user import User
+from app.schemas.auth import (
+    BootstrapAdminRequest,
+    LoginRequest,
+    RefreshRequest,
+    TokenResponse,
+)
 from app.services import auth_service
 
 router = APIRouter()
@@ -70,3 +79,38 @@ async def logout(
     """Déconnecte l'utilisateur en révoquant ses refresh tokens."""
     await auth_service.logout_user(db, current_user.id)
     logger.info("auth_logout", user_id=str(current_user.id))
+
+
+@router.post(
+    "/bootstrap-admin",
+    status_code=status.HTTP_201_CREATED,
+    summary="Créer le premier admin plateforme",
+)
+async def bootstrap_admin(
+    payload: BootstrapAdminRequest,
+    db: DbSession,
+) -> dict:
+    """Crée le premier admin si aucun admin plateforme n'existe."""
+    existing_admin = await db.execute(
+        select(User).where(User.is_platform_admin.is_(True))
+    )
+    if existing_admin.scalar_one_or_none():
+        raise http_400("Un admin plateforme existe déjà")
+
+    existing_email = await db.execute(select(User).where(User.email == payload.email))
+    if existing_email.scalar_one_or_none():
+        raise http_400("Cet email existe déjà")
+
+    user = User(
+        email=str(payload.email).lower(),
+        password_hash=get_password_hash(payload.password),
+        first_name=payload.first_name.strip() or "Super",
+        last_name=payload.last_name.strip() or "Admin",
+        is_active=True,
+        is_platform_admin=True,
+    )
+    db.add(user)
+    await db.commit()
+
+    logger.info("bootstrap_admin_created", email=user.email)
+    return {"status": "created", "email": user.email}

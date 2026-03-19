@@ -18,3 +18,10 @@ class LoginRequest(BaseModel):
 
 class RefreshRequest(BaseModel):
     refresh_token: str
+
+
+class BootstrapAdminRequest(BaseModel):
+    email: EmailStr
+    password: str
+    first_name: str = "Super"
+    last_name: str = "Admin"
