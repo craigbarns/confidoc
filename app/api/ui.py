@@ -51,6 +51,9 @@ async def upload_ui() -> str:
 <body>
   <h1>ConfiDoc Console</h1>
   <p>Upload, anonymisation, preview, validation, export texte et PDF redacted.</p>
+  <div class="box full" style="border-color:#22c55e">
+    <strong>UI v2 active</strong> — build forced: 2026-03-19-13:40
+  </div>
 
   <div class="layout">
   <div class="box">
