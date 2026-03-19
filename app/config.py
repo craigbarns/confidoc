@@ -77,7 +77,7 @@ class Settings(BaseSettings):
     # Vise uniquement les suggestions de spans (pas d'automatisation définitive).
     # Note: le nom "LLM" est conservé par compatibilité, mais on peut provider NER aussi.
     LLM_ASSISTIVE_ENABLED: bool = False
-    LLM_PROVIDER: Literal["mistral", "huggingface"] = "mistral"
+    LLM_PROVIDER: Literal["mistral", "huggingface", "presidio"] = "mistral"
     # Secrets: à fournir via Railway Secrets / variables d'environnement.
     MISTRAL_API_KEY: str = ""
     MISTRAL_BASE_URL: str = "https://api.mistral.ai"

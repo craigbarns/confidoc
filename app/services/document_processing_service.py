@@ -18,6 +18,7 @@ from app.services.anonymization_service import (
 )
 from app.services.hf_ner_assist_service import propose_spans_huggingface_ner
 from app.services.llm_assist_service import build_snippets, propose_spans_mistral
+from app.services.presidio_ner_assist_service import propose_spans_presidio
 
 
 async def build_anonymization_preview(
@@ -82,6 +83,10 @@ async def build_anonymization_preview(
         if settings.LLM_PROVIDER == "huggingface":
             llm_model = settings.HF_MODEL
             propose_fn = propose_spans_huggingface_ner
+        elif settings.LLM_PROVIDER == "presidio":
+            # Presidio n'a pas de "model" externe (offline).
+            llm_model = "presidio-local"
+            propose_fn = propose_spans_presidio
 
         llm_req_obj = LlmRequest(
             document_id=document.id,
