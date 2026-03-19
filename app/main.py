@@ -7,6 +7,7 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from app.config import get_settings
+from app.core.database import init_database
 from app.core.logging import get_logger, setup_logging
 from app.api.health import router as health_router
 from app.api.ui import router as ui_router
@@ -27,6 +28,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         app_name=settings.APP_NAME,
         environment=settings.APP_ENV,
     )
+    await init_database()
+    logger.info("database_initialized")
 
     yield
 
