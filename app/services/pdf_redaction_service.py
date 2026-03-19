@@ -63,7 +63,7 @@ def redact_pdf_bytes(original_pdf: bytes, sensitive_values: list[str]) -> bytes:
                 for cand in candidates_for_value(value):
                     # `search_for` est sensible à la casse; on tente plusieurs variantes.
                     # hit_max évite d'exploser si le token est fréquent.
-                    areas = page.search_for(cand, hit_max=50)
+                    areas = page.search_for(cand)
                     for rect in areas:
                         page.add_redact_annot(rect, fill=(0, 0, 0))
             page.apply_redactions()
