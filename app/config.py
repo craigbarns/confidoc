@@ -1,10 +1,10 @@
 """ConfiDoc Backend — Configuration centralisée via pydantic-settings."""
 
 from functools import lru_cache
-from typing import Literal
+from typing import Annotated, Literal
 
 from pydantic import field_validator
-from pydantic_settings import BaseSettings, SettingsConfigDict
+from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
 class Settings(BaseSettings):
@@ -29,7 +29,9 @@ class Settings(BaseSettings):
 
     # ---- API ----
     API_V1_PREFIX: str = "/api/v1"
-    ALLOWED_ORIGINS: list[str] = ["http://localhost:3000", "http://localhost:5173"]
+    ALLOWED_ORIGINS: Annotated[
+        list[str], NoDecode
+    ] = ["http://localhost:3000", "http://localhost:5173"]
 
     # ---- Database ----
     DATABASE_URL: str = (
@@ -61,7 +63,13 @@ class Settings(BaseSettings):
 
     # ---- File Upload ----
     MAX_UPLOAD_SIZE_MB: int = 50
-    ALLOWED_EXTENSIONS: list[str] = ["pdf", "png", "jpg", "jpeg", "tiff"]
+    ALLOWED_EXTENSIONS: Annotated[list[str], NoDecode] = [
+        "pdf",
+        "png",
+        "jpg",
+        "jpeg",
+        "tiff",
+    ]
 
     @field_validator("APP_ENV", mode="before")
     @classmethod
