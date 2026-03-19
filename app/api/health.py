@@ -22,6 +22,8 @@ async def root() -> dict:
         "service": "confidoc-backend",
         "status": "ok",
         "health": "/health",
+        "ui": "/ui",
+        "release": "v3-force-2026-03-19",
     }
 
 
@@ -36,6 +38,7 @@ async def health_check() -> dict:
     return {
         "status": "healthy",
         "service": "confidoc-backend",
+        "release": "v3-force-2026-03-19",
     }
 
 
