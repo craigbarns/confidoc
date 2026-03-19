@@ -66,6 +66,12 @@ async def upload_ui() -> str:
 
   <div class="box">
     <h2>2) Upload document</h2>
+    <label>Profil d'anonymisation</label>
+    <select id="profileSelect">
+      <option value="moderate" selected>Modéré</option>
+      <option value="strict">Strict</option>
+    </select>
+    <label style="margin-top:8px"><input id="autoAnonymize" type="checkbox" checked style="width:auto; margin-right:8px" /> Anonymiser automatiquement après upload</label>
     <input id="fileInput" type="file" />
     <button id="uploadBtn">Uploader</button>
     <p id="uploadStatus"></p>
@@ -203,9 +209,11 @@ async def upload_ui() -> str:
 
       const form = new FormData();
       form.append("file", file);
+      const profile = document.getElementById("profileSelect").value;
+      const autoAnonymize = document.getElementById("autoAnonymize").checked;
 
       try {
-        const { res, data } = await api("/api/v1/uploads", {
+        const { res, data } = await api(`/api/v1/uploads?auto_anonymize=${autoAnonymize ? "true" : "false"}&profile=${encodeURIComponent(profile)}&document_type=auto`, {
           method: "POST",
           body: form
         });
@@ -234,10 +242,11 @@ async def upload_ui() -> str:
       if (!accessToken) { show({ detail: "Connecte-toi d'abord" }); return; }
       const action = btn.dataset.action;
       const id = btn.dataset.id;
+      const profile = document.getElementById("profileSelect").value;
 
       try {
         if (action === "anonymize") {
-          const { res, data } = await api(`/api/v1/documents/${id}/anonymize`, { method: "POST" });
+          const { res, data } = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, { method: "POST" });
           show(data);
           if (res.ok) showPreview(data.preview_text || "");
         } else if (action === "preview") {

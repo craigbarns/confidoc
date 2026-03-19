@@ -1,8 +1,9 @@
 """ConfiDoc Backend — Upload Endpoints."""
 
 import hashlib
+from typing import Literal
 
-from fastapi import APIRouter, File, UploadFile, status
+from fastapi import APIRouter, File, Query, UploadFile, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -10,6 +11,7 @@ from app.config import get_settings
 from app.core.exceptions import http_400, http_413
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
+from app.services.document_processing_service import build_anonymization_preview
 from app.services.storage_service import store_bytes
 
 router = APIRouter()
@@ -25,6 +27,9 @@ async def upload_document(
     current_user: CurrentUser,
     db: DbSession,
     file: UploadFile = File(...),
+    auto_anonymize: bool = Query(default=True),
+    profile: Literal["moderate", "strict"] = Query(default="moderate"),
+    document_type: str = Query(default="auto"),
 ) -> dict:
     """Upload un document, le stocke et persiste son enregistrement en base."""
     filename = file.filename or ""
@@ -74,8 +79,31 @@ async def upload_document(
     await db.commit()
     await db.refresh(document)
 
+    processing: dict = {
+        "auto_anonymize": auto_anonymize,
+        "profile": profile,
+        "document_type": document_type,
+    }
+    if auto_anonymize:
+        preview_text, detections, effective_type = await build_anonymization_preview(
+            db=db,
+            document=document,
+            file_content=content,
+            profile=profile,
+            document_type=document_type,
+        )
+        await db.commit()
+        processing.update(
+            {
+                "status": "ready",
+                "effective_type": effective_type,
+                "detections_count": len(detections),
+                "preview_excerpt": preview_text[:300],
+            }
+        )
+
     return {
-        "status": "uploaded",
+        "status": document.status.value,
         "document_id": str(document.id),
         "storage_backend": document.storage_backend,
         "storage_key": document.storage_key,
@@ -84,4 +112,5 @@ async def upload_document(
         "content_type": file.content_type,
         "size_bytes": len(content),
         "uploaded_by": str(current_user.id),
+        "processing": processing,
     }

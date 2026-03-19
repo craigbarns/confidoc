@@ -3,9 +3,11 @@
 import uuid
 from io import BytesIO
 
+from typing import Literal
+
 from fastapi import APIRouter, Query, status
 from fastapi.responses import PlainTextResponse, StreamingResponse
-from sqlalchemy import delete, desc, select
+from sqlalchemy import desc, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
@@ -18,7 +20,7 @@ from app.schemas.document import (
     DocumentPreviewResponse,
     DocumentResponse,
 )
-from app.services.anonymization_service import anonymize_text, extract_text_from_file
+from app.services.document_processing_service import build_anonymization_preview
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import read_bytes
 
@@ -85,57 +87,18 @@ async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    profile: Literal["moderate", "strict"] = Query(default="moderate"),
+    document_type: str = Query(default="auto"),
 ) -> AnonymizeResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    document.status = DocumentStatus.PROCESSING
-    await db.flush()
-
     file_content = read_bytes(document.storage_backend, document.storage_key)
-    original_text = extract_text_from_file(file_content, document.extension)
-    if not original_text:
-        original_text = ""
-
-    preview_text, detections = anonymize_text(original_text)
-
-    # Replace prior computed preview data for idempotence
-    await db.execute(delete(EntityDetection).where(EntityDetection.document_id == document.id))
-    await db.execute(
-        delete(DocumentVersion).where(
-            DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type.in_(
-                [DocumentVersionType.ORIGINAL_TEXT, DocumentVersionType.PREVIEW_ANONYMIZED]
-            ),
-        )
+    preview_text, detections, effective_type = await build_anonymization_preview(
+        db=db,
+        document=document,
+        file_content=file_content,
+        profile=profile,
+        document_type=document_type,
     )
-
-    original_version = DocumentVersion(
-        document_id=document.id,
-        version_type=DocumentVersionType.ORIGINAL_TEXT,
-        content_text=original_text,
-    )
-    preview_version = DocumentVersion(
-        document_id=document.id,
-        version_type=DocumentVersionType.PREVIEW_ANONYMIZED,
-        content_text=preview_text,
-    )
-    db.add(original_version)
-    db.add(preview_version)
-    await db.flush()
-
-    for item in detections:
-        db.add(
-            EntityDetection(
-                document_id=document.id,
-                document_version_id=preview_version.id,
-                entity_type=item["entity_type"],
-                start_index=item["start_index"],
-                end_index=item["end_index"],
-                value_excerpt=item["value_excerpt"],
-                replacement=item["replacement"],
-            )
-        )
-
-    document.status = DocumentStatus.READY
     await db.commit()
 
     return AnonymizeResponse(
@@ -143,7 +106,7 @@ async def anonymize_document(
         status=document.status.value,
         detections_count=len(detections),
         detections=[DetectionResponse(**item) for item in detections],
-        preview_text=preview_text,
+        preview_text=f"[type={effective_type}|profile={profile}]\\n\\n{preview_text}",
     )
 
 

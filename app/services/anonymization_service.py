@@ -4,6 +4,22 @@ import re
 
 import fitz
 
+STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+    ("date_fr", re.compile(r"\b(?:0?[1-9]|[12]\d|3[01])[\/\-.](?:0?[1-9]|1[0-2])[\/\-.](?:19|20)\d{2}\b"), "[DATE]"),
+    ("amount_eur", re.compile(r"\b\d{1,3}(?:[ \u00a0]?\d{3})*(?:[.,]\d{2})?\s?(?:€|EUR)\b", re.IGNORECASE), "[AMOUNT]"),
+    ("invoice_number", re.compile(r"(?i)\b(?:facture|invoice)\s*(?:n[°o]|#|num(?:é|e)ro)?\s*[:\-]?\s*[A-Z0-9\-\/]{2,}\b"), "[INVOICE_REF]"),
+]
+
+INVOICE_HINTS = (
+    "facture",
+    "invoice",
+    "tva",
+    "total ttc",
+    "montant ht",
+    "règlement",
+    "reglement",
+)
+
 PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("email", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b"), "[EMAIL]"),
     ("phone_fr", re.compile(r"\b(?:\+33|0)[1-9](?:[\s\.-]?\d{2}){4}\b"), "[PHONE]"),
@@ -36,6 +52,14 @@ LABEL_VALUE_PATTERN = re.compile(
 )
 
 
+def classify_document_type(text: str, filename: str = "") -> str:
+    """Very simple document type classification (V1 heuristic)."""
+    source = f"{filename}\n{text[:4000]}".lower()
+    if any(hint in source for hint in INVOICE_HINTS):
+        return "invoice"
+    return "generic"
+
+
 def extract_text_from_file(content: bytes, extension: str) -> str:
     """Extract text from uploaded bytes (PDF first)."""
     extension = extension.lower()
@@ -53,7 +77,7 @@ def extract_text_from_file(content: bytes, extension: str) -> str:
         return ""
 
 
-def _detect_entities(text: str) -> list[dict]:
+def _detect_entities(text: str, profile: str = "moderate", document_type: str = "generic") -> list[dict]:
     matches: list[dict] = []
     for entity_type, pattern, replacement in PATTERNS:
         for match in pattern.finditer(text):
@@ -84,6 +108,19 @@ def _detect_entities(text: str) -> list[dict]:
             }
         )
 
+    if profile == "strict" and document_type in {"invoice", "generic"}:
+        for entity_type, pattern, replacement in STRICT_ONLY_PATTERNS:
+            for match in pattern.finditer(text):
+                matches.append(
+                    {
+                        "entity_type": entity_type,
+                        "start_index": match.start(),
+                        "end_index": match.end(),
+                        "value_excerpt": match.group(0),
+                        "replacement": replacement,
+                    }
+                )
+
     # Keep longest match first, then left-to-right
     matches.sort(key=lambda m: (m["start_index"], -(m["end_index"] - m["start_index"])))
     kept: list[dict] = []
@@ -102,9 +139,13 @@ def _detect_entities(text: str) -> list[dict]:
     return kept
 
 
-def anonymize_text(text: str) -> tuple[str, list[dict]]:
+def anonymize_text(
+    text: str,
+    profile: str = "moderate",
+    document_type: str = "generic",
+) -> tuple[str, list[dict]]:
     """Apply regex-based anonymization and return detections metadata."""
-    detections = _detect_entities(text)
+    detections = _detect_entities(text, profile=profile, document_type=document_type)
     anonymized = text
     for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
         start = match["start_index"]
