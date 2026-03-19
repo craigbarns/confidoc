@@ -10,8 +10,24 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("amount_plain", re.compile(r"\b\d{1,3}(?:[ \u00a0]?\d{3})*,\d{2}\b"), "[AMOUNT]"),
     ("invoice_number", re.compile(r"(?i)\b(?:facture|invoice)\s*(?:n[°o]|#|num(?:é|e)ro)?\s*[:\-]?\s*[A-Z0-9\-\/]{2,}\b"), "[INVOICE_REF]"),
     ("company_legal_name", re.compile(r"\b(?:SAS|SARL|EURL|SCI|SELARL|SCP|SA|SNC|EI|EIRL)\s+[A-Z0-9][A-Z0-9 \-']{1,}\b"), "[COMPANY]"),
-    ("person_name", re.compile(r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b"), "[PERSON]"),
+    # Accepte aussi les noms 100% MAJUSCULES (ex: "BARANES GREGORY")
+    ("person_name", re.compile(r"\b[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b"), "[PERSON]"),
     ("country", re.compile(r"\bFrance\b", re.IGNORECASE), "[COUNTRY]"),
+    # Adresses écrites sans "rue/avenue" (ex: "B 34 LES TERRASSES DE ...")
+    (
+        "address_residence_label",
+        re.compile(
+            r"\b[A-Z]\s?\d{1,4}\s+(?:LES\s+TERRASSES|TERRASSES|R[eé]sidence|RESIDENCE)\s+(?:DE|DU|DES)?\s*[A-Za-zÀ-ÖØ-öø-ÿ'’\- ]{3,50}\b",
+            re.IGNORECASE,
+        ),
+        "[ADDRESS]",
+    ),
+    # Comptes de banque en écriture comptable (ex: "51210000 QONTO")
+    (
+        "bank_account_code_and_label",
+        re.compile(r"\b(512\d{5})\s+([A-Z0-9][A-Z0-9 &/\\'\-]{1,40})\b", re.IGNORECASE),
+        "[REDACTED]",
+    ),
 ]
 
 INVOICE_HINTS = (
@@ -30,8 +46,9 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("phone_intl", re.compile(r"\+\d{1,3}[\s\.-]?\d(?:[\s\.-]?\d){6,14}\b"), "[PHONE]"),
     ("iban", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), "[IBAN]"),
     ("bic", re.compile(r"\b[A-Z]{6}[A-Z0-9]{2}([A-Z0-9]{3})?\b"), "[BIC]"),
-    ("siren", re.compile(r"\b\d{3}\s?\d{3}\s?\d{3}\b"), "[SIREN]"),
-    ("siret", re.compile(r"\b\d{3}\s?\d{3}\s?\d{3}\s?\d{5}\b"), "[SIRET]"),
+    # Accepte aussi les séparateurs type points ou tirets (ex: 123.456.789 / 123-456-789-00012)
+    ("siren", re.compile(r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b"), "[SIREN]"),
+    ("siret", re.compile(r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b"), "[SIRET]"),
     ("vat_fr", re.compile(r"\bFR\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b"), "[VAT]"),
     (
         "address_line",
@@ -124,13 +141,21 @@ def _detect_entities(text: str, profile: str = "moderate", document_type: str = 
             if profile == "dataset_accounting" and entity_type in {"amount_eur", "amount_plain"}:
                 continue
             for match in pattern.finditer(text):
+                # Spécial-case: on veut masquer le libellé de banque mais parfois garder le code.
+                rep = replacement
+                if entity_type == "bank_account_code_and_label":
+                    code = match.group(1)
+                    if profile == "dataset_accounting":
+                        rep = f"{code} [REDACTED]"
+                    else:
+                        rep = "[REDACTED]"
                 matches.append(
                     {
                         "entity_type": entity_type,
                         "start_index": match.start(),
                         "end_index": match.end(),
                         "value_excerpt": match.group(0),
-                        "replacement": replacement,
+                        "replacement": rep,
                     }
                 )
         # Identity block heuristique: facture-like docs (souvent comptables).
@@ -153,7 +178,7 @@ def _detect_entities(text: str, profile: str = "moderate", document_type: str = 
                         or "avenue" in clean.lower()
                     )
                     or re.search(
-                        r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b",
+                        r"\b[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b",
                         clean,
                     )
                     is not None
