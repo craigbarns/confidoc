@@ -1,13 +1,14 @@
 """ConfiDoc Backend — Documents endpoints."""
 
 import uuid
+from io import BytesIO
 
 from fastapi import APIRouter, Query, status
-from fastapi.responses import PlainTextResponse
+from fastapi.responses import PlainTextResponse, StreamingResponse
 from sqlalchemy import delete, desc, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.exceptions import http_404
+from app.core.exceptions import http_400, http_404
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
@@ -18,6 +19,7 @@ from app.schemas.document import (
     DocumentResponse,
 )
 from app.services.anonymization_service import anonymize_text, extract_text_from_file
+from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import read_bytes
 
 router = APIRouter()
@@ -230,3 +232,30 @@ async def export_document(document_id: str, current_user: CurrentUser, db: DbSes
         raise http_404("Aucune version finale disponible. Lance /validate d'abord")
 
     return PlainTextResponse(final_version.content_text)
+
+
+@router.get(
+    "/{document_id}/export-pdf",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter un PDF visuellement redacted",
+)
+async def export_redacted_pdf(document_id: str, current_user: CurrentUser, db: DbSession) -> StreamingResponse:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    if document.extension.lower() != "pdf":
+        raise http_400("Export PDF redacted disponible uniquement pour les PDF")
+
+    detections_result = await db.execute(
+        select(EntityDetection).where(EntityDetection.document_id == document.id)
+    )
+    detections = list(detections_result.scalars().all())
+    if not detections:
+        raise http_404("Aucune détection disponible. Lance /anonymize d'abord")
+
+    original_bytes = read_bytes(document.storage_backend, document.storage_key)
+    sensitive_values = [item.value_excerpt for item in detections]
+    redacted_bytes = redact_pdf_bytes(original_bytes, sensitive_values)
+
+    download_name = f"redacted_{document.original_filename}"
+    headers = {"Content-Disposition": f'attachment; filename="{download_name}"'}
+    return StreamingResponse(BytesIO(redacted_bytes), media_type="application/pdf", headers=headers)
