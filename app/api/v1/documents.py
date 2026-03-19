@@ -7,13 +7,14 @@ from typing import Literal
 
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import desc, select
+from sqlalchemy import desc, select, update
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
+from app.models.llm_request import LlmRequest
 from app.schemas.document import (
     AnonymizeResponse,
     DetectionResponse,
@@ -176,6 +177,15 @@ async def validate_document(document_id: str, current_user: CurrentUser, db: DbS
             version_type=DocumentVersionType.FINAL_ANONYMIZED,
             content_text=preview_version.content_text,
         )
+    )
+    # Marquer l'approbation humaine des suggestions LLM pour cette preview.
+    await db.execute(
+        update(LlmRequest)
+        .where(
+            LlmRequest.document_id == document.id,
+            LlmRequest.preview_version_id == preview_version.id,
+        )
+        .values(human_status="accepted")
     )
     await db.commit()
     return {"status": "validated", "document_id": str(document.id)}

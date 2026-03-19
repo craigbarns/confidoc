@@ -73,6 +73,22 @@ class Settings(BaseSettings):
         "tiff",
     ]
 
+    # ---- LLM Assistive (V2) ----
+    # Vise uniquement les suggestions de spans (pas d'automatisation définitive).
+    LLM_ASSISTIVE_ENABLED: bool = False
+    LLM_PROVIDER: Literal["mistral"] = "mistral"
+    # Secrets: à fournir via Railway Secrets / variables d'environnement.
+    MISTRAL_API_KEY: str = ""
+    MISTRAL_BASE_URL: str = "https://api.mistral.ai"
+    MISTRAL_MODEL: str = "mistral-small-latest"
+
+    # Contraintes RGPD / minimisation
+    LLM_MIN_DETECTIONS: int = 2
+    LLM_CONFIDENCE_THRESHOLD: float = 0.75
+    LLM_MAX_SNIPPETS: int = 3
+    LLM_SNIPPET_CHARS: int = 800
+    LLM_MAX_DOC_CHARS: int = 6000
+
     @field_validator("APP_ENV", mode="before")
     @classmethod
     def normalize_app_env(cls, value: str) -> str:

@@ -9,6 +9,8 @@ from app.models.refresh_token import RefreshToken
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
+from app.models.llm_request import LlmRequest
+from app.models.llm_suggestion import LlmSuggestion
 
 __all__ = [
     "Base", "BaseModel", "TenantModel", "TimestampMixin",
@@ -17,4 +19,6 @@ __all__ = [
     "Document", "DocumentStatus",
     "DocumentVersion", "DocumentVersionType",
     "EntityDetection",
+    "LlmRequest",
+    "LlmSuggestion",
 ]
