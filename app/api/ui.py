@@ -18,32 +18,88 @@ async def upload_ui() -> str:
   <title>ConfiDoc Console</title>
   <style>
     :root {
-      --bg: #0f172a;
-      --card: #111827;
-      --border: #374151;
+      --bg0: #070a16;
+      --bg1: #0b1220;
+      --card: rgba(255,255,255,0.04);
+      --border: rgba(148,163,184,0.22);
       --text: #e5e7eb;
       --muted: #9ca3af;
       --ok: #22c55e;
       --err: #ef4444;
-      --btn: #2563eb;
+      --accent: #60a5fa;
+      --accent2: #34d399;
+      --shadow: rgba(0,0,0,0.35);
     }
-    body { font-family: -apple-system, Segoe UI, Arial, sans-serif; margin: 24px; background: var(--bg); color: var(--text); }
-    h1 { margin: 0 0 8px 0; font-size: 24px; }
-    h2 { margin: 0 0 10px 0; font-size: 18px; }
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Arial, sans-serif;
+      margin: 24px;
+      color: var(--text);
+      background:
+        radial-gradient(1200px circle at 10% 10%, rgba(96,165,250,0.25), transparent 52%),
+        radial-gradient(900px circle at 90% 15%, rgba(52,211,153,0.16), transparent 52%),
+        linear-gradient(180deg, var(--bg1), var(--bg0));
+    }
+    h1 { margin: 0 0 8px 0; font-size: 28px; letter-spacing: -0.02em; }
+    h2 { margin: 0 0 10px 0; font-size: 16px; color: #cbd5e1; }
     p { color: var(--muted); margin-top: 0; }
     .layout { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
     .full { grid-column: 1 / -1; }
-    .box { border: 1px solid var(--border); background: var(--card); padding: 14px; border-radius: 10px; }
-    label { display: block; margin-top: 8px; color: var(--muted); }
-    input, button, select { margin-top: 6px; padding: 9px; width: 100%; box-sizing: border-box; border-radius: 8px; border: 1px solid var(--border); background: #0b1220; color: var(--text); }
-    button { cursor: pointer; font-weight: 600; background: var(--btn); border: none; }
-    button.secondary { background: #334155; }
-    button.small { width: auto; padding: 6px 10px; font-size: 12px; margin-right: 6px; }
-    pre { background: #020617; padding: 12px; border-radius: 8px; overflow: auto; border: 1px solid var(--border); }
-    .ok { color: var(--ok); }
-    .err { color: var(--err); }
+    .box {
+      border: 1px solid var(--border);
+      background: var(--card);
+      padding: 14px;
+      border-radius: 12px;
+      box-shadow: 0 16px 40px var(--shadow);
+      backdrop-filter: blur(10px);
+    }
+    label { display: block; margin-top: 8px; color: var(--muted); font-size: 13px; }
+    input, select {
+      margin-top: 6px;
+      padding: 10px;
+      width: 100%;
+      box-sizing: border-box;
+      border-radius: 10px;
+      border: 1px solid rgba(148,163,184,0.28);
+      background: rgba(2,6,23,0.65);
+      color: var(--text);
+      outline: none;
+    }
+    input:focus, select:focus { border-color: rgba(96,165,250,0.7); box-shadow: 0 0 0 3px rgba(96,165,250,0.18); }
+    button {
+      cursor: pointer;
+      font-weight: 700;
+      width: auto;
+      border: 1px solid rgba(96,165,250,0.35);
+      border-radius: 10px;
+      padding: 10px 14px;
+      color: var(--text);
+      background: linear-gradient(180deg, rgba(37,99,235,1), rgba(29,78,216,1));
+      box-shadow: 0 10px 22px rgba(37,99,235,0.18);
+      transition: transform 120ms ease, box-shadow 120ms ease, border-color 120ms ease;
+    }
+    button:hover { transform: translateY(-1px); box-shadow: 0 14px 28px rgba(37,99,235,0.28); }
+    button:disabled { opacity: 0.55; cursor: not-allowed; transform: none; }
+    button.secondary {
+      background: rgba(148,163,184,0.10);
+      border: 1px solid rgba(148,163,184,0.25);
+      box-shadow: none;
+    }
+    button.small { width: auto; padding: 7px 10px; font-size: 12px; margin-right: 6px; }
+    pre {
+      background: rgba(2,6,23,0.85);
+      padding: 12px;
+      border-radius: 10px;
+      overflow: auto;
+      border: 1px solid var(--border);
+      color: #e5e7eb;
+      line-height: 1.35;
+      max-height: 360px;
+    }
+    .ok { color: var(--ok); font-weight: 700; }
+    .err { color: var(--err); font-weight: 700; }
     table { width: 100%; border-collapse: collapse; margin-top: 8px; }
     th, td { border-bottom: 1px solid var(--border); padding: 8px; font-size: 13px; text-align: left; vertical-align: top; }
+    tbody tr:hover td { background: rgba(148,163,184,0.05); }
     .actions { white-space: nowrap; }
     @media (max-width: 980px) { .layout { grid-template-columns: 1fr; } }
   </style>
@@ -152,6 +208,7 @@ async def upload_ui() -> str:
             <button class="small" data-action="validate" data-id="${doc.id}">Valider</button>
             <button class="small" data-action="exporttxt" data-id="${doc.id}">Export TXT</button>
             <button class="small" data-action="exportpdf" data-id="${doc.id}">Export PDF</button>
+            <button class="small" data-action="exportdataset" data-id="${doc.id}">Export dataset</button>
           </td>
         `;
         docsBody.appendChild(tr);
@@ -278,6 +335,16 @@ async def upload_ui() -> str:
           a.click();
           URL.revokeObjectURL(url);
           show({ status: "ok", message: "PDF redacted téléchargé" });
+        } else if (action === "exportdataset") {
+          const res = await fetch(`/api/v1/documents/${id}/export-dataset`, { headers: { Authorization: `Bearer ${accessToken}` } });
+          const data = await res.json().catch(() => ({}));
+          show(data);
+          if (res.ok) {
+            const t = data.anonymized_text || "";
+            showPreview(t ? t.slice(0, 5000) : "Dataset exporté (anonymized_text vide).");
+          } else {
+            showPreview("Export dataset échoué.");
+          }
         }
       } catch (e) {
         show({ detail: "Erreur réseau/action", error: String(e) });
