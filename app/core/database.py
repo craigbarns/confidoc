@@ -31,8 +31,14 @@ async_session_factory = async_sessionmaker(
 
 async def init_database() -> None:
     """Initialise le schéma minimal si les tables n'existent pas."""
+    from sqlalchemy import text
     async with engine.begin() as conn:
+        # Création des tables si inexistantes
         await conn.run_sync(Base.metadata.create_all)
+        # Ajout manuel des colonnes manquantes (Base.metadata.create_all ne le fait pas)
+        await conn.execute(
+            text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS raw_content bytea;")
+        )
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:
