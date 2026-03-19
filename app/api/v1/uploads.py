@@ -1,19 +1,19 @@
 """ConfiDoc Backend — Upload Endpoints."""
 
-from pathlib import Path
-from uuid import uuid4
+import hashlib
 
 from fastapi import APIRouter, File, UploadFile, status
+from sqlalchemy import select
 
-from app.api.deps import CurrentUser
+from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
 from app.core.exceptions import http_400, http_413
+from app.models.document import Document, DocumentStatus
+from app.models.membership import Membership
+from app.services.storage_service import store_bytes
 
 router = APIRouter()
 settings = get_settings()
-
-UPLOAD_ROOT = Path("/tmp/confidoc_uploads")
-UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 
 
 @router.post(
@@ -23,9 +23,10 @@ UPLOAD_ROOT.mkdir(parents=True, exist_ok=True)
 )
 async def upload_document(
     current_user: CurrentUser,
+    db: DbSession,
     file: UploadFile = File(...),
 ) -> dict:
-    """Upload un document et le stocke localement (V1 bootstrap)."""
+    """Upload un document, le stocke et persiste son enregistrement en base."""
     filename = file.filename or ""
     if "." not in filename:
         raise http_400("Nom de fichier invalide")
@@ -45,13 +46,40 @@ async def upload_document(
             f"Fichier trop volumineux. Maximum: {settings.MAX_UPLOAD_SIZE_MB} MB"
         )
 
-    stored_name = f"{uuid4()}.{extension}"
-    target_path = UPLOAD_ROOT / stored_name
-    target_path.write_bytes(content)
+    storage_backend, storage_key = store_bytes(content=content, extension=extension)
+    sha256 = hashlib.sha256(content).hexdigest()
+
+    membership_res = await db.execute(
+        select(Membership).where(
+            Membership.user_id == current_user.id,
+            Membership.is_active.is_(True),
+        )
+    )
+    membership = membership_res.scalar_one_or_none()
+    org_id = membership.org_id if membership else None
+
+    document = Document(
+        org_id=org_id,
+        uploaded_by_user_id=current_user.id,
+        original_filename=filename,
+        content_type=file.content_type or "application/octet-stream",
+        extension=extension,
+        size_bytes=len(content),
+        sha256=sha256,
+        storage_backend=storage_backend,
+        storage_key=storage_key,
+        status=DocumentStatus.UPLOADED,
+    )
+    db.add(document)
+    await db.commit()
+    await db.refresh(document)
 
     return {
         "status": "uploaded",
-        "document_id": stored_name,
+        "document_id": str(document.id),
+        "storage_backend": document.storage_backend,
+        "storage_key": document.storage_key,
+        "sha256": document.sha256,
         "original_filename": filename,
         "content_type": file.content_type,
         "size_bytes": len(content),

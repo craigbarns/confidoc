@@ -23,6 +23,7 @@ class User(BaseModel):
     # Relationships
     memberships = relationship("Membership", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
+    documents = relationship("Document", cascade="all, delete-orphan")
 
     @property
     def full_name(self) -> str:
