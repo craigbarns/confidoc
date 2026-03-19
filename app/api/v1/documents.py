@@ -62,19 +62,22 @@ async def _get_user_document_or_404(
 
 
 def _read_file_or_404(document: Document) -> bytes:
-    """Read file from storage, raise 404 with a user-friendly message on error."""
+    """Read file from storage, with fallback to raw_content in DB."""
+    # Try external storage first
     try:
         return read_bytes(document.storage_backend, document.storage_key)
-    except FileNotFoundError:
-        raise http_404(
-            "Fichier source introuvable. Le fichier a peut-être été supprimé du stockage. "
-            "Ré-uploadez le document."
-        )
-    except Exception as exc:
-        logger.error("storage_read_failed", doc_id=str(document.id), error=str(exc))
-        raise http_404(
-            "Impossible de lire le fichier source. Ré-uploadez le document."
-        )
+    except (FileNotFoundError, Exception) as exc:
+        logger.warning("storage_read_fallback", doc_id=str(document.id), error=str(exc))
+
+    # Fallback: raw bytes stored in PostgreSQL
+    if document.raw_content:
+        logger.info("using_db_raw_content", doc_id=str(document.id))
+        return document.raw_content
+
+    raise http_404(
+        "Fichier source introuvable. Le fichier a été supprimé du stockage "
+        "et aucune copie n'est disponible en base. Ré-uploadez le document."
+    )
 
 
 async def _get_or_create_final_version(

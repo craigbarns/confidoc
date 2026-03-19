@@ -1,4 +1,4 @@
-"""ConfiDoc Backend — Upload Endpoints."""
+"""ConfiDoc Backend — Upload Endpoints (v2)."""
 
 import hashlib
 from typing import Literal
@@ -9,6 +9,7 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
 from app.core.exceptions import http_400, http_413
+from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.services.document_processing_service import build_anonymization_preview
@@ -16,6 +17,7 @@ from app.services.storage_service import store_bytes
 
 router = APIRouter()
 settings = get_settings()
+logger = get_logger(__name__)
 
 
 @router.post(
@@ -51,7 +53,14 @@ async def upload_document(
             f"Fichier trop volumineux. Maximum: {settings.MAX_UPLOAD_SIZE_MB} MB"
         )
 
-    storage_backend, storage_key = store_bytes(content=content, extension=extension)
+    # Store to external storage (MinIO or local /tmp)
+    try:
+        storage_backend, storage_key = store_bytes(content=content, extension=extension)
+    except Exception as exc:
+        logger.warning("external_storage_failed", error=str(exc))
+        storage_backend = "database"
+        storage_key = f"db://{hashlib.sha256(content).hexdigest()}"
+
     sha256 = hashlib.sha256(content).hexdigest()
 
     membership_res = await db.execute(
@@ -74,10 +83,20 @@ async def upload_document(
         storage_backend=storage_backend,
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
+        # Always store raw bytes in DB as fallback
+        raw_content=content,
     )
     db.add(document)
     await db.commit()
     await db.refresh(document)
+
+    logger.info(
+        "document_uploaded",
+        doc_id=str(document.id),
+        filename=filename,
+        size=len(content),
+        backend=storage_backend,
+    )
 
     processing: dict = {
         "auto_anonymize": auto_anonymize,
@@ -85,28 +104,29 @@ async def upload_document(
         "document_type": document_type,
     }
     if auto_anonymize:
-        preview_text, detections, effective_type = await build_anonymization_preview(
-            db=db,
-            document=document,
-            file_content=content,
-            profile=profile,
-            document_type=document_type,
-        )
-        await db.commit()
-        processing.update(
-            {
+        try:
+            preview_text, detections, effective_type = await build_anonymization_preview(
+                db=db,
+                document=document,
+                file_content=content,
+                profile=profile,
+                document_type=document_type,
+            )
+            await db.commit()
+            processing.update({
                 "status": "ready",
                 "effective_type": effective_type,
                 "detections_count": len(detections),
                 "preview_excerpt": preview_text[:300],
-            }
-        )
+            })
+        except Exception as exc:
+            logger.error("auto_anonymize_failed", doc_id=str(document.id), error=str(exc))
+            processing.update({"status": "error", "error": str(exc)[:200]})
 
     return {
         "status": document.status.value,
         "document_id": str(document.id),
         "storage_backend": document.storage_backend,
-        "storage_key": document.storage_key,
         "sha256": document.sha256,
         "original_filename": filename,
         "content_type": file.content_type,

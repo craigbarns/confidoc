@@ -3,7 +3,7 @@
 from enum import Enum as PyEnum
 import uuid
 
-from sqlalchemy import Enum, ForeignKey, String, Text
+from sqlalchemy import Enum, ForeignKey, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -42,3 +42,7 @@ class Document(BaseModel):
     status: Mapped[DocumentStatus] = mapped_column(
         Enum(DocumentStatus), default=DocumentStatus.UPLOADED, nullable=False, index=True
     )
+
+    # Raw file bytes — stored in DB as fallback when external storage is ephemeral
+    # (e.g. Railway local /tmp). Nullable for backward compat with existing rows.
+    raw_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, default=None)
