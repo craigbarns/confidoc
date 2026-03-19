@@ -19,7 +19,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 # Installer les dépendances Python
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -e ".[processing]"
+    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels ".[processing]"
 
 
 # ==============================================================================
