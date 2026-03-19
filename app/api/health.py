@@ -11,6 +11,21 @@ logger = get_logger(__name__)
 
 
 @router.get(
+    "/",
+    status_code=status.HTTP_200_OK,
+    summary="Root endpoint",
+    description="Point d'entrée HTTP public de l'API.",
+)
+async def root() -> dict:
+    """Endpoint racine pour éviter le 404 sur le domaine principal."""
+    return {
+        "service": "confidoc-backend",
+        "status": "ok",
+        "health": "/health",
+    }
+
+
+@router.get(
     "/health",
     status_code=status.HTTP_200_OK,
     summary="Health check",
