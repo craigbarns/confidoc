@@ -1,11 +1,14 @@
-"""ConfiDoc Backend — Document processing pipeline service."""
+"""ConfiDoc Backend — Document processing pipeline service (v2)."""
 
 from __future__ import annotations
+
+from typing import Any
 
 from sqlalchemy import delete
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
+from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
@@ -16,9 +19,115 @@ from app.services.anonymization_service import (
     classify_document_type,
     extract_text_from_file,
 )
-from app.services.hf_ner_assist_service import propose_spans_huggingface_ner
-from app.services.llm_assist_service import build_snippets, propose_spans_mistral
-from app.services.presidio_ner_assist_service import propose_spans_presidio
+
+logger = get_logger(__name__)
+
+
+def _overlaps(a: dict, b: dict) -> bool:
+    """Check if two span dicts overlap."""
+    return not (a["end_index"] <= b["start_index"] or a["start_index"] >= b["end_index"])
+
+
+def _apply_replacements(text: str, detections: list[dict]) -> str:
+    """Apply replacement tokens to text, processing from end to preserve indices."""
+    out = text
+    for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
+        out = out[: match["start_index"]] + match["replacement"] + out[match["end_index"] :]
+    return out
+
+
+async def _call_llm_provider(
+    settings: Any, snippets: list[dict], document: Document,
+    profile: str, db: AsyncSession,
+) -> tuple[list[dict], LlmRequest | None]:
+    """Call external NER/LLM provider (Mistral, HuggingFace, or Presidio)."""
+    from app.services.llm_assist_service import build_snippets, propose_spans_mistral
+
+    llm_detections: list[dict] = []
+
+    snippets_meta = [
+        {"start": s["start"], "end": s["end"], "sha256": s["sha256"]} for s in snippets
+    ]
+
+    llm_model = settings.MISTRAL_MODEL
+    propose_fn = propose_spans_mistral
+
+    if settings.LLM_PROVIDER == "huggingface":
+        from app.services.hf_ner_assist_service import propose_spans_huggingface_ner
+        llm_model = settings.HF_MODEL
+        propose_fn = propose_spans_huggingface_ner
+    elif settings.LLM_PROVIDER == "presidio":
+        from app.services.presidio_ner_assist_service import propose_spans_presidio
+        llm_model = "presidio-local"
+        propose_fn = propose_spans_presidio
+
+    llm_req = LlmRequest(
+        document_id=document.id,
+        created_by_user_id=document.uploaded_by_user_id,
+        preview_version_id=None,
+        provider=settings.LLM_PROVIDER,
+        model=llm_model,
+        profile=profile,
+        snippets_meta={"snippets": snippets_meta},
+        status="completed",
+        human_status="pending",
+        error_message=None,
+    )
+    db.add(llm_req)
+    await db.flush()
+
+    try:
+        for s in snippets:
+            spans = await propose_fn(s["text"])
+            for span in spans:
+                conf = float(span.get("confidence", 0.0))
+                if conf < settings.LLM_CONFIDENCE_THRESHOLD:
+                    continue
+
+                start_global = int(s["start"]) + int(span["start"])
+                end_global = int(s["start"]) + int(span["end"])
+                if end_global <= start_global:
+                    continue
+
+                # Safely extract value excerpt
+                value_excerpt = ""
+                try:
+                    value_excerpt = s["text"][int(span["start"]):int(span["end"])]
+                except (IndexError, KeyError):
+                    continue
+                if not value_excerpt.strip():
+                    continue
+
+                cand = {
+                    "entity_type": span["entity_type"],
+                    "start_index": start_global,
+                    "end_index": end_global,
+                    "value_excerpt": value_excerpt,
+                    "replacement": span["replacement_token"],
+                    "confidence": conf,
+                }
+
+                # Dataset accounting: skip amount replacements
+                if profile == "dataset_accounting" and cand.get("replacement") == "[AMOUNT]":
+                    continue
+
+                llm_detections.append(cand)
+                db.add(
+                    LlmSuggestion(
+                        llm_request_id=llm_req.id,
+                        entity_type=cand["entity_type"],
+                        start_index=cand["start_index"],
+                        end_index=cand["end_index"],
+                        replacement_token=cand["replacement"],
+                        confidence=conf,
+                    )
+                )
+    except Exception as exc:
+        logger.error("llm_provider_failed", error=str(exc), provider=settings.LLM_PROVIDER)
+        llm_req.status = "failed"
+        llm_req.error_message = str(exc)[:500]
+
+    return llm_detections, llm_req
 
 
 async def build_anonymization_preview(
@@ -28,36 +137,38 @@ async def build_anonymization_preview(
     profile: str = "moderate",
     document_type: str = "auto",
 ) -> tuple[str, list[dict], str]:
-    """Compute anonymization preview and persist versions/detections."""
+    """Compute anonymization preview and persist versions/detections.
+
+    Returns:
+        (preview_text, merged_detections, effective_document_type)
+    """
     settings = get_settings()
 
-    def overlaps(a: dict, b: dict) -> bool:
-        return not (a["end_index"] <= b["start_index"] or a["start_index"] >= b["end_index"])
-
-    def apply_replacements(text: str, dets: list[dict]) -> str:
-        out = text
-        for match in sorted(dets, key=lambda m: m["start_index"], reverse=True):
-            out = (
-                out[: match["start_index"]]
-                + match["replacement"]
-                + out[match["end_index"] :]
-            )
-        return out
-
+    # 1) Mark as processing
     document.status = DocumentStatus.PROCESSING
     await db.flush()
 
+    # 2) Extract text from file
     original_text = extract_text_from_file(file_content, document.extension) or ""
+    if not original_text.strip():
+        logger.warning("empty_text_extraction", doc_id=str(document.id))
+        document.status = DocumentStatus.READY
+        await db.flush()
+        return "", [], "empty"
+
+    # 3) Classify document type
     effective_type = (
         classify_document_type(original_text, document.original_filename)
         if document_type == "auto"
         else document_type
     )
 
+    # 4) Run regex anonymization
     preview_text, detections = anonymize_text(
         original_text, profile=profile, document_type=effective_type
     )
 
+    # 5) Optionally call LLM/NER provider for additional spans
     llm_detections: list[dict] = []
     llm_req_obj: LlmRequest | None = None
 
@@ -69,103 +180,37 @@ async def build_anonymization_preview(
     )
 
     if should_call_llm:
+        from app.services.llm_assist_service import build_snippets
         snippets = build_snippets(
             original_text,
             max_snippets=settings.LLM_MAX_SNIPPETS,
             snippet_chars=settings.LLM_SNIPPET_CHARS,
         )
-        snippets_meta = [
-            {"start": s["start"], "end": s["end"], "sha256": s["sha256"]} for s in snippets
-        ]
-
-        llm_model = settings.MISTRAL_MODEL
-        propose_fn = propose_spans_mistral
-        if settings.LLM_PROVIDER == "huggingface":
-            llm_model = settings.HF_MODEL
-            propose_fn = propose_spans_huggingface_ner
-        elif settings.LLM_PROVIDER == "presidio":
-            # Presidio n'a pas de "model" externe (offline).
-            llm_model = "presidio-local"
-            propose_fn = propose_spans_presidio
-
-        llm_req_obj = LlmRequest(
-            document_id=document.id,
-            created_by_user_id=document.uploaded_by_user_id,
-            preview_version_id=None,
-            provider=settings.LLM_PROVIDER,
-            model=llm_model,
-            profile=profile,
-            snippets_meta={"snippets": snippets_meta},
-            status="completed",
-            human_status="pending",
-            error_message=None,
+        llm_detections, llm_req_obj = await _call_llm_provider(
+            settings, snippets, document, profile, db
         )
-        db.add(llm_req_obj)
-        await db.flush()
 
-        try:
-            for s in snippets:
-                spans = await propose_fn(s["text"])
-                for span in spans:
-                    conf = float(span.get("confidence", 0.0))
-                    if conf < settings.LLM_CONFIDENCE_THRESHOLD:
-                        continue
-
-                    start_global = int(s["start"]) + int(span["start"])
-                    end_global = int(s["start"]) + int(span["end"])
-                    if end_global <= start_global:
-                        continue
-
-                    value_excerpt = original_text[start_global:end_global]
-                    if not value_excerpt.strip():
-                        continue
-
-                    cand = {
-                        "entity_type": span["entity_type"],
-                        "start_index": start_global,
-                        "end_index": end_global,
-                        "value_excerpt": value_excerpt,
-                        "replacement": span["replacement_token"],
-                        "confidence": conf,
-                    }
-
-                    # Profil dataset comptable: ne pas proposer/ajouter de remplacements de montants.
-                    if profile == "dataset_accounting" and cand.get("replacement") == "[AMOUNT]":
-                        continue
-
-                    if any(overlaps(cand, existing) for existing in detections):
-                        continue
-
-                    llm_detections.append(cand)
-                    db.add(
-                        LlmSuggestion(
-                            llm_request_id=llm_req_obj.id,
-                            entity_type=cand["entity_type"],
-                            start_index=cand["start_index"],
-                            end_index=cand["end_index"],
-                            replacement_token=cand["replacement"],
-                            confidence=conf,
-                        )
-                    )
-        except Exception as exc:
-            llm_req_obj.status = "failed"
-            llm_req_obj.error_message = str(exc)
-
+    # 6) Merge detections (regex + LLM), removing overlaps
     merged = list(detections)
-    if llm_detections:
-        for cand in llm_detections:
-            if any(overlaps(cand, existing) for existing in merged):
-                continue
+    for cand in llm_detections:
+        if not any(_overlaps(cand, existing) for existing in merged):
             merged.append(cand)
-        preview_text = apply_replacements(original_text, merged)
 
-    await db.execute(delete(EntityDetection).where(EntityDetection.document_id == document.id))
+    # Re-apply if LLM added detections
+    if llm_detections:
+        preview_text = _apply_replacements(original_text, merged)
+
+    # 7) Persist: clean old data, save new versions/detections
+    await db.execute(
+        delete(EntityDetection).where(EntityDetection.document_id == document.id)
+    )
     await db.execute(
         delete(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type.in_(
-                [DocumentVersionType.ORIGINAL_TEXT, DocumentVersionType.PREVIEW_ANONYMIZED]
-            ),
+            DocumentVersion.version_type.in_([
+                DocumentVersionType.ORIGINAL_TEXT,
+                DocumentVersionType.PREVIEW_ANONYMIZED,
+            ]),
         )
     )
 
@@ -191,7 +236,7 @@ async def build_anonymization_preview(
                 entity_type=item["entity_type"],
                 start_index=item["start_index"],
                 end_index=item["end_index"],
-                value_excerpt=item["value_excerpt"],
+                value_excerpt=item.get("value_excerpt", ""),
                 replacement=item["replacement"],
             )
         )
@@ -201,4 +246,13 @@ async def build_anonymization_preview(
 
     document.status = DocumentStatus.READY
     await db.flush()
+
+    logger.info(
+        "anonymization_complete",
+        doc_id=str(document.id),
+        doc_type=effective_type,
+        profile=profile,
+        detections=len(merged),
+    )
+
     return preview_text, merged, effective_type
