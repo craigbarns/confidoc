@@ -15,6 +15,7 @@ from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
+from app.models.llm_suggestion import LlmSuggestion
 from app.schemas.document import (
     AnonymizeResponse,
     DetectionResponse,
@@ -279,6 +280,46 @@ async def export_dataset(
         document_type=effective_type,
     )
 
+    def overlaps(a: dict, b: dict) -> bool:
+        return not (a["end_index"] <= b["start_index"] or a["start_index"] >= b["end_index"])
+
+    def apply_replacements(text: str, dets: list[dict]) -> str:
+        out = text
+        for match in sorted(dets, key=lambda m: m["start_index"], reverse=True):
+            out = (
+                out[: match["start_index"]]
+                + match["replacement"]
+                + out[match["end_index"] :]
+            )
+        return out
+
+    # Ajouter les suggestions LLM acceptées (humain = validate déjà appelé).
+    llm_suggestions_result = await db.execute(
+        select(LlmSuggestion).join(
+            LlmRequest, LlmRequest.id == LlmSuggestion.llm_request_id
+        ).where(
+            LlmRequest.document_id == document.id,
+            LlmRequest.human_status == "accepted",
+        )
+    )
+    llm_suggestions = list(llm_suggestions_result.scalars().all())
+
+    merged = list(detections)
+    for s in llm_suggestions:
+        cand = {
+            "entity_type": s.entity_type,
+            "start_index": int(s.start_index),
+            "end_index": int(s.end_index),
+            "replacement": s.replacement_token,
+            # valeur non utilisée pour dataset export, mais utile pour uniformiser le schéma
+            "value_excerpt": "",
+        }
+        if any(overlaps(cand, existing) for existing in merged):
+            continue
+        merged.append(cand)
+
+    dataset_text = apply_replacements(original_text, merged)
+
     entities = [
         {
             "entity_type": item["entity_type"],
@@ -286,7 +327,7 @@ async def export_dataset(
             "end": item["end_index"],
             "replacement_token": item["replacement"],
         }
-        for item in detections
+        for item in merged
     ]
 
     needs_review = len(entities) == 0
