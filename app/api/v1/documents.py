@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Documents endpoints."""
 
 import uuid
+import re
 from io import BytesIO
 
 from typing import Literal
@@ -330,7 +331,92 @@ async def export_dataset(
         for item in merged
     ]
 
-    needs_review = len(entities) == 0
+    # ----------------------------
+    # Quality gate RGPD safe:
+    # vérifier qu'on n'a pas laissé des patterns critiques dans le dataset final.
+    # ----------------------------
+    quality_flags: list[str] = []
+    critical_patterns: dict[str, str] = {
+        "emails_found": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        "iban_found": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
+        "siret_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b",
+        "siren_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b",
+        # Noms en clair (approx): suites de mots en MAJUSCULES
+        "uppercase_person_leftovers": r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,4}\b",
+    }
+    for flag, pat in critical_patterns.items():
+        if re.search(pat, dataset_text):
+            quality_flags.append(flag)
+
+    needs_review = len(quality_flags) > 0 or len(entities) == 0
+
+    def pcg_category(code: str) -> str:
+        if not code:
+            return "inconnu"
+        code = code.strip()
+        if code.startswith("401"):
+            return "fournisseur"
+        if code.startswith("411"):
+            return "client"
+        if code.startswith("455"):
+            return "associe_compte_courant"
+        if code.startswith("467"):
+            return "creance_diverse"
+        if code.startswith("512") or code.startswith("53"):
+            return "banque_caisse"
+        if code.startswith("62"):
+            return "honoraires"
+        if code.startswith("63"):
+            return "impots"
+        if code.startswith("64"):
+            return "personnel_charge"
+        if code.startswith("66"):
+            return "charges_financieres"
+        if code.startswith("16"):
+            return "emprunt"
+        if code.startswith("26"):
+            return "participation"
+        if code.startswith("21"):
+            return "immobilisation"
+        classes = {
+            "1": "capitaux",
+            "2": "immobilisation",
+            "3": "stock",
+            "4": "tiers",
+            "5": "tresorerie",
+            "6": "charge",
+            "7": "produit",
+            "8": "autre",
+        }
+        return classes.get(code[0], "autre")
+
+    amount_pat = re.compile(r"\b\d{1,3}(?:[ \u00a0]?\d{3})*(?:[.,]\d{2})?\b\s*(?:€|EUR)?", re.IGNORECASE)
+    code_line_pat = re.compile(r"^\s*(\d{3,6})\b")
+
+    def extract_accounting_records(text: str) -> list[dict]:
+        records: list[dict] = []
+        for raw_line in text.splitlines():
+            line = raw_line.strip()
+            if not line:
+                continue
+            m_code = code_line_pat.search(line)
+            if not m_code:
+                continue
+            code = m_code.group(1)
+            amounts = list(amount_pat.finditer(line))
+            amount_raw = amounts[-1].group(0) if amounts else None
+            records.append(
+                {
+                    "code_comptable": code,
+                    "categorie_pcg": pcg_category(code),
+                    "montant_raw": amount_raw,
+                    "libelle": line,
+                }
+            )
+        return records
+
+    accounting_records = extract_accounting_records(dataset_text)
+
     payload = {
         "document_id": str(document.id),
         "doc_type": effective_type,
@@ -340,7 +426,9 @@ async def export_dataset(
         "quality": {
             "detections_count": len(entities),
             "needs_review": needs_review,
+            "quality_flags": quality_flags,
         },
+        "accounting_records": accounting_records,
     }
     return JSONResponse(payload)
 
