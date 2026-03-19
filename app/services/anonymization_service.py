@@ -5,6 +5,15 @@ from typing import Any
 
 import fitz
 
+try:
+    import pytesseract
+    from PIL import Image
+    from io import BytesIO
+    from pdf2image import convert_from_bytes
+    HAS_OCR = True
+except ImportError:
+    HAS_OCR = False
+
 
 # ──────────────────────────────────────────────────────────────────────
 # REGEX PATTERNS — applied in every profile
@@ -182,19 +191,37 @@ def classify_document_type(text: str, filename: str = "") -> str:
 def extract_text_from_file(content: bytes, extension: str) -> str:
     """Extract text from uploaded bytes (PDF first, images later)."""
     extension = extension.lower().strip(".")
+    text_chunks: list[str] = []
 
     if extension == "pdf":
-        text_chunks: list[str] = []
         try:
             with fitz.open(stream=content, filetype="pdf") as doc:
                 for page in doc:
                     text_chunks.append(page.get_text("text"))
         except Exception:
-            # Corrupt or encrypted PDF — return empty
-            return ""
-        return "\n".join(text_chunks).strip()
+            pass
 
-    # Plain text fallback for non-PDF
+        ext_text = "\n".join(text_chunks).strip()
+
+        # If text is very short (< 10 words) or empty, maybe it's a scan — try OCR fallback
+        if len(ext_text.split()) < 10 and HAS_OCR:
+            try:
+                images = convert_from_bytes(content)
+                ocr_chunks = [pytesseract.image_to_string(img, lang="fra") for img in images]
+                return "\n".join(ocr_chunks).strip()
+            except Exception:
+                return ext_text
+        return ext_text
+
+    # Image support (PNG, JPG, TIFF) via OCR
+    if extension in ["png", "jpg", "jpeg", "tiff", "tif"] and HAS_OCR:
+        try:
+            img = Image.open(BytesIO(content))
+            return str(pytesseract.image_to_string(img, lang="fra")).strip()
+        except Exception:
+            pass
+
+    # Plain text fallback
     try:
         return content.decode("utf-8", errors="ignore").strip()
     except Exception:

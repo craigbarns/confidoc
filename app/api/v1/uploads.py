@@ -12,6 +12,7 @@ from app.core.exceptions import http_400, http_413
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
+from app.services.anonymization_service import HAS_OCR
 from app.services.document_processing_service import build_anonymization_preview
 from app.services.storage_service import store_bytes
 
@@ -102,6 +103,7 @@ async def upload_document(
         "auto_anonymize": auto_anonymize,
         "profile": profile,
         "document_type": document_type,
+        "ocr_available": HAS_OCR,
     }
     if auto_anonymize:
         try:

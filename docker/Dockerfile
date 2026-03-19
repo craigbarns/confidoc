@@ -32,9 +32,12 @@ ENV PYTHONUNBUFFERED=1
 
 WORKDIR /app
 
-# Réinstaller libmagic pour python-magic (détection MIME sécurisée)
+# Réinstaller libmagic, poppler et tesseract pour l'OCR
 RUN apt-get update && apt-get install -y --no-install-recommends \
     libmagic1 \
+    poppler-utils \
+    tesseract-ocr \
+    tesseract-ocr-fra \
     && rm -rf /var/lib/apt/lists/*
 
 # Copier et installer les wheels pré-construits
