@@ -7,7 +7,11 @@ import fitz
 STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("date_fr", re.compile(r"\b(?:0?[1-9]|[12]\d|3[01])[\/\-.](?:0?[1-9]|1[0-2])[\/\-.](?:19|20)\d{2}\b"), "[DATE]"),
     ("amount_eur", re.compile(r"\b\d{1,3}(?:[ \u00a0]?\d{3})*(?:[.,]\d{2})?\s?(?:€|EUR)\b", re.IGNORECASE), "[AMOUNT]"),
+    ("amount_plain", re.compile(r"\b\d{1,3}(?:[ \u00a0]?\d{3})*,\d{2}\b"), "[AMOUNT]"),
     ("invoice_number", re.compile(r"(?i)\b(?:facture|invoice)\s*(?:n[°o]|#|num(?:é|e)ro)?\s*[:\-]?\s*[A-Z0-9\-\/]{2,}\b"), "[INVOICE_REF]"),
+    ("company_legal_name", re.compile(r"\b(?:SAS|SARL|EURL|SCI|SELARL|SCP|SA|SNC|EI|EIRL)\s+[A-Z0-9][A-Z0-9 \-']{1,}\b"), "[COMPANY]"),
+    ("person_name", re.compile(r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b"), "[PERSON]"),
+    ("country", re.compile(r"\bFrance\b", re.IGNORECASE), "[COUNTRY]"),
 ]
 
 INVOICE_HINTS = (
@@ -120,6 +124,36 @@ def _detect_entities(text: str, profile: str = "moderate", document_type: str = 
                         "replacement": replacement,
                     }
                 )
+        # Invoice strict mode: aggressively mask identity block before "Désignation"
+        desig_idx = text.lower().find("désignation")
+        header_zone = text[:desig_idx] if desig_idx > 0 else text[:1200]
+        for line in header_zone.splitlines():
+            clean = line.strip()
+            if not clean:
+                continue
+            is_upper_heavy = sum(c.isupper() for c in clean) >= max(5, int(len(clean) * 0.5))
+            has_digits = any(ch.isdigit() for ch in clean)
+            looks_identity = (
+                ("sci" in clean.lower() or "sas" in clean.lower() or "sarl" in clean.lower())
+                or ("terrasses" in clean.lower() or "rue" in clean.lower() or "avenue" in clean.lower())
+                or re.search(r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ'’-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ'’-]{2,}\b", clean) is not None
+                or (is_upper_heavy and not has_digits and len(clean) >= 6)
+            )
+            if not looks_identity:
+                continue
+            start = text.find(line)
+            if start < 0:
+                continue
+            end = start + len(line)
+            matches.append(
+                {
+                    "entity_type": "invoice_identity_block",
+                    "start_index": start,
+                    "end_index": end,
+                    "value_excerpt": line,
+                    "replacement": "[IDENTITY]",
+                }
+            )
 
     # Keep longest match first, then left-to-right
     matches.sort(key=lambda m: (m["start_index"], -(m["end_index"] - m["start_index"])))
