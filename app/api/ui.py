@@ -209,6 +209,7 @@ async def upload_ui() -> str:
             <button class="small" data-action="exporttxt" data-id="${doc.id}">Export TXT</button>
             <button class="small" data-action="exportpdf" data-id="${doc.id}">Export PDF</button>
             <button class="small" data-action="exportdataset" data-id="${doc.id}">Export dataset</button>
+            <button class="small" data-action="delete" data-id="${doc.id}">Supprimer</button>
           </td>
         `;
         docsBody.appendChild(tr);
@@ -344,6 +345,16 @@ async def upload_ui() -> str:
             showPreview(t ? t.slice(0, 5000) : "Dataset exporté (anonymized_text vide).");
           } else {
             showPreview("Export dataset échoué.");
+          }
+        } else if (action === "delete") {
+          const res = await fetch(`/api/v1/documents/${id}`, { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } });
+          if (res.ok) {
+            show({ status: "deleted", document_id: id });
+            showPreview("Document supprimé.");
+          } else {
+            const txt = await res.text();
+            show({ status: res.status, error: txt });
+            showPreview("Suppression échouée.");
           }
         }
       } catch (e) {

@@ -7,7 +7,7 @@ from typing import Literal
 
 from fastapi import APIRouter, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import desc, select, update
+from sqlalchemy import desc, delete as sql_delete, select, update
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
@@ -29,7 +29,7 @@ from app.services.anonymization_service import (
     extract_text_from_file,
 )
 from app.services.pdf_redaction_service import redact_pdf_bytes
-from app.services.storage_service import read_bytes
+from app.services.storage_service import delete_bytes, read_bytes
 
 router = APIRouter()
 
@@ -343,3 +343,24 @@ async def export_dataset(
         },
     }
     return JSONResponse(payload)
+
+
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Supprimer un document (et son fichier)",
+    include_in_schema=True,
+)
+async def delete_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    # 1) Supprimer le fichier (best effort)
+    delete_bytes(document.storage_backend, document.storage_key)
+
+    # 2) Supprimer la base (cascade sur versions/detections)
+    await db.execute(sql_delete(Document).where(Document.id == document.id))
+    await db.commit()

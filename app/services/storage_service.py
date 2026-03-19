@@ -60,3 +60,26 @@ def read_bytes(storage_backend: str, storage_key: str) -> bytes:
             response.release_conn()
 
     return Path(storage_key).read_bytes()
+
+
+def delete_bytes(storage_backend: str, storage_key: str) -> None:
+    """Supprime un fichier du backend de stockage (best effort)."""
+    if storage_backend == "minio":
+        client = Minio(
+            settings.MINIO_ENDPOINT,
+            access_key=settings.MINIO_ACCESS_KEY,
+            secret_key=settings.MINIO_SECRET_KEY,
+            secure=settings.MINIO_USE_SSL,
+        )
+        try:
+            client.remove_object(settings.MINIO_BUCKET, storage_key)
+        except Exception:
+            # La suppression est best-effort: on ne bloque pas la suppression DB si l'objet n'existe plus.
+            return
+        return
+
+    try:
+        Path(storage_key).unlink(missing_ok=True)
+    except Exception:
+        # Best-effort: on ne bloque pas la suppression DB si le fichier n'existe plus ou si perms manquantes.
+        return
