@@ -99,7 +99,12 @@ async def anonymize_document(
     document_type: str = Query(default="auto"),
 ) -> AnonymizeResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    file_content = read_bytes(document.storage_backend, document.storage_key)
+    try:
+        file_content = read_bytes(document.storage_backend, document.storage_key)
+    except FileNotFoundError as exc:
+        raise http_404(
+            "Fichier source introuvable sur le stockage actuel. Ré-uploade le document."
+        ) from exc
     preview_text, detections, effective_type = await build_anonymization_preview(
         db=db,
         document=document,
@@ -232,7 +237,12 @@ async def export_redacted_pdf(document_id: str, current_user: CurrentUser, db: D
     if not detections:
         raise http_404("Aucune détection disponible. Lance /anonymize d'abord")
 
-    original_bytes = read_bytes(document.storage_backend, document.storage_key)
+    try:
+        original_bytes = read_bytes(document.storage_backend, document.storage_key)
+    except FileNotFoundError as exc:
+        raise http_404(
+            "Fichier source introuvable sur le stockage actuel. Ré-uploade le document."
+        ) from exc
     sensitive_values = [item.value_excerpt for item in detections]
     redacted_bytes = redact_pdf_bytes(original_bytes, sensitive_values)
 
@@ -271,7 +281,12 @@ async def export_dataset(
         original_text = original_version.content_text
 
     if original_text is None:
-        original_bytes = read_bytes(document.storage_backend, document.storage_key)
+        try:
+            original_bytes = read_bytes(document.storage_backend, document.storage_key)
+        except FileNotFoundError as exc:
+            raise http_404(
+                "Fichier source introuvable sur le stockage actuel. Ré-uploade le document."
+            ) from exc
         original_text = extract_text_from_file(original_bytes, document.extension) or ""
 
     effective_type = classify_document_type(original_text, document.original_filename)
