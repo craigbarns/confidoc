@@ -1,0 +1,1 @@
+"""ConfiDoc Backend — API package."""

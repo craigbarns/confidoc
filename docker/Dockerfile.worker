@@ -1,0 +1,57 @@
+# ==============================================================================
+# ConfiDoc Backend — Celery Worker Dockerfile
+# ==============================================================================
+FROM python:3.11-slim-bookworm AS builder
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /build
+
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    build-essential \
+    libffi-dev \
+    tesseract-ocr \
+    tesseract-ocr-fra \
+    tesseract-ocr-eng \
+    poppler-utils \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY pyproject.toml ./
+RUN pip install --no-cache-dir --upgrade pip && \
+    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels -e ".[processing]"
+
+
+# ==============================================================================
+# Phase finale (Worker avec OCR)
+# ==============================================================================
+FROM python:3.11-slim-bookworm
+
+ENV PYTHONDONTWRITEBYTECODE=1
+ENV PYTHONUNBUFFERED=1
+
+WORKDIR /app
+
+# Dépendances système lourdes pour OCR et parsing PDF
+RUN apt-get update && apt-get install -y --no-install-recommends \
+    tesseract-ocr \
+    tesseract-ocr-fra \
+    tesseract-ocr-eng \
+    poppler-utils \
+    libmagic1 \
+    && rm -rf /var/lib/apt/lists/*
+
+COPY --from=builder /build/wheels /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
+
+COPY . .
+
+# Télécharger le modèle spaCy de base (NER FR) - Optionnel mais recommandé ici
+RUN python -m spacy download fr_core_news_md
+
+RUN useradd -m confidoc && chown -R confidoc:confidoc /app
+USER confidoc
+
+# Lancer le worker principal
+CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "-Q", "ingestion,ocr,processing,rendering,export,maintenance,notifications"]
