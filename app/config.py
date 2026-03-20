@@ -96,6 +96,12 @@ class Settings(BaseSettings):
     LLM_SNIPPET_CHARS: int = 800
     LLM_MAX_DOC_CHARS: int = 6000
 
+    # ---- Local AI (Ollama / Open WebUI stack) ----
+    OLLAMA_ENABLED: bool = False
+    OLLAMA_BASE_URL: str = "http://localhost:11434"
+    OLLAMA_MODEL: str = "qwen3:1.7b"
+    OLLAMA_TIMEOUT_SECONDS: int = 90
+
     @field_validator("APP_ENV", mode="before")
     @classmethod
     def normalize_app_env(cls, value: str) -> str:
