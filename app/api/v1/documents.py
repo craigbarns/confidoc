@@ -189,7 +189,7 @@ async def anonymize_document(
     current_user: CurrentUser,
     db: DbSession,
     profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting"] = Query(
-        default="moderate"
+        default="dataset_accounting"
     ),
     document_type: str = Query(default="auto"),
 ) -> AnonymizeResponse:

@@ -240,11 +240,8 @@ HTML_DASHBOARD = """
             <div class="upload-config">
               <div>
                 <label class="form-group" style="margin-bottom:4px"><span style="font-size:12px;color:var(--text-dim)">Profil d'anonymisation</span></label>
-                <select id="profileSelect">
-                  <option value="moderate" selected>🟢 Modéré</option>
-                  <option value="strict">🟡 Strict</option>
-                  <option value="dataset_strict">🔴 Dataset strict</option>
-                  <option value="dataset_accounting">📊 Dataset comptable</option>
+                <select id="profileSelect" disabled>
+                  <option value="dataset_accounting" selected>📊 Dataset comptable</option>
                 </select>
               </div>
               <div class="checkbox-row">
@@ -368,8 +365,6 @@ function renderDocs(items) {
           <button class="btn-act primary" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
           <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Preview</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
-          <button class="btn-act" data-a="exporttxt" data-id="${doc.id}">📝 TXT</button>
-          <button class="btn-act" data-a="exportpdf" data-id="${doc.id}">📕 PDF</button>
           <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Dataset</button>
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
         </div>
