@@ -155,6 +155,13 @@ body{background:var(--bg-deep)}
 .preview-content .tag-address,.preview-content .tag-city{background:rgba(245,158,11,0.15);color:var(--amber)}
 .preview-content .tag-default{background:rgba(244,63,94,0.12);color:var(--rose)}
 
+/* KB Ask panel */
+.kb-ask-panel{margin-bottom:20px;animation-delay:.14s}
+.kb-ask-row{display:flex;gap:10px;align-items:center}
+.kb-ask-input{flex:1;padding:12px 14px;background:rgba(2,6,23,0.7);border:1px solid var(--glass-border);border-radius:var(--radius-xs);color:var(--text);font-size:14px;font-family:inherit;outline:none;transition:var(--transition)}
+.kb-ask-input:focus{border-color:var(--accent);box-shadow:0 0 0 3px var(--accent-glow)}
+.kb-ask-hint{font-size:12px;color:var(--text-dim);margin-top:8px}
+
 /* API Response */
 .api-panel{margin-top:20px}
 .api-content{background:rgba(2,6,23,0.8);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:20px;max-height:300px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;color:var(--text-dim);white-space:pre-wrap;word-break:break-word}
@@ -265,6 +272,16 @@ HTML_DASHBOARD = """
               <div class="docs-empty"><div class="empty-icon">📂</div><p>Aucun document.<br>Uploadez votre premier fichier.</p></div>
             </div>
           </div>
+        </div>
+      </div>
+      <div class="panel kb-ask-panel">
+        <div class="panel-header"><h2><span class="icon">💬</span> Question à la base anonyme</h2></div>
+        <div class="panel-body">
+          <div class="kb-ask-row">
+            <input id="kbQuestion" class="kb-ask-input" type="text" placeholder="Ex: charges marketing T1, compte 622, facture fournisseur..." />
+            <button id="askKbBtn" class="btn btn-ghost btn-sm">Poser la question</button>
+          </div>
+          <div class="kb-ask-hint">Astuce: commencez par ingérer vos documents via l'API <code>/api/v1/kb/ingest/{document_id}</code>.</div>
         </div>
       </div>
       <div class="panel preview-panel">
@@ -467,6 +484,50 @@ async function doUpload() {
 
 // Refresh
 $("refreshBtn").addEventListener("click", () => { refreshDocs(); toast("Liste actualisée", "info"); });
+
+// KB ask
+async function askKb() {
+  const input = $("kbQuestion");
+  const query = (input.value || "").trim();
+  if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
+  if (!query) { toast("Saisissez une question", "error"); return; }
+
+  const askBtn = $("askKbBtn");
+  askBtn.disabled = true;
+  try {
+    toast("Recherche dans la base anonyme…", "info");
+    const {res, data} = await api("/api/v1/kb/search", {
+      method: "POST",
+      headers: {"Content-Type":"application/json"},
+      body: JSON.stringify({query, limit: 20, include_needs_review: true}),
+    });
+    showApi(data);
+    if (!res.ok) { toast(data.detail || "Recherche KB échouée", "error"); return; }
+
+    const results = Array.isArray(data.results) ? data.results : [];
+    if (!results.length) {
+      showPreview("Aucun résultat dans la base anonyme pour cette question.");
+      toast("Aucun résultat", "info");
+      return;
+    }
+
+    const lines = results.slice(0, 8).map((r, idx) => {
+      if (r.type === "accounting_record") {
+        return `${idx + 1}. [record] ${r.code_comptable || "-"} | ${r.categorie_pcg || "-"} | ${r.montant_raw || "-"}\n${r.libelle || ""}`;
+      }
+      return `${idx + 1}. [chunk] ${r.chunk_text || ""}`;
+    });
+    showPreview(`Question: ${query}\n\nRésultats (${results.length}):\n\n${lines.join("\n\n")}`);
+    toast(`${results.length} résultat(s) trouvés`, "success");
+  } catch (e) {
+    toast("Erreur réseau", "error");
+  } finally {
+    askBtn.disabled = false;
+  }
+}
+
+$("askKbBtn").addEventListener("click", askKb);
+$("kbQuestion").addEventListener("keydown", e => { if (e.key === "Enter") askKb(); });
 
 // Document actions
 docList.addEventListener("click", async e => {
