@@ -70,6 +70,33 @@ def _extract_financial_amount_for_label(text: str, label_regex: str, min_amount:
     return value if abs(value) >= min_amount else None
 
 
+def _extract_first_amount_from_patterns(text: str, patterns: list[str], min_amount: float = 100.0) -> float | None:
+    for pat in patterns:
+        val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount)
+        if val is not None:
+            return val
+    return None
+
+
+def _extract_first_date_from_patterns(text: str, patterns: list[str]) -> str | None:
+    for pat in patterns:
+        v = _extract_first(pat, text)
+        if v:
+            return v
+    return None
+
+
+def _extract_first_int_from_patterns(text: str, patterns: list[str]) -> float | None:
+    for pat in patterns:
+        v = _extract_first(pat, text)
+        if not v:
+            continue
+        n = _to_float_fr(v)
+        if n is not None and 1 <= n <= 200:
+            return n
+    return None
+
+
 def _clean_amount_candidate(value: float | None) -> float | None:
     """Reject numeric noise for business amounts (years, form IDs, zip codes, compact dates)."""
     if value is None:
@@ -240,23 +267,66 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     immeubles = _extract_2072_immeubles_table(text)
     associes = _extract_2072_associes_table(text)
 
-    # V2.3 focus: prioritize 5 critical reliable fields first.
+    # V3 focus: reliably fill only critical fields first.
+    denom = _extract_value_near_label(
+        header_zone,
+        r"d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci",
+        r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
+    ) or _extract_value_near_label(
+        text,
+        r"d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci",
+        r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
+    )
+
+    date_cloture = _extract_first_date_from_patterns(
+        header_zone + "\n" + text,
+        [
+            r"(?:date\s+de\s+cl[ôo]ture(?:\s+de\s+l[' ]exercice)?)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
+            r"(?:soc5).{0,40}([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
+            r"(?:cl[ôo]ture).{0,40}([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
+        ],
+    )
+    nb_associes = _extract_first_int_from_patterns(
+        header_zone + "\n" + text,
+        [
+            r"(?:nombre\s+d[' ]associ[ée]s?)\s*[:\-]?\s*([0-9]{1,3})",
+            r"(?:soc18).{0,20}([0-9]{1,3})",
+        ],
+    )
+    revenus_bruts = _extract_first_amount_from_patterns(
+        results_zone + "\n" + text,
+        [
+            r"revenus?\s+bruts?",
+            r"montant\s+brut.{0,30}loyers?\s+encaiss",
+        ],
+        min_amount=100.0,
+    )
+    interets = _extract_first_amount_from_patterns(
+        results_zone + "\n" + text,
+        [
+            r"int[eé]r[eê]ts?\s+d[' ]emprunts?",
+            r"int[eé]r[eê]ts?\s+des?\s+emprunts?",
+        ],
+        min_amount=50.0,
+    )
+    revenu_net = _extract_first_amount_from_patterns(
+        results_zone + "\n" + text,
+        [
+            r"revenu\s+net(?:\s+foncier)?",
+            r"d[ée]ficit\s+net",
+            r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)",
+        ],
+        min_amount=100.0,
+    )
+
     return {
-        "denomination_sci": _field(
-            _extract_value_near_label(
-                header_zone,
-                r"d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci",
-                r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
-            ),
-            0.9,
-            "header:denomination_societe",
-        ),
-        "date_cloture_exercice": _field(_extract_first(r"(?:date\s+de\s+cl[ôo]ture(?:\s+de\s+l[' ]exercice)?)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", header_zone), 0.92, "header:date_cloture_exercice"),
-        "nombre_associes": _field(_to_float_fr(_extract_first(r"(?:nombre\s+d[' ]associ[ée]s?)\s*[:\-]?\s*([0-9]{1,3})", header_zone)), 0.88, "header:nombre_associes"),
-        "revenus_bruts": _field(_extract_financial_amount_for_label(results_zone, r"revenus?\s+bruts?"), 0.9, "resultats:revenus_bruts"),
+        "denomination_sci": _field(denom, 0.92 if denom else 0.0, "header:denomination_societe"),
+        "date_cloture_exercice": _field(date_cloture, 0.92 if date_cloture else 0.0, "header:date_cloture_exercice"),
+        "nombre_associes": _field(nb_associes, 0.9 if nb_associes is not None else 0.0, "header:nombre_associes"),
+        "revenus_bruts": _field(revenus_bruts, 0.9 if revenus_bruts is not None else 0.0, "resultats:revenus_bruts"),
         "frais_charges_hors_interets": _field(_extract_financial_amount_for_label(results_zone, r"frais?\s+et\s+charges?.{0,30}autres?.{0,30}int[eé]r"), 0.88, "resultats:frais_charges_hors_interets"),
-        "interets_emprunts": _field(_extract_financial_amount_for_label(results_zone, r"int[eé]r[eê]ts?\s+d[' ]emprunts?"), 0.88, "resultats:interets_emprunts"),
-        "revenu_net_foncier": _field(_extract_financial_amount_for_label(results_zone, r"revenu\s+net(?:\s+foncier)?|d[ée]ficit\s+net"), 0.9, "resultats:revenu_net_foncier"),
+        "interets_emprunts": _field(interets, 0.88 if interets is not None else 0.0, "resultats:interets_emprunts"),
+        "revenu_net_foncier": _field(revenu_net, 0.9 if revenu_net is not None else 0.0, "resultats:revenu_net_foncier"),
         # Keep advanced fields nullable for now; they will be re-enabled once core 5 are stable.
         "adresse_sci": _field(None, 0.0, "deferred:v2.3"),
         "adresse_siege_ouverture": _field(None, 0.0, "deferred:v2.3"),
