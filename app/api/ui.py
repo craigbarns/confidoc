@@ -157,6 +157,21 @@ body{background:var(--bg-deep)}
 .preview-content .tag-address,.preview-content .tag-city{background:rgba(245,158,11,0.15);color:var(--amber)}
 .preview-content .tag-default{background:rgba(244,63,94,0.12);color:var(--rose)}
 
+/* Before/After split view */
+.preview-mode-row{display:flex;gap:8px;margin-bottom:12px;flex-wrap:wrap}
+.preview-mode-btn{padding:7px 10px;font-size:12px;border-radius:var(--radius-xs);border:1px solid var(--glass-border);background:rgba(2,6,23,0.35);color:var(--text-muted);cursor:pointer;transition:var(--transition)}
+.preview-mode-btn:hover{border-color:rgba(148,163,184,0.25);background:rgba(255,255,255,0.04);color:var(--text)}
+.preview-mode-btn.active{border-color:rgba(59,130,246,0.35);color:var(--accent);background:rgba(59,130,246,0.08)}
+
+.split-view{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+.split-pane{background:rgba(2,6,23,0.45);border:1px solid var(--glass-border);border-radius:var(--radius-xs);padding:12px}
+.split-title{font-size:12px;color:var(--text-dim);font-weight:600;margin-bottom:8px;letter-spacing:.02em}
+.split-content{max-height:420px;overflow:auto;white-space:pre-wrap;word-break:break-word;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:var(--text-muted)}
+.split-content::-webkit-scrollbar{width:4px}.split-content::-webkit-scrollbar-thumb{background:var(--glass-border);border-radius:4px}
+
+/* Masked panel */
+.masked-content{background:rgba(2,6,23,0.8);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:16px;max-height:420px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:var(--text-dim);white-space:pre-wrap;word-break:break-word}
+
 /* KB Ask panel */
 .kb-ask-panel{margin-bottom:20px;animation-delay:.14s}
 .kb-ask-row{display:flex;gap:10px;align-items:center}
@@ -288,7 +303,19 @@ HTML_DASHBOARD = """
       </div>
       <div class="panel preview-panel">
         <div class="panel-header"><h2><span class="icon">👁️</span> Prévisualisation</h2></div>
-        <div class="panel-body"><div class="preview-content" id="previewOutput">Sélectionnez un document et lancez une action pour voir la prévisualisation ici.</div></div>
+        <div class="panel-body">
+          <div class="preview-mode-row">
+            <button id="modeAnonOnly" class="preview-mode-btn active" type="button">Anonymisé</button>
+            <button id="modeBeforeAfter" class="preview-mode-btn" type="button">Avant / Après</button>
+          </div>
+          <div class="preview-content" id="previewOutput">Sélectionnez un document et lancez une action pour voir la prévisualisation ici.</div>
+        </div>
+      </div>
+      <div class="panel" style="animation-delay:.22s">
+        <div class="panel-header"><h2><span class="icon">🕵️</span> Ce qui a été masqué</h2></div>
+        <div class="panel-body">
+          <div class="masked-content" id="maskedOutput">Lancez `Anonymiser` / `Traiter tout` pour voir le résumé.</div>
+        </div>
       </div>
       <div class="panel api-panel" style="animation-delay:.2s">
         <div class="panel-header"><h2><span class="icon">⚡</span> Réponse API</h2></div>
@@ -305,9 +332,15 @@ JAVASCRIPT = """
 let accessToken = "";
 let currentDocs = [];
 let docDetectionMap = {};
+let lastAnonDocId = null;
+let lastAnonText = "";
+let lastOriginalDocId = null;
+let lastOriginalText = "";
+let previewMode = "anon"; // "anon" | "beforeafter"
 
 const $ = id => document.getElementById(id);
 const previewOut = $("previewOutput");
+const maskedOut = $("maskedOutput");
 const apiOut = $("apiOutput");
 const docList = $("docList");
 const toastBox = $("toastContainer");
@@ -333,6 +366,156 @@ function highlightTags(text) {
 }
 
 function showPreview(text) { previewOut.innerHTML = highlightTags(text); }
+function escapeHtml(s) {
+  if (s === null || s === undefined) return "";
+  return String(s)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/\"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+}
+
+function setPreviewMode(mode) {
+  previewMode = mode;
+  const btnAnon = $("modeAnonOnly");
+  const btnBA = $("modeBeforeAfter");
+  if (btnAnon) btnAnon.classList.toggle("active", mode === "anon");
+  if (btnBA) btnBA.classList.toggle("active", mode === "beforeafter");
+}
+
+function showBeforeAfter(originalText, anonymizedText) {
+  previewOut.innerHTML = `
+    <div class="split-view">
+      <div class="split-pane">
+        <div class="split-title">Avant (original)</div>
+        <div class="split-content">${escapeHtml(originalText)}</div>
+      </div>
+      <div class="split-pane">
+        <div class="split-title">Après (anonymisé)</div>
+        <div class="split-content">${highlightTags(anonymizedText)}</div>
+      </div>
+    </div>
+  `;
+}
+
+async function refreshMaskedSummary(docId) {
+  if (!docId) return;
+  try {
+    const {res, data} = await api(`/api/v1/documents/${docId}/proof`);
+    if (!res.ok) return;
+
+    const types = data && data.detections_entity_types_count ? data.detections_entity_types_count : {};
+    const entries = Object.entries(types).sort((a,b) => (b[1]||0) - (a[1]||0));
+    const total = entries.reduce((sum, it) => sum + (it[1]||0), 0);
+
+    const LABELS = {
+      "email":"Email",
+      "phone_fr":"Telephone",
+      "phone_intl":"Telephone",
+      "iban":"IBAN",
+      "iban_compact":"IBAN",
+      "bic":"BIC",
+      "siret":"SIRET",
+      "siren":"SIREN",
+      "vat_fr":"TVA",
+      "nss":"NIR/NSS",
+      "address_line":"Adresse",
+      "postal_city":"Ville",
+      "person_title":"Nom/Personne",
+      "person_name":"Nom/Personne",
+      "person_uppercase":"Nom/Personne",
+      "company_legal_name":"Raison sociale",
+      "invoice_number":"Reference facture",
+      "date_fr":"Date",
+      "date_iso":"Date",
+      "date_text_fr":"Date",
+      "amount_eur":"Montant",
+      "amount_plain":"Montant",
+      "address_residence":"Adresse",
+      "bank_account_code_label":"Compte bancaire",
+      "country":"Pays",
+      "invoice_identity_block":"Bloc identite",
+      "labeled_sensitive_value":"Valeur sensible (libelle:valeur)",
+    };
+
+    const EXPL = {
+      "email":"Masquage des emails (identification directe).",
+      "phone_fr":"Masquage des numeros de telephone.",
+      "phone_intl":"Masquage des numeros de telephone internationaux.",
+      "iban":"Masquage des IBAN.",
+      "bic":"Masquage des BIC.",
+      "siret":"Masquage des SIRET (identifiant entreprise).",
+      "siren":"Masquage des SIREN (identifiant entreprise).",
+      "vat_fr":"Masquage des identifiants TVA FR.",
+      "nss":"Masquage des numeros personnels (NIR/NSS).",
+      "address_line":"Masquage des adresses completes.",
+      "postal_city":"Masquage partiel de la localisation (ville).",
+      "person_title":"Masquage des noms de personnes.",
+      "person_name":"Masquage des noms de personnes.",
+      "person_uppercase":"Masquage des noms de personnes (majuscule).",
+      "company_legal_name":"Masquage des raisons sociales (selon regles).",
+      "invoice_number":"Masquage ou redaction des references de factures selon profil.",
+      "date_fr":"Masquage/normalisation des dates.",
+      "amount_eur":"Montants conserves ou masques selon profil (dataset comptable: preserve).",
+      "amount_plain":"Montants conserves ou masques selon profil (dataset comptable: preserve).",
+      "address_residence":"Masquage de blocs adresses typiques.",
+      "bank_account_code_label":"Masquage du label bancaire en conservant le code comptable si applicable.",
+      "country":"Masquage des pays.",
+      "invoice_identity_block":"Masquage d'un bloc identite detecte dans l'en-tete.",
+      "labeled_sensitive_value":"Masquage des paires libelle:valeur sensibles (RGPD).",
+    };
+
+    const top = entries.slice(0, 10).map(([k,v]) => {
+      const label = LABELS[k] || k;
+      const expl = EXPL[k] || "Masquage automatique d'une donnee sensible detectee.";
+      return `- ${label}: ${v}\n  ${expl}`;
+    });
+
+    maskedOut.textContent =
+      `Ce qui a ete masque (compteur spans): ${total}\n\n` +
+      (top.length ? top.join("\n") : "Aucune donnee sensible detectee.");
+  } catch (e) {
+    // no-op
+  }
+}
+
+function setAnonymizedPreview(docId, text) {
+  lastAnonDocId = docId;
+  lastAnonText = text || "";
+  lastOriginalDocId = null;
+  lastOriginalText = "";
+  showPreview(lastAnonText);
+  refreshMaskedSummary(docId);
+  if (previewMode === "beforeafter" && lastOriginalDocId === docId && lastOriginalText) {
+    showBeforeAfter(lastOriginalText, lastAnonText);
+  }
+}
+
+async function loadOriginalForBeforeAfter() {
+  if (!lastAnonDocId || !lastAnonText) { toast("Chargez d'abord un document", "error"); return; }
+  const docId = lastAnonDocId;
+  if (!confirm("Afficher la version originale peut exposer des donnees sensibles. Continuer ?")) return;
+  toast("Chargement version originale…", "info");
+  try {
+    const res = await fetch(
+      `/api/v1/documents/${docId}/original?allow_original=true&max_chars=8000`,
+      {headers:{Authorization:`Bearer ${accessToken}`}}
+    );
+    const raw = await res.text();
+    if (!res.ok) {
+      let detail = raw;
+      try { detail = JSON.parse(raw).detail || raw; } catch {}
+      toast(detail || "Erreur chargement original", "error");
+      return;
+    }
+    lastOriginalDocId = docId;
+    lastOriginalText = raw || "";
+    showBeforeAfter(lastOriginalText, lastAnonText);
+  } catch (e) {
+    toast("Erreur reseau", "error");
+  }
+}
 function setDetections(count, context) {
   $("statDetections").textContent = count;
   $("statDetectionsSub").textContent = context || "dernier document traité";
@@ -483,6 +666,22 @@ async function refreshDocDetections(items) {
       if (res.ok) setDocDetection(doc.id, data.detections_count || 0);
     } catch {}
   }
+}
+
+// Preview mode (anonymisé / avant-apres)
+const modeAnonBtn = $("modeAnonOnly");
+const modeBeforeAfterBtn = $("modeBeforeAfter");
+if (modeAnonBtn) {
+  modeAnonBtn.addEventListener("click", () => {
+    setPreviewMode("anon");
+    if (lastAnonText) showPreview(lastAnonText);
+  });
+}
+if (modeBeforeAfterBtn) {
+  modeBeforeAfterBtn.addEventListener("click", async () => {
+    setPreviewMode("beforeafter");
+    await loadOriginalForBeforeAfter();
+  });
 }
 
 // Login
@@ -651,7 +850,7 @@ docList.addEventListener("click", async e => {
       const a2 = await api(`/api/v1/documents/${id}/preview`);
       showApi(a2.data);
       if (!a2.res.ok) { toast(a2.data.detail||"Échec preview", "error"); return; }
-      showPreview(a2.data.preview_text||"");
+      setAnonymizedPreview(id, a2.data.preview_text||"");
 
       const a3 = await api(`/api/v1/documents/${id}/validate`, {method:"POST"});
       showApi(a3.data);
@@ -668,12 +867,12 @@ docList.addEventListener("click", async e => {
       toast("Anonymisation en cours…", "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
       showApi(data);
-      if (res.ok) { showPreview(data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); setDetections(data.detections_count||0, "dernier document traité"); setDocDetection(id, data.detections_count||0); }
+      if (res.ok) { setAnonymizedPreview(id, data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); setDetections(data.detections_count||0, "dernier document traité"); setDocDetection(id, data.detections_count||0); }
       else toast(data.detail||"Échec", "error");
     } else if (action === "preview") {
       const {res, data} = await api(`/api/v1/documents/${id}/preview`);
       showApi(data);
-      if (res.ok) showPreview(data.preview_text||""); else toast(data.detail||"Pas de preview", "error");
+      if (res.ok) setAnonymizedPreview(id, data.preview_text||""); else toast(data.detail||"Pas de preview", "error");
     } else if (action === "validate") {
       const {res, data} = await api(`/api/v1/documents/${id}/validate`, {method:"POST"});
       showApi(data);
@@ -696,7 +895,7 @@ docList.addEventListener("click", async e => {
       showApi(data);
       if (res.ok) {
         const q = data && data.quality ? data.quality : {};
-        showPreview(data.anonymized_text||"Dataset exporté");
+        setAnonymizedPreview(id, data.anonymized_text||"Dataset exporté");
         toast(`Dataset: ${q.detections_count||0} entités, review=${q.needs_review}`, "success");
       }
       else toast("Export dataset échoué", "error");

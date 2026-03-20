@@ -259,6 +259,32 @@ async def preview_document(
     )
 
 
+@router.get(
+    "/{document_id}/original",
+    response_class=PlainTextResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Retourne le texte original (avec garde-fou RGPD)",
+)
+async def original_text_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    allow_original: bool = Query(default=False, description="Doit etre a true pour autoriser l'affichage du texte original."),
+    max_chars: int = Query(default=8000, ge=100, le=50000, description="Limite de caracteres pour eviter les charges trop lourdes."),
+) -> PlainTextResponse:
+    """Expose le texte original uniquement si allow_original=true.
+
+    Utilite pour la vue 'avant/apres' en console UI (beta/demo). Le texte original contient des donnees sensibles.
+    """
+    if not allow_original:
+        raise http_400("Acces au texte original desactive. Utilisez allow_original=true.")
+
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_original_text(db, document)
+    sliced = original_text[:max_chars] if original_text else ""
+    return PlainTextResponse(sliced)
+
+
 @router.post(
     "/{document_id}/validate",
     status_code=status.HTTP_200_OK,
