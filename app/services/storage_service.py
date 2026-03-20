@@ -43,6 +43,15 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
         logger.info("file_stored_minio", key=object_key, size=len(content))
         return ("minio", object_key)
 
+    if settings.STORAGE_BACKEND == "database":
+        # Les octets sont persistés via Document.raw_content.
+        # storage_key sert uniquement de trace logique.
+        from hashlib import sha256
+
+        db_key = f"db://{sha256(content).hexdigest()}.{extension}"
+        logger.info("file_stored_database_marker", key=db_key, size=len(content))
+        return ("database", db_key)
+
     # Local storage
     local_dir = Path(settings.LOCAL_UPLOAD_DIR)
     local_dir.mkdir(parents=True, exist_ok=True)
@@ -58,6 +67,10 @@ def read_bytes(storage_backend: str, storage_key: str) -> bytes:
     Raises:
         FileNotFoundError: if the file cannot be found.
     """
+    if storage_backend == "database":
+        # La lecture réelle se fait via Document.raw_content dans les endpoints/services.
+        raise FileNotFoundError(f"Database-backed content must be read from raw_content: {storage_key}")
+
     if storage_backend == "minio":
         try:
             client = _get_minio_client()
@@ -83,6 +96,11 @@ def read_bytes(storage_backend: str, storage_key: str) -> bytes:
 
 def delete_bytes(storage_backend: str, storage_key: str) -> None:
     """Delete file from storage backend (best effort, never raises)."""
+    if storage_backend == "database":
+        # Rien à supprimer côté objet externe.
+        logger.info("file_deleted_database_marker", key=storage_key)
+        return
+
     if storage_backend == "minio":
         try:
             client = _get_minio_client()

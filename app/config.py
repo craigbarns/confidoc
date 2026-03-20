@@ -46,7 +46,7 @@ class Settings(BaseSettings):
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
 
     # ---- MinIO / S3 ----
-    STORAGE_BACKEND: Literal["local", "minio"] = "local"
+    STORAGE_BACKEND: Literal["local", "minio", "database"] = "local"
     LOCAL_UPLOAD_DIR: str = "/tmp/confidoc_uploads"
     MINIO_ENDPOINT: str = "localhost:9000"
     MINIO_ACCESS_KEY: str = "confidoc_minio"
