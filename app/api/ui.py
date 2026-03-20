@@ -415,7 +415,7 @@ $("loginBtn").addEventListener("click", async () => {
     });
     showApi(data);
     if (!res.ok) {
-      const detail = data?.detail || data?.raw || `Échec login (${res.status})`;
+      const detail = (data && data.detail) || (data && data.raw) || `Échec login (${res.status})`;
       toast(detail, "error");
       return;
     }
@@ -478,7 +478,7 @@ async function doUpload() {
     } else {
       fill.style.width = "100%";
       progText.textContent = "Terminé !";
-      const count = data.processing?.detections_count;
+      const count = data && data.processing ? data.processing.detections_count : null;
       toast(`${file.name} uploadé — ${count != null ? count + " détections" : "prêt"}`, "success");
       await refreshDocs();
     }
@@ -563,7 +563,8 @@ docList.addEventListener("click", async e => {
       showApi(a4data);
       if (!a4.ok) { toast("Échec export dataset", "error"); return; }
       showPreview(a4data.anonymized_text||"Dataset exporté");
-      toast(`Terminé ✓ entités=${a4data.quality?.detections_count||0} review=${a4data.quality?.needs_review}`, "success");
+      const q4 = a4data && a4data.quality ? a4data.quality : {};
+      toast(`Terminé ✓ entités=${q4.detections_count||0} review=${q4.needs_review}`, "success");
     } else if (action === "anonymize") {
       toast("Anonymisation en cours…", "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
@@ -594,7 +595,11 @@ docList.addEventListener("click", async e => {
       const res = await fetch(`/api/v1/documents/${id}/export-dataset`, {headers:{Authorization:`Bearer ${accessToken}`}});
       const data = await res.json().catch(()=>({}));
       showApi(data);
-      if (res.ok) { showPreview(data.anonymized_text||"Dataset exporté"); toast(`Dataset: ${data.quality?.detections_count||0} entités, review=${data.quality?.needs_review}`, "success"); }
+      if (res.ok) {
+        const q = data && data.quality ? data.quality : {};
+        showPreview(data.anonymized_text||"Dataset exporté");
+        toast(`Dataset: ${q.detections_count||0} entités, review=${q.needs_review}`, "success");
+      }
       else toast("Export dataset échoué", "error");
     } else if (action === "delete") {
       if (!confirm("Supprimer ce document ?")) return;
