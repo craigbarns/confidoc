@@ -8,11 +8,46 @@ from datetime import datetime, timezone
 from typing import Any
 
 
+def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
+    return any(k in source for k in keywords)
+
+
 def detect_specialized_doc_type(text: str, filename: str = "") -> str:
     """Detect specialized accounting/tax document type (heuristic V1)."""
     source = f"{filename}\n{text[:20000]}".lower()
 
-    if any(k in source for k in ("2072", "sci", "revenus fonciers", "quote-part", "associé")):
+    # Strong branch: liasse IS simplifiée (2065 + 2033*)
+    liasse_markers = (
+        "2065",
+        "2065-sd",
+        "2033-a",
+        "2033-b",
+        "bilan simplifié",
+        "bilan simplifie",
+        "compte de résultat simplifié",
+        "compte de resultat simplifie",
+        "régime simplifié d'imposition",
+        "regime simplifie d'imposition",
+        "liasse fiscale",
+    )
+    if _contains_any(source, liasse_markers):
+        return "liasse_is_simplifiee"
+
+    # 2072 must require strong form signals, not just generic "SCI".
+    strong_2072_markers = (
+        "2072",
+        "2072-an1",
+        "2072-an2",
+        "annexe 1",
+        "annexe 2",
+        "revenus fonciers",
+        "associés revenus fonciers",
+        "associes revenus fonciers",
+    )
+    weak_2072_markers = ("sci", "quote-part", "associé", "associe")
+    has_strong_2072 = _contains_any(source, strong_2072_markers)
+    has_weak_2072 = _contains_any(source, weak_2072_markers)
+    if has_strong_2072 and has_weak_2072:
         return "fiscal_2072"
     if any(k in source for k in ("2044", "revenu foncier", "déficit foncier", "deficit foncier")):
         return "fiscal_2044"
@@ -258,6 +293,27 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
         "resultat_exploitation": _field(_extract_amount_for_label(text, r"résultat\s+d[' ]exploitation|resultat\s+d[' ]exploitation"), 0.82, "label:resultat exploitation"),
         "resultat_courant": _field(_extract_amount_for_label(text, r"résultat\s+courant|resultat\s+courant"), 0.8, "label:resultat courant"),
         "resultat_net": _field(_extract_amount_for_label(text, r"résultat\s+net|resultat\s+net"), 0.84, "label:resultat net"),
+    }
+
+
+def _extract_liasse_is_simplifiee(text: str) -> dict[str, dict[str, Any]]:
+    """Minimal dedicated extractor for 2065/2033 liasse documents."""
+    bilan = _extract_bilan(text)
+    cr = _extract_compte_resultat(text)
+    exercice = _extract_first(r"(?:exercice|clos le)\s*[:\-]?\s*([0-9]{4})", text)
+    regime = _extract_first(
+        r"(?:r[ée]gime\s+simplifi[ée]\s+d[' ]imposition|regime\s+simplifie\s+d[' ]imposition)",
+        text,
+    )
+    return {
+        "liasse_type": _field("2065_2033", 0.9, "liasse:is_simplifiee"),
+        "exercice": _field(exercice, 0.85 if exercice else 0.0, "header:exercice"),
+        "regime_imposition": _field(regime or "rsi", 0.75 if regime else 0.55, "header:regime"),
+        "total_actif": bilan.get("total_actif", _field(None, 0.0, "bilan:total_actif")),
+        "total_passif": bilan.get("total_passif", _field(None, 0.0, "bilan:total_passif")),
+        "chiffre_affaires": cr.get("chiffre_affaires", _field(None, 0.0, "cr:chiffre_affaires")),
+        "resultat_exercice": bilan.get("resultat_exercice", _field(None, 0.0, "bilan:resultat_exercice")),
+        "resultat_net": cr.get("resultat_net", _field(None, 0.0, "cr:resultat_net")),
     }
 
 
@@ -723,6 +779,10 @@ def build_structured_dataset(
         quality = _quality(fields)
     elif doc_type == "compte_resultat":
         fields = _extract_compte_resultat(source_text)
+        tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
+        quality = _quality(fields)
+    elif doc_type == "liasse_is_simplifiee":
+        fields = _extract_liasse_is_simplifiee(source_text)
         tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
         quality = _quality(fields)
     elif doc_type == "fiscal_2072":
