@@ -698,6 +698,7 @@ function renderDocs(items) {
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
           <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Exporter le dataset</button>
           <button class="btn-act" data-a="exportstructured" data-id="${doc.id}">🧠 Dataset métier</button>
+          <button class="btn-act primary" data-a="aisummary" data-id="${doc.id}">🤖 Synthèse IA</button>
           <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Exporter la preuve</button>
           <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Exporter l'audit</button>
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
@@ -981,6 +982,26 @@ docList.addEventListener("click", async e => {
       } else {
         toast(data.detail || "Export dataset métier échoué", "error");
       }
+    } else if (action === "aisummary") {
+      toast("Génération de la synthèse IA…", "info");
+      const {res, data} = await api(`/api/v1/ai/summary/${id}?doc_type=auto`, {method:"POST"});
+      showApi(data);
+      if (!res.ok) {
+        toast(data.detail || "Synthèse IA échouée", "error");
+        return;
+      }
+      let parsed = null;
+      try { parsed = JSON.parse(data.summary_json_text || "{}"); } catch {}
+      const pretty = parsed ? JSON.stringify(parsed, null, 2) : (data.summary_json_text || "");
+      showPreview(pretty || "Synthèse IA vide");
+      downloadJsonFile(`ai_summary_${id}.json`, {
+        document_id: id,
+        provider: data.provider,
+        model: data.model,
+        payload_policy: data.payload_policy,
+        summary: parsed || data.summary_json_text || "",
+      });
+      toast("Synthèse IA prête (.json)", "success");
     } else if (action === "auditexport") {
       const {res, data} = await api(`/api/v1/documents/${id}/audit-export`);
       showApi(data);
