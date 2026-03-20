@@ -31,7 +31,7 @@ async def upload_document(
     db: DbSession,
     file: UploadFile = File(...),
     auto_anonymize: bool = Query(default=True),
-    profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting"] = Query(default="dataset_accounting"),
+    profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"] = Query(default="dataset_accounting_pseudo"),
     document_type: str = Query(default="auto"),
 ) -> dict:
     """Upload un document, le stocke et persiste son enregistrement en base."""

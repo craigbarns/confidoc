@@ -278,8 +278,9 @@ HTML_DASHBOARD = """
             <div class="upload-config">
               <div>
                 <label class="form-group" style="margin-bottom:4px"><span style="font-size:12px;color:var(--text-dim)">Profil d'anonymisation</span></label>
-                <select id="profileSelect" disabled>
-                  <option value="dataset_accounting" selected>📊 Dataset comptable</option>
+                <select id="profileSelect">
+                  <option value="dataset_accounting_pseudo" selected>✨ Pseudonymisation métier</option>
+                  <option value="dataset_accounting">📊 Dataset comptable (strict)</option>
                 </select>
               </div>
               <div class="checkbox-row">
@@ -543,6 +544,8 @@ function setAnonymizedPreview(docId, text) {
   if (previewMode === "beforeafter" && lastOriginalDocId === docId && lastOriginalText) {
     showBeforeAfter(lastOriginalText, lastAnonText);
   }
+  const modeLabel = $("profileSelect") ? $("profileSelect").value : "dataset_accounting_pseudo";
+  $("statDetectionsSub").textContent = `mode appliqué: ${modeLabel}`;
 }
 
 async function loadOriginalForBeforeAfter() {

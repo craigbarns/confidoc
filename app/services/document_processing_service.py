@@ -108,7 +108,7 @@ async def _call_llm_provider(
                 }
 
                 # Dataset accounting: skip amount replacements
-                if profile == "dataset_accounting" and cand.get("replacement") == "[AMOUNT]":
+                if profile in {"dataset_accounting", "dataset_accounting_pseudo"} and cand.get("replacement") == "[AMOUNT]":
                     continue
 
                 llm_detections.append(cand)
@@ -174,7 +174,7 @@ async def build_anonymization_preview(
 
     should_call_llm = (
         settings.LLM_ASSISTIVE_ENABLED
-        and profile in {"moderate", "strict", "dataset_accounting"}
+        and profile in {"moderate", "strict", "dataset_accounting", "dataset_accounting_pseudo"}
         and len(detections) < settings.LLM_MIN_DETECTIONS
         and original_text
     )

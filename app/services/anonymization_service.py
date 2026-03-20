@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Text extraction and anonymization service (v2)."""
 
 import re
+import unicodedata
 from typing import Any
 
 import fitz
@@ -315,11 +316,11 @@ def _detect_entities(
         })
 
     # ── Strict-only patterns ──
-    is_strict = profile in {"strict", "dataset_strict", "dataset_accounting"}
+    is_strict = profile in {"strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"}
     if is_strict:
         for entity_type, pattern, replacement in STRICT_ONLY_PATTERNS:
             # Dataset accounting: keep amounts for business utility
-            if profile == "dataset_accounting" and entity_type in {"amount_eur", "amount_plain"}:
+            if profile in {"dataset_accounting", "dataset_accounting_pseudo"} and entity_type in {"amount_eur", "amount_plain"}:
                 continue
 
             for match in pattern.finditer(text):
@@ -331,7 +332,7 @@ def _detect_entities(
                 # Bank account: keep code in accounting mode
                 if entity_type == "bank_account_code_label":
                     code = match.group(1)
-                    rep = f"{code} [REDACTED]" if profile == "dataset_accounting" else "[REDACTED]"
+                    rep = f"{code} [REDACTED]" if profile in {"dataset_accounting", "dataset_accounting_pseudo"} else "[REDACTED]"
 
                 matches.append({
                     "entity_type": entity_type,
@@ -411,6 +412,107 @@ def _deduplicate(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     return kept
 
 
+def _normalize_value_key(value: str) -> str:
+    """Normalize detected value for stable pseudonym mapping."""
+    txt = unicodedata.normalize("NFKD", (value or ""))
+    txt = "".join(ch for ch in txt if not unicodedata.combining(ch))
+    txt = re.sub(r"\s+", " ", txt.strip().upper())
+    return txt
+
+
+def _infer_business_prefix(
+    text: str,
+    entity_type: str,
+    value_excerpt: str,
+    start_index: int,
+    end_index: int,
+) -> str:
+    """Infer business pseudonym prefix from entity + local context."""
+    left = max(0, start_index - 80)
+    right = min(len(text), end_index + 80)
+    ctx = text[left:right].lower()
+    line_start = text.rfind("\n", 0, start_index) + 1
+    line_end = text.find("\n", end_index)
+    if line_end < 0:
+        line_end = len(text)
+    line = text[line_start:line_end].lower()
+
+    if entity_type in {"person_name", "person_uppercase", "person_title"}:
+        if "associe" in ctx or re.search(r"\b455\d{3,6}\b", line):
+            return "ASSOCIE"
+        if "fournisseur" in ctx:
+            return "FOURNISSEUR"
+        if "client" in ctx:
+            return "CLIENT"
+        return "PERSONNE"
+
+    if entity_type in {"company_legal_name", "invoice_identity_block"}:
+        if "fournisseur" in ctx:
+            return "FOURNISSEUR"
+        if "client" in ctx:
+            return "CLIENT"
+        return "SOCIETE"
+
+    if entity_type in {"address_line", "address_residence"}:
+        if any(k in ctx for k in ("loyer", "immeuble", "bien", "locatif", "locat", "residence", "résidence", "batiment", "bâtiment")):
+            return "BIEN"
+        return "ADRESSE"
+
+    if entity_type == "postal_city":
+        return "VILLE"
+
+    if entity_type in {"iban", "iban_compact", "bic"}:
+        return "BANQUE"
+
+    if entity_type in {"bank_account_code_label", "siret", "siren", "vat_fr", "invoice_number"}:
+        return "COMPTE"
+
+    if entity_type == "nss":
+        return "PERSONNE"
+
+    if entity_type in {"date_fr", "date_iso", "date_text_fr"}:
+        return "DATE"
+
+    if entity_type == "labeled_sensitive_value":
+        v = (value_excerpt or "").lower()
+        if "iban" in v or "bic" in v:
+            return "BANQUE"
+        if "adresse" in v:
+            return "ADRESSE"
+        if "ville" in v:
+            return "VILLE"
+        if "siret" in v or "siren" in v:
+            return "COMPTE"
+        return "DONNEE"
+
+    return "DONNEE"
+
+
+def _apply_business_pseudonyms(text: str, detections: list[dict[str, Any]]) -> list[dict[str, Any]]:
+    """Replace generic tokens by stable business pseudonyms inside one document."""
+    counters: dict[str, int] = {}
+    mapping: dict[tuple[str, str], str] = {}
+    out: list[dict[str, Any]] = []
+    for d in detections:
+        entity_type = str(d.get("entity_type", ""))
+        value = str(d.get("value_excerpt", ""))
+        prefix = _infer_business_prefix(
+            text=text,
+            entity_type=entity_type,
+            value_excerpt=value,
+            start_index=int(d.get("start_index", 0)),
+            end_index=int(d.get("end_index", 0)),
+        )
+        key = (prefix, _normalize_value_key(value))
+        if key not in mapping:
+            counters[prefix] = counters.get(prefix, 0) + 1
+            mapping[key] = f"{prefix}_{counters[prefix]}"
+        new_d = dict(d)
+        new_d["replacement"] = mapping[key]
+        out.append(new_d)
+    return out
+
+
 def anonymize_text(
     text: str,
     profile: str = "moderate",
@@ -421,6 +523,8 @@ def anonymize_text(
         return text, []
 
     detections = _detect_entities(text, profile=profile, document_type=document_type)
+    if profile == "dataset_accounting_pseudo":
+        detections = _apply_business_pseudonyms(text, detections)
     anonymized = text
     # Apply replacements from end to start to preserve indices
     for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
