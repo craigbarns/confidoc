@@ -414,7 +414,11 @@ $("loginBtn").addEventListener("click", async () => {
       body: JSON.stringify({email, password: pw})
     });
     showApi(data);
-    if (!res.ok) { toast("Email ou mot de passe incorrect", "error"); return; }
+    if (!res.ok) {
+      const detail = data?.detail || data?.raw || `Échec login (${res.status})`;
+      toast(detail, "error");
+      return;
+    }
     accessToken = data.access_token || "";
     $("userEmail").textContent = email.split("@")[0];
     $("userAvatar").textContent = email[0].toUpperCase();
@@ -607,7 +611,8 @@ docList.addEventListener("click", async e => {
 @router.get("/ui", response_class=HTMLResponse, include_in_schema=False)
 async def upload_ui() -> str:
     """Interface web ConfiDoc — Console premium."""
-    return f"""<!doctype html>
+    return HTMLResponse(
+        content=f"""<!doctype html>
 <html lang="fr">
 <head>
   <meta charset="utf-8" />
@@ -621,4 +626,9 @@ async def upload_ui() -> str:
   {HTML_DASHBOARD}
   {JAVASCRIPT}
 </body>
-</html>"""
+</html>""",
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
