@@ -535,6 +535,7 @@ async def export_structured_dataset(
         anonymized_text=anonymized_text,
         original_filename=document.original_filename,
         requested_doc_type=doc_type,
+        extraction_text=original_text,
     )
     structured.update(
         {

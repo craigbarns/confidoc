@@ -62,6 +62,14 @@ def _extract_amount_for_label(text: str, label_regex: str) -> float | None:
     return _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
 
 
+def _extract_financial_amount_for_label(text: str, label_regex: str, min_amount: float = 100.0) -> float | None:
+    """Financial amount extractor with plausibility threshold (avoid index-like numbers)."""
+    value = _extract_amount_for_label(text, label_regex)
+    if value is None:
+        return None
+    return value if abs(value) >= min_amount else None
+
+
 def _clean_amount_candidate(value: float | None) -> float | None:
     """Reject numeric noise for business amounts (years, form IDs, zip codes, compact dates)."""
     if value is None:
@@ -232,6 +240,7 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     immeubles = _extract_2072_immeubles_table(text)
     associes = _extract_2072_associes_table(text)
 
+    # V2.3 focus: prioritize 5 critical reliable fields first.
     return {
         "denomination_sci": _field(
             _extract_value_near_label(
@@ -242,40 +251,25 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             0.9,
             "header:denomination_societe",
         ),
-        "adresse_sci": _field(
-            _extract_value_near_label(
-                header_zone,
-                r"adresse\s+de\s+la\s+soci[ée]t[ée]",
-                r"([A-Z0-9_].{8,160})",
-            ),
-            0.86,
-            "header:adresse_societe",
-        ),
-        "adresse_siege_ouverture": _field(
-            _extract_value_near_label(
-                header_zone,
-                r"adresse\s+du\s+si[eè]ge(?:\s+social)?(?:\s+a\s+l[' ]ouverture)?",
-                r"([A-Z0-9_].{8,160})",
-            ),
-            0.78,
-            "header:adresse_siege_ouverture",
-        ),
         "date_cloture_exercice": _field(_extract_first(r"(?:date\s+de\s+cl[ôo]ture(?:\s+de\s+l[' ]exercice)?)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", header_zone), 0.92, "header:date_cloture_exercice"),
         "nombre_associes": _field(_to_float_fr(_extract_first(r"(?:nombre\s+d[' ]associ[ée]s?)\s*[:\-]?\s*([0-9]{1,3})", header_zone)), 0.88, "header:nombre_associes"),
-        "nombre_parts_ouverture": _field(_to_float_fr(_extract_first(r"(?:nombre\s+de\s+parts?.{0,20}ouverture)\s*[:\-]?\s*([0-9]{1,10})", header_zone)), 0.78, "header:nombre_parts_ouverture"),
-        "nombre_parts_cloture": _field(_to_float_fr(_extract_first(r"(?:nombre\s+de\s+parts?.{0,20}cl[ôo]ture)\s*[:\-]?\s*([0-9]{1,10})", header_zone)), 0.78, "header:nombre_parts_cloture"),
-        "montant_nominal_parts": _field(_extract_amount_for_label(header_zone, r"montant\s+nominal\s+des?\s+parts?"), 0.76, "header:montant_nominal_parts"),
-        "revenus_bruts": _field(_extract_amount_for_label(results_zone, r"revenus?\s+bruts?"), 0.9, "resultats:revenus_bruts"),
-        "paiements_travaux": _field(_extract_amount_for_label(results_zone, r"paiements?\s+sur\s+travaux"), 0.84, "resultats:paiements_travaux"),
-        "frais_charges_hors_interets": _field(_extract_amount_for_label(results_zone, r"frais?\s+et\s+charges?.{0,30}autres?.{0,30}int[eé]r"), 0.88, "resultats:frais_charges_hors_interets"),
-        "interets_emprunts": _field(_extract_amount_for_label(results_zone, r"int[eé]r[eê]ts?\s+d[' ]emprunts?"), 0.88, "resultats:interets_emprunts"),
-        "revenu_net_foncier": _field(_extract_amount_for_label(results_zone, r"revenu\s+net(?:\s+foncier)?|d[ée]ficit\s+net"), 0.9, "resultats:revenu_net_foncier"),
-        "resultat_financier": _field(_extract_amount_for_label(results_zone, r"r[ée]sultat\s+financier"), 0.84, "resultats:resultat_financier"),
-        "resultat_fiscal": _field(_extract_amount_for_label(results_zone, r"r[ée]sultat\s+fiscal"), 0.86, "resultats:resultat_fiscal"),
-        "resultat_exploitation": _field(_extract_amount_for_label(results_zone, r"r[ée]sultat\s+d[' ]exploitation"), 0.84, "resultats:resultat_exploitation"),
-        "resultat_exceptionnel": _field(_extract_amount_for_label(results_zone, r"r[ée]sultat\s+exceptionnel"), 0.82, "resultats:resultat_exceptionnel"),
-        "montant_produits_financiers": _field(_extract_amount_for_label(results_zone, r"produits?\s+financiers"), 0.8, "resultats:montant_produits_financiers"),
-        "montant_produits_exceptionnels": _field(_extract_amount_for_label(results_zone, r"produits?\s+exceptionnels"), 0.8, "resultats:montant_produits_exceptionnels"),
+        "revenus_bruts": _field(_extract_financial_amount_for_label(results_zone, r"revenus?\s+bruts?"), 0.9, "resultats:revenus_bruts"),
+        "frais_charges_hors_interets": _field(_extract_financial_amount_for_label(results_zone, r"frais?\s+et\s+charges?.{0,30}autres?.{0,30}int[eé]r"), 0.88, "resultats:frais_charges_hors_interets"),
+        "interets_emprunts": _field(_extract_financial_amount_for_label(results_zone, r"int[eé]r[eê]ts?\s+d[' ]emprunts?"), 0.88, "resultats:interets_emprunts"),
+        "revenu_net_foncier": _field(_extract_financial_amount_for_label(results_zone, r"revenu\s+net(?:\s+foncier)?|d[ée]ficit\s+net"), 0.9, "resultats:revenu_net_foncier"),
+        # Keep advanced fields nullable for now; they will be re-enabled once core 5 are stable.
+        "adresse_sci": _field(None, 0.0, "deferred:v2.3"),
+        "adresse_siege_ouverture": _field(None, 0.0, "deferred:v2.3"),
+        "nombre_parts_ouverture": _field(None, 0.0, "deferred:v2.3"),
+        "nombre_parts_cloture": _field(None, 0.0, "deferred:v2.3"),
+        "montant_nominal_parts": _field(None, 0.0, "deferred:v2.3"),
+        "paiements_travaux": _field(None, 0.0, "deferred:v2.3"),
+        "resultat_financier": _field(None, 0.0, "deferred:v2.3"),
+        "resultat_fiscal": _field(None, 0.0, "deferred:v2.3"),
+        "resultat_exploitation": _field(None, 0.0, "deferred:v2.3"),
+        "resultat_exceptionnel": _field(None, 0.0, "deferred:v2.3"),
+        "montant_produits_financiers": _field(None, 0.0, "deferred:v2.3"),
+        "montant_produits_exceptionnels": _field(None, 0.0, "deferred:v2.3"),
         "presence_annexes_immeubles": _field(len(immeubles) > 0 or bool(re.search(r"annexe\s*1|adresse\s+de\s+l[' ]immeuble", text, re.IGNORECASE)), 0.84, "annexe:immeubles"),
         "presence_annexes_associes_rf": _field(len(associes) > 0 or bool(re.search(r"annexe\s*2|quote[\- ]part", text, re.IGNORECASE)), 0.84, "annexe:associes_revenus_fonciers"),
     }
@@ -610,32 +604,67 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     }
 
 
+def _pseudonymize_2072_output(fields: dict[str, dict[str, Any]], tables: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+    """Keep extraction quality from raw while exposing anonymized structured output."""
+    out_fields = dict(fields)
+    if out_fields.get("denomination_sci", {}).get("value"):
+        out_fields["denomination_sci"] = _field("SOCIETE_1", out_fields["denomination_sci"].get("confidence", 0.9), "pseudo:denomination_sci")
+    if out_fields.get("adresse_sci", {}).get("value"):
+        out_fields["adresse_sci"] = _field("ADRESSE_SOCIETE_1", out_fields["adresse_sci"].get("confidence", 0.85), "pseudo:adresse_sci")
+    if out_fields.get("adresse_siege_ouverture", {}).get("value"):
+        out_fields["adresse_siege_ouverture"] = _field("ADRESSE_SIEGE_1", out_fields["adresse_siege_ouverture"].get("confidence", 0.8), "pseudo:adresse_siege_ouverture")
+
+    out_tables = dict(tables)
+    immeubles = []
+    for idx, it in enumerate((tables.get("immeubles") or []), start=1):
+        row = dict(it)
+        if row.get("adresse_immeuble"):
+            row["adresse_immeuble"] = f"BIEN_{idx}"
+        immeubles.append(row)
+    associes = []
+    for idx, it in enumerate((tables.get("associes_revenus_fonciers") or []), start=1):
+        row = dict(it)
+        if row.get("nom"):
+            row["nom"] = f"ASSOCIE_{idx}"
+        if row.get("adresse"):
+            row["adresse"] = f"ADRESSE_ASSOCIE_{idx}"
+        associes.append(row)
+    if "immeubles" in out_tables:
+        out_tables["immeubles"] = immeubles
+    if "associes_revenus_fonciers" in out_tables:
+        out_tables["associes_revenus_fonciers"] = associes
+    return out_fields, out_tables
+
+
 def build_structured_dataset(
     anonymized_text: str,
     original_filename: str = "",
     requested_doc_type: str = "auto",
+    extraction_text: str | None = None,
 ) -> dict[str, Any]:
     """Build normalized structured dataset payload for downstream analytics/AI."""
-    detected_doc_type = detect_specialized_doc_type(anonymized_text, original_filename)
+    source_text = extraction_text if extraction_text is not None else anonymized_text
+    detected_doc_type = detect_specialized_doc_type(source_text, original_filename)
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
 
     if doc_type == "bilan":
-        fields = _extract_bilan(anonymized_text)
+        fields = _extract_bilan(source_text)
         tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
         quality = _quality(fields)
     elif doc_type == "compte_resultat":
-        fields = _extract_compte_resultat(anonymized_text)
+        fields = _extract_compte_resultat(source_text)
         tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
         quality = _quality(fields)
     elif doc_type == "fiscal_2072":
-        fields = _extract_2072(anonymized_text)
+        fields = _extract_2072(source_text)
         tables = {
-            "immeubles": _extract_2072_immeubles_table(anonymized_text),
-            "associes_revenus_fonciers": _extract_2072_associes_table(anonymized_text),
+            "immeubles": _extract_2072_immeubles_table(source_text),
+            "associes_revenus_fonciers": _extract_2072_associes_table(source_text),
         }
-        quality = _quality_2072(fields, tables, anonymized_text)
+        quality = _quality_2072(fields, tables, source_text)
+        fields, tables = _pseudonymize_2072_output(fields, tables)
     else:
-        fields = _extract_common_fields(anonymized_text)
+        fields = _extract_common_fields(source_text)
         tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
         quality = _quality(fields)
 
