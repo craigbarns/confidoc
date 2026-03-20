@@ -956,6 +956,7 @@ docList.addEventListener("click", async e => {
       if (res.ok) {
         const q = data && data.quality ? data.quality : {};
         setAnonymizedPreview(id, data.anonymized_text||"Dataset exporté");
+        downloadJsonFile(`dataset_${id}.json`, data);
         toast(`Dataset exporté : ${q.detections_count||0} entités. Revue requise : ${q.needs_review ? "oui" : "non"}.`, "success");
       }
       else toast("Export dataset échoué", "error");
