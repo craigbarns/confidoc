@@ -460,8 +460,23 @@ async function refreshMaskedSummary(docId) {
       return "Revue recommandée";
     }
 
+    const CAT_DESCR = {
+      "Nom & personne": "Nom et identifiants de personnes masqués.",
+      "Email": "Adresses email (identification directe) masquées.",
+      "Téléphone": "Numéros de téléphone masqués.",
+      "Identifiants bancaires": "IBAN/BIC et mentions bancaires masqués.",
+      "Identifiants entreprise & fiscalité": "SIREN/SIRET et références fiscales masqués.",
+      "Identifiant personnel": "Identifiants personnels masqués.",
+      "Adresse & localisation": "Adresses et localisation masquées.",
+      "Dates": "Dates détectées comme sensibles masquées/normalisées.",
+      "Références & mentions": "Références de factures et mentions masquées.",
+      "Valeurs sensibles (libellé : valeur)": "Paires libellé/valeur détectées comme sensibles masquées.",
+      "Pays": "Pays masqués.",
+      "Autre": "Autres champs détectés comme sensibles masqués.",
+    };
+
     const maskedLines = maskedCats.length
-      ? maskedCats.map(([cat,cnt]) => `- ${cat}: ${cnt}`).join("\\n")
+      ? maskedCats.map(([cat,cnt]) => `- ${cat}: ${cnt}\n  ${CAT_DESCR[cat] || "Masquage automatique d'une donnée sensible."}`).join("\\n")
       : "- (aucune catégorie detectee)";
 
     maskedOut.innerHTML =
