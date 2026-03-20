@@ -2,6 +2,7 @@
 
 import uuid
 import re
+import hashlib
 from io import BytesIO
 
 from typing import Literal
@@ -35,6 +36,14 @@ from app.services.storage_service import delete_bytes, read_bytes
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+def _sha256_text(text: str | None) -> str | None:
+    """Compute sha256 of a text (used for audit/integrity only; never expose raw text)."""
+    if text is None:
+        return None
+    if not isinstance(text, str):
+        text = str(text)
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -487,6 +496,289 @@ async def delete_document(
     await db.execute(delete(Document).where(Document.id == document.id))
     await db.commit()
     logger.info("document_deleted", doc_id=str(document.id))
+
+
+@router.get(
+    "/{document_id}/proof",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Preuve d'integrite RGPD (hashes + compteurs)",
+)
+async def document_proof(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    preview_version_obj = (
+        await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+            )
+        )
+    ).scalar_one_or_none()
+    final_version_obj = (
+        await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
+            )
+        )
+    ).scalar_one_or_none()
+
+    detections_n = (
+        await db.execute(
+            select(func.count()).select_from(EntityDetection).where(
+                EntityDetection.document_id == document.id
+            )
+        )
+    ).scalar() or 0
+
+    llm_req_n = (
+        await db.execute(
+            select(func.count()).select_from(LlmRequest).where(
+                LlmRequest.document_id == document.id
+            )
+        )
+    ).scalar() or 0
+
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "document_sha256": document.sha256,
+            "preview_version_present": preview_version_obj is not None,
+            "preview_version_sha256": _sha256_text(
+                preview_version_obj.content_text if preview_version_obj else None
+            ),
+            "final_version_present": final_version_obj is not None,
+            "final_version_sha256": _sha256_text(
+                final_version_obj.content_text if final_version_obj else None
+            ),
+            "detections_count": int(detections_n),
+            "llm_requests_count": int(llm_req_n),
+        }
+    )
+
+
+@router.get(
+    "/{document_id}/deletion-preview",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Apercu de l'effacement RGPD (compteurs, sans donnees)",
+)
+async def document_deletion_preview(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    versions_n = (
+        await db.execute(
+            select(func.count()).select_from(DocumentVersion).where(
+                DocumentVersion.document_id == document.id
+            )
+        )
+    ).scalar() or 0
+
+    detections_n = (
+        await db.execute(
+            select(func.count()).select_from(EntityDetection).where(
+                EntityDetection.document_id == document.id
+            )
+        )
+    ).scalar() or 0
+
+    llm_req_n = (
+        await db.execute(
+            select(func.count()).select_from(LlmRequest).where(
+                LlmRequest.document_id == document.id
+            )
+        )
+    ).scalar() or 0
+
+    llm_suggestions_n = (
+        await db.execute(
+            select(func.count()).select_from(LlmSuggestion).join(
+                LlmRequest,
+                LlmRequest.id == LlmSuggestion.llm_request_id,
+            ).where(LlmRequest.document_id == document.id)
+        )
+    ).scalar() or 0
+
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            # On ne renvoie pas storage_key (chemin interne) : RGPD-friendly (meta seulement).
+            "storage": {"backend": document.storage_backend},
+            "will_delete": {
+                "document": True,
+                "document_versions_count": int(versions_n),
+                "entity_detections_count": int(detections_n),
+                "llm_requests_count": int(llm_req_n),
+                "llm_suggestions_count": int(llm_suggestions_n),
+            },
+        }
+    )
+
+
+@router.get(
+    "/{document_id}/audit-export",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Export audit RGPD (hashes + resume, sans donnees brutes)",
+)
+async def document_audit_export(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    original_version_obj = (
+        await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+            )
+        )
+    ).scalar_one_or_none()
+    preview_version_obj = (
+        await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+            )
+        )
+    ).scalar_one_or_none()
+    final_version_obj = (
+        await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
+            )
+        )
+    ).scalar_one_or_none()
+
+    entity_type_rows = (
+        await db.execute(
+            select(EntityDetection.entity_type, func.count()).where(
+                EntityDetection.document_id == document.id
+            ).group_by(EntityDetection.entity_type)
+        )
+    ).all()
+    entity_types_count = {
+        str(entity_type): int(cnt) for entity_type, cnt in entity_type_rows
+    }
+
+    llm_request_rows = (
+        await db.execute(
+            select(
+                LlmRequest.id,
+                LlmRequest.provider,
+                LlmRequest.model,
+                LlmRequest.profile,
+                LlmRequest.status,
+                LlmRequest.human_status,
+                LlmRequest.snippets_meta,
+            ).where(LlmRequest.document_id == document.id)
+        )
+    ).all()
+
+    llm_requests: dict[str, dict] = {}
+    llm_request_ids: list[uuid.UUID] = []
+    for (
+        req_id,
+        provider,
+        model,
+        profile,
+        status_str,
+        human_status,
+        snippets_meta,
+    ) in llm_request_rows:
+        llm_request_ids.append(req_id)
+        req_key = str(req_id)
+        snippets = []
+        try:
+            if (
+                isinstance(snippets_meta, dict)
+                and isinstance(snippets_meta.get("snippets"), list)
+            ):
+                snippets = snippets_meta.get("snippets", [])
+        except Exception:
+            snippets = []
+
+        snippet_count = len(snippets)
+        snippet_hashes = [
+            s.get("sha256")
+            for s in snippets
+            if isinstance(s, dict) and s.get("sha256")
+        ][:10]
+
+        llm_requests[req_key] = {
+            "llm_request_id": req_key,
+            "provider": provider,
+            "model": model,
+            "profile": profile,
+            "status": status_str,
+            "human_status": human_status,
+            "snippets_count": int(snippet_count),
+            "snippets_hashes_sample": snippet_hashes,
+            "suggestions": {},
+        }
+
+    suggestions_rows = []
+    if llm_request_ids:
+        suggestions_rows = (
+            await db.execute(
+                select(
+                    LlmSuggestion.llm_request_id,
+                    LlmSuggestion.entity_type,
+                    LlmSuggestion.replacement_token,
+                    func.count(),
+                    func.avg(LlmSuggestion.confidence),
+                )
+                .where(LlmSuggestion.llm_request_id.in_(llm_request_ids))
+                .group_by(
+                    LlmSuggestion.llm_request_id,
+                    LlmSuggestion.entity_type,
+                    LlmSuggestion.replacement_token,
+                )
+            )
+        ).all()
+
+    for req_id, entity_type, replacement_token, cnt, avg_conf in suggestions_rows:
+        req_key = str(req_id)
+        req_obj = llm_requests.get(req_key)
+        if not req_obj:
+            continue
+        et_key = f"{entity_type}::{replacement_token}"
+        req_obj["suggestions"][et_key] = {
+            "count": int(cnt),
+            "avg_confidence": float(avg_conf or 0.0),
+        }
+
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "document_sha256": document.sha256,
+            "versions_sha256": {
+                "original": _sha256_text(
+                    original_version_obj.content_text if original_version_obj else None
+                ),
+                "preview_anonymized": _sha256_text(
+                    preview_version_obj.content_text if preview_version_obj else None
+                ),
+                "final_anonymized": _sha256_text(
+                    final_version_obj.content_text if final_version_obj else None
+                ),
+            },
+            "detections_entity_types_count": entity_types_count,
+            "llm_requests": list(llm_requests.values()),
+        }
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────

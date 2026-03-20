@@ -399,6 +399,8 @@ function renderDocs(items) {
           <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Preview</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
           <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Dataset</button>
+          <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Preuve RGPD</button>
+          <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Audit export</button>
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
         </div>
       </div>`;
@@ -643,8 +645,26 @@ docList.addEventListener("click", async e => {
         toast(`Dataset: ${q.detections_count||0} entités, review=${q.needs_review}`, "success");
       }
       else toast("Export dataset échoué", "error");
+    } else if (action === "proof") {
+      const {res, data} = await api(`/api/v1/documents/${id}/proof`);
+      showApi(data);
+      if (res.ok) toast("Preuve RGPD affichée", "success");
+      else toast(data.detail || "Erreur preuve RGPD", "error");
+    } else if (action === "auditexport") {
+      const {res, data} = await api(`/api/v1/documents/${id}/audit-export`);
+      showApi(data);
+      if (res.ok) toast("Audit export prêt", "success");
+      else toast(data.detail || "Erreur audit export", "error");
     } else if (action === "delete") {
-      if (!confirm("Supprimer ce document ?")) return;
+      // Effacement RGPD en 2 étapes : aperçu (compteurs) puis confirmation forte.
+      const {res: prevRes, data: prevData} = await api(`/api/v1/documents/${id}/deletion-preview`);
+      if (!prevRes.ok) {
+        toast(prevData.detail || "Impossible de charger l'aperçu suppression", "error");
+        return;
+      }
+      showApi(prevData);
+      const typed = prompt("Effacement RGPD : tapez exactement SUPPRIMER pour confirmer.");
+      if (typed !== "SUPPRIMER") { toast("Suppression annulée", "info"); return; }
       const res = await fetch(`/api/v1/documents/${id}`, {method:"DELETE",headers:{Authorization:`Bearer ${accessToken}`}});
       if (res.ok) { toast("Document supprimé", "success"); showPreview("Document supprimé."); } else toast("Suppression échouée", "error");
     }
