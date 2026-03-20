@@ -1,11 +1,15 @@
 """ConfiDoc Backend — Auth Endpoints."""
 
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, Depends, status
 from fastapi.security import OAuth2PasswordRequestForm
+from pydantic import BaseModel, EmailStr
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
+from app.config import get_settings
 from app.core.exceptions import http_400
 from app.core.logging import get_logger
 from app.core.security import get_password_hash
@@ -20,6 +24,13 @@ from app.services import auth_service
 
 router = APIRouter()
 logger = get_logger(__name__)
+settings = get_settings()
+
+
+class RecoveryResetRequest(BaseModel):
+    email: EmailStr
+    new_password: str
+    recovery_token: str
 
 
 @router.post(
@@ -114,3 +125,39 @@ async def bootstrap_admin(
 
     logger.info("bootstrap_admin_created", email=user.email)
     return {"status": "created", "email": user.email}
+
+
+@router.post(
+    "/recover-access",
+    status_code=status.HTTP_200_OK,
+    summary="Réinitialiser un accès via token de récupération",
+)
+async def recover_access(
+    payload: RecoveryResetRequest,
+    db: DbSession,
+) -> dict:
+    """Recovery d'urgence en production, protégé par token Railway.
+
+    Désactivé tant que ADMIN_RECOVERY_TOKEN n'est pas configuré.
+    """
+    recovery_token = (getattr(settings, "ADMIN_RECOVERY_TOKEN", "") or "").strip()
+    if not recovery_token:
+        raise http_400("Recovery désactivé: configurez ADMIN_RECOVERY_TOKEN")
+    if payload.recovery_token.strip() != recovery_token:
+        raise http_400("Recovery token invalide")
+    if len(payload.new_password or "") < 8:
+        raise http_400("Le nouveau mot de passe doit contenir au moins 8 caractères")
+
+    user_res = await db.execute(
+        select(User).where(User.email == str(payload.email).strip().lower())
+    )
+    user = user_res.scalar_one_or_none()
+    if not user:
+        raise http_400("Utilisateur introuvable")
+
+    user.password_hash = get_password_hash(payload.new_password)
+    user.is_active = True
+    user.last_login_at = datetime.now(timezone.utc)
+    await db.commit()
+    logger.warning("auth_recovery_password_reset", email=user.email)
+    return {"status": "password_reset", "email": user.email}

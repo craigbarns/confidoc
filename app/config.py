@@ -101,6 +101,7 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen3:1.7b"
     OLLAMA_TIMEOUT_SECONDS: int = 90
+    ADMIN_RECOVERY_TOKEN: str = ""
 
     @field_validator("APP_ENV", mode="before")
     @classmethod
