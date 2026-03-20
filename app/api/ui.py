@@ -448,7 +448,7 @@ function showAiSummaryCard(data) {
     "",
     "Questions de revue:",
     ...questions.map(q => `- ${q}`),
-  ].join("\n");
+  ].join("\\n");
   previewOut.innerHTML = `
     <div class="ai-summary">
       <div class="ai-head">
