@@ -11,6 +11,8 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
 from app.models.llm_suggestion import LlmSuggestion
+from app.models.kb_accounting_record import KbAccountingRecord
+from app.models.kb_text_chunk import KbTextChunk
 
 __all__ = [
     "Base", "BaseModel", "TenantModel", "TimestampMixin",
@@ -21,4 +23,6 @@ __all__ = [
     "EntityDetection",
     "LlmRequest",
     "LlmSuggestion",
+    "KbAccountingRecord",
+    "KbTextChunk",
 ]
