@@ -819,6 +819,99 @@ async def document_audit_export(
     )
 
 
+@router.get(
+    "/{document_id}/dataset-summary",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Resume dataset comptable (sans texte brut)",
+)
+async def document_dataset_summary(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    """Petit resume pour l'UI : qualite, besoin de revue, nombre de lignes comptables.
+
+    RGPD-friendly : ne renvoie pas l'anonymized_text.
+    """
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    original_text = await _get_original_text(db, document)
+    if not original_text:
+        raise http_404("Texte original introuvable")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    dataset_text, detections = anonymize_text(
+        original_text, profile="dataset_accounting", document_type=effective_type
+    )
+
+    # Merge accepted LLM suggestions (RGPD: replacement only)
+    llm_suggestions_result = await db.execute(
+        select(LlmSuggestion)
+        .join(LlmRequest, LlmRequest.id == LlmSuggestion.llm_request_id)
+        .where(
+            LlmRequest.document_id == document.id,
+            LlmRequest.human_status == "accepted",
+        )
+    )
+    llm_suggestions = list(llm_suggestions_result.scalars().all())
+    merged = list(detections)
+    for s in llm_suggestions:
+        cand = {
+            "entity_type": s.entity_type,
+            "start_index": int(s.start_index),
+            "end_index": int(s.end_index),
+            "replacement": s.replacement_token,
+        }
+        overlap = any(
+            not (cand["end_index"] <= ex["start_index"] or cand["start_index"] >= ex["end_index"])
+            for ex in merged
+        )
+        if not overlap:
+            merged.append(cand)
+
+    # Apply replacements so quality gate matches the final dataset text.
+    dataset_text = original_text
+    for match in sorted(merged, key=lambda m: m["start_index"], reverse=True):
+        dataset_text = (
+            dataset_text[: match["start_index"]]
+            + match["replacement"]
+            + dataset_text[match["end_index"] :]
+        )
+
+    # Quality gate (same patterns as export_dataset)
+    critical_patterns: dict[str, str] = {
+        "emails_found": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
+        "iban_found": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
+        "siret_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b",
+        "siren_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b",
+        "uppercase_person_leftovers": r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,4}\b",
+    }
+    quality_flags: list[str] = []
+    for flag, pat in critical_patterns.items():
+        if re.search(pat, dataset_text):
+            quality_flags.append(flag)
+
+    entities_count = len(merged)
+    needs_review = len(quality_flags) > 0 or entities_count == 0
+
+    accounting_records = _extract_accounting_records(dataset_text)
+
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "doc_type": effective_type,
+            "profile": "dataset_accounting",
+            "quality": {
+                "needs_review": needs_review,
+                "quality_flags": quality_flags,
+                "detections_count": entities_count,
+            },
+            "accounting_records_count": len(accounting_records),
+        }
+    )
+
+
 # ──────────────────────────────────────────────────────────────────────
 # ACCOUNTING RECORDS HELPER
 # ──────────────────────────────────────────────────────────────────────

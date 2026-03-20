@@ -172,6 +172,20 @@ body{background:var(--bg-deep)}
 /* Masked panel */
 .masked-content{background:rgba(2,6,23,0.8);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:16px;max-height:420px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.6;color:var(--text-dim);white-space:pre-wrap;word-break:break-word}
 
+/* Proof cards (3 columns) */
+.proof-cards3{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-bottom:12px}
+.proof-card{background:rgba(2,6,23,0.45);border:1px solid var(--glass-border);border-radius:var(--radius-xs);padding:12px}
+.proof-card-title{font-size:12px;color:var(--text-dim);font-weight:700;letter-spacing:.02em;margin-bottom:8px}
+.proof-card-value{font-size:20px;font-weight:800;color:var(--text);margin-bottom:6px}
+.proof-card-sub{font-size:12px;color:var(--text-muted)}
+.proof-card.masked{border-color:rgba(244,63,94,0.2)}
+.proof-card.kept{border-color:rgba(16,185,129,0.2)}
+.proof-card.review{border-color:rgba(245,158,11,0.25)}
+
+@media(max-width:900px){
+  .proof-cards3{grid-template-columns:1fr}
+}
+
 /* KB Ask panel */
 .kb-ask-panel{margin-bottom:20px;animation-delay:.14s}
 .kb-ask-row{display:flex;gap:10px;align-items:center}
@@ -406,75 +420,69 @@ async function refreshMaskedSummary(docId) {
     if (!res.ok) return;
 
     const types = data && data.detections_entity_types_count ? data.detections_entity_types_count : {};
-    const entries = Object.entries(types).sort((a,b) => (b[1]||0) - (a[1]||0));
-    const total = entries.reduce((sum, it) => sum + (it[1]||0), 0);
+    const maskedTotal = data && typeof data.detections_count === "number" ? data.detections_count : 0;
 
-    const LABELS = {
-      "email":"Email",
-      "phone_fr":"Telephone",
-      "phone_intl":"Telephone",
-      "iban":"IBAN",
-      "iban_compact":"IBAN",
-      "bic":"BIC",
-      "siret":"SIRET",
-      "siren":"SIREN",
-      "vat_fr":"TVA",
-      "nss":"NIR/NSS",
-      "address_line":"Adresse",
-      "postal_city":"Ville",
-      "person_title":"Nom/Personne",
-      "person_name":"Nom/Personne",
-      "person_uppercase":"Nom/Personne",
-      "company_legal_name":"Raison sociale",
-      "invoice_number":"Reference facture",
-      "date_fr":"Date",
-      "date_iso":"Date",
-      "date_text_fr":"Date",
-      "amount_eur":"Montant",
-      "amount_plain":"Montant",
-      "address_residence":"Adresse",
-      "bank_account_code_label":"Compte bancaire",
-      "country":"Pays",
-      "invoice_identity_block":"Bloc identite",
-      "labeled_sensitive_value":"Valeur sensible (libelle:valeur)",
-    };
+    // Dataset quality for the "à revoir" card (no raw text).
+    const qRes = await api(`/api/v1/documents/${docId}/dataset-summary`);
+    const quality = qRes.data && qRes.data.quality ? qRes.data.quality : {};
+    const accountingCount = qRes.data ? qRes.data.accounting_records_count : null;
 
-    const EXPL = {
-      "email":"Masquage des emails (identification directe).",
-      "phone_fr":"Masquage des numeros de telephone.",
-      "phone_intl":"Masquage des numeros de telephone internationaux.",
-      "iban":"Masquage des IBAN.",
-      "bic":"Masquage des BIC.",
-      "siret":"Masquage des SIRET (identifiant entreprise).",
-      "siren":"Masquage des SIREN (identifiant entreprise).",
-      "vat_fr":"Masquage des identifiants TVA FR.",
-      "nss":"Masquage des numeros personnels (NIR/NSS).",
-      "address_line":"Masquage des adresses completes.",
-      "postal_city":"Masquage partiel de la localisation (ville).",
-      "person_title":"Masquage des noms de personnes.",
-      "person_name":"Masquage des noms de personnes.",
-      "person_uppercase":"Masquage des noms de personnes (majuscule).",
-      "company_legal_name":"Masquage des raisons sociales (selon regles).",
-      "invoice_number":"Masquage ou redaction des references de factures selon profil.",
-      "date_fr":"Masquage/normalisation des dates.",
-      "amount_eur":"Montants conserves ou masques selon profil (dataset comptable: preserve).",
-      "amount_plain":"Montants conserves ou masques selon profil (dataset comptable: preserve).",
-      "address_residence":"Masquage de blocs adresses typiques.",
-      "bank_account_code_label":"Masquage du label bancaire en conservant le code comptable si applicable.",
-      "country":"Masquage des pays.",
-      "invoice_identity_block":"Masquage d'un bloc identite detecte dans l'en-tete.",
-      "labeled_sensitive_value":"Masquage des paires libelle:valeur sensibles (RGPD).",
-    };
+    const ambiguousZones = Array.isArray(quality.quality_flags) ? quality.quality_flags.length : 0;
 
-    const top = entries.slice(0, 10).map(([k,v]) => {
-      const label = LABELS[k] || k;
-      const expl = EXPL[k] || "Masquage automatique d'une donnee sensible detectee.";
-      return `- ${label}: ${v}\n  ${expl}`;
-    });
+    function fuseCategory(entityType) {
+      const t = entityType || "";
+      if (t.startsWith("person_") || t === "company_legal_name") return "Nom & personne";
+      if (t === "email") return "Email";
+      if (t.startsWith("phone_")) return "Téléphone";
+      if (t === "iban" || t === "iban_compact" || t === "bic" || t === "bank_account_code_label") return "Identifiants bancaires";
+      if (t === "siret" || t === "siren" || t === "vat_fr") return "Identifiants entreprise & fiscalité";
+      if (t === "nss") return "Identifiant personnel";
+      if (t.startsWith("address_") || t === "postal_city") return "Adresse & localisation";
+      if (t.startsWith("date_")) return "Dates";
+      if (t === "invoice_number" || t === "invoice_identity_block") return "Références & mentions";
+      if (t === "labeled_sensitive_value") return "Valeurs sensibles (libellé : valeur)";
+      if (t.startsWith("amount_")) return "Montants";
+      if (t === "country") return "Pays";
+      return "Autre";
+    }
 
-    maskedOut.textContent =
-      `Ce qui a ete masque (compteur spans): ${total}\n\n` +
-      (top.length ? top.join("\\n") : "Aucune donnee sensible detectee.");
+    const fused = {};
+    for (const [k,v] of Object.entries(types)) {
+      const cat = fuseCategory(k);
+      fused[cat] = (fused[cat] || 0) + (v || 0);
+    }
+    const fusedEntries = Object.entries(fused).sort((a,b) => (b[1]||0) - (a[1]||0));
+    const maskedCats = fusedEntries.filter(([cat,_]) => cat !== "Montants").slice(0, 8);
+
+    function qualityLabel() {
+      if (!quality.needs_review) return "Aucune zone ambiguë détectée";
+      if (ambiguousZones > 0) return `${ambiguousZones} zone(s) à vérifier`;
+      return "Revue recommandée";
+    }
+
+    const maskedLines = maskedCats.length
+      ? maskedCats.map(([cat,cnt]) => `- ${cat}: ${cnt}`).join("\\n")
+      : "- (aucune catégorie detectee)";
+
+    maskedOut.innerHTML =
+      `<div class="proof-cards3">
+        <div class="proof-card masked">
+          <div class="proof-card-title">Masqué</div>
+          <div class="proof-card-value">${maskedTotal} éléments sensibles</div>
+          <div class="proof-card-sub">Détail (principales catégories)</div>
+          <div class="proof-card-sub" style="white-space:pre-wrap">${maskedLines}</div>
+        </div>
+        <div class="proof-card kept">
+          <div class="proof-card-title">Conservé</div>
+          <div class="proof-card-value">Montants & structure</div>
+          <div class="proof-card-sub">${accountingCount != null ? `${accountingCount} lignes comptables extraites` : "Prêt pour l'exploitation comptable"}</div>
+        </div>
+        <div class="proof-card review">
+          <div class="proof-card-title">À revoir</div>
+          <div class="proof-card-value">${quality.needs_review ? "Oui" : "Non"}</div>
+          <div class="proof-card-sub">${qualityLabel()}</div>
+        </div>
+      </div>`;
   } catch (e) {
     // no-op
   }
@@ -526,32 +534,20 @@ function showPlain(text) {
 
 function showProofSummary(data) {
   if (!data) { showPlain("Aucune preuve RGPD."); return; }
-  const steps = [];
-  if (data.preview_version_present) steps.push("Anonymisation générée (preview)");
-  if (data.final_version_present) steps.push("Version finale validée");
-  if ((data.detections_count || 0) > 0) steps.push("Données sensibles détectées");
-
-  const types = data.detections_entity_types_count || {};
-  const entries = Object.entries(types)
-    .sort((a,b) => (b[1]||0) - (a[1]||0))
-    .slice(0, 8);
-
-  const topTypes = entries.length
-    ? entries.map(([k,v]) => `${k}: ${v}`).join("\\n")
-    : "(aucune détection)";
-
   const finalPresent = data.final_version_present ? "oui" : "non";
+  const previewPresent = data.preview_version_present ? "oui" : "non";
+  const maskedCount = data.detections_count || 0;
   showPlain(
-    `PREUVE RGPD — document ${data.document_id}\n\n` +
-    `sha256 source: ${data.document_sha256}\n` +
-    `sha256 preview: ${data.preview_version_sha256 || "(absent)"}\n` +
-    `sha256 final: ${data.final_version_sha256 || "(absent)"}\n\n` +
-    `Final validé: ${finalPresent}\n` +
-    `Détections: ${data.detections_count || 0}\n` +
-    `Requêtes LLM: ${data.llm_requests_count || 0}\n\n` +
-    `Timeline: ${steps.length ? "" : "(non disponible)"}\n` +
-    `${steps.map(s => `- ${s}`).join("\\n")}\n\n` +
-    `Top entités masquées (résumé):\n${topTypes}\n`
+    `Certificat de traitement — document ${data.document_id}\n\n` +
+    `Le document a été anonymisé avec succès.\n` +
+    `${maskedCount} éléments sensibles ont été masqués.\n` +
+    `Les informations utiles à l'exploitation comptable sont conservées (montants + structure).\n\n` +
+    `Prévisualisation générée: ${previewPresent}\n` +
+    `Version finale validée: ${finalPresent}\n\n` +
+    `Empreinte source (sha256): ${data.document_sha256}\n` +
+    `Empreinte preview (sha256): ${data.preview_version_sha256 || "(absente)"}\n` +
+    `Empreinte finale (sha256): ${data.final_version_sha256 || "(absente)"}\n\n` +
+    `Pour le détail des catégories et les zones à revoir, regarde le panneau « Ce qui a été masqué ».`
   );
 }
 
