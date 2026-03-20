@@ -68,6 +68,8 @@ def _clean_amount_candidate(value: float | None) -> float | None:
         return None
     iv = int(value)
     if abs(value - iv) < 1e-6:
+        if 0 <= iv <= 50:  # likely line index / small marker, not a financial amount
+            return None
         if 1900 <= iv <= 2100:  # likely year
             return None
         if iv == 2072:  # form number
@@ -75,6 +77,82 @@ def _clean_amount_candidate(value: float | None) -> float | None:
         if 10000 <= iv <= 99999:  # likely zip code
             return None
     return value
+
+
+FORM_LABEL_BLACKLIST = {
+    "adresse de la société",
+    "adresse de la societe",
+    "adresse du siège social",
+    "adresse du siege social",
+    "dénomination de la société",
+    "denomination de la societe",
+    "nom marital",
+    "au cours de",
+    "date de naissance",
+    "nom et prénom",
+    "nom et prenom",
+    "soc5",
+    "soc18",
+}
+
+
+def _looks_like_form_label(value: str | None) -> bool:
+    if not value:
+        return True
+    v = _norm_spaces(value).lower()
+    if len(v) < 2:
+        return True
+    if any(lbl in v for lbl in FORM_LABEL_BLACKLIST):
+        return True
+    # Reject obvious header-only fragments with almost no value signal
+    if re.search(r"\b(adresse|dénomination|denomination|nom|date|associ[ée]s?)\b", v) and not re.search(r"\d|_|[a-z]{3,}", v):
+        return True
+    return False
+
+
+def _clean_text_candidate(value: str | None) -> str | None:
+    if value is None:
+        return None
+    v = _norm_spaces(value)
+    if _looks_like_form_label(v):
+        return None
+    return v
+
+
+def _extract_value_near_label(
+    text: str,
+    label_regex: str,
+    value_regex: str,
+    *,
+    max_next_lines: int = 2,
+    flags: int = re.IGNORECASE,
+) -> str | None:
+    """Extract value near label while avoiding re-capturing the label itself."""
+    lines = text.splitlines()
+    label_re = re.compile(label_regex, flags)
+    value_re = re.compile(value_regex, flags)
+
+    for i, line in enumerate(lines):
+        if not label_re.search(line):
+            continue
+        # 1) same line after label
+        tail = label_re.sub("", line, count=1)
+        m_same = value_re.search(tail)
+        if m_same:
+            val = _clean_text_candidate(m_same.group(1) if m_same.lastindex else m_same.group(0))
+            if val:
+                return val
+        # 2) next lines close to label
+        for j in range(1, max_next_lines + 1):
+            if i + j >= len(lines):
+                break
+            m_next = value_re.search(lines[i + j])
+            if not m_next:
+                continue
+            val = _clean_text_candidate(m_next.group(1) if m_next.lastindex else m_next.group(0))
+            if val:
+                return val
+    return None
 
 
 @dataclass
@@ -155,9 +233,33 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     associes = _extract_2072_associes_table(text)
 
     return {
-        "denomination_sci": _field(_extract_first(r"(?:d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci)\s*[:\-]?\s*([^\n]{3,120})", header_zone), 0.9, "header:denomination_societe"),
-        "adresse_sci": _field(_extract_first(r"(?:adresse\s+de\s+la\s+soci[ée]t[ée])\s*[:\-]?\s*([^\n]{8,160})", header_zone), 0.86, "header:adresse_societe"),
-        "adresse_siege_ouverture": _field(_extract_first(r"(?:adresse\s+du\s+si[eè]ge(?:\s+a\s+l[' ]ouverture)?)\s*[:\-]?\s*([^\n]{8,160})", header_zone), 0.78, "header:adresse_siege_ouverture"),
+        "denomination_sci": _field(
+            _extract_value_near_label(
+                header_zone,
+                r"d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci",
+                r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
+            ),
+            0.9,
+            "header:denomination_societe",
+        ),
+        "adresse_sci": _field(
+            _extract_value_near_label(
+                header_zone,
+                r"adresse\s+de\s+la\s+soci[ée]t[ée]",
+                r"([A-Z0-9_].{8,160})",
+            ),
+            0.86,
+            "header:adresse_societe",
+        ),
+        "adresse_siege_ouverture": _field(
+            _extract_value_near_label(
+                header_zone,
+                r"adresse\s+du\s+si[eè]ge(?:\s+social)?(?:\s+a\s+l[' ]ouverture)?",
+                r"([A-Z0-9_].{8,160})",
+            ),
+            0.78,
+            "header:adresse_siege_ouverture",
+        ),
         "date_cloture_exercice": _field(_extract_first(r"(?:date\s+de\s+cl[ôo]ture(?:\s+de\s+l[' ]exercice)?)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", header_zone), 0.92, "header:date_cloture_exercice"),
         "nombre_associes": _field(_to_float_fr(_extract_first(r"(?:nombre\s+d[' ]associ[ée]s?)\s*[:\-]?\s*([0-9]{1,3})", header_zone)), 0.88, "header:nombre_associes"),
         "nombre_parts_ouverture": _field(_to_float_fr(_extract_first(r"(?:nombre\s+de\s+parts?.{0,20}ouverture)\s*[:\-]?\s*([0-9]{1,10})", header_zone)), 0.78, "header:nombre_parts_ouverture"),
@@ -247,7 +349,11 @@ def _extract_2072_immeubles_table(text: str) -> list[dict[str, Any]]:
         chunk = "\n".join(zone_lines[a:b])
         entry = {
             "immeuble_id": f"IMMEUBLE_{len(entries) + 1}",
-            "adresse_immeuble": _extract_first(r"(?:adresse\s+de\s+l[' ]immeuble)\s*[:\-]?\s*([^\n]{6,160})", chunk),
+            "adresse_immeuble": _extract_value_near_label(
+                chunk,
+                r"adresse\s+de\s+l[' ]immeuble",
+                r"([A-Z0-9_].{6,160})",
+            ),
             "nombre_locaux": _to_float_fr(_extract_first(r"(?:nombre\s+de\s+locaux)\s*[:\-]?\s*([0-9]{1,4})", chunk)),
             "revenus_bruts": _extract_amount_for_label(chunk, r"montant\s+brut.{0,25}loyers?\s+encaiss|revenus?\s+bruts?"),
             "frais_gestion": _extract_amount_for_label(chunk, r"frais?\s+de\s+gestion"),
@@ -317,9 +423,17 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
         chunk = "\n".join(zone_lines[a:b])
         entry = {
             "associe_id": f"ASSOCIE_{len(entries) + 1}",
-            "nom": _extract_first(r"(?:nom\s+et\s+pr[ée]nom)\s*[:\-]?\s*([^\n]{3,120})", chunk),
+            "nom": _extract_value_near_label(
+                chunk,
+                r"nom\s+et\s+pr[ée]nom",
+                r"([A-Z_][A-Z_.\- ]{2,120})",
+            ),
             "date_naissance": _extract_first(r"(?:date\s+de\s+naissance)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", chunk),
-            "adresse": _extract_first(r"(?:adresse)\s*[:\-]?\s*([^\n]{8,140})", chunk),
+            "adresse": _extract_value_near_label(
+                chunk,
+                r"(?:\badresse\b)",
+                r"([A-Z0-9_].{8,140})",
+            ),
             "parts_detenues": _to_float_fr(_extract_first(r"(?:parts?\s+d[ée]tenues?)\s*[:\-]?\s*([0-9]{1,10})", chunk)),
             "quote_part_revenus_bruts": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenus?\s+bruts?"),
             "quote_part_frais_charges": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}frais?.{0,25}charges?"),
@@ -327,6 +441,9 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
             "quote_part_amortissement": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}amortissement"),
             "quote_part_revenu_net": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenu\s+net|quote[\- ]part.{0,25}d[ée]ficit"),
         }
+        # Anti-label cleanup for text columns
+        entry["nom"] = _clean_text_candidate(entry.get("nom"))
+        entry["adresse"] = _clean_text_candidate(entry.get("adresse"))
         if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "associe_id"):
             entries.append(entry)
 
