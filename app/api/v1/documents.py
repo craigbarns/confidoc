@@ -544,6 +544,17 @@ async def document_proof(
         )
     ).scalar() or 0
 
+    entity_type_rows = (
+        await db.execute(
+            select(EntityDetection.entity_type, func.count()).where(
+                EntityDetection.document_id == document.id
+            ).group_by(EntityDetection.entity_type)
+        )
+    ).all()
+    detections_entity_types_count = {
+        str(entity_type): int(cnt) for entity_type, cnt in entity_type_rows
+    }
+
     return JSONResponse(
         {
             "document_id": str(document.id),
@@ -558,6 +569,7 @@ async def document_proof(
             ),
             "detections_count": int(detections_n),
             "llm_requests_count": int(llm_req_n),
+            "detections_entity_types_count": detections_entity_types_count,
         }
     )
 

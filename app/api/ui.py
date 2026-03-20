@@ -337,6 +337,61 @@ function setDetections(count, context) {
   $("statDetections").textContent = count;
   $("statDetectionsSub").textContent = context || "dernier document traité";
 }
+function showPlain(text) {
+  previewOut.textContent = text || "";
+}
+
+function showProofSummary(data) {
+  if (!data) { showPlain("Aucune preuve RGPD."); return; }
+  const steps = [];
+  if (data.preview_version_present) steps.push("Anonymisation générée (preview)");
+  if (data.final_version_present) steps.push("Version finale validée");
+  if ((data.detections_count || 0) > 0) steps.push("Données sensibles détectées");
+
+  const types = data.detections_entity_types_count || {};
+  const entries = Object.entries(types)
+    .sort((a,b) => (b[1]||0) - (a[1]||0))
+    .slice(0, 8);
+
+  const topTypes = entries.length
+    ? entries.map(([k,v]) => `${k}: ${v}`).join("\n")
+    : "(aucune détection)";
+
+  const finalPresent = data.final_version_present ? "oui" : "non";
+  showPlain(
+    `PREUVE RGPD — document ${data.document_id}\n\n` +
+    `sha256 source: ${data.document_sha256}\n` +
+    `sha256 preview: ${data.preview_version_sha256 || "(absent)"}\n` +
+    `sha256 final: ${data.final_version_sha256 || "(absent)"}\n\n` +
+    `Final validé: ${finalPresent}\n` +
+    `Détections: ${data.detections_count || 0}\n` +
+    `Requêtes LLM: ${data.llm_requests_count || 0}\n\n` +
+    `Timeline: ${steps.length ? "" : "(non disponible)"}\n` +
+    `${steps.map(s => `- ${s}`).join("\n")}\n\n` +
+    `Top entités masquées (résumé):\n${topTypes}\n`
+  );
+}
+
+function showAuditSummary(data) {
+  if (!data) { showPlain("Aucun audit export."); return; }
+  const types = data.detections_entity_types_count || {};
+  const entries = Object.entries(types)
+    .sort((a,b) => (b[1]||0) - (a[1]||0))
+    .slice(0, 10);
+  const topTypes = entries.length
+    ? entries.map(([k,v]) => `${k}: ${v}`).join("\n")
+    : "(aucun type)";
+
+  const llmReqs = Array.isArray(data.llm_requests) ? data.llm_requests : [];
+  const llmLine = llmReqs.length ? `LLM requêtes: ${llmReqs.length}` : "LLM requêtes: 0";
+
+  showPlain(
+    `AUDIT EXPORT (RGPD) — ${data.document_id}\n\n` +
+    `document_sha256: ${data.document_sha256}\n\n` +
+    `types entités (top):\n${topTypes}\n\n` +
+    `${llmLine}\n`
+  );
+}
 function setDocDetection(docId, count) {
   docDetectionMap[docId] = count;
   const el = document.querySelector(`[data-doc-detection="${docId}"]`);
@@ -648,12 +703,12 @@ docList.addEventListener("click", async e => {
     } else if (action === "proof") {
       const {res, data} = await api(`/api/v1/documents/${id}/proof`);
       showApi(data);
-      if (res.ok) toast("Preuve RGPD affichée", "success");
+      if (res.ok) { showProofSummary(data); toast("Preuve RGPD affichée", "success"); }
       else toast(data.detail || "Erreur preuve RGPD", "error");
     } else if (action === "auditexport") {
       const {res, data} = await api(`/api/v1/documents/${id}/audit-export`);
       showApi(data);
-      if (res.ok) toast("Audit export prêt", "success");
+      if (res.ok) { showAuditSummary(data); toast("Audit export prêt", "success"); }
       else toast(data.detail || "Erreur audit export", "error");
     } else if (action === "delete") {
       // Effacement RGPD en 2 étapes : aperçu (compteurs) puis confirmation forte.
