@@ -26,7 +26,6 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("phone_intl", re.compile(r"\+\d{1,3}[\s.\-]?\d(?:[\s.\-]?\d){6,14}\b"), "[PHONE]"),
     ("iban", re.compile(r"\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b"), "[IBAN]"),
     ("iban_compact", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), "[IBAN]"),
-    ("bic", re.compile(r"\b[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b"), "[BIC]"),
     ("siret", re.compile(r"\b\d{3}[\s.\-]?\d{3}[\s.\-]?\d{3}[\s.\-]?\d{5}\b"), "[SIRET]"),
     ("siren", re.compile(r"\b\d{3}[\s.\-]?\d{3}[\s.\-]?\d{3}\b"), "[SIREN]"),
     ("vat_fr", re.compile(r"\bFR\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b"), "[VAT]"),
@@ -136,6 +135,11 @@ LABEL_VALUE_PATTERN = re.compile(
     r"\s*[:\-]\s*(.+)$"
 )
 
+# BIC should be detected only with an explicit label to avoid masking accounting words.
+BIC_LABELED_PATTERN = re.compile(
+    r"(?im)\bBIC\b\s*[:\-]?\s*([A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b"
+)
+
 INVOICE_HINTS = (
     "facture", "invoice", "tva", "total ttc", "total ht",
     "montant ht", "règlement", "reglement", "avoir", "devis",
@@ -160,6 +164,12 @@ FALSE_POSITIVE_WORDS: set[str] = {
     "BON", "COMMANDE", "LIVRAISON", "RETOUR",
     "MODE", "PAIEMENT", "CONDITIONS", "GÉNÉRALES", "GENERALES",
     "VENTE", "ACHAT", "CLIENT", "FOURNISSEUR",
+    # Extra accounting words frequently hit by OCR/NER false positives
+    "CHIFFRE", "AFFAIRES", "EXPLOITATION", "EXCEPTIONNEL", "FINANCIERES",
+    "NETTES", "COURANT", "ACTIFS", "CREANCES", "PARTICIPATIONS",
+    "DISPONIBILITES", "IMMOBILISATIONS", "CAPITAUX", "DETTES",
+    "RATTACHEES", "EXERCICE", "CLOS", "VARIATION", "REPORT",
+    "NOUVEAU", "COMPTE", "COMPTES", "RÉSULTAT", "RESULTAT",
 }
 
 
@@ -241,6 +251,20 @@ def _is_false_positive(value: str) -> bool:
     # Too short
     if len(clean) < 3:
         return True
+    # Typical accounting labels that must stay readable
+    accounting_guard_patterns = (
+        r"\bCHIFFRE\s+D[’']AFFAIRES\b",
+        r"\bCHARGES?\s+D[’']EXPLOITATION\b",
+        r"\bPRODUITS?\s+D[’']EXPLOITATION\b",
+        r"\bR[ÉE]SULTAT\s+DE\s+L[’']EXERCICE\b",
+        r"\bCR[ÉE]ANCES?\s+RATTACH[ÉE]ES?\s+[ÀA]\s+DES?\s+PARTICIPATIONS\b",
+        r"\bVALEURS?\s+NETTES?\b",
+        r"\bBILAN\b",
+        r"\bACTIF\b",
+        r"\bPASSIF\b",
+    )
+    if any(re.search(pat, clean) for pat in accounting_guard_patterns):
+        return True
     return False
 
 
@@ -275,6 +299,19 @@ def _detect_entities(
             "end_index": match.end(1),
             "value_excerpt": value,
             "replacement": "[REDACTED]",
+        })
+
+    # ── BIC detection only when explicitly labeled (avoid false positives) ──
+    for match in BIC_LABELED_PATTERN.finditer(text):
+        value = match.group(1).strip()
+        if not value or _is_false_positive(value):
+            continue
+        matches.append({
+            "entity_type": "bic",
+            "start_index": match.start(1),
+            "end_index": match.end(1),
+            "value_excerpt": value,
+            "replacement": "[BIC]",
         })
 
     # ── Strict-only patterns ──
