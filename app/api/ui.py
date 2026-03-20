@@ -476,6 +476,18 @@ async function refreshMaskedSummary(docId) {
       return "Revue recommandée";
     }
 
+    const FLAG_LABELS = {
+      "emails_found": "Email potentiellement visible",
+      "iban_found": "IBAN potentiellement visible",
+      "siret_found": "SIRET potentiellement visible",
+      "siren_found": "SIREN potentiellement visible",
+      "uppercase_person_leftovers": "Nom/prénom potentiellement identifiable restant",
+    };
+    const rawFlags = Array.isArray(quality.quality_flags) ? quality.quality_flags : [];
+    const reviewDetails = rawFlags.length
+      ? rawFlags.map(f => `- ${FLAG_LABELS[f] || f}`).join("\\n")
+      : "- Aucun point de revue détecté";
+
     const CAT_DESCR = {
       "Nom & personne": "Nom et identifiants de personnes masqués.",
       "Email": "Adresses email (identification directe) masquées.",
@@ -512,6 +524,8 @@ async function refreshMaskedSummary(docId) {
           <div class="proof-card-title">À revoir</div>
           <div class="proof-card-value">${quality.needs_review ? "Oui" : "Non"}</div>
           <div class="proof-card-sub">${qualityLabel()}</div>
+          <div class="proof-card-sub" style="white-space:pre-wrap">${reviewDetails}</div>
+          <div class="proof-card-sub">Action recommandée: revue manuelle ciblée puis validation.</div>
         </div>
       </div>`;
   } catch (e) {
