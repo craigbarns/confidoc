@@ -499,6 +499,18 @@ async function askKb() {
   const askBtn = $("askKbBtn");
   askBtn.disabled = true;
   try {
+    // Ingestion automatique des documents "ready" avant recherche KB
+    const readyDocs = (currentDocs || []).filter(d => d.status === "ready");
+    if (readyDocs.length) {
+      toast("Indexation KB en cours…", "info");
+      for (const doc of readyDocs) {
+        const {res: ingestRes} = await api(`/api/v1/kb/ingest/${doc.id}`, {method: "POST"});
+        if (!ingestRes.ok && ingestRes.status !== 404) {
+          // On continue sur les autres docs: un doc invalide ne doit pas bloquer les questions
+        }
+      }
+    }
+
     toast("Recherche dans la base anonyme…", "info");
     const {res, data} = await api("/api/v1/kb/search", {
       method: "POST",
