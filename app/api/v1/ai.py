@@ -168,6 +168,11 @@ async def ai_summary(
             "document_id": str(document.id),
             "provider": "ollama",
             "model": llm.get("model"),
+            "quality_snapshot": {
+                "needs_review": bool((structured.get("quality") or {}).get("needs_review", True)),
+                "ready_for_ai": bool((structured.get("quality") or {}).get("ready_for_ai", False)),
+                "coverage_ratio": (structured.get("quality") or {}).get("coverage_ratio"),
+            },
             "payload_policy": {
                 "raw_text_sent": False,
                 "anonymized_only": True,

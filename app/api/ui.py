@@ -184,10 +184,13 @@ body{background:var(--bg-deep)}
 .proof-card.review{border-color:rgba(245,158,11,0.25)}
 .ai-summary{display:grid;gap:10px}
 .ai-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ai-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
 .ai-mode{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--glass-border);color:var(--text-muted);background:rgba(2,6,23,0.45)}
 .ai-mode.ok{border-color:rgba(16,185,129,0.35);color:var(--emerald)}
 .ai-mode.fallback{border-color:rgba(245,158,11,0.35);color:var(--amber)}
 .ai-confidence{font-size:13px;color:var(--text-muted)}
+.ai-status{font-size:12px;color:var(--text-muted)}
+.ai-security{font-size:12px;color:var(--text-muted);padding:8px 10px;border:1px dashed var(--glass-border);border-radius:8px;background:rgba(2,6,23,0.3)}
 .ai-block{background:rgba(2,6,23,0.45);border:1px solid var(--glass-border);border-radius:10px;padding:10px}
 .ai-title{font-size:12px;color:var(--text-dim);font-weight:700;margin-bottom:6px}
 .ai-list{margin:0;padding-left:18px}
@@ -426,13 +429,37 @@ function showAiSummaryCard(data) {
   const alerts = Array.isArray(s.anomalies_ou_alertes) ? s.anomalies_ou_alertes : [];
   const questions = Array.isArray(s.questions_de_revue) ? s.questions_de_revue : [];
   const resume = s.resume_executif || "Synthèse générée avec prudence à partir des données disponibles. Une revue humaine reste recommandée.";
+  const q = data && data.quality_snapshot ? data.quality_snapshot : {};
+  const docStatus = q.ready_for_ai ? "Prêt IA" : (q.needs_review ? "À revoir" : "En analyse");
   const listHtml = arr => arr.map(x => `<li>${String(x)}</li>`).join("");
+  const summaryTextForCopy = [
+    "Synthèse IA",
+    `Mode: ${modeFallback ? "synthèse de secours" : "synthèse assistée"}`,
+    `Confiance: ${confidenceLabel(conf)} (${Math.round(conf * 100)}%)`,
+    `Statut du document: ${docStatus}`,
+    "",
+    `Résumé exécutif: ${resume}`,
+    "",
+    "Points clés:",
+    ...points.map(p => `- ${p}`),
+    "",
+    "Alertes:",
+    ...alerts.map(a => `- ${a}`),
+    "",
+    "Questions de revue:",
+    ...questions.map(q => `- ${q}`),
+  ].join("\n");
   previewOut.innerHTML = `
     <div class="ai-summary">
       <div class="ai-head">
-        <div class="ai-mode ${modeClass}">${modeText}</div>
+        <div class="ai-tools">
+          <div class="ai-mode ${modeClass}">${modeText}</div>
+          <button class="btn-act" id="copyAiSummaryBtn">Copier la synthèse</button>
+        </div>
         <div class="ai-confidence">Confiance : <b>${confidenceLabel(conf)}</b> (${Math.round(conf * 100)}%)</div>
       </div>
+      <div class="ai-status">Statut du document : <b>${docStatus}</b></div>
+      <div class="ai-security">Synthèse générée à partir de données anonymisées uniquement.</div>
       <div class="ai-block">
         <div class="ai-title">Résumé exécutif</div>
         <div>${resume}</div>
@@ -450,6 +477,17 @@ function showAiSummaryCard(data) {
         <ul class="ai-list">${listHtml(questions)}</ul>
       </div>
     </div>`;
+  const copyBtn = $("copyAiSummaryBtn");
+  if (copyBtn) {
+    copyBtn.addEventListener("click", async () => {
+      try {
+        await navigator.clipboard.writeText(summaryTextForCopy);
+        toast("Synthèse copiée", "success");
+      } catch {
+        toast("Copie impossible", "error");
+      }
+    });
+  }
 }
 function escapeHtml(s) {
   if (s === null || s === undefined) return "";
