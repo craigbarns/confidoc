@@ -448,15 +448,15 @@ async function refreshMaskedSummary(docId) {
 
     function fuseCategory(entityType) {
       const t = entityType || "";
-      if (t.startsWith("person_") || t === "company_legal_name") return "Nom & personne";
+      if (t.startsWith("person_") || t === "company_legal_name") return "Noms de personnes";
       if (t === "email") return "Email";
       if (t.startsWith("phone_")) return "Téléphone";
       if (t === "iban" || t === "iban_compact" || t === "bic" || t === "bank_account_code_label") return "Identifiants bancaires";
       if (t === "siret" || t === "siren" || t === "vat_fr") return "Identifiants entreprise & fiscalité";
       if (t === "nss") return "Identifiant personnel";
-      if (t.startsWith("address_") || t === "postal_city") return "Adresse & localisation";
+      if (t.startsWith("address_") || t === "postal_city") return "Adresses et données de localisation";
       if (t.startsWith("date_")) return "Dates";
-      if (t === "invoice_number" || t === "invoice_identity_block") return "Références & mentions";
+      if (t === "invoice_number" || t === "invoice_identity_block") return "Références documentaires";
       if (t === "labeled_sensitive_value") return "Valeurs sensibles (libellé : valeur)";
       if (t.startsWith("amount_")) return "Montants";
       if (t === "country") return "Pays";
@@ -472,9 +472,9 @@ async function refreshMaskedSummary(docId) {
     const maskedCats = fusedEntries.filter(([cat,_]) => cat !== "Montants").slice(0, 8);
 
     function qualityLabel() {
-      if (!quality.needs_review) return "Aucune zone ambiguë détectée";
-      if (ambiguousZones > 0) return `${ambiguousZones} zone(s) à vérifier`;
-      return "Revue recommandée";
+      if (!quality.needs_review) return "Aucune zone ambiguë détectée.";
+      if (ambiguousZones > 0) return `${ambiguousZones} élément(s) potentiellement identifiable(s) reste(nt) à vérifier manuellement.`;
+      return "Revue manuelle ciblée recommandée.";
     }
 
     const FLAG_LABELS = {
@@ -490,15 +490,15 @@ async function refreshMaskedSummary(docId) {
       : "- Aucun point de revue détecté";
 
     const CAT_DESCR = {
-      "Nom & personne": "Nom et identifiants de personnes masqués.",
-      "Email": "Adresses email (identification directe) masquées.",
-      "Téléphone": "Numéros de téléphone masqués.",
-      "Identifiants bancaires": "IBAN/BIC et mentions bancaires masqués.",
+      "Noms de personnes": "Les noms et identifiants de personnes ont été masqués.",
+      "Email": "Les adresses email détectées ont été masquées.",
+      "Téléphone": "Les numéros de téléphone ont été masqués.",
+      "Identifiants bancaires": "Les identifiants et mentions bancaires détectés ont été masqués.",
       "Identifiants entreprise & fiscalité": "SIREN/SIRET et références fiscales masqués.",
       "Identifiant personnel": "Identifiants personnels masqués.",
-      "Adresse & localisation": "Adresses et localisation masquées.",
+      "Adresses et données de localisation": "Les adresses et éléments de localisation ont été masqués.",
       "Dates": "Dates détectées comme sensibles masquées/normalisées.",
-      "Références & mentions": "Références de factures et mentions masquées.",
+      "Références documentaires": "Les références de facture et mentions associées ont été masquées.",
       "Valeurs sensibles (libellé : valeur)": "Paires libellé/valeur détectées comme sensibles masquées.",
       "Pays": "Pays masqués.",
       "Autre": "Autres champs détectés comme sensibles masqués.",
@@ -523,10 +523,10 @@ async function refreshMaskedSummary(docId) {
         </div>
         <div class="proof-card review">
           <div class="proof-card-title">À revoir</div>
-          <div class="proof-card-value">${quality.needs_review ? "Oui" : "Non"}</div>
+          <div class="proof-card-value">${quality.needs_review ? "Revue recommandée" : "Aucune revue requise"}</div>
           <div class="proof-card-sub">${qualityLabel()}</div>
           <div class="proof-card-sub" style="white-space:pre-wrap">${reviewDetails}</div>
-          <div class="proof-card-sub">Action recommandée: revue manuelle ciblée puis validation.</div>
+          <div class="proof-card-sub">Étape conseillée : vérifier cette zone puis valider le document.</div>
         </div>
       </div>`;
   } catch (e) {
