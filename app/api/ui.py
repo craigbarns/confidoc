@@ -182,6 +182,16 @@ body{background:var(--bg-deep)}
 .proof-card.masked{border-color:rgba(244,63,94,0.2)}
 .proof-card.kept{border-color:rgba(16,185,129,0.2)}
 .proof-card.review{border-color:rgba(245,158,11,0.25)}
+.ai-summary{display:grid;gap:10px}
+.ai-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
+.ai-mode{font-size:12px;padding:4px 10px;border-radius:999px;border:1px solid var(--glass-border);color:var(--text-muted);background:rgba(2,6,23,0.45)}
+.ai-mode.ok{border-color:rgba(16,185,129,0.35);color:var(--emerald)}
+.ai-mode.fallback{border-color:rgba(245,158,11,0.35);color:var(--amber)}
+.ai-confidence{font-size:13px;color:var(--text-muted)}
+.ai-block{background:rgba(2,6,23,0.45);border:1px solid var(--glass-border);border-radius:10px;padding:10px}
+.ai-title{font-size:12px;color:var(--text-dim);font-weight:700;margin-bottom:6px}
+.ai-list{margin:0;padding-left:18px}
+.ai-list li{margin:4px 0}
 
 @media(max-width:900px){
   .proof-cards3{grid-template-columns:1fr}
@@ -398,6 +408,49 @@ function highlightTags(text) {
 }
 
 function showPreview(text) { previewOut.innerHTML = highlightTags(text); }
+
+function confidenceLabel(v) {
+  const n = Number(v || 0);
+  if (n >= 0.75) return "élevée";
+  if (n >= 0.5) return "moyenne";
+  return "faible";
+}
+
+function showAiSummaryCard(data) {
+  const s = data && data.summary ? data.summary : {};
+  const modeFallback = (data && data.summary_source) === "fallback_local";
+  const modeText = modeFallback ? "Mode : synthèse de secours" : "Mode : synthèse assistée";
+  const modeClass = modeFallback ? "fallback" : "ok";
+  const conf = Number(s.confiance_globale || 0);
+  const points = Array.isArray(s.points_cles) ? s.points_cles : [];
+  const alerts = Array.isArray(s.anomalies_ou_alertes) ? s.anomalies_ou_alertes : [];
+  const questions = Array.isArray(s.questions_de_revue) ? s.questions_de_revue : [];
+  const resume = s.resume_executif || "Synthèse générée avec prudence à partir des données disponibles. Une revue humaine reste recommandée.";
+  const listHtml = arr => arr.map(x => `<li>${String(x)}</li>`).join("");
+  previewOut.innerHTML = `
+    <div class="ai-summary">
+      <div class="ai-head">
+        <div class="ai-mode ${modeClass}">${modeText}</div>
+        <div class="ai-confidence">Confiance : <b>${confidenceLabel(conf)}</b> (${Math.round(conf * 100)}%)</div>
+      </div>
+      <div class="ai-block">
+        <div class="ai-title">Résumé exécutif</div>
+        <div>${resume}</div>
+      </div>
+      <div class="ai-block">
+        <div class="ai-title">Points clés</div>
+        <ul class="ai-list">${listHtml(points)}</ul>
+      </div>
+      <div class="ai-block">
+        <div class="ai-title">Alertes</div>
+        <ul class="ai-list">${listHtml(alerts)}</ul>
+      </div>
+      <div class="ai-block">
+        <div class="ai-title">Questions de revue</div>
+        <ul class="ai-list">${listHtml(questions)}</ul>
+      </div>
+    </div>`;
+}
 function escapeHtml(s) {
   if (s === null || s === undefined) return "";
   return String(s)
@@ -992,13 +1045,17 @@ docList.addEventListener("click", async e => {
       }
       let parsed = null;
       try { parsed = JSON.parse(data.summary_json_text || "{}"); } catch {}
-      const pretty = parsed ? JSON.stringify(parsed, null, 2) : (data.summary_json_text || "");
-      showPreview(pretty || "Synthèse IA vide");
+      const summaryPayload = {
+        ...data,
+        summary: parsed || {},
+      };
+      showAiSummaryCard(summaryPayload);
       downloadJsonFile(`ai_summary_${id}.json`, {
         document_id: id,
         provider: data.provider,
         model: data.model,
         payload_policy: data.payload_policy,
+        summary_source: data.summary_source || null,
         summary: parsed || data.summary_json_text || "",
       });
       toast("Synthèse IA prête (.json)", "success");
