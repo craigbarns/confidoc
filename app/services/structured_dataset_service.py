@@ -17,7 +17,9 @@ def _score_hits(source: str, keywords: tuple[str, ...]) -> tuple[int, list[str]]
     return len(hits), hits
 
 
-def classify_doc_type_scored(text: str, filename: str = "") -> tuple[str, float, list[str]]:
+def classify_doc_type_scored(
+    text: str, filename: str = ""
+) -> tuple[str, float, list[str], dict[str, Any]]:
     """Scored router for a compact high-confidence taxonomy."""
     source = f"{filename}\n{text[:20000]}".lower()
 
@@ -42,12 +44,17 @@ def classify_doc_type_scored(text: str, filename: str = "") -> tuple[str, float,
     best_type = "unknown_other"
     best_score = 0
     best_hits: list[str] = []
+    second_type = "unknown_other"
+    second_score = 0
     for doc_type, keywords, threshold in rules:
         score, hits = _score_hits(source, keywords)
         if score >= threshold and score > best_score:
+            second_type, second_score = best_type, best_score
             best_type = doc_type
             best_score = score
             best_hits = hits
+        elif score >= threshold and score > second_score:
+            second_type, second_score = doc_type, score
 
     if best_type.startswith("unknown_"):
         # coarse unknown buckets for safer downstream routing
@@ -62,12 +69,16 @@ def classify_doc_type_scored(text: str, filename: str = "") -> tuple[str, float,
     reasons = [f"match:{h}" for h in best_hits][:10]
     if not reasons:
         reasons = ["no_strong_marker_match"]
-    return best_type, round(confidence, 3), reasons
+    runner_up = {
+        "doc_type": second_type,
+        "score": int(second_score),
+    }
+    return best_type, round(confidence, 3), reasons, runner_up
 
 
 def detect_specialized_doc_type(text: str, filename: str = "") -> str:
     """Backward-compatible wrapper returning doc_type only."""
-    doc_type, _confidence, _reasons = classify_doc_type_scored(text, filename)
+    doc_type, _confidence, _reasons, _runner_up = classify_doc_type_scored(text, filename)
     return doc_type
 
 
@@ -152,8 +163,6 @@ def _clean_amount_candidate(value: float | None) -> float | None:
         if 1900 <= iv <= 2100:  # likely year
             return None
         if iv == 2072:  # form number
-            return None
-        if 10000 <= iv <= 99999:  # likely zip code
             return None
     return value
 
@@ -779,7 +788,7 @@ def build_structured_dataset(
 ) -> dict[str, Any]:
     """Build normalized structured dataset payload for downstream analytics/AI."""
     source_text = extraction_text if extraction_text is not None else anonymized_text
-    detected_doc_type, routing_confidence, routing_reasons = classify_doc_type_scored(
+    detected_doc_type, routing_confidence, routing_reasons, routing_runner_up = classify_doc_type_scored(
         source_text, original_filename
     )
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
@@ -814,6 +823,7 @@ def build_structured_dataset(
         "detected_doc_type": detected_doc_type,
         "routing_confidence": routing_confidence,
         "routing_reasons": routing_reasons,
+        "routing_runner_up": routing_runner_up,
         "anonymized": True,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "fields": fields,
@@ -822,6 +832,7 @@ def build_structured_dataset(
         "provenance": {
             "extractor_version": "v2-specialized",
             "strategy": "zone-based-specialized",
+            "routing_version": "v1.5-scored-router",
             "source_filename": original_filename,
         },
     }
