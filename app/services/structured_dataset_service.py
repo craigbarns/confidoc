@@ -226,24 +226,62 @@ def _extract_2072_immeubles_table(text: str) -> list[dict[str, Any]]:
         if "annexe 2" in lines[j].lower():
             end = j
             break
-    zone = "\n".join(lines[start:end])
+    zone_lines = lines[start:end]
     entries: list[dict[str, Any]] = []
-    # V2 minimal extraction: one entry by block, expandable later.
-    addr = _extract_first(r"(?:adresse\s+de\s+l[' ]immeuble)\s*[:\-]?\s*([^\n]{6,140})", zone)
-    entry = {
-        "immeuble_id": "IMMEUBLE_1",
-        "adresse_immeuble": addr,
-        "nombre_locaux": _to_float_fr(_extract_first(r"(?:nombre\s+de\s+locaux)\s*[:\-]?\s*([0-9]{1,4})", zone)),
-        "revenus_bruts": _extract_amount_for_label(zone, r"montant\s+brut.{0,25}loyers?\s+encaiss"),
-        "primes_assurance": _extract_amount_for_label(zone, r"primes?\s+d[' ]assurance"),
-        "depenses_reparation_entretien": _extract_amount_for_label(zone, r"d[ée]penses?\s+de\s+r[ée]paration"),
-        "impositions": _extract_amount_for_label(zone, r"impositions?"),
-        "interets_emprunts": _extract_amount_for_label(zone, r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
-        "amortissement": _extract_amount_for_label(zone, r"amortissement"),
-        "revenu_ou_deficit": _extract_amount_for_label(zone, r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)|revenu\s+net"),
-    }
-    if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "immeuble_id"):
-        entries.append(entry)
+
+    # Multi-immeubles: split by explicit "Annexe 1" markers or repeated "adresse de l'immeuble".
+    chunk_starts: list[int] = []
+    for idx, line in enumerate(zone_lines):
+        low = line.lower()
+        if "annexe 1" in low or "adresse de l'immeuble" in low:
+            chunk_starts.append(idx)
+    if not chunk_starts:
+        chunk_starts = [0]
+    chunk_starts = sorted(set(chunk_starts))
+    chunk_starts.append(len(zone_lines))
+
+    for i in range(len(chunk_starts) - 1):
+        a, b = chunk_starts[i], chunk_starts[i + 1]
+        if b - a < 2:
+            continue
+        chunk = "\n".join(zone_lines[a:b])
+        entry = {
+            "immeuble_id": f"IMMEUBLE_{len(entries) + 1}",
+            "adresse_immeuble": _extract_first(r"(?:adresse\s+de\s+l[' ]immeuble)\s*[:\-]?\s*([^\n]{6,160})", chunk),
+            "nombre_locaux": _to_float_fr(_extract_first(r"(?:nombre\s+de\s+locaux)\s*[:\-]?\s*([0-9]{1,4})", chunk)),
+            "revenus_bruts": _extract_amount_for_label(chunk, r"montant\s+brut.{0,25}loyers?\s+encaiss|revenus?\s+bruts?"),
+            "frais_gestion": _extract_amount_for_label(chunk, r"frais?\s+de\s+gestion"),
+            "assurance": _extract_amount_for_label(chunk, r"primes?\s+d[' ]assurance|assurance"),
+            "travaux": _extract_amount_for_label(chunk, r"travaux|d[ée]penses?\s+de\s+r[ée]paration"),
+            "impositions": _extract_amount_for_label(chunk, r"impositions?"),
+            "interets_emprunts": _extract_amount_for_label(chunk, r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
+            "amortissement": _extract_amount_for_label(chunk, r"amortissement"),
+            "revenu_ou_deficit": _extract_amount_for_label(chunk, r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)|revenu\s+net"),
+        }
+        if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "immeuble_id"):
+            entries.append(entry)
+
+    # Fallback: try to create entries from repeated addresses if chunk split failed.
+    if not entries:
+        zone = "\n".join(zone_lines)
+        addrs = re.findall(r"(?:adresse\s+de\s+l[' ]immeuble)\s*[:\-]?\s*([^\n]{6,160})", zone, re.IGNORECASE)
+        for idx, addr in enumerate(addrs[:10], start=1):
+            entries.append(
+                {
+                    "immeuble_id": f"IMMEUBLE_{idx}",
+                    "adresse_immeuble": _norm_spaces(addr),
+                    "nombre_locaux": None,
+                    "revenus_bruts": None,
+                    "frais_gestion": None,
+                    "assurance": None,
+                    "travaux": None,
+                    "impositions": None,
+                    "interets_emprunts": None,
+                    "amortissement": None,
+                    "revenu_ou_deficit": None,
+                }
+            )
+
     return entries
 
 
@@ -257,21 +295,61 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
             break
     if start < 0:
         return []
-    zone = "\n".join(lines[start:min(len(lines), start + 320)])
-    # V2 lightweight extraction; robust row parser can be added next iteration.
-    entry = {
-        "associe_id": "ASSOCIE_1",
-        "nom_affiche_pseudo": _extract_first(r"(?:nom\s+et\s+pr[ée]nom)\s*[:\-]?\s*([^\n]{3,120})", zone),
-        "date_naissance": _extract_first(r"(?:date\s+de\s+naissance)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", zone),
-        "adresse_associe": _extract_first(r"(?:adresse)\s*[:\-]?\s*([^\n]{8,140})", zone),
-        "parts_detenues": _to_float_fr(_extract_first(r"(?:parts?\s+d[ée]tenues?)\s*[:\-]?\s*([0-9]{1,10})", zone)),
-        "quote_part_revenus_bruts": _extract_amount_for_label(zone, r"quote[\- ]part.{0,25}revenus?\s+bruts?"),
-        "quote_part_frais_charges": _extract_amount_for_label(zone, r"quote[\- ]part.{0,25}frais?.{0,25}charges?"),
-        "quote_part_interets_emprunts": _extract_amount_for_label(zone, r"quote[\- ]part.{0,25}int[eé]r[eê]ts?\s+d[' ]emprunts?"),
-        "quote_part_amortissement": _extract_amount_for_label(zone, r"quote[\- ]part.{0,25}amortissement"),
-        "quote_part_revenu_net": _extract_amount_for_label(zone, r"quote[\- ]part.{0,25}revenu\s+net|quote[\- ]part.{0,25}d[ée]ficit"),
-    }
-    return [entry] if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "associe_id") else []
+    zone_lines = lines[start:min(len(lines), start + 420)]
+    zone = "\n".join(zone_lines)
+    entries: list[dict[str, Any]] = []
+
+    # Build associated chunks from repeated date-of-birth lines or "Nom et prénom" labels.
+    starts: list[int] = []
+    for idx, line in enumerate(zone_lines):
+        low = line.lower()
+        if "nom et prénom".lower() in low or "nom et prenom" in low or "date de naissance" in low:
+            starts.append(idx)
+    starts = sorted(set(starts))
+    if not starts:
+        starts = [0]
+    starts.append(len(zone_lines))
+
+    for i in range(len(starts) - 1):
+        a, b = starts[i], starts[i + 1]
+        if b - a < 2:
+            continue
+        chunk = "\n".join(zone_lines[a:b])
+        entry = {
+            "associe_id": f"ASSOCIE_{len(entries) + 1}",
+            "nom": _extract_first(r"(?:nom\s+et\s+pr[ée]nom)\s*[:\-]?\s*([^\n]{3,120})", chunk),
+            "date_naissance": _extract_first(r"(?:date\s+de\s+naissance)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", chunk),
+            "adresse": _extract_first(r"(?:adresse)\s*[:\-]?\s*([^\n]{8,140})", chunk),
+            "parts_detenues": _to_float_fr(_extract_first(r"(?:parts?\s+d[ée]tenues?)\s*[:\-]?\s*([0-9]{1,10})", chunk)),
+            "quote_part_revenus_bruts": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenus?\s+bruts?"),
+            "quote_part_frais_charges": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}frais?.{0,25}charges?"),
+            "quote_part_interets_emprunts": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}int[eé]r[eê]ts?\s+d[' ]emprunts?"),
+            "quote_part_amortissement": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}amortissement"),
+            "quote_part_revenu_net": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenu\s+net|quote[\- ]part.{0,25}d[ée]ficit"),
+        }
+        if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "associe_id"):
+            entries.append(entry)
+
+    # Fallback from global zone using repeated dates of birth patterns.
+    if not entries:
+        birth_dates = re.findall(r"\b([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})\b", zone)
+        for idx, dt in enumerate(birth_dates[:10], start=1):
+            entries.append(
+                {
+                    "associe_id": f"ASSOCIE_{idx}",
+                    "nom": None,
+                    "date_naissance": dt,
+                    "adresse": None,
+                    "parts_detenues": None,
+                    "quote_part_revenus_bruts": None,
+                    "quote_part_frais_charges": None,
+                    "quote_part_interets_emprunts": None,
+                    "quote_part_amortissement": None,
+                    "quote_part_revenu_net": None,
+                }
+            )
+
+    return entries
 
 
 def _extract_generic_accounting_table(text: str) -> list[dict[str, Any]]:
@@ -344,7 +422,45 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     ann2_ok = (not ann2_declared) or len(tables.get("associes_revenus_fonciers", [])) >= 1
     annex_consistency_score = 1.0 if (ann1_ok and ann2_ok) else 0.5
 
-    consistency = (numeric_consistency_score + annex_consistency_score) / 2
+    # Aggregated consistency: sums of tables vs top-level totals.
+    associes = tables.get("associes_revenus_fonciers", []) or []
+    immeubles = tables.get("immeubles", []) or []
+    associes_rb = sum(float(x.get("quote_part_revenus_bruts") or 0.0) for x in associes)
+    associes_fc = sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes)
+    associes_ie = sum(float(x.get("quote_part_interets_emprunts") or 0.0) for x in associes)
+    immeubles_rb = sum(float(x.get("revenus_bruts") or 0.0) for x in immeubles)
+    immeubles_fc = sum(float((x.get("frais_gestion") or 0.0) + (x.get("assurance") or 0.0) + (x.get("travaux") or 0.0) + (x.get("impositions") or 0.0)) for x in immeubles)
+    immeubles_ie = sum(float(x.get("interets_emprunts") or 0.0) for x in immeubles)
+
+    agg_checks = 0
+    agg_ok = 0
+    if isinstance(rb, (int, float)) and associes_rb > 0:
+        agg_checks += 1
+        if abs(rb - associes_rb) <= max(2.0, abs(rb) * 0.03):
+            agg_ok += 1
+    if isinstance(rb, (int, float)) and immeubles_rb > 0:
+        agg_checks += 1
+        if abs(rb - immeubles_rb) <= max(2.0, abs(rb) * 0.03):
+            agg_ok += 1
+    if isinstance(fc, (int, float)) and associes_fc > 0:
+        agg_checks += 1
+        if abs(fc - associes_fc) <= max(2.0, abs(fc) * 0.03):
+            agg_ok += 1
+    if isinstance(fc, (int, float)) and immeubles_fc > 0:
+        agg_checks += 1
+        if abs(fc - immeubles_fc) <= max(2.0, abs(fc) * 0.03):
+            agg_ok += 1
+    if isinstance(ie, (int, float)) and associes_ie > 0:
+        agg_checks += 1
+        if abs(ie - associes_ie) <= max(2.0, abs(ie) * 0.03):
+            agg_ok += 1
+    if isinstance(ie, (int, float)) and immeubles_ie > 0:
+        agg_checks += 1
+        if abs(ie - immeubles_ie) <= max(2.0, abs(ie) * 0.03):
+            agg_ok += 1
+    aggregate_consistency_score = (agg_ok / agg_checks) if agg_checks else 0.7
+
+    consistency = (numeric_consistency_score + annex_consistency_score + aggregate_consistency_score) / 3
     ready_for_ai = (
         base["coverage_ratio"] >= 0.8
         and consistency >= 0.85
@@ -360,12 +476,15 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
         flags.append("annex_consistency_failed")
     if numeric_consistency_score < 0.85:
         flags.append("numeric_consistency_low")
+    if aggregate_consistency_score < 0.85:
+        flags.append("aggregate_consistency_low")
 
     return {
         **base,
         "zone_detection_score": round(zone_detection_score, 3),
         "numeric_consistency_score": round(numeric_consistency_score, 3),
         "annex_consistency_score": round(annex_consistency_score, 3),
+        "aggregate_consistency_score": round(aggregate_consistency_score, 3),
         "ocr_readability_score": 0.75,
         "critical_missing_fields": critical_missing,
         "needs_review": needs_review,
