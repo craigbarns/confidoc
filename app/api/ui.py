@@ -474,7 +474,7 @@ async function refreshMaskedSummary(docId) {
 
     maskedOut.textContent =
       `Ce qui a ete masque (compteur spans): ${total}\n\n` +
-      (top.length ? top.join("\n") : "Aucune donnee sensible detectee.");
+      (top.length ? top.join("\\n") : "Aucune donnee sensible detectee.");
   } catch (e) {
     // no-op
   }
@@ -537,7 +537,7 @@ function showProofSummary(data) {
     .slice(0, 8);
 
   const topTypes = entries.length
-    ? entries.map(([k,v]) => `${k}: ${v}`).join("\n")
+    ? entries.map(([k,v]) => `${k}: ${v}`).join("\\n")
     : "(aucune détection)";
 
   const finalPresent = data.final_version_present ? "oui" : "non";
@@ -550,7 +550,7 @@ function showProofSummary(data) {
     `Détections: ${data.detections_count || 0}\n` +
     `Requêtes LLM: ${data.llm_requests_count || 0}\n\n` +
     `Timeline: ${steps.length ? "" : "(non disponible)"}\n` +
-    `${steps.map(s => `- ${s}`).join("\n")}\n\n` +
+    `${steps.map(s => `- ${s}`).join("\\n")}\n\n` +
     `Top entités masquées (résumé):\n${topTypes}\n`
   );
 }
@@ -562,7 +562,7 @@ function showAuditSummary(data) {
     .sort((a,b) => (b[1]||0) - (a[1]||0))
     .slice(0, 10);
   const topTypes = entries.length
-    ? entries.map(([k,v]) => `${k}: ${v}`).join("\n")
+    ? entries.map(([k,v]) => `${k}: ${v}`).join("\\n")
     : "(aucun type)";
 
   const llmReqs = Array.isArray(data.llm_requests) ? data.llm_requests : [];
