@@ -129,6 +129,8 @@ body{background:var(--bg-deep)}
 .doc-item .doc-info{flex:1;min-width:0}
 .doc-item .doc-name{font-size:13px;font-weight:500;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .doc-item .doc-meta{font-size:11px;color:var(--text-dim);margin-top:2px;display:flex;align-items:center;gap:8px}
+.doc-item .doc-kpis{font-size:11px;color:var(--text-dim);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
+.doc-item .doc-kpi{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;border:1px solid var(--glass-border);background:rgba(2,6,23,0.45)}
 .doc-item .doc-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
 .doc-status.uploaded{background:rgba(59,130,246,0.12);color:var(--accent)}
 .doc-status.processing{background:rgba(245,158,11,0.12);color:var(--amber)}
@@ -232,7 +234,7 @@ HTML_DASHBOARD = """
         <div class="stat-card blue"><div class="stat-label">Documents</div><div class="stat-value" id="statTotal">0</div><div class="stat-sub">total uploadés</div></div>
         <div class="stat-card emerald"><div class="stat-label">Prêts</div><div class="stat-value" id="statReady">0</div><div class="stat-sub">anonymisés</div></div>
         <div class="stat-card violet"><div class="stat-label">En cours</div><div class="stat-value" id="statProcessing">0</div><div class="stat-sub">en traitement</div></div>
-        <div class="stat-card amber"><div class="stat-label">Détections</div><div class="stat-value" id="statDetections">—</div><div class="stat-sub">entités trouvées</div></div>
+        <div class="stat-card amber"><div class="stat-label">Détections</div><div class="stat-value" id="statDetections">—</div><div class="stat-sub" id="statDetectionsSub">dernier document traité</div></div>
       </div>
       <div class="main-grid">
         <div class="panel" style="animation-delay:.08s">
@@ -302,6 +304,7 @@ JAVASCRIPT = """
 <script>
 let accessToken = "";
 let currentDocs = [];
+let docDetectionMap = {};
 
 const $ = id => document.getElementById(id);
 const previewOut = $("previewOutput");
@@ -330,6 +333,15 @@ function highlightTags(text) {
 }
 
 function showPreview(text) { previewOut.innerHTML = highlightTags(text); }
+function setDetections(count, context) {
+  $("statDetections").textContent = count;
+  $("statDetectionsSub").textContent = context || "dernier document traité";
+}
+function setDocDetection(docId, count) {
+  docDetectionMap[docId] = count;
+  const el = document.querySelector(`[data-doc-detection="${docId}"]`);
+  if (el) el.textContent = `entités: ${count}`;
+}
 
 async function api(path, opts={}) {
   const headers = opts.headers || {};
@@ -378,6 +390,9 @@ function renderDocs(items) {
       <div class="doc-info">
         <div class="doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
         <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span><span class="doc-status ${doc.status}">${doc.status}</span></div>
+        <div class="doc-kpis">
+          <span class="doc-kpi" data-doc-detection="${doc.id}">${docDetectionMap[doc.id] != null ? `entités: ${docDetectionMap[doc.id]}` : "entités: —"}</span>
+        </div>
         <div class="doc-actions">
           <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter tout</button>
           <button class="btn-act primary" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
@@ -396,8 +411,21 @@ async function refreshDocs() {
   try {
     const {res, data} = await api("/api/v1/documents");
     showApi(data);
-    if (res.ok) renderDocs(data);
+    if (res.ok) {
+      renderDocs(data);
+      await refreshDocDetections(data);
+    }
   } catch(e) { toast("Erreur réseau", "error"); }
+}
+
+async function refreshDocDetections(items) {
+  const docs = (items || []).filter(d => d.status === "ready");
+  for (const doc of docs) {
+    try {
+      const {res, data} = await api(`/api/v1/documents/${doc.id}/preview`);
+      if (res.ok) setDocDetection(doc.id, data.detections_count || 0);
+    } catch {}
+  }
 }
 
 // Login
@@ -512,6 +540,7 @@ async function askKb() {
     }
 
     toast("Recherche dans la base anonyme…", "info");
+    $("statDetectionsSub").textContent = "compteur d'anonymisation, pas des questions";
     const {res, data} = await api("/api/v1/kb/search", {
       method: "POST",
       headers: {"Content-Type":"application/json"},
@@ -559,7 +588,8 @@ docList.addEventListener("click", async e => {
       const a1 = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
       showApi(a1.data);
       if (!a1.res.ok) { toast(a1.data.detail||"Échec anonymisation", "error"); return; }
-      $("statDetections").textContent = a1.data.detections_count||0;
+      setDetections(a1.data.detections_count||0, "dernier document traité");
+      setDocDetection(id, a1.data.detections_count||0);
 
       const a2 = await api(`/api/v1/documents/${id}/preview`);
       showApi(a2.data);
@@ -581,7 +611,7 @@ docList.addEventListener("click", async e => {
       toast("Anonymisation en cours…", "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
       showApi(data);
-      if (res.ok) { showPreview(data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); $("statDetections").textContent = data.detections_count||0; }
+      if (res.ok) { showPreview(data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); setDetections(data.detections_count||0, "dernier document traité"); setDocDetection(id, data.detections_count||0); }
       else toast(data.detail||"Échec", "error");
     } else if (action === "preview") {
       const {res, data} = await api(`/api/v1/documents/${id}/preview`);
