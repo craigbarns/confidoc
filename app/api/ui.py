@@ -131,6 +131,7 @@ body{background:var(--bg-deep)}
 .doc-item .doc-meta{font-size:11px;color:var(--text-dim);margin-top:2px;display:flex;align-items:center;gap:8px}
 .doc-item .doc-kpis{font-size:11px;color:var(--text-dim);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .doc-item .doc-kpi{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;border:1px solid var(--glass-border);background:rgba(2,6,23,0.45)}
+.doc-item .doc-next{margin-top:8px;padding:8px 10px;border-radius:8px;border:1px dashed var(--glass-border);background:rgba(2,6,23,0.35);font-size:12px;color:var(--text-muted)}
 .doc-item .doc-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
 .doc-status.uploaded{background:rgba(59,130,246,0.12);color:var(--accent)}
 .doc-status.processing{background:rgba(245,158,11,0.12);color:var(--amber)}
@@ -648,6 +649,20 @@ function docIcon(ext) {
   return {cls:"other",icon:"📄"};
 }
 
+function statusLabel(s) {
+  const map = {uploaded:"reçu", processing:"en cours", ready:"prêt", failed:"erreur"};
+  return map[s] || s || "inconnu";
+}
+
+function nextAction(doc) {
+  const s = (doc && doc.status) || "";
+  if (s === "uploaded") return "Prochaine action: lancer l'anonymisation.";
+  if (s === "processing") return "Prochaine action: attendre la fin du traitement puis actualiser.";
+  if (s === "ready") return "Prochaine action: vérifier Avant/Après, puis valider et exporter.";
+  if (s === "failed") return "Prochaine action: réessayer avec un document plus lisible.";
+  return "Prochaine action: ouvrir le document.";
+}
+
 function renderDocs(items) {
   currentDocs = items || [];
   const total = currentDocs.length;
@@ -671,18 +686,19 @@ function renderDocs(items) {
       <div class="doc-icon ${ic.cls}">${ic.icon}</div>
       <div class="doc-info">
         <div class="doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
-        <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span><span class="doc-status ${doc.status}">${doc.status}</span></div>
+        <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span><span class="doc-status ${doc.status}">${statusLabel(doc.status)}</span></div>
         <div class="doc-kpis">
           <span class="doc-kpi" data-doc-detection="${doc.id}">${docDetectionMap[doc.id] != null ? `entités: ${docDetectionMap[doc.id]}` : "entités: —"}</span>
         </div>
+        <div class="doc-next">${nextAction(doc)}</div>
         <div class="doc-actions">
           <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter tout</button>
           <button class="btn-act primary" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
-          <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Preview</button>
+          <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Prévisualiser</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
-          <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Dataset</button>
-          <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Preuve RGPD</button>
-          <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Audit export</button>
+          <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Exporter le dataset</button>
+          <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Exporter la preuve</button>
+          <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Exporter l'audit</button>
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
         </div>
       </div>`;
@@ -906,7 +922,7 @@ docList.addEventListener("click", async e => {
       if (!a4.ok) { toast("Échec export dataset", "error"); return; }
       showPreview(a4data.anonymized_text||"Dataset exporté");
       const q4 = a4data && a4data.quality ? a4data.quality : {};
-      toast(`Terminé ✓ entités=${q4.detections_count||0} review=${q4.needs_review}`, "success");
+      toast(`Traitement terminé : ${q4.detections_count||0} entités. Revue requise : ${q4.needs_review ? "oui" : "non"}.`, "success");
     } else if (action === "anonymize") {
       toast("Anonymisation en cours…", "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
@@ -940,7 +956,7 @@ docList.addEventListener("click", async e => {
       if (res.ok) {
         const q = data && data.quality ? data.quality : {};
         setAnonymizedPreview(id, data.anonymized_text||"Dataset exporté");
-        toast(`Dataset: ${q.detections_count||0} entités, review=${q.needs_review}`, "success");
+        toast(`Dataset exporté : ${q.detections_count||0} entités. Revue requise : ${q.needs_review ? "oui" : "non"}.`, "success");
       }
       else toast("Export dataset échoué", "error");
     } else if (action === "proof") {
