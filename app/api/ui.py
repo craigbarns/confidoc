@@ -362,6 +362,7 @@ function renderDocs(items) {
         <div class="doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
         <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span><span class="doc-status ${doc.status}">${doc.status}</span></div>
         <div class="doc-actions">
+          <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter tout</button>
           <button class="btn-act primary" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
           <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Preview</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
@@ -476,7 +477,29 @@ docList.addEventListener("click", async e => {
   const profile = $("profileSelect").value;
   btn.disabled = true;
   try {
-    if (action === "anonymize") {
+    if (action === "processall") {
+      toast("Traitement complet en cours…", "info");
+      const a1 = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
+      showApi(a1.data);
+      if (!a1.res.ok) { toast(a1.data.detail||"Échec anonymisation", "error"); return; }
+      $("statDetections").textContent = a1.data.detections_count||0;
+
+      const a2 = await api(`/api/v1/documents/${id}/preview`);
+      showApi(a2.data);
+      if (!a2.res.ok) { toast(a2.data.detail||"Échec preview", "error"); return; }
+      showPreview(a2.data.preview_text||"");
+
+      const a3 = await api(`/api/v1/documents/${id}/validate`, {method:"POST"});
+      showApi(a3.data);
+      if (!a3.res.ok) { toast(a3.data.detail||"Échec validation", "error"); return; }
+
+      const a4 = await fetch(`/api/v1/documents/${id}/export-dataset`, {headers:{Authorization:`Bearer ${accessToken}`}});
+      const a4data = await a4.json().catch(()=>({}));
+      showApi(a4data);
+      if (!a4.ok) { toast("Échec export dataset", "error"); return; }
+      showPreview(a4data.anonymized_text||"Dataset exporté");
+      toast(`Terminé ✓ entités=${a4data.quality?.detections_count||0} review=${a4data.quality?.needs_review}`, "success");
+    } else if (action === "anonymize") {
       toast("Anonymisation en cours…", "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
       showApi(data);
