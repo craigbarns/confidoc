@@ -848,6 +848,21 @@ async def document_audit_export(
         {
             "document_id": str(document.id),
             "document_sha256": document.sha256,
+            "security_policy": {
+                "raw_access_scope": "internal_engine_only",
+                "raw_exposed_to_copilot": False,
+                "raw_exposed_to_kb_search": False,
+                "raw_exposed_in_audit_export": False,
+                "dataset_for_ai": "anonymized_only",
+                "enforcement": "active",
+            },
+            "exposure_proof": {
+                "llm_snippets_stored_as_hashes_only": True,
+                "llm_raw_snippets_exported": False,
+                "audit_contains_raw_text": False,
+                "original_endpoint_requires_explicit_opt_in": True,
+                "original_endpoint_opt_in_param": "allow_original=true",
+            },
             "versions_sha256": {
                 "original": _sha256_text(
                     original_version_obj.content_text if original_version_obj else None
