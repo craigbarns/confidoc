@@ -370,6 +370,22 @@ function toast(msg, type="info") {
 
 function showApi(data) { apiOut.textContent = JSON.stringify(data, null, 2); }
 
+function downloadJsonFile(filename, data) {
+  try {
+    const blob = new Blob([JSON.stringify(data, null, 2)], {type: "application/json;charset=utf-8"});
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    a.click();
+    a.remove();
+    URL.revokeObjectURL(url);
+  } catch (e) {
+    toast("Impossible de télécharger le fichier", "error");
+  }
+}
+
 function highlightTags(text) {
   if (!text) return "Aucune donnée.";
   const map = {"EMAIL":"tag-email","PHONE":"tag-phone","PERSON":"tag-person","ADDRESS":"tag-address","CITY":"tag-city"};
@@ -913,12 +929,20 @@ docList.addEventListener("click", async e => {
     } else if (action === "proof") {
       const {res, data} = await api(`/api/v1/documents/${id}/proof`);
       showApi(data);
-      if (res.ok) { showProofSummary(data); toast("Preuve RGPD affichée", "success"); }
+      if (res.ok) {
+        showProofSummary(data);
+        downloadJsonFile(`proof_${id}.json`, data);
+        toast("Preuve RGPD exportée (.json)", "success");
+      }
       else toast(data.detail || "Erreur preuve RGPD", "error");
     } else if (action === "auditexport") {
       const {res, data} = await api(`/api/v1/documents/${id}/audit-export`);
       showApi(data);
-      if (res.ok) { showAuditSummary(data); toast("Audit export prêt", "success"); }
+      if (res.ok) {
+        showAuditSummary(data);
+        downloadJsonFile(`audit_${id}.json`, data);
+        toast("Audit exporté (.json)", "success");
+      }
       else toast(data.detail || "Erreur audit export", "error");
     } else if (action === "delete") {
       // Effacement RGPD en 2 étapes : aperçu (compteurs) puis confirmation forte.
