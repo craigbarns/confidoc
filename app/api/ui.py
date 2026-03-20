@@ -521,7 +521,7 @@ async function askKb() {
       }
       return `${idx + 1}. [chunk] ${r.chunk_text || ""}`;
     });
-    showPreview(`Question: ${query}\n\nRésultats (${results.length}):\n\n${lines.join("\n\n")}`);
+    showPreview(`Question: ${query}\n\nRésultats (${results.length}):\n\n${lines.join("\\n\\n")}`);
     toast(`${results.length} résultat(s) trouvés`, "success");
   } catch (e) {
     toast("Erreur réseau", "error");
