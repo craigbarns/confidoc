@@ -23,7 +23,8 @@ async def authenticate_user(
     db: AsyncSession, login_req: LoginRequest
 ) -> TokenResponse:
     """Verifie le compte et génère la paire JWT + Refresh."""
-    stmt = select(User).where(User.email == login_req.email)
+    normalized_email = str(login_req.email).strip().lower()
+    stmt = select(User).where(User.email == normalized_email)
     result = await db.execute(stmt)
     user = result.scalar_one_or_none()
 
