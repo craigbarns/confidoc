@@ -31,6 +31,7 @@ from app.services.anonymization_service import (
     classify_document_type,
     extract_text_from_file,
 )
+from app.services.structured_dataset_service import build_structured_dataset
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import delete_bytes, read_bytes
 
@@ -498,6 +499,51 @@ async def export_dataset(
         "accounting_records": accounting_records,
     }
     return JSONResponse(payload)
+
+
+@router.get(
+    "/{document_id}/export-structured-dataset",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter un dataset structure metier (par type documentaire)",
+)
+async def export_structured_dataset(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(
+        default="auto",
+        description="auto | bilan | compte_resultat | fiscal_2072 | fiscal_2044 | releve_bancaire | facture",
+    ),
+) -> JSONResponse:
+    """Export dataset structure:
+    - applique d'abord l'anonymisation dataset_accounting
+    - extrait des champs metier specialises par type de document
+    - renvoie un JSON normalise pret pour analytics/RAG/QA
+    """
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_original_text(db, document)
+    if not original_text:
+        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _detections = anonymize_text(
+        original_text, profile="dataset_accounting", document_type=effective_type
+    )
+
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+    )
+    structured.update(
+        {
+            "document_id": str(document.id),
+            "base_profile": "dataset_accounting",
+            "base_doc_type": effective_type,
+        }
+    )
+    return JSONResponse(structured)
 
 
 @router.delete(

@@ -697,6 +697,7 @@ function renderDocs(items) {
           <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Prévisualiser</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
           <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Exporter le dataset</button>
+          <button class="btn-act" data-a="exportstructured" data-id="${doc.id}">🧠 Dataset métier</button>
           <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Exporter la preuve</button>
           <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Exporter l'audit</button>
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
@@ -969,6 +970,17 @@ docList.addEventListener("click", async e => {
         toast("Preuve RGPD exportée (.json)", "success");
       }
       else toast(data.detail || "Erreur preuve RGPD", "error");
+    } else if (action === "exportstructured") {
+      const {res, data} = await api(`/api/v1/documents/${id}/export-structured-dataset?doc_type=auto`);
+      showApi(data);
+      if (res.ok) {
+        showPreview(data && data.fields ? JSON.stringify(data.fields, null, 2) : "Dataset métier exporté");
+        downloadJsonFile(`structured_dataset_${id}.json`, data);
+        const q = data && data.quality ? data.quality : {};
+        toast(`Dataset métier exporté : couverture ${Math.round((q.coverage_ratio || 0) * 100)}%.`, "success");
+      } else {
+        toast(data.detail || "Export dataset métier échoué", "error");
+      }
     } else if (action === "auditexport") {
       const {res, data} = await api(`/api/v1/documents/${id}/audit-export`);
       showApi(data);
