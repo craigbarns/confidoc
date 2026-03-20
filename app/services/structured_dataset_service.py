@@ -12,54 +12,63 @@ def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
     return any(k in source for k in keywords)
 
 
-def detect_specialized_doc_type(text: str, filename: str = "") -> str:
-    """Detect specialized accounting/tax document type (heuristic V1)."""
+def _score_hits(source: str, keywords: tuple[str, ...]) -> tuple[int, list[str]]:
+    hits = [k for k in keywords if k in source]
+    return len(hits), hits
+
+
+def classify_doc_type_scored(text: str, filename: str = "") -> tuple[str, float, list[str]]:
+    """Scored router for a compact high-confidence taxonomy."""
     source = f"{filename}\n{text[:20000]}".lower()
 
-    # Strong branch: liasse IS simplifiée (2065 + 2033*)
-    liasse_markers = (
-        "2065",
-        "2065-sd",
-        "2033-a",
-        "2033-b",
-        "bilan simplifié",
-        "bilan simplifie",
-        "compte de résultat simplifié",
-        "compte de resultat simplifie",
-        "régime simplifié d'imposition",
-        "regime simplifie d'imposition",
-        "liasse fiscale",
-    )
-    if _contains_any(source, liasse_markers):
-        return "liasse_is_simplifiee"
+    rules: list[tuple[str, tuple[str, ...], int]] = [
+        ("liasse_is_simplifiee", (
+            "2065", "2065-sd", "2033-a", "2033-b",
+            "bilan simplifié", "bilan simplifie",
+            "compte de résultat simplifié", "compte de resultat simplifie",
+            "régime simplifié d'imposition", "regime simplifie d'imposition",
+        ), 3),
+        ("fiscal_2072", (
+            "2072", "2072-an1", "2072-an2", "revenus fonciers",
+            "associés revenus fonciers", "associes revenus fonciers",
+        ), 2),
+        ("fiscal_2044", ("2044", "revenu foncier", "déficit foncier", "deficit foncier"), 2),
+        ("bilan", ("bilan", "total actif", "total passif", "capitaux propres"), 2),
+        ("compte_resultat", ("compte de résultat", "compte de resultat", "résultat net", "resultat net"), 2),
+        ("releve_bancaire", ("relevé bancaire", "releve bancaire", "iban", "solde", "virement"), 2),
+        ("facture_fournisseur", ("facture fournisseur", "facture", "tva", "ht", "ttc"), 2),
+    ]
 
-    # 2072 must require strong form signals, not just generic "SCI".
-    strong_2072_markers = (
-        "2072",
-        "2072-an1",
-        "2072-an2",
-        "annexe 1",
-        "annexe 2",
-        "revenus fonciers",
-        "associés revenus fonciers",
-        "associes revenus fonciers",
-    )
-    weak_2072_markers = ("sci", "quote-part", "associé", "associe")
-    has_strong_2072 = _contains_any(source, strong_2072_markers)
-    has_weak_2072 = _contains_any(source, weak_2072_markers)
-    if has_strong_2072 and has_weak_2072:
-        return "fiscal_2072"
-    if any(k in source for k in ("2044", "revenu foncier", "déficit foncier", "deficit foncier")):
-        return "fiscal_2044"
-    if any(k in source for k in ("compte de résultat", "compte de resultat", "résultat d'exploitation", "resultat net")):
-        return "compte_resultat"
-    if any(k in source for k in ("bilan", "total actif", "total passif", "capitaux propres")):
-        return "bilan"
-    if any(k in source for k in ("relevé bancaire", "releve bancaire", "iban", "solde", "virement")):
-        return "releve_bancaire"
-    if any(k in source for k in ("facture", "tva", "ht", "ttc")):
-        return "facture"
-    return "autre"
+    best_type = "unknown_other"
+    best_score = 0
+    best_hits: list[str] = []
+    for doc_type, keywords, threshold in rules:
+        score, hits = _score_hits(source, keywords)
+        if score >= threshold and score > best_score:
+            best_type = doc_type
+            best_score = score
+            best_hits = hits
+
+    if best_type.startswith("unknown_"):
+        # coarse unknown buckets for safer downstream routing
+        if any(k in source for k in ("fiscal", "liasse", "impot", "tva", "2065", "2033", "2044", "2072")):
+            best_type = "unknown_tax"
+        elif any(k in source for k in ("bilan", "compte", "journal", "écriture", "ecriture", "pcg")):
+            best_type = "unknown_accounting"
+        else:
+            best_type = "unknown_other"
+
+    confidence = min(0.99, 0.45 + (best_score * 0.15)) if not best_type.startswith("unknown_") else 0.35
+    reasons = [f"match:{h}" for h in best_hits][:10]
+    if not reasons:
+        reasons = ["no_strong_marker_match"]
+    return best_type, round(confidence, 3), reasons
+
+
+def detect_specialized_doc_type(text: str, filename: str = "") -> str:
+    """Backward-compatible wrapper returning doc_type only."""
+    doc_type, _confidence, _reasons = classify_doc_type_scored(text, filename)
+    return doc_type
 
 
 def _norm_spaces(v: str) -> str:
@@ -770,7 +779,9 @@ def build_structured_dataset(
 ) -> dict[str, Any]:
     """Build normalized structured dataset payload for downstream analytics/AI."""
     source_text = extraction_text if extraction_text is not None else anonymized_text
-    detected_doc_type = detect_specialized_doc_type(source_text, original_filename)
+    detected_doc_type, routing_confidence, routing_reasons = classify_doc_type_scored(
+        source_text, original_filename
+    )
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
 
     if doc_type == "bilan":
@@ -801,6 +812,8 @@ def build_structured_dataset(
     payload = {
         "doc_type": doc_type,
         "detected_doc_type": detected_doc_type,
+        "routing_confidence": routing_confidence,
+        "routing_reasons": routing_reasons,
         "anonymized": True,
         "generated_at": datetime.now(timezone.utc).isoformat(),
         "fields": fields,
