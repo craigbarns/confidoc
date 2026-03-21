@@ -89,6 +89,22 @@ def _build_fallback_summary(ai_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _parse_llm_json(raw_text: str) -> dict[str, Any] | None:
+    """Extracts valid JSON out of conversational LLM output."""
+    if not raw_text:
+        return None
+    start = raw_text.find("{")
+    end = raw_text.rfind("}")
+    if start != -1 and end != -1 and start < end:
+        try:
+            obj = json.loads(raw_text[start:end+1])
+            if isinstance(obj, dict):
+                return obj
+        except Exception:
+            pass
+    return None
+
+
 @router.post(
     "/audit/{document_id}",
     response_class=JSONResponse,
@@ -148,17 +164,7 @@ async def ai_audit(
         raise http_400(f"Erreur IA locale (AuditAgent): {exc}") from exc
 
     raw_text = llm.get("raw_response", "") or ""
-    # Nettoyage des backticks markdown fréquents sur les petits modèles LLM
-    import re
-    clean_text = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
-    
-    parsed: dict[str, Any] | None = None
-    try:
-        obj = json.loads(clean_text) if clean_text else {}
-        if isinstance(obj, dict) and obj:
-            parsed = obj
-    except Exception:
-        parsed = None
+    parsed = _parse_llm_json(raw_text)
 
     if parsed is None:
         parsed = {
@@ -246,18 +252,9 @@ async def ai_summary(
         raise http_400(f"Erreur IA locale (Ollama): {exc}") from exc
 
     raw_text = llm.get("raw_response", "") or ""
-    # Eviter le plantage JSON si le modèle le renvoie dans des balises markdown:
-    import re
-    clean_text = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
+    parsed = _parse_llm_json(raw_text)
 
-    parsed: dict[str, Any] | None = None
     used_fallback = False
-    try:
-        obj = json.loads(clean_text) if clean_text else {}
-        if isinstance(obj, dict) and obj:
-            parsed = obj
-    except Exception:
-        parsed = None
     if parsed is None:
         parsed = _build_fallback_summary(ai_payload)
         summary_json_text = json.dumps(parsed, ensure_ascii=False)
