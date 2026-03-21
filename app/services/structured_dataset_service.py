@@ -133,6 +133,52 @@ def _extract_first_amount_from_patterns(text: str, patterns: list[str], min_amou
     return None
 
 
+def _extract_first_amount_with_source(
+    text: str, patterns: list[tuple[str, str]], min_amount: float = 100.0
+) -> tuple[float | None, str]:
+    for source_hint, pat in patterns:
+        val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount)
+        if val is not None:
+            return val, source_hint
+    return None, "missing"
+
+
+def _extract_amount_from_lines_with_keyword(
+    text: str, keyword_regex: str, min_amount: float = 100.0
+) -> tuple[float | None, str]:
+    pat_kw = re.compile(keyword_regex, re.IGNORECASE)
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or not pat_kw.search(line):
+            continue
+        m = re.search(r"([0-9][0-9\s\u00a0.,]{0,30})\s*$", line)
+        if not m:
+            continue
+        v = _clean_amount_candidate(_to_float_fr(m.group(1)))
+        if isinstance(v, float) and abs(v) >= min_amount:
+            return v, "fallback:line_keyword"
+    return None, "missing"
+
+
+def _sum_accounting_lines_by_prefixes(
+    text: str, prefixes: tuple[str, ...], min_total: float = 100.0
+) -> tuple[float | None, str]:
+    records = _extract_generic_accounting_table(text)
+    vals = [
+        float(r.get("amount"))
+        for r in records
+        if isinstance(r.get("amount"), (int, float))
+        and str(r.get("code", "")).startswith(prefixes)
+        and abs(float(r.get("amount"))) >= 1.0
+    ]
+    if len(vals) < 2:
+        return None, "missing"
+    total = sum(vals)
+    if abs(total) < min_total:
+        return None, "missing"
+    return total, "fallback:accounting_prefix_sum"
+
+
 def _extract_first_date_from_patterns(text: str, patterns: list[str]) -> str | None:
     for pat in patterns:
         v = _extract_first(pat, text)
@@ -295,31 +341,141 @@ def _extract_common_fields(text: str) -> dict[str, dict[str, Any]]:
 
 
 def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
+    total_actif, total_actif_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:total_actif", r"total\s+actif"),
+            ("label:total_general_actif", r"total\s+g[ée]n[ée]ral.{0,12}actif"),
+            ("label:total_i_actif", r"total\s+i.{0,15}actif"),
+        ],
+        min_amount=100.0,
+    )
+    if total_actif is None:
+        total_actif, total_actif_src = _extract_amount_from_lines_with_keyword(
+            "\n".join(text.splitlines()[-260:]), r"total.{0,12}actif", min_amount=100.0
+        )
+
+    total_passif, total_passif_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:total_passif", r"total\s+passif"),
+            ("label:total_general_passif", r"total\s+g[ée]n[ée]ral.{0,12}passif"),
+            ("label:total_i_passif", r"total\s+i.{0,15}passif"),
+        ],
+        min_amount=100.0,
+    )
+    if total_passif is None:
+        total_passif, total_passif_src = _extract_amount_from_lines_with_keyword(
+            "\n".join(text.splitlines()[-260:]), r"total.{0,12}passif", min_amount=100.0
+        )
+
+    capitaux_propres, capitaux_propres_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:capitaux_propres", r"capitaux?\s+propres"),
+            ("label:capitaux_propres_ensemble", r"total.{0,20}capitaux?\s+propres"),
+        ],
+        min_amount=100.0,
+    )
+    resultat_exercice, resultat_exercice_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:resultat_exercice", r"r[ée]sultat\s+de?\s+l[' ]?exercice"),
+            ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
+        ],
+        min_amount=50.0,
+    )
+
     return {
         **_extract_common_fields(text),
-        "total_actif": _field(_extract_amount_for_label(text, r"total\s+actif"), 0.87, "label:total actif"),
-        "total_passif": _field(_extract_amount_for_label(text, r"total\s+passif"), 0.87, "label:total passif"),
+        "total_actif": _field(total_actif, 0.87 if total_actif is not None else 0.0, total_actif_src),
+        "total_passif": _field(total_passif, 0.87 if total_passif is not None else 0.0, total_passif_src),
         "immobilisations": _field(_extract_amount_for_label(text, r"immobilisations"), 0.78, "label:immobilisations"),
         "creances": _field(_extract_amount_for_label(text, r"créances|creances"), 0.78, "label:creances"),
         "disponibilites": _field(_extract_amount_for_label(text, r"disponibilités|disponibilites"), 0.78, "label:disponibilites"),
         "dettes_financieres": _field(_extract_amount_for_label(text, r"dettes?\s+financi"), 0.76, "label:dettes financieres"),
         "dettes_fournisseurs": _field(_extract_amount_for_label(text, r"dettes?\s+fournisseurs?"), 0.76, "label:dettes fournisseurs"),
-        "capitaux_propres": _field(_extract_amount_for_label(text, r"capitaux?\s+propres"), 0.8, "label:capitaux propres"),
-        "resultat_exercice": _field(_extract_amount_for_label(text, r"résultat\s+de?\s+l[' ]?exercice|resultat\s+de?\s+l[' ]?exercice"), 0.8, "label:resultat exercice"),
+        "capitaux_propres": _field(
+            capitaux_propres, 0.8 if capitaux_propres is not None else 0.0, capitaux_propres_src
+        ),
+        "resultat_exercice": _field(
+            resultat_exercice, 0.8 if resultat_exercice is not None else 0.0, resultat_exercice_src
+        ),
     }
 
 
 def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
+    charges_externes, charges_externes_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:charges_externes", r"charges?\s+externes"),
+            ("label:autres_charges_externes", r"autres?.{0,10}charges?.{0,10}externes"),
+            ("label:services_exterieurs", r"services?\s+ext[ée]rieurs"),
+        ],
+        min_amount=50.0,
+    )
+    if charges_externes is None:
+        charges_externes, charges_externes_src = _sum_accounting_lines_by_prefixes(
+            text, ("61", "62"), min_total=100.0
+        )
+
+    resultat_exploitation, resultat_exploitation_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:resultat_exploitation", r"r[ée]sultat\s+d[' ]exploitation"),
+            ("label:resultat_exploitation_alt", r"r[ée]sultat\s+exploitation"),
+        ],
+        min_amount=50.0,
+    )
+    if resultat_exploitation is None:
+        resultat_exploitation, resultat_exploitation_src = _extract_amount_from_lines_with_keyword(
+            text, r"r[ée]sultat.{0,12}exploitation", min_amount=50.0
+        )
+
+    resultat_courant, resultat_courant_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:resultat_courant", r"r[ée]sultat\s+courant"),
+            ("label:rcai", r"r[ée]sultat\s+courant\s+avant\s+imp[oô]ts|rcai"),
+        ],
+        min_amount=50.0,
+    )
+    if resultat_courant is None:
+        resultat_courant, resultat_courant_src = _extract_amount_from_lines_with_keyword(
+            text, r"r[ée]sultat.{0,12}courant", min_amount=50.0
+        )
+
+    resultat_net, resultat_net_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:resultat_net", r"r[ée]sultat\s+net"),
+            ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
+        ],
+        min_amount=50.0,
+    )
+    if resultat_net is None:
+        resultat_net, resultat_net_src = _extract_amount_from_lines_with_keyword(
+            text, r"r[ée]sultat.{0,12}net|b[ée]n[ée]fice|perte", min_amount=50.0
+        )
+
     return {
         **_extract_common_fields(text),
         "chiffre_affaires": _field(_extract_amount_for_label(text, r"chiffre\s+d[' ]affaires"), 0.86, "label:chiffre affaires"),
         "autres_produits": _field(_extract_amount_for_label(text, r"autres?\s+produits"), 0.76, "label:autres produits"),
-        "charges_externes": _field(_extract_amount_for_label(text, r"charges?\s+externes"), 0.76, "label:charges externes"),
+        "charges_externes": _field(
+            charges_externes, 0.76 if charges_externes is not None else 0.0, charges_externes_src
+        ),
         "impots_taxes": _field(_extract_amount_for_label(text, r"imp[oô]ts?\s+et\s+taxes"), 0.76, "label:impots taxes"),
         "charges_financieres": _field(_extract_amount_for_label(text, r"charges?\s+financi"), 0.76, "label:charges financieres"),
-        "resultat_exploitation": _field(_extract_amount_for_label(text, r"résultat\s+d[' ]exploitation|resultat\s+d[' ]exploitation"), 0.82, "label:resultat exploitation"),
-        "resultat_courant": _field(_extract_amount_for_label(text, r"résultat\s+courant|resultat\s+courant"), 0.8, "label:resultat courant"),
-        "resultat_net": _field(_extract_amount_for_label(text, r"résultat\s+net|resultat\s+net"), 0.84, "label:resultat net"),
+        "resultat_exploitation": _field(
+            resultat_exploitation,
+            0.82 if resultat_exploitation is not None else 0.0,
+            resultat_exploitation_src,
+        ),
+        "resultat_courant": _field(
+            resultat_courant, 0.8 if resultat_courant is not None else 0.0, resultat_courant_src
+        ),
+        "resultat_net": _field(resultat_net, 0.84 if resultat_net is not None else 0.0, resultat_net_src),
     }
 
 
@@ -393,14 +549,20 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=50.0,
     )
-    interets = _extract_first_amount_from_patterns(
+    interets, interets_source = _extract_first_amount_with_source(
         results_zone + "\n" + text,
         [
-            r"int[eé]r[eê]ts?\s+d[' ]emprunts?",
-            r"int[eé]r[eê]ts?\s+des?\s+emprunts?",
+            ("label:interets_emprunts", r"int[eé]r[eê]ts?\s+d[' ]emprunts?"),
+            ("label:interets_emprunts_alt", r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
+            ("label:interets_emprunt_singulier", r"int[eé]r[eê]t\s+d[' ]emprunt"),
+            ("label:charge_interets", r"charges?.{0,10}d[' ]int[eé]r[eê]ts?"),
         ],
         min_amount=50.0,
     )
+    if interets is None:
+        interets, interets_source = _extract_amount_from_lines_with_keyword(
+            results_zone + "\n" + text, r"int[eé]r[eê]t.{0,12}emprunt", min_amount=50.0
+        )
     revenu_net = _extract_first_amount_from_patterns(
         results_zone + "\n" + text,
         [
@@ -428,8 +590,10 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     if interets is None:
         if immeubles_interets > 0:
             interets = immeubles_interets
+            interets_source = "fallback:immeubles_interets_sum"
         elif associes_interets > 0:
             interets = associes_interets
+            interets_source = "fallback:associes_interets_sum"
 
     if revenus_bruts is None:
         immeubles_rb = sum(float(x.get("revenus_bruts") or 0.0) for x in immeubles)
@@ -450,7 +614,9 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         "nombre_associes": _field(nb_associes, 0.9 if nb_associes is not None else 0.0, "header:nombre_associes"),
         "revenus_bruts": _field(revenus_bruts, 0.9 if revenus_bruts is not None else 0.0, "resultats:revenus_bruts"),
         "frais_charges_hors_interets": _field(frais_hors_interets, 0.88 if frais_hors_interets is not None else 0.0, "resultats:frais_charges_hors_interets"),
-        "interets_emprunts": _field(interets, 0.88 if interets is not None else 0.0, "resultats:interets_emprunts"),
+        "interets_emprunts": _field(
+            interets, 0.88 if interets is not None else 0.0, interets_source
+        ),
         "revenu_net_foncier": _field(revenu_net, 0.9 if revenu_net is not None else 0.0, "resultats:revenu_net_foncier"),
         # Keep advanced fields nullable for now; they will be re-enabled once core 5 are stable.
         "adresse_sci": _field(None, 0.0, "deferred:v2.3"),
