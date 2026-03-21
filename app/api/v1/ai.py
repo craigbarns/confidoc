@@ -260,8 +260,10 @@ async def ai_summary(
         parsed = None
     if parsed is None:
         parsed = _build_fallback_summary(ai_payload)
-        raw_text = json.dumps(parsed, ensure_ascii=False)
+        summary_json_text = json.dumps(parsed, ensure_ascii=False)
         used_fallback = True
+    else:
+        summary_json_text = json.dumps(parsed, ensure_ascii=False)
 
     return JSONResponse(
         {
@@ -278,7 +280,7 @@ async def ai_summary(
                 "anonymized_only": True,
                 "non_placeholder_text_fields_redacted": True,
             },
-            "summary_json_text": raw_text,
+            "summary_json_text": summary_json_text,
             "summary_source": "fallback_local" if used_fallback else "ollama",
         }
     )
