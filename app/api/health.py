@@ -3,6 +3,7 @@
 from fastapi import APIRouter, status
 from sqlalchemy import text
 
+from app.config import get_settings
 from app.core.database import async_session_factory
 from app.core.logging import get_logger
 
@@ -51,6 +52,7 @@ async def health_check() -> dict:
 async def readiness_check() -> dict:
     """Readiness probe — toutes les dépendances sont accessibles."""
     checks: dict[str, str] = {}
+    settings = get_settings()
 
     # Check PostgreSQL
     try:
@@ -65,9 +67,6 @@ async def readiness_check() -> dict:
     try:
         import redis.asyncio as aioredis
 
-        from app.config import get_settings
-
-        settings = get_settings()
         r = aioredis.from_url(settings.REDIS_URL)
         await r.ping()
         await r.aclose()
@@ -76,26 +75,26 @@ async def readiness_check() -> dict:
         logger.error("redis_readiness_failed", error=str(e))
         checks["redis"] = f"error: {str(e)}"
 
-    # Check MinIO
-    try:
-        from app.config import get_settings
+    # Check object storage only when MinIO/S3 backend is configured.
+    if settings.STORAGE_BACKEND == "minio":
+        try:
+            from minio import Minio
 
-        from minio import Minio
+            client = Minio(
+                settings.MINIO_ENDPOINT,
+                access_key=settings.MINIO_ACCESS_KEY,
+                secret_key=settings.MINIO_SECRET_KEY,
+                secure=settings.MINIO_USE_SSL,
+            )
+            client.bucket_exists(settings.MINIO_BUCKET)
+            checks["storage"] = "ok"
+        except Exception as e:
+            logger.error("minio_readiness_failed", error=str(e))
+            checks["storage"] = f"error: {str(e)}"
+    else:
+        checks["storage"] = f"skipped: storage_backend={settings.STORAGE_BACKEND}"
 
-        settings = get_settings()
-        client = Minio(
-            settings.MINIO_ENDPOINT,
-            access_key=settings.MINIO_ACCESS_KEY,
-            secret_key=settings.MINIO_SECRET_KEY,
-            secure=settings.MINIO_USE_SSL,
-        )
-        client.bucket_exists(settings.MINIO_BUCKET)
-        checks["storage"] = "ok"
-    except Exception as e:
-        logger.error("minio_readiness_failed", error=str(e))
-        checks["storage"] = f"error: {str(e)}"
-
-    all_ok = all(v == "ok" for v in checks.values())
+    all_ok = all(v == "ok" or v.startswith("skipped:") for v in checks.values())
 
     return {
         "status": "ready" if all_ok else "degraded",

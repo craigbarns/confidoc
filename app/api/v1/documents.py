@@ -38,6 +38,69 @@ from app.services.storage_service import delete_bytes, read_bytes
 router = APIRouter()
 logger = get_logger(__name__)
 
+_UPPERCASE_TOKEN_BLACKLIST = {
+    "SCI",
+    "SAS",
+    "SARL",
+    "SA",
+    "EURL",
+    "EI",
+    "SIREN",
+    "SIRET",
+    "TVA",
+    "RCS",
+    "BIC",
+    "BNC",
+    "HT",
+    "TTC",
+    "EUR",
+    "EUROS",
+    "EURO",
+    "ANNEE",
+    "EXERCICE",
+    "COMPTE",
+    "COMPTES",
+    "ACTIF",
+    "PASSIF",
+    "TOTAL",
+    "CHARGES",
+    "PRODUITS",
+    "FISCAL",
+    "LIASSE",
+    "ANNEXE",
+    "IMMEUBLE",
+    "IMMEUBLES",
+    "ASSOCIE",
+    "ASSOCIES",
+    "SOCIETE",
+    "ADRESSE",
+}
+
+
+def _has_uppercase_person_leftovers(text: str) -> bool:
+    """Detect likely person-name leftovers while avoiding accounting/form labels."""
+    if not text:
+        return False
+    # 2 to 4 fully upper-case words with accents/hyphens/apostrophes.
+    candidates = re.findall(
+        r"\b([A-ZÀ-ÖØ-Ý]{3,}(?:[-'][A-ZÀ-ÖØ-Ý]{2,})?(?:\s+[A-ZÀ-ÖØ-Ý]{3,}(?:[-'][A-ZÀ-ÖØ-Ý]{2,})?){1,3})\b",
+        text,
+    )
+    for cand in candidates:
+        words = [w for w in re.split(r"\s+", cand.strip()) if w]
+        if len(words) < 2:
+            continue
+        if any(any(ch.isdigit() for ch in w) for w in words):
+            continue
+        if any(w in _UPPERCASE_TOKEN_BLACKLIST for w in words):
+            continue
+        # If every token is a short acronym-like word, ignore.
+        if all(len(w) <= 4 for w in words):
+            continue
+        return True
+    return False
+
+
 def _sha256_text(text: str | None) -> str | None:
     """Compute sha256 of a text (used for audit/integrity only; never expose raw text)."""
     if text is None:
@@ -474,11 +537,12 @@ async def export_dataset(
         "iban_found": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
         "siret_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b",
         "siren_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b",
-        "uppercase_person_leftovers": r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,4}\b",
     }
     for flag, pat in critical_patterns.items():
         if re.search(pat, dataset_text):
             quality_flags.append(flag)
+    if _has_uppercase_person_leftovers(dataset_text):
+        quality_flags.append("uppercase_person_leftovers")
 
     needs_review = len(quality_flags) > 0 or len(entities) == 0
 
@@ -948,12 +1012,13 @@ async def document_dataset_summary(
         "iban_found": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
         "siret_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b",
         "siren_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b",
-        "uppercase_person_leftovers": r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,4}\b",
     }
     quality_flags: list[str] = []
     for flag, pat in critical_patterns.items():
         if re.search(pat, dataset_text):
             quality_flags.append(flag)
+    if _has_uppercase_person_leftovers(dataset_text):
+        quality_flags.append("uppercase_person_leftovers")
 
     entities_count = len(merged)
     needs_review = len(quality_flags) > 0 or entities_count == 0

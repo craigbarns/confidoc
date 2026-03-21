@@ -36,7 +36,7 @@ class LlmRequest(BaseModel):
     profile: Mapped[str] = mapped_column(String(40), nullable=False, index=True)
 
     # Hashes/offsets uniquement (option A RGPD): pas de texte brut.
-    snippets_meta: Mapped[dict | None] = mapped_column(JSONB, nullable=True)
+    snippets_meta: Mapped[dict[str, object] | None] = mapped_column(JSONB, nullable=True)
 
     status: Mapped[str] = mapped_column(String(20), nullable=False, default="completed")
     human_status: Mapped[str | None] = mapped_column(String(20), nullable=True, default="pending")

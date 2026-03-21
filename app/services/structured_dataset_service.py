@@ -581,8 +581,12 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
             "quote_part_revenu_net": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenu\s+net|quote[\- ]part.{0,25}d[ée]ficit"),
         }
         # Anti-label cleanup for text columns
-        entry["nom"] = _clean_text_candidate(entry.get("nom"))
-        entry["adresse"] = _clean_text_candidate(entry.get("adresse"))
+        nom_value = entry.get("nom")
+        adresse_value = entry.get("adresse")
+        entry["nom"] = _clean_text_candidate(nom_value if isinstance(nom_value, str) else None)
+        entry["adresse"] = _clean_text_candidate(
+            adresse_value if isinstance(adresse_value, str) else None
+        )
         if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "associe_id"):
             entries.append(entry)
 

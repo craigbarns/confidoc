@@ -88,7 +88,7 @@ async def logout(
     db: DbSession,
 ) -> None:
     """Déconnecte l'utilisateur en révoquant ses refresh tokens."""
-    await auth_service.logout_user(db, current_user.id)
+    await auth_service.logout_user(db, str(current_user.id))
     logger.info("auth_logout", user_id=str(current_user.id))
 
 
@@ -100,7 +100,7 @@ async def logout(
 async def bootstrap_admin(
     payload: BootstrapAdminRequest,
     db: DbSession,
-) -> dict:
+) -> dict[str, str]:
     """Crée le premier admin si aucun admin plateforme n'existe."""
     existing_admin = await db.execute(
         select(User).where(User.is_platform_admin.is_(True))
@@ -135,7 +135,7 @@ async def bootstrap_admin(
 async def recover_access(
     payload: RecoveryResetRequest,
     db: DbSession,
-) -> dict:
+) -> dict[str, str]:
     """Recovery d'urgence en production, protégé par token Railway.
 
     Désactivé tant que ADMIN_RECOVERY_TOKEN n'est pas configuré.
