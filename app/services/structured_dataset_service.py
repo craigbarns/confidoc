@@ -259,6 +259,14 @@ class ExtractedField:
         }
 
 
+@dataclass
+class StructuredExtractionResult:
+    fields: dict[str, dict[str, Any]]
+    tables: dict[str, Any]
+    quality: dict[str, Any]
+    extractor_name: str
+
+
 def _field(value: Any, confidence: float, source_hint: str) -> dict[str, Any]:
     is_missing = value in (None, "", [])
     return ExtractedField(
@@ -376,6 +384,15 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=100.0,
     )
+    frais_hors_interets = _extract_first_amount_from_patterns(
+        results_zone + "\n" + text,
+        [
+            r"frais?\s+et\s+charges?.{0,40}hors.{0,20}int[eé]r[eê]ts?",
+            r"frais?\s+et\s+charges?.{0,40}autres?.{0,20}int[eé]r",
+            r"frais?\s+de\s+gestion",
+        ],
+        min_amount=50.0,
+    )
     interets = _extract_first_amount_from_patterns(
         results_zone + "\n" + text,
         [
@@ -394,12 +411,45 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         min_amount=100.0,
     )
 
+    # Fallbacks from annexes/tables when top-level labels are missing.
+    immeubles_frais = sum(
+        float((x.get("frais_gestion") or 0.0) + (x.get("assurance") or 0.0) + (x.get("travaux") or 0.0) + (x.get("impositions") or 0.0))
+        for x in immeubles
+    )
+    associes_frais = sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes)
+    if frais_hors_interets is None:
+        if immeubles_frais > 0:
+            frais_hors_interets = immeubles_frais
+        elif associes_frais > 0:
+            frais_hors_interets = associes_frais
+
+    immeubles_interets = sum(float(x.get("interets_emprunts") or 0.0) for x in immeubles)
+    associes_interets = sum(float(x.get("quote_part_interets_emprunts") or 0.0) for x in associes)
+    if interets is None:
+        if immeubles_interets > 0:
+            interets = immeubles_interets
+        elif associes_interets > 0:
+            interets = associes_interets
+
+    if revenus_bruts is None:
+        immeubles_rb = sum(float(x.get("revenus_bruts") or 0.0) for x in immeubles)
+        associes_rb = sum(float(x.get("quote_part_revenus_bruts") or 0.0) for x in associes)
+        if immeubles_rb > 0:
+            revenus_bruts = immeubles_rb
+        elif associes_rb > 0:
+            revenus_bruts = associes_rb
+
+    if revenu_net is None and isinstance(revenus_bruts, (int, float)):
+        fc = float(frais_hors_interets or 0.0)
+        ie = float(interets or 0.0)
+        revenu_net = revenus_bruts - fc - ie
+
     return {
         "denomination_sci": _field(denom, 0.92 if denom else 0.0, "header:denomination_societe"),
         "date_cloture_exercice": _field(date_cloture, 0.92 if date_cloture else 0.0, "header:date_cloture_exercice"),
         "nombre_associes": _field(nb_associes, 0.9 if nb_associes is not None else 0.0, "header:nombre_associes"),
         "revenus_bruts": _field(revenus_bruts, 0.9 if revenus_bruts is not None else 0.0, "resultats:revenus_bruts"),
-        "frais_charges_hors_interets": _field(_extract_financial_amount_for_label(results_zone, r"frais?\s+et\s+charges?.{0,30}autres?.{0,30}int[eé]r"), 0.88, "resultats:frais_charges_hors_interets"),
+        "frais_charges_hors_interets": _field(frais_hors_interets, 0.88 if frais_hors_interets is not None else 0.0, "resultats:frais_charges_hors_interets"),
         "interets_emprunts": _field(interets, 0.88 if interets is not None else 0.0, "resultats:interets_emprunts"),
         "revenu_net_foncier": _field(revenu_net, 0.9 if revenu_net is not None else 0.0, "resultats:revenu_net_foncier"),
         # Keep advanced fields nullable for now; they will be re-enabled once core 5 are stable.
@@ -646,7 +696,9 @@ def _quality(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "coverage_ratio": round(coverage, 3),
         "filled_fields": int(filled),
         "total_fields": int(total),
+        "critical_missing_fields": [],
         "needs_review": needs_review,
+        "ready_for_ai": coverage >= 0.8,
         "quality_flags": flags,
     }
 
@@ -785,6 +837,96 @@ def _pseudonymize_2072_output(fields: dict[str, dict[str, Any]], tables: dict[st
     return out_fields, out_tables
 
 
+def _extractor_bilan(source_text: str, anonymized_text: str) -> StructuredExtractionResult:
+    fields = _extract_bilan(source_text)
+    tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
+    return StructuredExtractionResult(
+        fields=fields,
+        tables=tables,
+        quality=_quality(fields),
+        extractor_name="extractor_bilan",
+    )
+
+
+def _extractor_compte_resultat(source_text: str, anonymized_text: str) -> StructuredExtractionResult:
+    fields = _extract_compte_resultat(source_text)
+    tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
+    return StructuredExtractionResult(
+        fields=fields,
+        tables=tables,
+        quality=_quality(fields),
+        extractor_name="extractor_compte_resultat",
+    )
+
+
+def _extractor_fiscal_2072(source_text: str, _anonymized_text: str) -> StructuredExtractionResult:
+    fields = _extract_2072(source_text)
+    tables = {
+        "immeubles": _extract_2072_immeubles_table(source_text),
+        "associes_revenus_fonciers": _extract_2072_associes_table(source_text),
+    }
+    quality = _quality_2072(fields, tables, source_text)
+    fields, tables = _pseudonymize_2072_output(fields, tables)
+    return StructuredExtractionResult(
+        fields=fields,
+        tables=tables,
+        quality=quality,
+        extractor_name="extractor_2072",
+    )
+
+
+EXTRACTOR_REGISTRY_V1: dict[str, Any] = {
+    "bilan": _extractor_bilan,
+    "compte_resultat": _extractor_compte_resultat,
+    "fiscal_2072": _extractor_fiscal_2072,
+}
+
+
+def _build_contract_payload(
+    *,
+    doc_type: str,
+    detected_doc_type: str,
+    routing_confidence: float,
+    routing_confidence_raw: float,
+    routing_reasons: list[str],
+    routing_runner_up: dict[str, Any],
+    fields: dict[str, dict[str, Any]],
+    tables: dict[str, Any],
+    quality: dict[str, Any],
+    original_filename: str,
+    extractor_name: str,
+) -> dict[str, Any]:
+    quality_out = dict(quality or {})
+    quality_out.setdefault("coverage_ratio", 0.0)
+    quality_out.setdefault("filled_fields", 0)
+    quality_out.setdefault("total_fields", 0)
+    quality_out.setdefault("needs_review", True)
+    quality_out.setdefault("ready_for_ai", False)
+    quality_out.setdefault("quality_flags", [])
+    quality_out.setdefault("critical_missing_fields", [])
+
+    return {
+        "doc_type": doc_type,
+        "detected_doc_type": detected_doc_type,
+        "routing_confidence": routing_confidence,
+        "routing_confidence_raw": routing_confidence_raw,
+        "routing_reasons": routing_reasons,
+        "routing_runner_up": routing_runner_up,
+        "anonymized": True,
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "fields": fields,
+        "tables": tables,
+        "quality": quality_out,
+        "provenance": {
+            "extractor_version": "v3-registry",
+            "extractor_name": extractor_name,
+            "strategy": "registry-specialized",
+            "routing_version": "v1.5-scored-router",
+            "source_filename": original_filename,
+        },
+    }
+
+
 def build_structured_dataset(
     anonymized_text: str,
     original_filename: str = "",
@@ -798,30 +940,29 @@ def build_structured_dataset(
     )
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
 
-    if doc_type == "bilan":
-        fields = _extract_bilan(source_text)
-        tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
-        quality = _quality(fields)
-    elif doc_type == "compte_resultat":
-        fields = _extract_compte_resultat(source_text)
-        tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
-        quality = _quality(fields)
+    extractor = EXTRACTOR_REGISTRY_V1.get(doc_type)
+    if extractor is not None:
+        extracted = extractor(source_text, anonymized_text)
     elif doc_type == "liasse_is_simplifiee":
         fields = _extract_liasse_is_simplifiee(source_text)
-        tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
-        quality = _quality(fields)
-    elif doc_type == "fiscal_2072":
-        fields = _extract_2072(source_text)
-        tables = {
-            "immeubles": _extract_2072_immeubles_table(source_text),
-            "associes_revenus_fonciers": _extract_2072_associes_table(source_text),
-        }
-        quality = _quality_2072(fields, tables, source_text)
-        fields, tables = _pseudonymize_2072_output(fields, tables)
+        extracted = StructuredExtractionResult(
+            fields=fields,
+            tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
+            quality=_quality(fields),
+            extractor_name="extractor_liasse_is_simplifiee",
+        )
     else:
         fields = _extract_common_fields(source_text)
-        tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
-        quality = _quality(fields)
+        extracted = StructuredExtractionResult(
+            fields=fields,
+            tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
+            quality=_quality(fields),
+            extractor_name="extractor_common_fallback",
+        )
+
+    fields = extracted.fields
+    tables = extracted.tables
+    quality = extracted.quality
 
     routing_confidence_raw = routing_confidence
     # Guardrail: if critical 2072 fields are mostly missing, cap routing confidence.
@@ -838,24 +979,17 @@ def build_structured_dataset(
         if critical_present < 3:
             routing_confidence = min(routing_confidence, 0.6)
 
-    payload = {
-        "doc_type": doc_type,
-        "detected_doc_type": detected_doc_type,
-        "routing_confidence": routing_confidence,
-        "routing_confidence_raw": routing_confidence_raw,
-        "routing_reasons": routing_reasons,
-        "routing_runner_up": routing_runner_up,
-        "anonymized": True,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
-        "fields": fields,
-        "tables": tables,
-        "quality": quality,
-        "provenance": {
-            "extractor_version": "v2-specialized",
-            "strategy": "zone-based-specialized",
-            "routing_version": "v1.5-scored-router",
-            "source_filename": original_filename,
-        },
-    }
-    return payload
+    return _build_contract_payload(
+        doc_type=doc_type,
+        detected_doc_type=detected_doc_type,
+        routing_confidence=routing_confidence,
+        routing_confidence_raw=routing_confidence_raw,
+        routing_reasons=routing_reasons,
+        routing_runner_up=routing_runner_up,
+        fields=fields,
+        tables=tables,
+        quality=quality,
+        original_filename=original_filename,
+        extractor_name=extracted.extractor_name,
+    )
 
