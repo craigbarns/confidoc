@@ -3,7 +3,7 @@
 import hashlib
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, File, Query, UploadFile, status
+from fastapi import APIRouter, File, Query, UploadFile, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -29,13 +29,12 @@ logger = get_logger(__name__)
 async def upload_document(
     current_user: CurrentUser,
     db: DbSession,
-    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     auto_anonymize: bool = Query(default=True),
     profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"] = Query(default="dataset_accounting_pseudo"),
     document_type: str = Query(default="auto"),
 ) -> dict:
-    """Upload un document, le stocke et persiste son enregistrement en base (puis lance l'analyse)."""
+    """Upload un document, le stocke et persiste son enregistrement en base."""
     filename = file.filename or ""
     if "." not in filename:
         raise http_400("Nom de fichier invalide")
@@ -105,18 +104,27 @@ async def upload_document(
         "profile": profile,
         "document_type": document_type,
         "ocr_available": HAS_OCR,
-        "status": "processing",
-        "background_task": True,
     }
     
     if auto_anonymize:
-        background_tasks.add_task(
-            _run_anonymization_in_background,
-            document_id=str(document.id),
-            content=content,
-            profile=profile,
-            doc_type=document_type,
-        )
+        try:
+            preview_text, detections, effective_type = await build_anonymization_preview(
+                db=db,
+                document=document,
+                file_content=content,
+                profile=profile,
+                document_type=document_type,
+            )
+            await db.commit()
+            processing.update({
+                "status": "ready",
+                "effective_type": effective_type,
+                "detections_count": len(detections),
+                "preview_excerpt": preview_text[:300],
+            })
+        except Exception as exc:
+            logger.error("auto_anonymize_failed", doc_id=str(document.id), error=str(exc))
+            processing.update({"status": "error", "error": str(exc)[:200]})
 
     return {
         "status": document.status.value,
@@ -129,44 +137,4 @@ async def upload_document(
         "uploaded_by": str(current_user.id),
         "processing": processing,
     }
-
-async def _run_anonymization_in_background(
-    document_id: str,
-    content: bytes,
-    profile: str,
-    doc_type: str,
-) -> None:
-    """Tâche de fond gérant sa propre session DB pour éviter les détachements après HTTP."""
-    from app.core.database import async_session_factory
-    import uuid
-    
-    async with async_session_factory() as bg_db:
-        try:
-            doc_uuid = uuid.UUID(document_id)
-            result = await bg_db.execute(select(Document).where(Document.id == doc_uuid))
-            document = result.scalar_one_or_none()
-            if not document:
-                return
-
-            document.status = DocumentStatus.PROCESSING
-            await bg_db.commit()
-
-            await build_anonymization_preview(
-                db=bg_db,
-                document=document,
-                file_content=content,
-                profile=profile,
-                document_type=doc_type,
-            )
-            
-            document.status = DocumentStatus.READY
-            await bg_db.commit()
-            logger.info("background_anonymization_success", doc_id=document_id)
-        except Exception as exc:
-            logger.error("background_anonymization_failed", doc_id=document_id, error=str(exc))
-            try:
-                document.status = DocumentStatus.FAILED
-                await bg_db.commit()
-            except Exception:
-                pass
 
