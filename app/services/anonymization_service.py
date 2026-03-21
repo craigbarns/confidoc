@@ -6,6 +6,10 @@ from typing import Any
 
 import fitz
 
+from app.core.logging import get_logger
+
+logger = get_logger(__name__)
+
 try:
     import pytesseract
     from PIL import Image
@@ -14,6 +18,12 @@ try:
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
+
+try:
+    import pymupdf4llm
+    HAS_MD_EXTRACTOR = True
+except ImportError:
+    HAS_MD_EXTRACTOR = False
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -200,38 +210,52 @@ def classify_document_type(text: str, filename: str = "") -> str:
 
 
 def extract_text_from_file(content: bytes, extension: str) -> str:
-    """Extract text from uploaded bytes (PDF first, images later)."""
+    """Extract text from uploaded bytes (PDF first, images later) preserving structural layout."""
     extension = extension.lower().strip(".")
-    text_chunks: list[str] = []
 
     if extension == "pdf":
+        ext_text = ""
         try:
-            with fitz.open(stream=content, filetype="pdf") as doc:
-                for page in doc:
-                    text_chunks.append(page.get_text("text"))
+            if HAS_MD_EXTRACTOR:
+                # Use Advanced Layout Extraction (markdown with table preservation)
+                with fitz.open(stream=content, filetype="pdf") as doc:
+                    ext_text = pymupdf4llm.to_markdown(doc)
+            else:
+                # Fallback to basic text extraction
+                text_chunks = []
+                with fitz.open(stream=content, filetype="pdf") as doc:
+                    for page in doc:
+                        text_chunks.append(page.get_text("text"))
+                ext_text = "\n".join(text_chunks)
         except Exception:
             pass
 
-        ext_text = "\n".join(text_chunks).strip()
+        ext_text = ext_text.strip()
 
         # If text is very short (< 10 words) or empty, maybe it's a scan — try OCR fallback
         if len(ext_text.split()) < 10 and HAS_OCR:
             try:
                 images = convert_from_bytes(content)
                 ocr_chunks = [pytesseract.image_to_string(img, lang="fra") for img in images]
+                logger.info("document_extraction", method="ocr_tesseract_pdf", extension="pdf")
                 return "\n".join(ocr_chunks).strip()
             except Exception:
+                logger.info("document_extraction", method="native_pdf_empty_ocr_failed", extension="pdf")
                 return ext_text
+        
+        logger.info("document_extraction", method="native_pdf_pymupdf", extension="pdf")
         return ext_text
 
     # Image support (PNG, JPG, TIFF) via OCR
     if extension in ["png", "jpg", "jpeg", "tiff", "tif"] and HAS_OCR:
         try:
             img = Image.open(BytesIO(content))
+            logger.info("document_extraction", method="ocr_tesseract_image", extension=extension)
             return str(pytesseract.image_to_string(img, lang="fra")).strip()
         except Exception:
             pass
 
+    logger.warning("document_extraction", method="fallback_plain_text_or_error", extension=extension)
     # Plain text fallback
     try:
         return content.decode("utf-8", errors="ignore").strip()

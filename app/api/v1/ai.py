@@ -14,7 +14,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
 from app.models.document import Document
 from app.services.anonymization_service import anonymize_text, classify_document_type
-from app.services.ollama_service import generate_summary_with_ollama
+from app.services.ollama_service import generate_summary_with_ollama, generate_audit_with_ollama
 from app.services.structured_dataset_service import build_structured_dataset
 from app.api.v1.documents import _get_original_text
 
@@ -87,6 +87,96 @@ def _build_fallback_summary(ai_payload: dict[str, Any]) -> dict[str, Any]:
         "questions_de_revue": questions,
         "confiance_globale": confidence,
     }
+
+
+@router.post(
+    "/audit/{document_id}",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Agent IA de contrôle de cohérence & conformité",
+)
+async def ai_audit(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+) -> JSONResponse:
+    try:
+        document_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404("Document introuvable")
+
+    original_text = await _get_original_text(db, document)
+    if not original_text:
+        raise http_400("Texte source introuvable pour ce document")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, detections = anonymize_text(
+        original_text,
+        profile="dataset_accounting",
+        document_type=effective_type,
+    )
+
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+
+    ai_payload = {
+        "document_id": str(document.id),
+        "doc_type": structured.get("doc_type"),
+        "fields": _sanitize_fields_for_ai(structured.get("fields", {})),
+        "anonymized_excerpt": anonymized_text[:5000],
+    }
+
+    try:
+        # Appelle le nouvel agent restrictif
+        llm = await generate_audit_with_ollama(ai_payload, doc_type=structured.get("doc_type", "generic"))
+    except Exception as exc:
+        raise http_400(f"Erreur IA locale (AuditAgent): {exc}") from exc
+
+    raw_text = llm.get("raw_response", "") or ""
+    parsed: dict[str, Any] | None = None
+    try:
+        obj = json.loads(raw_text) if raw_text else {}
+        if isinstance(obj, dict) and obj:
+            parsed = obj
+    except Exception:
+        parsed = None
+
+    if parsed is None:
+        parsed = {
+            "global_status": "inconclusive",
+            "checks": [
+                {
+                    "code": "CHK_FORMAT",
+                    "description": "Validation du format JSON de sortie de l'IA",
+                    "status": "failed",
+                    "explanation": "L'IA locale n'a pas réussi à formater sa réponse en JSON strict."
+                }
+            ]
+        }
+
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "audit_results": parsed,
+            "provider": "ollama (local)",
+            "model": llm.get("model", "unknown"),
+        }
+    )
 
 
 @router.post(
