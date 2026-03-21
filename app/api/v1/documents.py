@@ -541,7 +541,8 @@ async def export_structured_dataset(
         {
             "document_id": str(document.id),
             "base_profile": "dataset_accounting",
-            "base_doc_type": effective_type,
+            "base_doc_type": structured.get("detected_doc_type"),
+            "base_doc_type_legacy": effective_type,
         }
     )
     return JSONResponse(structured)

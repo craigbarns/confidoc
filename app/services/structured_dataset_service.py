@@ -260,11 +260,12 @@ class ExtractedField:
 
 
 def _field(value: Any, confidence: float, source_hint: str) -> dict[str, Any]:
+    is_missing = value in (None, "", [])
     return ExtractedField(
         value=value,
-        confidence=confidence,
+        confidence=0.0 if is_missing else confidence,
         source_hint=source_hint,
-        review_required=value in (None, "", []),
+        review_required=is_missing,
     ).as_dict()
 
 
@@ -818,10 +819,26 @@ def build_structured_dataset(
         tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
         quality = _quality(fields)
 
+    routing_confidence_raw = routing_confidence
+    # Guardrail: if critical 2072 fields are mostly missing, cap routing confidence.
+    if doc_type == "fiscal_2072":
+        critical6 = [
+            "denomination_sci",
+            "date_cloture_exercice",
+            "nombre_associes",
+            "revenus_bruts",
+            "interets_emprunts",
+            "revenu_net_foncier",
+        ]
+        critical_present = sum(1 for k in critical6 if (fields.get(k, {}) or {}).get("value") not in (None, "", []))
+        if critical_present < 3:
+            routing_confidence = min(routing_confidence, 0.6)
+
     payload = {
         "doc_type": doc_type,
         "detected_doc_type": detected_doc_type,
         "routing_confidence": routing_confidence,
+        "routing_confidence_raw": routing_confidence_raw,
         "routing_reasons": routing_reasons,
         "routing_runner_up": routing_runner_up,
         "anonymized": True,
