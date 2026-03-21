@@ -613,7 +613,7 @@ async function refreshMaskedSummary(docId) {
     };
     docExtractionDetails[docId] = extractionDetails;
 
-    const ambiguousZones = Array.isArray(quality.quality_flags) ? quality.quality_flags.length : 0;
+    const qualityFlagsCount = Array.isArray(quality.quality_flags) ? quality.quality_flags.length : 0;
 
     function fuseCategory(entityType) {
       const t = entityType || "";
@@ -641,8 +641,8 @@ async function refreshMaskedSummary(docId) {
     const maskedCats = fusedEntries.filter(([cat,_]) => cat !== "Montants").slice(0, 8);
 
     function qualityLabel() {
-      if (!quality.needs_review) return "Aucune zone ambiguë détectée.";
-      if (ambiguousZones > 0) return `${ambiguousZones} élément(s) potentiellement identifiable(s) reste(nt) à vérifier manuellement.`;
+      if (!quality.needs_review) return "Aucun point qualité bloquant détecté.";
+      if (qualityFlagsCount > 0) return `${qualityFlagsCount} point(s) qualité à revoir avant validation.`;
       return "Revue manuelle ciblée recommandée.";
     }
 
@@ -672,6 +672,10 @@ async function refreshMaskedSummary(docId) {
       : (criticalMissing.length
           ? "Les champs critiques n'ont pas été extraits: relancer avec type forcé et vérifier le document source."
           : "Aucune action immédiate requise.");
+    const shownRoutingConfidence =
+      extractionDetails.routing_confidence != null && criticalMissing.length > 0
+        ? Math.min(extractionDetails.routing_confidence, 0.85)
+        : extractionDetails.routing_confidence;
 
     const CAT_DESCR = {
       "Noms de personnes": "Les noms et identifiants de personnes ont été masqués.",
@@ -722,7 +726,7 @@ async function refreshMaskedSummary(docId) {
         <div class="extract-details-line">routing_selected: <b>${extractionDetails.routing_selected}</b></div>
         <div class="extract-details-line">extractor_selected: <b>${extractionDetails.extractor_selected}</b></div>
         <div class="extract-details-line">doc_type final: <b>${extractionDetails.doc_type}</b></div>
-        <div class="extract-details-line">routing_confidence: <b>${extractionDetails.routing_confidence != null ? extractionDetails.routing_confidence : "unknown"}</b></div>
+        <div class="extract-details-line">routing_confidence: <b>${shownRoutingConfidence != null ? shownRoutingConfidence : "unknown"}</b></div>
       </div>`;
   } catch (e) {
     // no-op

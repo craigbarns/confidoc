@@ -1229,6 +1229,11 @@ def build_structured_dataset(
         critical_present = sum(1 for k in critical6 if (fields.get(k, {}) or {}).get("value") not in (None, "", []))
         if critical_present < 3:
             routing_confidence = min(routing_confidence, 0.6)
+    # Global guardrail: confidence shown to users should remain conservative when
+    # critical fields are missing, even if router lexical score is high.
+    critical_missing = quality.get("critical_missing_fields", []) if isinstance(quality, dict) else []
+    if isinstance(critical_missing, list) and critical_missing:
+        routing_confidence = min(routing_confidence, 0.85)
 
     return _build_contract_payload(
         doc_type=doc_type,
