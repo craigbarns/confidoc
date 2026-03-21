@@ -259,7 +259,7 @@ if [[ "$code" != "200" ]]; then
   exit 1
 fi
 
-READY_FOR_AI="$(json_get "$SUMMARY_JSON" "quality.ready_for_ai")"
+READY_FOR_AI="$(json_get "$STRUCTURED_JSON" "quality.ready_for_ai")"
 NEEDS_REVIEW="$(json_get "$SUMMARY_JSON" "quality.needs_review")"
 DETECTIONS_COUNT="$(json_get "$SUMMARY_JSON" "quality.detections_count")"
 QUALITY_FLAGS="$(json_get "$SUMMARY_JSON" "quality.quality_flags")"
@@ -270,6 +270,9 @@ CRITICAL_MISSING_FIELDS="$(json_get "$STRUCTURED_JSON" "quality.critical_missing
 ROUTING_CONFIDENCE="$(json_get "$STRUCTURED_JSON" "routing_confidence")"
 ROUTING_RUNNER_UP="$(json_get "$STRUCTURED_JSON" "routing_runner_up")"
 EXTRACTOR_SELECTED="$(json_get "$STRUCTURED_JSON" "provenance.extractor_name")"
+if [[ -z "${EXTRACTOR_SELECTED:-}" ]]; then
+  EXTRACTOR_SELECTED="extractor_unknown_fallback"
+fi
 
 if [[ "$COMPACT_MODE" == "1" ]]; then
   echo ""

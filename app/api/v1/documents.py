@@ -541,9 +541,6 @@ async def export_dataset(
     for flag, pat in critical_patterns.items():
         if re.search(pat, dataset_text):
             quality_flags.append(flag)
-    if _has_uppercase_person_leftovers(dataset_text):
-        quality_flags.append("uppercase_person_leftovers")
-
     needs_review = len(quality_flags) > 0 or len(entities) == 0
 
     # ── Accounting records extraction ──
@@ -1017,12 +1014,17 @@ async def document_dataset_summary(
     for flag, pat in critical_patterns.items():
         if re.search(pat, dataset_text):
             quality_flags.append(flag)
-    if _has_uppercase_person_leftovers(dataset_text):
-        quality_flags.append("uppercase_person_leftovers")
-
+    structured = build_structured_dataset(
+        anonymized_text=dataset_text,
+        original_filename=document.original_filename,
+        requested_doc_type="auto",
+        extraction_text=original_text,
+    )
+    structured_quality = structured.get("quality", {}) if isinstance(structured, dict) else {}
     entities_count = len(merged)
-    needs_review = len(quality_flags) > 0 or entities_count == 0
+    needs_review = bool(structured_quality.get("needs_review", False)) or len(quality_flags) > 0 or entities_count == 0
 
+    merged_quality_flags = list(dict.fromkeys([*quality_flags, *list(structured_quality.get("quality_flags", []))]))
     accounting_records = _extract_accounting_records(dataset_text)
 
     return JSONResponse(
@@ -1032,8 +1034,11 @@ async def document_dataset_summary(
             "profile": "dataset_accounting",
             "quality": {
                 "needs_review": needs_review,
-                "quality_flags": quality_flags,
+                "quality_flags": merged_quality_flags,
                 "detections_count": entities_count,
+                "coverage_ratio": structured_quality.get("coverage_ratio"),
+                "critical_missing_fields": structured_quality.get("critical_missing_fields", []),
+                "ready_for_ai": bool(structured_quality.get("ready_for_ai", False)),
             },
             "accounting_records_count": len(accounting_records),
         }

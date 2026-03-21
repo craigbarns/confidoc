@@ -703,6 +703,90 @@ def _quality(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    base = _quality(fields)
+    critical = [
+        "total_actif",
+        "total_passif",
+        "capitaux_propres",
+        "dettes_financieres",
+        "dettes_fournisseurs",
+        "resultat_exercice",
+    ]
+    critical_missing = [k for k in critical if fields.get(k, {}).get("value") in (None, "", [])]
+
+    actif = fields.get("total_actif", {}).get("value")
+    passif = fields.get("total_passif", {}).get("value")
+    balance_ok = False
+    if isinstance(actif, (int, float)) and isinstance(passif, (int, float)):
+        balance_ok = abs(float(actif) - float(passif)) <= max(2.0, abs(float(actif)) * 0.02)
+
+    ready_for_ai = (
+        base["coverage_ratio"] >= 0.75
+        and not critical_missing
+        and balance_ok
+    )
+    needs_review = (not ready_for_ai) or base["needs_review"]
+
+    flags = list(base.get("quality_flags", []))
+    if critical_missing:
+        flags.append("critical_fields_missing")
+    if not balance_ok:
+        flags.append("bilan_balance_mismatch")
+
+    return {
+        **base,
+        "critical_missing_fields": critical_missing,
+        "needs_review": needs_review,
+        "ready_for_ai": ready_for_ai,
+        "quality_flags": sorted(set(flags)),
+    }
+
+
+def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    base = _quality(fields)
+    critical = [
+        "chiffre_affaires",
+        "charges_externes",
+        "resultat_exploitation",
+        "resultat_courant",
+        "resultat_net",
+    ]
+    critical_missing = [k for k in critical if fields.get(k, {}).get("value") in (None, "", [])]
+
+    rex = fields.get("resultat_exploitation", {}).get("value")
+    rc = fields.get("resultat_courant", {}).get("value")
+    rn = fields.get("resultat_net", {}).get("value")
+    progression_ok = True
+    if isinstance(rex, (int, float)) and isinstance(rc, (int, float)) and isinstance(rn, (int, float)):
+        delta_courant = abs(float(rc) - float(rex))
+        delta_net = abs(float(rn) - float(rc))
+        progression_ok = delta_courant <= max(500_000.0, abs(float(rex)) * 2.0) and delta_net <= max(
+            500_000.0, abs(float(rc)) * 2.0
+        )
+
+    ready_for_ai = (
+        base["coverage_ratio"] >= 0.75
+        and not critical_missing
+        and progression_ok
+    )
+    needs_review = (not ready_for_ai) or base["needs_review"]
+
+    flags = list(base.get("quality_flags", []))
+    if critical_missing:
+        flags.append("critical_fields_missing")
+    if not progression_ok:
+        flags.append("result_chain_inconsistent")
+
+    return {
+        **base,
+        "critical_missing_fields": critical_missing,
+        "needs_review": needs_review,
+        "ready_for_ai": ready_for_ai,
+        "quality_flags": sorted(set(flags)),
+    }
+
+
 def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str) -> dict[str, Any]:
     base = _quality(fields)
     critical = [
@@ -843,7 +927,7 @@ def _extractor_bilan(source_text: str, anonymized_text: str) -> StructuredExtrac
     return StructuredExtractionResult(
         fields=fields,
         tables=tables,
-        quality=_quality(fields),
+        quality=_quality_bilan(fields),
         extractor_name="extractor_bilan",
     )
 
@@ -854,7 +938,7 @@ def _extractor_compte_resultat(source_text: str, anonymized_text: str) -> Struct
     return StructuredExtractionResult(
         fields=fields,
         tables=tables,
-        quality=_quality(fields),
+        quality=_quality_compte_resultat(fields),
         extractor_name="extractor_compte_resultat",
     )
 
@@ -896,6 +980,7 @@ def _build_contract_payload(
     original_filename: str,
     extractor_name: str,
 ) -> dict[str, Any]:
+    extractor_name = (extractor_name or "").strip() or "extractor_unknown_fallback"
     quality_out = dict(quality or {})
     quality_out.setdefault("coverage_ratio", 0.0)
     quality_out.setdefault("filled_fields", 0)
