@@ -252,7 +252,7 @@ if [[ "$code" != "200" ]]; then
 fi
 
 echo "==> 9) Feedback stats (dataset-summary)"
-code="$(http_json "GET" "$BASE_URL/api/v1/documents/$DOCUMENT_ID/dataset-summary" "$SUMMARY_JSON" "$TOKEN")"
+code="$(http_json "GET" "$BASE_URL/api/v1/documents/$DOCUMENT_ID/dataset-summary?doc_type=$DOC_TYPE" "$SUMMARY_JSON" "$TOKEN")"
 if [[ "$code" != "200" ]]; then
   echo "Echec dataset-summary (HTTP $code)"
   cat "$SUMMARY_JSON"

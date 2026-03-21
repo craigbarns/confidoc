@@ -953,6 +953,10 @@ async def document_dataset_summary(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    doc_type: str = Query(
+        default="auto",
+        description="auto | bilan | compte_resultat | fiscal_2072 | fiscal_2044 | releve_bancaire | facture",
+    ),
 ) -> JSONResponse:
     """Petit resume pour l'UI : qualite, besoin de revue, nombre de lignes comptables.
 
@@ -1017,7 +1021,7 @@ async def document_dataset_summary(
     structured = build_structured_dataset(
         anonymized_text=dataset_text,
         original_filename=document.original_filename,
-        requested_doc_type="auto",
+        requested_doc_type=doc_type,
         extraction_text=original_text,
     )
     structured_quality = structured.get("quality", {}) if isinstance(structured, dict) else {}
