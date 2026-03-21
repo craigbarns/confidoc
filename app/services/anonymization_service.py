@@ -215,22 +215,35 @@ def extract_text_from_file(content: bytes, extension: str) -> str:
 
     if extension == "pdf":
         ext_text = ""
-        try:
-            if HAS_MD_EXTRACTOR:
-                # Use Advanced Layout Extraction (markdown with table preservation)
-                with fitz.open(stream=content, filetype="pdf") as doc:
-                    ext_text = pymupdf4llm.to_markdown(doc)
-            else:
-                # Fallback to basic text extraction
+        # 1. Tentative d'extraction structurée (Markdown + Tableaux)
+        if HAS_MD_EXTRACTOR:
+            import tempfile
+            import os
+            # pymupdf4llm est plus robuste sur un fichier physique que sur un stream en mémoire
+            with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
+                tmp.write(content)
+                tmp_path = tmp.name
+            try:
+                ext_text = pymupdf4llm.to_markdown(tmp_path)
+            except Exception as e:
+                logger.error("pymupdf4llm_failed", error=str(e))
+                ext_text = ""
+            finally:
+                os.unlink(tmp_path)
+        
+        # 2. Fallback d'extraction de texte native (si markdown a échoué)
+        if not ext_text or not str(ext_text).strip():
+            try:
                 text_chunks = []
                 with fitz.open(stream=content, filetype="pdf") as doc:
                     for page in doc:
                         text_chunks.append(page.get_text("text"))
                 ext_text = "\n".join(text_chunks)
-        except Exception:
-            pass
+            except Exception as e:
+                logger.warning("native_pdf_text_extraction_failed", error=str(e))
+                ext_text = ""
 
-        ext_text = ext_text.strip()
+        ext_text = str(ext_text).strip()
 
         # If text is very short (< 10 words) or empty, maybe it's a scan — try OCR fallback
         if len(ext_text.split()) < 10 and HAS_OCR:
