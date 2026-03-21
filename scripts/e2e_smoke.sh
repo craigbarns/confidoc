@@ -169,7 +169,24 @@ fi
 
 echo "==> 2) Upload"
 UPLOAD_URL="$BASE_URL/api/v1/uploads?auto_anonymize=true&profile=$PROFILE&document_type=$DOC_TYPE"
-code="$(http_json "POST" "$UPLOAD_URL" "$UPLOAD_JSON" "$TOKEN" "" "$TEST_FILE")"
+UPLOAD_MAX_ATTEMPTS="${CONFIDOC_UPLOAD_MAX_ATTEMPTS:-3}"
+upload_attempt=1
+code=""
+while (( upload_attempt <= UPLOAD_MAX_ATTEMPTS )); do
+  code="$(http_json "POST" "$UPLOAD_URL" "$UPLOAD_JSON" "$TOKEN" "" "$TEST_FILE")"
+  if [[ "$code" == "201" ]]; then
+    break
+  fi
+  if [[ "$code" == "502" || "$code" == "503" || "$code" == "504" ]]; then
+    if (( upload_attempt < UPLOAD_MAX_ATTEMPTS )); then
+      echo "Upload temporairement indisponible (HTTP $code), retry ${upload_attempt}/${UPLOAD_MAX_ATTEMPTS}..."
+      sleep $((upload_attempt * 2))
+      upload_attempt=$((upload_attempt + 1))
+      continue
+    fi
+  fi
+  break
+done
 if [[ "$code" != "201" ]]; then
   echo "Echec upload (HTTP $code)"
   [[ -f "$UPLOAD_JSON" ]] && cat "$UPLOAD_JSON"
