@@ -98,7 +98,7 @@ def _parse_llm_json(raw_text: str) -> dict[str, Any] | None:
     if start != -1 and end != -1 and start < end:
         try:
             obj = json.loads(raw_text[start:end+1])
-            if isinstance(obj, dict):
+            if isinstance(obj, dict) and obj:  # doit être non vide
                 return obj
         except Exception:
             pass
