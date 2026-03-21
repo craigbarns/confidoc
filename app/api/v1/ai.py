@@ -148,9 +148,13 @@ async def ai_audit(
         raise http_400(f"Erreur IA locale (AuditAgent): {exc}") from exc
 
     raw_text = llm.get("raw_response", "") or ""
+    # Nettoyage des backticks markdown fréquents sur les petits modèles LLM
+    import re
+    clean_text = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
+    
     parsed: dict[str, Any] | None = None
     try:
-        obj = json.loads(raw_text) if raw_text else {}
+        obj = json.loads(clean_text) if clean_text else {}
         if isinstance(obj, dict) and obj:
             parsed = obj
     except Exception:
@@ -242,10 +246,14 @@ async def ai_summary(
         raise http_400(f"Erreur IA locale (Ollama): {exc}") from exc
 
     raw_text = llm.get("raw_response", "") or ""
+    # Eviter le plantage JSON si le modèle le renvoie dans des balises markdown:
+    import re
+    clean_text = re.sub(r"^```(?:json)?|```$", "", raw_text.strip(), flags=re.IGNORECASE | re.MULTILINE).strip()
+
     parsed: dict[str, Any] | None = None
     used_fallback = False
     try:
-        obj = json.loads(raw_text) if raw_text else {}
+        obj = json.loads(clean_text) if clean_text else {}
         if isinstance(obj, dict) and obj:
             parsed = obj
     except Exception:
