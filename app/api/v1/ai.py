@@ -153,6 +153,7 @@ async def ai_summary(
 
     raw_text = llm.get("raw_response", "") or ""
     parsed: dict[str, Any] | None = None
+    used_fallback = False
     try:
         obj = json.loads(raw_text) if raw_text else {}
         if isinstance(obj, dict) and obj:
@@ -162,6 +163,7 @@ async def ai_summary(
     if parsed is None:
         parsed = _build_fallback_summary(ai_payload)
         raw_text = json.dumps(parsed, ensure_ascii=False)
+        used_fallback = True
 
     return JSONResponse(
         {
@@ -179,7 +181,7 @@ async def ai_summary(
                 "non_placeholder_text_fields_redacted": True,
             },
             "summary_json_text": raw_text,
-            "summary_source": "ollama" if llm.get("raw_response", "").strip() not in ("", "{}") else "fallback_local",
+            "summary_source": "fallback_local" if used_fallback else "ollama",
         }
     )
 
