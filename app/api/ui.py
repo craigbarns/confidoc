@@ -117,6 +117,11 @@ body{background:var(--bg-deep)}
 .progress-bar{height:4px;background:rgba(255,255,255,0.06);border-radius:4px;overflow:hidden}
 .progress-bar .fill{height:100%;background:linear-gradient(90deg,var(--accent),var(--violet));border-radius:4px;width:0;transition:width .4s ease;animation:shimmer 2s infinite;background-size:200% 100%}
 .upload-progress .prog-text{font-size:12px;color:var(--text-muted);margin-top:6px;text-align:center}
+.stage-strip{margin-top:10px;padding:10px;border:1px solid var(--glass-border);border-radius:8px;background:rgba(2,6,23,0.35);font-size:12px;color:var(--text-muted)}
+.stage-title{font-weight:700;color:var(--text-dim);margin-bottom:4px}
+.stage-flow{display:flex;gap:6px;flex-wrap:wrap}
+.stage-chip{padding:3px 8px;border-radius:999px;border:1px solid var(--glass-border);background:rgba(2,6,23,0.5)}
+.stage-chip.active{border-color:rgba(59,130,246,0.4);color:var(--accent);background:rgba(59,130,246,0.1)}
 
 /* Documents table */
 .docs-empty{text-align:center;padding:40px 20px;color:var(--text-dim);font-size:13px}
@@ -328,6 +333,17 @@ HTML_DASHBOARD = """
               <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
               <div class="prog-text" id="progText">Upload en cours…</div>
             </div>
+            <div class="stage-strip" id="stageStrip">
+              <div class="stage-title">Étapes de traitement</div>
+              <div class="stage-flow">
+                <span class="stage-chip" data-stage="upload">Upload</span>
+                <span class="stage-chip" data-stage="ocr">OCR</span>
+                <span class="stage-chip" data-stage="anonymize">Anonymisation</span>
+                <span class="stage-chip" data-stage="extract">Extraction</span>
+                <span class="stage-chip" data-stage="ready">Prêt</span>
+              </div>
+              <div id="stageText" style="margin-top:6px">En attente d'un document.</div>
+            </div>
           </div>
         </div>
         <div class="panel" style="animation-delay:.12s">
@@ -396,6 +412,14 @@ const maskedOut = $("maskedOutput");
 const apiOut = $("apiOutput");
 const docList = $("docList");
 const toastBox = $("toastContainer");
+const stageText = $("stageText");
+
+function setStage(stage, message) {
+  document.querySelectorAll("[data-stage]").forEach(el => {
+    el.classList.toggle("active", el.getAttribute("data-stage") === stage);
+  });
+  if (stageText) stageText.textContent = message || "";
+}
 
 function toast(msg, type="info") {
   const icons = {success:"✅",error:"❌",info:"ℹ️"};
@@ -404,6 +428,18 @@ function toast(msg, type="info") {
   el.innerHTML = `<span class="toast-icon">${icons[type]||"ℹ️"}</span><span>${msg}</span>`;
   toastBox.appendChild(el);
   setTimeout(() => { el.classList.add("removing"); setTimeout(() => el.remove(), 300); }, 4000);
+}
+
+function setActionBusy(btn, busy, labelWhenBusy = "Traitement...") {
+  if (!btn) return;
+  if (busy) {
+    if (!btn.dataset.originalText) btn.dataset.originalText = btn.textContent || "";
+    btn.disabled = true;
+    btn.textContent = labelWhenBusy;
+  } else {
+    btn.disabled = false;
+    if (btn.dataset.originalText) btn.textContent = btn.dataset.originalText;
+  }
 }
 
 function showApi(data) { apiOut.textContent = JSON.stringify(data, null, 2); }
@@ -979,6 +1015,7 @@ async function doUpload() {
   const auto = $("autoAnonymize").checked;
 
   try {
+    setStage("upload", "Upload du document en cours...");
     fill.style.width = "60%";
     const {res, data} = await api(`/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST", body:form});
     showApi(data);
@@ -986,9 +1023,15 @@ async function doUpload() {
       toast(`Upload échoué: ${data.detail||res.status}`, "error");
       fill.style.width = "100%"; fill.style.background = "var(--rose)";
       progText.textContent = "Échec";
+      setStage("upload", "Échec pendant l'upload.");
     } else {
       fill.style.width = "100%";
       progText.textContent = "Terminé !";
+      if (auto) {
+        setStage("extract", "Document reçu. OCR/anonymisation/extraction terminés.");
+      } else {
+        setStage("upload", "Upload terminé. Lancez l'anonymisation.");
+      }
       const count = data && data.processing ? data.processing.detections_count : null;
       toast(`${file.name} uploadé — ${count != null ? count + " détections" : "prêt"}`, "success");
       await refreshDocs();
@@ -1080,9 +1123,24 @@ docList.addEventListener("click", async e => {
   const id = btn.dataset.id;
   const profile = $("profileSelect").value;
   const requestedDocType = currentDocTypeRequested();
-  btn.disabled = true;
+  const busyLabelByAction = {
+    processall: "Traitement...",
+    anonymize: "Anonymisation...",
+    rerunextract: "Relance...",
+    preview: "Chargement...",
+    validate: "Validation...",
+    exportstructured: "Export...",
+    exportdataset: "Export...",
+    aisummary: "Synthèse...",
+    proof: "Preuve...",
+    auditexport: "Audit...",
+    delete: "Suppression...",
+  };
+  setActionBusy(btn, true, busyLabelByAction[action] || "Traitement...");
   try {
+    toast(`Action en cours: ${action}`, "info");
     if (action === "processall") {
+      setStage("anonymize", "Anonymisation en cours...");
       toast("Traitement complet en cours…", "info");
       const a1 = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(a1.data);
@@ -1104,15 +1162,18 @@ docList.addEventListener("click", async e => {
       showApi(a4data);
       if (!a4.ok) { toast("Échec export dataset", "error"); return; }
       showPreview(a4data.anonymized_text||"Dataset exporté");
+      setStage("ready", "Document prêt : validation et export terminés.");
       const q4 = a4data && a4data.quality ? a4data.quality : {};
       toast(`Traitement terminé : ${q4.detections_count||0} entités. Revue requise : ${q4.needs_review ? "oui" : "non"}.`, "success");
     } else if (action === "anonymize") {
+      setStage("anonymize", "Anonymisation en cours...");
       toast("Anonymisation en cours…", "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(data);
-      if (res.ok) { setAnonymizedPreview(id, data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); setDetections(data.detections_count||0, "dernier document traité"); setDocDetection(id, data.detections_count||0); }
+      if (res.ok) { setAnonymizedPreview(id, data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); setDetections(data.detections_count||0, "dernier document traité"); setDocDetection(id, data.detections_count||0); setStage("extract", "Anonymisation terminée. Données extraites."); }
       else toast(data.detail||"Échec", "error");
     } else if (action === "rerunextract") {
+      setStage("extract", `Relance extraction (${requestedDocType}) en cours...`);
       toast(`Relance extraction (${requestedDocType})…`, "info");
       const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(data);
@@ -1121,6 +1182,7 @@ docList.addEventListener("click", async e => {
         setDetections(data.detections_count||0, "dernier document traité");
         setDocDetection(id, data.detections_count||0);
         toast(`Extraction relancée (${requestedDocType})`, "success");
+        setStage("extract", `Extraction relancée (${requestedDocType}) terminée.`);
       } else {
         toast(data.detail || "Relance extraction échouée", "error");
       }
@@ -1165,6 +1227,7 @@ docList.addEventListener("click", async e => {
       }
       else toast(data.detail || "Erreur preuve RGPD", "error");
     } else if (action === "exportstructured") {
+      setStage("extract", "Export structured dataset en cours...");
       const {res, data} = await api(`/api/v1/documents/${id}/export-structured-dataset?doc_type=${encodeURIComponent(requestedDocType)}`);
       showApi(data);
       if (res.ok) {
@@ -1172,6 +1235,7 @@ docList.addEventListener("click", async e => {
         downloadJsonFile(`structured_dataset_${id}.json`, data);
         const q = data && data.quality ? data.quality : {};
         toast(`Dataset métier exporté (${requestedDocType}) : couverture ${Math.round((q.coverage_ratio || 0) * 100)}%.`, "success");
+        setStage("ready", "Extraction structurée prête.");
         await refreshMaskedSummary(id);
       } else {
         toast(data.detail || "Export dataset métier échoué", "error");
@@ -1222,8 +1286,23 @@ docList.addEventListener("click", async e => {
       const res = await fetch(`/api/v1/documents/${id}`, {method:"DELETE",headers:{Authorization:`Bearer ${accessToken}`}});
       if (res.ok) { toast("Document supprimé", "success"); showPreview("Document supprimé."); } else toast("Suppression échouée", "error");
     }
-  } catch(e) { toast("Erreur réseau", "error"); }
-  finally { btn.disabled = false; await refreshDocs(); }
+  } catch(e) {
+    const msg = (e && e.message) ? e.message : "Erreur réseau";
+    toast(`Erreur: ${msg}`, "error");
+  }
+  finally {
+    setActionBusy(btn, false);
+    await refreshDocs();
+  }
+});
+
+window.addEventListener("error", (ev) => {
+  const msg = (ev && ev.message) ? ev.message : "Erreur JavaScript";
+  toast(`Erreur UI: ${msg}`, "error");
+});
+window.addEventListener("unhandledrejection", (ev) => {
+  const reason = ev && ev.reason ? String(ev.reason) : "Promesse rejetée";
+  toast(`Erreur async: ${reason}`, "error");
 });
 </script>
 """
