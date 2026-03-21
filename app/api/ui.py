@@ -71,9 +71,12 @@ body{background:var(--bg-deep)}
 .topnav .logo .shield-sm{width:32px;height:32px;background:linear-gradient(135deg,var(--accent),var(--violet));border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:16px}
 .topnav .logo span{background:linear-gradient(135deg,var(--accent),var(--violet));-webkit-background-clip:text;-webkit-text-fill-color:transparent}
 .topnav .user-area{display:flex;align-items:center;gap:12px}
+.expert-toggle{display:flex;align-items:center;gap:6px;font-size:12px;color:var(--text-muted);padding:6px 10px;border:1px solid var(--glass-border);border-radius:999px;background:var(--glass)}
+.expert-toggle input{accent-color:var(--accent)}
 .topnav .user-pill{display:flex;align-items:center;gap:8px;padding:6px 14px;background:var(--glass);border:1px solid var(--glass-border);border-radius:20px;font-size:13px;color:var(--text-muted)}
 .topnav .user-pill .avatar{width:24px;height:24px;background:linear-gradient(135deg,var(--emerald),var(--accent));border-radius:50%;display:flex;align-items:center;justify-content:center;font-size:11px;font-weight:700;color:#fff}
 .dash-content{max-width:1280px;margin:0 auto;padding:28px 32px 60px}
+.value-prop{margin-bottom:14px;padding:12px 14px;border:1px dashed var(--glass-border);border-radius:12px;background:rgba(2,6,23,0.35);color:var(--text-muted);font-size:13px}
 
 /* Stats */
 .stats-row{display:grid;grid-template-columns:repeat(4,1fr);gap:16px;margin-bottom:28px}
@@ -182,6 +185,9 @@ body{background:var(--bg-deep)}
 .proof-card.masked{border-color:rgba(244,63,94,0.2)}
 .proof-card.kept{border-color:rgba(16,185,129,0.2)}
 .proof-card.review{border-color:rgba(245,158,11,0.25)}
+.extract-details{margin-top:10px;background:rgba(2,6,23,0.45);border:1px solid var(--glass-border);border-radius:8px;padding:10px}
+.extract-details-title{font-size:12px;color:var(--text-dim);font-weight:700;margin-bottom:6px}
+.extract-details-line{font-size:12px;color:var(--text-muted);line-height:1.55}
 .ai-summary{display:grid;gap:10px}
 .ai-head{display:flex;justify-content:space-between;align-items:center;gap:10px;flex-wrap:wrap}
 .ai-tools{display:flex;gap:8px;align-items:center;flex-wrap:wrap}
@@ -210,6 +216,8 @@ body{background:var(--bg-deep)}
 /* API Response */
 .api-panel{margin-top:20px}
 .api-content{background:rgba(2,6,23,0.8);border:1px solid var(--glass-border);border-radius:var(--radius-sm);padding:20px;max-height:300px;overflow:auto;font-family:'JetBrains Mono',monospace;font-size:12px;line-height:1.5;color:var(--text-dim);white-space:pre-wrap;word-break:break-word}
+.expert-only{display:none}
+.expert-only.show{display:block}
 
 /* Toasts */
 .toast-container{position:fixed;top:20px;right:20px;z-index:9999;display:flex;flex-direction:column;gap:10px}
@@ -265,6 +273,10 @@ HTML_DASHBOARD = """
         <span>ConfiDoc</span>
       </div>
       <div class="user-area">
+        <label class="expert-toggle" title="Afficher les détails techniques">
+          <input type="checkbox" id="expertModeToggle" />
+          <span>Mode expert</span>
+        </label>
         <div class="user-pill">
           <div class="avatar" id="userAvatar">A</div>
           <span id="userEmail">admin</span>
@@ -273,6 +285,7 @@ HTML_DASHBOARD = """
       </div>
     </nav>
     <div class="dash-content">
+      <div class="value-prop">Déposez un document, ConfiDoc l'analyse, le sécurise et vous indique en priorité s'il est prêt, à revoir ou insuffisant.</div>
       <div class="stats-row">
         <div class="stat-card blue"><div class="stat-label">Documents</div><div class="stat-value" id="statTotal">0</div><div class="stat-sub">total uploadés</div></div>
         <div class="stat-card emerald"><div class="stat-label">Prêts</div><div class="stat-value" id="statReady">0</div><div class="stat-sub">anonymisés</div></div>
@@ -295,6 +308,15 @@ HTML_DASHBOARD = """
                 <select id="profileSelect">
                   <option value="dataset_accounting_pseudo" selected>✨ Pseudonymisation métier</option>
                   <option value="dataset_accounting">📊 Dataset comptable (strict)</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-group" style="margin-bottom:4px"><span style="font-size:12px;color:var(--text-dim)">Type d'extraction (forçage)</span></label>
+                <select id="docTypeSelect">
+                  <option value="auto" selected>Auto</option>
+                  <option value="bilan">Bilan</option>
+                  <option value="compte_resultat">Compte de résultat</option>
+                  <option value="fiscal_2072">2072</option>
                 </select>
               </div>
               <div class="checkbox-row">
@@ -346,7 +368,7 @@ HTML_DASHBOARD = """
           <div class="masked-content" id="maskedOutput">Lancez `Anonymiser` / `Traiter tout` pour voir le résumé.</div>
         </div>
       </div>
-      <div class="panel api-panel" style="animation-delay:.2s">
+      <div class="panel api-panel expert-only" style="animation-delay:.2s">
         <div class="panel-header"><h2><span class="icon">⚡</span> Réponse API</h2></div>
         <div class="panel-body"><pre class="api-content" id="apiOutput">{}</pre></div>
       </div>
@@ -366,6 +388,7 @@ let lastAnonText = "";
 let lastOriginalDocId = null;
 let lastOriginalText = "";
 let previewMode = "anon"; // "anon" | "beforeafter"
+let docExtractionDetails = {};
 
 const $ = id => document.getElementById(id);
 const previewOut = $("previewOutput");
@@ -411,6 +434,11 @@ function highlightTags(text) {
 }
 
 function showPreview(text) { previewOut.innerHTML = highlightTags(text); }
+
+function currentDocTypeRequested() {
+  const el = $("docTypeSelect");
+  return (el && el.value) ? el.value : "auto";
+}
 
 function confidenceLabel(v) {
   const n = Number(v || 0);
@@ -535,6 +563,19 @@ async function refreshMaskedSummary(docId) {
     const qRes = await api(`/api/v1/documents/${docId}/dataset-summary`);
     const quality = qRes.data && qRes.data.quality ? qRes.data.quality : {};
     const accountingCount = qRes.data ? qRes.data.accounting_records_count : null;
+    const requested = currentDocTypeRequested();
+    const sRes = await api(`/api/v1/documents/${docId}/export-structured-dataset?doc_type=${encodeURIComponent(requested)}`);
+    const sData = sRes.data || {};
+    const sQ = sData.quality || {};
+    const criticalMissing = Array.isArray(sQ.critical_missing_fields) ? sQ.critical_missing_fields : [];
+    const extractionDetails = {
+      routing_requested: requested,
+      routing_selected: sData.detected_doc_type || "unknown",
+      extractor_selected: (sData.provenance && sData.provenance.extractor_name) || "unknown",
+      routing_confidence: typeof sData.routing_confidence === "number" ? sData.routing_confidence : null,
+      doc_type: sData.doc_type || "unknown",
+    };
+    docExtractionDetails[docId] = extractionDetails;
 
     const ambiguousZones = Array.isArray(quality.quality_flags) ? quality.quality_flags.length : 0;
 
@@ -576,10 +617,25 @@ async function refreshMaskedSummary(docId) {
       "siren_found": "SIREN potentiellement visible",
       "uppercase_person_leftovers": "Nom/prénom potentiellement identifiable restant",
     };
+    const FLAG_ACTIONS = {
+      "uppercase_person_leftovers": "Vérifier les zones en majuscules restantes puis confirmer/masquer.",
+      "emails_found": "Contrôler les emails restants et relancer l'extraction.",
+      "iban_found": "Vérifier les IBAN visibles puis relancer l'anonymisation.",
+      "siret_found": "Vérifier les identifiants entreprise non masqués.",
+      "siren_found": "Vérifier les identifiants entreprise non masqués.",
+    };
     const rawFlags = Array.isArray(quality.quality_flags) ? quality.quality_flags : [];
     const reviewDetails = rawFlags.length
       ? rawFlags.map(f => `- ${FLAG_LABELS[f] || f}`).join("\\n")
       : "- Aucun point de revue détecté";
+    const criticalDetails = criticalMissing.length
+      ? criticalMissing.map(f => `- ${f}`).join("\\n")
+      : "- Aucun champ critique manquant";
+    const recommendedAction = rawFlags.length
+      ? (FLAG_ACTIONS[rawFlags[0]] || "Analyser les points listés puis relancer l'extraction.")
+      : (criticalMissing.length
+          ? "Les champs critiques n'ont pas été extraits: relancer avec type forcé et vérifier le document source."
+          : "Aucune action immédiate requise.");
 
     const CAT_DESCR = {
       "Noms de personnes": "Les noms et identifiants de personnes ont été masqués.",
@@ -618,8 +674,19 @@ async function refreshMaskedSummary(docId) {
           <div class="proof-card-value">${quality.needs_review ? "Revue recommandée" : "Aucune revue requise"}</div>
           <div class="proof-card-sub">${qualityLabel()}</div>
           <div class="proof-card-sub" style="white-space:pre-wrap">${reviewDetails}</div>
+          <div class="proof-card-sub" style="margin-top:6px;font-weight:700">Champs critiques manquants</div>
+          <div class="proof-card-sub" style="white-space:pre-wrap">${criticalDetails}</div>
+          <div class="proof-card-sub" style="margin-top:6px"><b>Action recommandée :</b> ${recommendedAction}</div>
           <div class="proof-card-sub">Étape conseillée : vérifier cette zone puis valider le document.</div>
         </div>
+      </div>
+      <div class="extract-details">
+        <div class="extract-details-title">Détails d'extraction</div>
+        <div class="extract-details-line">routing_requested: <b>${extractionDetails.routing_requested}</b></div>
+        <div class="extract-details-line">routing_selected: <b>${extractionDetails.routing_selected}</b></div>
+        <div class="extract-details-line">extractor_selected: <b>${extractionDetails.extractor_selected}</b></div>
+        <div class="extract-details-line">doc_type final: <b>${extractionDetails.doc_type}</b></div>
+        <div class="extract-details-line">routing_confidence: <b>${extractionDetails.routing_confidence != null ? extractionDetails.routing_confidence : "unknown"}</b></div>
       </div>`;
   } catch (e) {
     // no-op
@@ -783,15 +850,21 @@ function renderDocs(items) {
         </div>
         <div class="doc-next">${nextAction(doc)}</div>
         <div class="doc-actions">
-          <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter tout</button>
-          <button class="btn-act primary" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
-          <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Prévisualiser</button>
+          <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
-          <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Exporter le dataset</button>
-          <button class="btn-act" data-a="exportstructured" data-id="${doc.id}">🧠 Dataset métier</button>
-          <button class="btn-act primary" data-a="aisummary" data-id="${doc.id}">🤖 Synthèse IA</button>
-          <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Exporter la preuve</button>
-          <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Exporter l'audit</button>
+          <button class="btn-act" data-a="rerunextract" data-id="${doc.id}">🔁 Relancer l'extraction</button>
+          <button class="btn-act primary" data-a="exportstructured" data-id="${doc.id}">📤 Exporter</button>
+          <details class="expert-only">
+            <summary class="btn-act" style="display:inline-flex;list-style:none">Plus</summary>
+            <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+              <button class="btn-act" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
+              <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Prévisualiser</button>
+              <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Exporter dataset</button>
+              <button class="btn-act" data-a="aisummary" data-id="${doc.id}">🤖 Synthèse IA</button>
+              <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Preuve</button>
+              <button class="btn-act" data-a="auditexport" data-id="${doc.id}">🧾 Audit</button>
+            </div>
+          </details>
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
         </div>
       </div>`;
@@ -902,11 +975,12 @@ async function doUpload() {
   const form = new FormData();
   form.append("file", file);
   const profile = $("profileSelect").value;
+  const requestedDocType = currentDocTypeRequested();
   const auto = $("autoAnonymize").checked;
 
   try {
     fill.style.width = "60%";
-    const {res, data} = await api(`/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST", body:form});
+    const {res, data} = await api(`/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST", body:form});
     showApi(data);
     if (!res.ok) {
       toast(`Upload échoué: ${data.detail||res.status}`, "error");
@@ -925,6 +999,21 @@ async function doUpload() {
 
 // Refresh
 $("refreshBtn").addEventListener("click", () => { refreshDocs(); toast("Liste actualisée", "info"); });
+
+function applyExpertMode(enabled) {
+  document.querySelectorAll(".expert-only").forEach(el => {
+    el.classList.toggle("show", !!enabled);
+  });
+}
+const expertToggle = $("expertModeToggle");
+if (expertToggle) {
+  expertToggle.addEventListener("change", (e) => {
+    const on = !!(e && e.target && e.target.checked);
+    applyExpertMode(on);
+    toast(on ? "Mode expert activé" : "Mode expert désactivé", "info");
+  });
+}
+applyExpertMode(false);
 
 // KB ask
 async function askKb() {
@@ -990,11 +1079,12 @@ docList.addEventListener("click", async e => {
   const action = btn.dataset.a;
   const id = btn.dataset.id;
   const profile = $("profileSelect").value;
+  const requestedDocType = currentDocTypeRequested();
   btn.disabled = true;
   try {
     if (action === "processall") {
       toast("Traitement complet en cours…", "info");
-      const a1 = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
+      const a1 = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(a1.data);
       if (!a1.res.ok) { toast(a1.data.detail||"Échec anonymisation", "error"); return; }
       setDetections(a1.data.detections_count||0, "dernier document traité");
@@ -1018,10 +1108,22 @@ docList.addEventListener("click", async e => {
       toast(`Traitement terminé : ${q4.detections_count||0} entités. Revue requise : ${q4.needs_review ? "oui" : "non"}.`, "success");
     } else if (action === "anonymize") {
       toast("Anonymisation en cours…", "info");
-      const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=auto`, {method:"POST"});
+      const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(data);
       if (res.ok) { setAnonymizedPreview(id, data.preview_text||""); toast(`${data.detections_count||0} entités détectées`, "success"); setDetections(data.detections_count||0, "dernier document traité"); setDocDetection(id, data.detections_count||0); }
       else toast(data.detail||"Échec", "error");
+    } else if (action === "rerunextract") {
+      toast(`Relance extraction (${requestedDocType})…`, "info");
+      const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
+      showApi(data);
+      if (res.ok) {
+        setAnonymizedPreview(id, data.preview_text||"");
+        setDetections(data.detections_count||0, "dernier document traité");
+        setDocDetection(id, data.detections_count||0);
+        toast(`Extraction relancée (${requestedDocType})`, "success");
+      } else {
+        toast(data.detail || "Relance extraction échouée", "error");
+      }
     } else if (action === "preview") {
       const {res, data} = await api(`/api/v1/documents/${id}/preview`);
       showApi(data);
@@ -1063,19 +1165,20 @@ docList.addEventListener("click", async e => {
       }
       else toast(data.detail || "Erreur preuve RGPD", "error");
     } else if (action === "exportstructured") {
-      const {res, data} = await api(`/api/v1/documents/${id}/export-structured-dataset?doc_type=auto`);
+      const {res, data} = await api(`/api/v1/documents/${id}/export-structured-dataset?doc_type=${encodeURIComponent(requestedDocType)}`);
       showApi(data);
       if (res.ok) {
         showPreview(data && data.fields ? JSON.stringify(data.fields, null, 2) : "Dataset métier exporté");
         downloadJsonFile(`structured_dataset_${id}.json`, data);
         const q = data && data.quality ? data.quality : {};
-        toast(`Dataset métier exporté : couverture ${Math.round((q.coverage_ratio || 0) * 100)}%.`, "success");
+        toast(`Dataset métier exporté (${requestedDocType}) : couverture ${Math.round((q.coverage_ratio || 0) * 100)}%.`, "success");
+        await refreshMaskedSummary(id);
       } else {
         toast(data.detail || "Export dataset métier échoué", "error");
       }
     } else if (action === "aisummary") {
       toast("Génération de la synthèse IA…", "info");
-      const {res, data} = await api(`/api/v1/ai/summary/${id}?doc_type=auto`, {method:"POST"});
+      const {res, data} = await api(`/api/v1/ai/summary/${id}?doc_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(data);
       if (!res.ok) {
         toast(data.detail || "Synthèse IA échouée", "error");
