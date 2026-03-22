@@ -232,6 +232,26 @@ def _sum_accounting_lines_by_prefixes(
     return total, "fallback:accounting_prefix_sum"
 
 
+def _sum_accounting_lines_single_prefix(
+    text: str, prefix: str, *, min_total: float = 100.0, min_lines: int = 1
+) -> tuple[float | None, str]:
+    """Sum PCG lines whose code starts with prefix (e.g. '62' for charges externes)."""
+    records = _extract_generic_accounting_table(text)
+    vals = [
+        float(r.get("amount"))
+        for r in records
+        if isinstance(r.get("amount"), (int, float))
+        and str(r.get("code", "")).startswith(prefix)
+        and abs(float(r.get("amount"))) >= 1.0
+    ]
+    if len(vals) < min_lines:
+        return None, "missing"
+    total = sum(vals)
+    if abs(total) < min_total:
+        return None, "missing"
+    return total, f"fallback:accounting_prefix_{prefix}_sum"
+
+
 def _extract_first_date_from_patterns(text: str, patterns: list[str]) -> str | None:
     for pat in patterns:
         v = _extract_first(pat, text)
@@ -427,9 +447,28 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         [
             ("label:capitaux_propres", r"capitaux?\s+propres"),
             ("label:capitaux_propres_ensemble", r"total.{0,20}capitaux?\s+propres"),
+            ("label:fonds_propres", r"fonds?\s+propres"),
+            ("label:ressources_propres", r"ressources?\s+propres"),
+            ("label:capitaux_assimiles", r"capitaux?\s+propres\s+et\s+assimil"),
+            ("label:total_capitaux", r"total\s+i.{0,18}capitaux"),
         ],
         min_amount=100.0,
     )
+    if capitaux_propres is None:
+        for src_hint, pat in [
+            ("label_wide:capitaux_propres", r"capitaux?\s+propres"),
+            ("label_wide:fonds_propres", r"fonds?\s+propres"),
+        ]:
+            w = _extract_financial_amount_for_label_wide(text, pat, max_gap=140, min_amount=100.0)
+            if w is not None:
+                capitaux_propres, capitaux_propres_src = w, src_hint
+                break
+    if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _extract_amount_after_keyword_multiline(
+            "\n".join(text.splitlines()[-320:]),
+            r"capitaux.{0,12}propres|fonds.{0,12}propres|ressources.{0,12}propres",
+            min_amount=100.0,
+        )
     resultat_exercice, resultat_exercice_src = _extract_first_amount_with_source(
         text,
         [
@@ -458,18 +497,43 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
 
 
 def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
+    scan_cr = text
     charges_externes, charges_externes_src = _extract_first_amount_with_source(
-        text,
+        scan_cr,
         [
             ("label:charges_externes", r"charges?\s+externes"),
+            ("label:total_charges_externes", r"total.{0,15}charges?.{0,12}externes"),
             ("label:autres_charges_externes", r"autres?.{0,10}charges?.{0,10}externes"),
             ("label:services_exterieurs", r"services?\s+ext[ée]rieurs"),
         ],
         min_amount=50.0,
     )
     if charges_externes is None:
+        for src_hint, pat in [
+            ("label_wide:charges_externes", r"charges?\s+externes"),
+            ("label_wide:services_exterieurs", r"services?\s+ext[ée]rieurs"),
+        ]:
+            w = _extract_financial_amount_for_label_wide(scan_cr, pat, max_gap=140, min_amount=50.0)
+            if w is not None:
+                charges_externes, charges_externes_src = w, src_hint
+                break
+    if charges_externes is None:
+        charges_externes, charges_externes_src = _extract_amount_after_keyword_multiline(
+            scan_cr,
+            r"charges?.{0,12}externes|services?.{0,12}ext[ée]rieurs",
+            min_amount=50.0,
+        )
+    if charges_externes is None:
         charges_externes, charges_externes_src = _sum_accounting_lines_by_prefixes(
-            text, ("61", "62"), min_total=100.0
+            scan_cr, ("61", "62"), min_total=100.0
+        )
+    if charges_externes is None:
+        charges_externes, charges_externes_src = _sum_accounting_lines_single_prefix(
+            scan_cr, "62", min_total=100.0, min_lines=2
+        )
+    if charges_externes is None:
+        charges_externes, charges_externes_src = _sum_accounting_lines_single_prefix(
+            scan_cr, "62", min_total=500.0, min_lines=1
         )
 
     resultat_exploitation, resultat_exploitation_src = _extract_first_amount_with_source(
@@ -499,16 +563,32 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
         )
 
     resultat_net, resultat_net_src = _extract_first_amount_with_source(
-        text,
+        scan_cr,
         [
-            ("label:resultat_net", r"r[ée]sultat\s+net"),
+            ("label:resultat_net", r"r[ée]sultat\s+net(?:\s+de\s+l[' ]?exercice)?"),
+            ("label:resultat_net_apres_impots", r"r[ée]sultat\s+net.{0,20}imp[oô]ts?"),
             ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
         ],
         min_amount=50.0,
     )
     if resultat_net is None:
+        for src_hint, pat in [
+            ("label_wide:resultat_net", r"r[ée]sultat\s+net"),
+            ("label_wide:resultat_exercice", r"r[ée]sultat\s+de\s+l[' ]?exercice"),
+        ]:
+            w = _extract_financial_amount_for_label_wide(scan_cr, pat, max_gap=160, min_amount=50.0)
+            if w is not None:
+                resultat_net, resultat_net_src = w, src_hint
+                break
+    if resultat_net is None:
         resultat_net, resultat_net_src = _extract_amount_from_lines_with_keyword(
-            text, r"r[ée]sultat.{0,12}net|b[ée]n[ée]fice|perte", min_amount=50.0
+            scan_cr, r"r[ée]sultat.{0,12}net", min_amount=50.0
+        )
+    if resultat_net is None:
+        resultat_net, resultat_net_src = _extract_amount_after_keyword_multiline(
+            scan_cr,
+            r"r[ée]sultat\s+net|r[ée]sultat\s+de\s+l[' ]?exercice|b[ée]n[ée]fice\s+net",
+            min_amount=50.0,
         )
 
     return {
