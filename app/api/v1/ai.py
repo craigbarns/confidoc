@@ -89,22 +89,6 @@ def _build_fallback_summary(ai_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
-def _parse_llm_json(raw_text: str) -> dict[str, Any] | None:
-    """Extracts valid JSON out of conversational LLM output."""
-    if not raw_text:
-        return None
-    start = raw_text.find("{")
-    end = raw_text.rfind("}")
-    if start != -1 and end != -1 and start < end:
-        try:
-            obj = json.loads(raw_text[start:end+1])
-            if isinstance(obj, dict) and obj:  # doit être non vide
-                return obj
-        except Exception:
-            pass
-    return None
-
-
 @router.post(
     "/audit/{document_id}",
     response_class=JSONResponse,
@@ -163,20 +147,22 @@ async def ai_audit(
     except Exception as exc:
         raise http_400(f"Erreur IA locale (AuditAgent): {exc}") from exc
 
-    raw_text = llm.get("raw_response", "") or ""
-    parsed = _parse_llm_json(raw_text)
-
-    if parsed is None:
+    parsed = llm.get("validated")
+    if not isinstance(parsed, dict):
+        err_hint = (llm.get("last_validation_error") or "").strip()
+        expl = "L'IA locale n'a pas fourni un JSON conforme au schéma après plusieurs tentatives."
+        if err_hint:
+            expl = f"{expl} Détail: {err_hint[:800]}"
         parsed = {
             "global_status": "inconclusive",
             "checks": [
                 {
                     "code": "CHK_FORMAT",
-                    "description": "Validation du format JSON de sortie de l'IA",
+                    "description": "Validation Pydantic de la sortie JSON (AuditResult)",
                     "status": "failed",
-                    "explanation": "L'IA locale n'a pas réussi à formater sa réponse en JSON strict."
+                    "explanation": expl,
                 }
-            ]
+            ],
         }
 
     return JSONResponse(
@@ -185,6 +171,10 @@ async def ai_audit(
             "audit_results": parsed,
             "provider": "ollama (local)",
             "model": llm.get("model", "unknown"),
+            "ollama_validation": {
+                "ok": bool(llm.get("validation_ok")),
+                "attempts": llm.get("validation_attempts"),
+            },
         }
     )
 
@@ -251,22 +241,21 @@ async def ai_summary(
     except Exception as exc:
         raise http_400(f"Erreur IA locale (Ollama): {exc}") from exc
 
-    raw_text = llm.get("raw_response", "") or ""
-    parsed = _parse_llm_json(raw_text)
-
-    used_fallback = False
-    if parsed is None:
+    parsed = llm.get("validated")
+    used_fallback = not isinstance(parsed, dict)
+    if used_fallback:
         parsed = _build_fallback_summary(ai_payload)
-        summary_json_text = json.dumps(parsed, ensure_ascii=False)
-        used_fallback = True
-    else:
-        summary_json_text = json.dumps(parsed, ensure_ascii=False)
+    summary_json_text = json.dumps(parsed, ensure_ascii=False)
 
     return JSONResponse(
         {
             "document_id": str(document.id),
             "provider": "ollama",
             "model": llm.get("model"),
+            "ollama_validation": {
+                "ok": bool(llm.get("validation_ok")),
+                "attempts": llm.get("validation_attempts"),
+            },
             "quality_snapshot": {
                 "needs_review": bool((structured.get("quality") or {}).get("needs_review", True)),
                 "ready_for_ai": bool((structured.get("quality") or {}).get("ready_for_ai", False)),
