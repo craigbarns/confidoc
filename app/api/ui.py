@@ -654,6 +654,8 @@ async function refreshMaskedSummary(docId) {
       "uppercase_person_leftovers": "Nom/prénom potentiellement identifiable restant",
       "bilan_balance_mismatch": "Bilan : écart actif/passif au-delà de la tolérance",
       "bilan_balance_minor_gap": "Bilan : léger écart actif/passif (tolérance élargie)",
+      "result_chain_inconsistent": "Compte de résultat : incohérence REX → RC → RN",
+      "result_chain_minor_gap": "Compte de résultat : écart modéré sur la chaîne REX/RC/RN",
       "critical_fields_missing": "Champs critiques manquants pour ce type de document",
     };
     const FLAG_ACTIONS = {
@@ -664,6 +666,8 @@ async function refreshMaskedSummary(docId) {
       "siren_found": "Vérifier les identifiants entreprise non masqués.",
       "bilan_balance_mismatch": "Contrôler les totaux actif/passif sur le document source ou relancer l'OCR.",
       "bilan_balance_minor_gap": "Vérifier rapidement les arrondis / synthèse plaquette ; souvent acceptable.",
+      "result_chain_inconsistent": "Contrôler les trois résultats (exploitation, courant, net) sur le PDF source.",
+      "result_chain_minor_gap": "Contrôler les postes financiers / exceptionnels entre les deux lignes concernées.",
       "critical_fields_missing": "Forcer le type de document ou vérifier la qualité du PDF.",
     };
     const rawFlags = Array.isArray(quality.quality_flags) ? quality.quality_flags : [];

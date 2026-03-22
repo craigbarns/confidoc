@@ -1175,6 +1175,19 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _cr_step_tolerances(anchor_abs: float) -> tuple[float, float]:
+    """Seuils strict vs relax pour un pas de chaîne (REX→RC ancré sur |REX|, RC→RN sur |RC|).
+
+    - *relax* : aligné sur l’historique ``max(500k, 2×|ancre|)`` (évite l’effet « triangulaire »
+      si l’on prenait ``max(|REX|,|RC|)`` pour les deux côtés).
+    - *strict* : bande intérieure pour ``result_chain_minor_gap`` sans bloquer ``ready_for_ai``.
+    """
+    a = max(abs(float(anchor_abs)), 1.0)
+    tol_strict = max(250_000.0, a * 1.5)
+    tol_relaxed = max(500_000.0, a * 2.0)
+    return tol_strict, tol_relaxed
+
+
 def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     base = _quality(fields)
     critical = [
@@ -1189,13 +1202,30 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
     rex = fields.get("resultat_exploitation", {}).get("value")
     rc = fields.get("resultat_courant", {}).get("value")
     rn = fields.get("resultat_net", {}).get("value")
+    chain_keys = ("resultat_exploitation", "resultat_courant", "resultat_net")
+    results_filled = all(fields.get(k, {}).get("value") not in (None, "", []) for k in chain_keys)
+
     progression_ok = True
+    chain_minor_gap = False
+    delta_rex_rc: float | None = None
+    delta_rc_rn: float | None = None
+    tol_s1 = tol_r1 = tol_s2 = tol_r2 = 0.0
+
     if isinstance(rex, (int, float)) and isinstance(rc, (int, float)) and isinstance(rn, (int, float)):
-        delta_courant = abs(float(rc) - float(rex))
-        delta_net = abs(float(rn) - float(rc))
-        progression_ok = delta_courant <= max(500_000.0, abs(float(rex)) * 2.0) and delta_net <= max(
-            500_000.0, abs(float(rc)) * 2.0
+        fr, fc, fn = float(rex), float(rc), float(rn)
+        delta_rex_rc = abs(fc - fr)
+        delta_rc_rn = abs(fn - fc)
+        tol_s1, tol_r1 = _cr_step_tolerances(fr)
+        tol_s2, tol_r2 = _cr_step_tolerances(fc)
+        step1_ok = delta_rex_rc <= tol_r1
+        step2_ok = delta_rc_rn <= tol_r2
+        progression_ok = step1_ok and step2_ok
+        chain_minor_gap = progression_ok and (
+            (tol_s1 < delta_rex_rc <= tol_r1) or (tol_s2 < delta_rc_rn <= tol_r2)
         )
+    elif results_filled:
+        # Totaux de chaîne renseignés mais non comparables numériquement.
+        progression_ok = False
 
     ready_for_ai = (
         base["coverage_ratio"] >= 0.75
@@ -1207,7 +1237,12 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
     flags = list(base.get("quality_flags", []))
     if critical_missing:
         flags.append("critical_fields_missing")
-    if not progression_ok:
+    if isinstance(rex, (int, float)) and isinstance(rc, (int, float)) and isinstance(rn, (int, float)):
+        if not progression_ok:
+            flags.append("result_chain_inconsistent")
+        elif chain_minor_gap:
+            flags.append("result_chain_minor_gap")
+    elif results_filled:
         flags.append("result_chain_inconsistent")
 
     return {
@@ -1216,6 +1251,10 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
         "needs_review": needs_review,
         "ready_for_ai": ready_for_ai,
         "quality_flags": sorted(set(flags)),
+        "cr_chain_delta_rex_rc": round(delta_rex_rc, 2) if delta_rex_rc is not None else None,
+        "cr_chain_delta_rc_rn": round(delta_rc_rn, 2) if delta_rc_rn is not None else None,
+        "cr_chain_tol_relaxed_rex_rc": round(tol_r1, 2) if tol_r1 else None,
+        "cr_chain_tol_relaxed_rc_rn": round(tol_r2, 2) if tol_r2 else None,
     }
 
 
