@@ -604,12 +604,14 @@ async function refreshMaskedSummary(docId) {
     const sData = sRes.data || {};
     const sQ = sData.quality || {};
     const criticalMissing = Array.isArray(sQ.critical_missing_fields) ? sQ.critical_missing_fields : [];
+    const provSeg = sData.provenance && sData.provenance.text_segmentation;
     const extractionDetails = {
       routing_requested: requested,
       routing_selected: sData.detected_doc_type || "unknown",
       extractor_selected: (sData.provenance && sData.provenance.extractor_name) || "unknown",
       routing_confidence: typeof sData.routing_confidence === "number" ? sData.routing_confidence : null,
       doc_type: sData.doc_type || "unknown",
+      text_segmentation: provSeg || null,
     };
     docExtractionDetails[docId] = extractionDetails;
 
@@ -737,6 +739,11 @@ async function refreshMaskedSummary(docId) {
         <div class="extract-details-line">extractor_selected: <b>${extractionDetails.extractor_selected}</b></div>
         <div class="extract-details-line">doc_type final: <b>${extractionDetails.doc_type}</b></div>
         <div class="extract-details-line">routing_confidence: <b>${shownRoutingConfidence != null ? shownRoutingConfidence : "unknown"}</b></div>
+        <div class="extract-details-line">découpe texte (smart split): <b>${
+          extractionDetails.text_segmentation
+            ? `${extractionDetails.text_segmentation.strategy} — ${extractionDetails.text_segmentation.segment_chars}/${extractionDetails.text_segmentation.full_chars} car. (score ${extractionDetails.text_segmentation.window_score ?? "—"})`
+            : "—"
+        }</b></div>
       </div>`;
   } catch (e) {
     // no-op

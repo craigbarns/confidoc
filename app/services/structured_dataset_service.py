@@ -1450,6 +1450,7 @@ def _build_contract_payload(
     quality: dict[str, Any],
     original_filename: str,
     extractor_name: str,
+    text_segmentation: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     extractor_name = (extractor_name or "").strip() or "extractor_unknown_fallback"
     quality_out = dict(quality or {})
@@ -1460,6 +1461,16 @@ def _build_contract_payload(
     quality_out.setdefault("ready_for_ai", False)
     quality_out.setdefault("quality_flags", [])
     quality_out.setdefault("critical_missing_fields", [])
+
+    provenance: dict[str, Any] = {
+        "extractor_version": "v3-registry",
+        "extractor_name": extractor_name,
+        "strategy": "registry-specialized",
+        "routing_version": "v1.5-scored-router",
+        "source_filename": original_filename,
+    }
+    if text_segmentation:
+        provenance["text_segmentation"] = text_segmentation
 
     return {
         "doc_type": doc_type,
@@ -1473,13 +1484,7 @@ def _build_contract_payload(
         "fields": fields,
         "tables": tables,
         "quality": quality_out,
-        "provenance": {
-            "extractor_version": "v3-registry",
-            "extractor_name": extractor_name,
-            "strategy": "registry-specialized",
-            "routing_version": "v1.5-scored-router",
-            "source_filename": original_filename,
-        },
+        "provenance": provenance,
     }
 
 
@@ -1490,11 +1495,20 @@ def build_structured_dataset(
     extraction_text: str | None = None,
 ) -> dict[str, Any]:
     """Build normalized structured dataset payload for downstream analytics/AI."""
-    source_text = extraction_text if extraction_text is not None else anonymized_text
+    from app.services.text_segment_selector import select_extraction_segment
+
+    full_text_for_routing = extraction_text if extraction_text is not None else anonymized_text
     detected_doc_type, routing_confidence, routing_reasons, routing_runner_up = classify_doc_type_scored(
-        source_text, original_filename
+        full_text_for_routing, original_filename
     )
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
+
+    source_text = full_text_for_routing
+    text_segmentation: dict[str, Any] = {}
+    if extraction_text is not None:
+        seg, text_segmentation = select_extraction_segment(extraction_text, doc_type)
+        if text_segmentation.get("strategy") == "semantic_window":
+            source_text = seg
 
     extractor = EXTRACTOR_REGISTRY_V1.get(doc_type)
     if extractor is not None:
@@ -1552,5 +1566,6 @@ def build_structured_dataset(
         quality=quality,
         original_filename=original_filename,
         extractor_name=extracted.extractor_name,
+        text_segmentation=text_segmentation,
     )
 

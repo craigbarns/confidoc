@@ -8,6 +8,8 @@ Resultat attendu a 90 jours:
 - V1 fiable sur `bilan`, `compte_resultat`, `fiscal_2072`
 - qualite mesurable et stable en production
 - runbook ops + regression automatique apres chaque deploiement
+- **Smart split (V1)** : sur PDF / textes longs (>= ~12k car.), fenêtre sémantique par type (`bilan`, `compte_resultat`, `fiscal_2072`) — métadonnées dans `provenance.text_segmentation`
+- **CI GitHub Actions** : `pytest` sur chaque push/PR (`main`, `develop`)
 
 ---
 
