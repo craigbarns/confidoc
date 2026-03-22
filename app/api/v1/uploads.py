@@ -60,7 +60,10 @@ async def upload_document(
     except Exception as exc:
         logger.warning("external_storage_failed", error=str(exc))
         storage_backend = "database"
-        storage_key = f"db://{hashlib.sha256(content).hexdigest()}"
+        # Clé unique par upload (aligné sur store_bytes database)
+        from uuid import uuid4
+
+        storage_key = f"db://{hashlib.sha256(content).hexdigest()}.{uuid4().hex}.{extension}"
 
     sha256 = hashlib.sha256(content).hexdigest()
 

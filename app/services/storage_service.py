@@ -45,10 +45,10 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
 
     if settings.STORAGE_BACKEND == "database":
         # Les octets sont persistés via Document.raw_content.
-        # storage_key sert uniquement de trace logique.
+        # storage_key doit être UNIQUE par ligne : ajouter un suffixe (même fichier ré-uploadé).
         from hashlib import sha256
 
-        db_key = f"db://{sha256(content).hexdigest()}.{extension}"
+        db_key = f"db://{sha256(content).hexdigest()}.{uuid4().hex}.{extension}"
         logger.info("file_stored_database_marker", key=db_key, size=len(content))
         return ("database", db_key)
 
