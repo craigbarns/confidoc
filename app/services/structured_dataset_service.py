@@ -1133,8 +1133,17 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     actif = fields.get("total_actif", {}).get("value")
     passif = fields.get("total_passif", {}).get("value")
     balance_ok = False
+    balance_gap: float | None = None
+    # Strict (audit) vs relaxed (OCR / plaquette synthèse): large docs tolerate more rounding noise.
+    tol_strict = 0.0
+    tol_relaxed = 0.0
     if isinstance(actif, (int, float)) and isinstance(passif, (int, float)):
-        balance_ok = abs(float(actif) - float(passif)) <= max(2.0, abs(float(actif)) * 0.02)
+        fa, fp = float(actif), float(passif)
+        balance_gap = abs(fa - fp)
+        ref = max(abs(fa), abs(fp), 1.0)
+        tol_strict = max(2.0, ref * 0.02)
+        tol_relaxed = max(10.0, ref * 0.04)
+        balance_ok = balance_gap <= tol_relaxed
 
     ready_for_ai = (
         base["coverage_ratio"] >= 0.75
@@ -1146,7 +1155,13 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     flags = list(base.get("quality_flags", []))
     if critical_missing:
         flags.append("critical_fields_missing")
-    if not balance_ok:
+    if isinstance(actif, (int, float)) and isinstance(passif, (int, float)) and balance_gap is not None:
+        if balance_gap > tol_relaxed:
+            flags.append("bilan_balance_mismatch")
+        elif balance_gap > tol_strict:
+            flags.append("bilan_balance_minor_gap")
+    elif "total_actif" not in critical_missing and "total_passif" not in critical_missing:
+        # Totaux renseignés mais non comparables numériquement → garder un signal explicite.
         flags.append("bilan_balance_mismatch")
 
     return {
@@ -1155,6 +1170,8 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "needs_review": needs_review,
         "ready_for_ai": ready_for_ai,
         "quality_flags": sorted(set(flags)),
+        "bilan_balance_gap": round(balance_gap, 2) if balance_gap is not None else None,
+        "bilan_balance_tolerance_used": round(tol_relaxed, 2) if tol_relaxed else None,
     }
 
 

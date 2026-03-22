@@ -652,6 +652,9 @@ async function refreshMaskedSummary(docId) {
       "siret_found": "SIRET potentiellement visible",
       "siren_found": "SIREN potentiellement visible",
       "uppercase_person_leftovers": "Nom/prénom potentiellement identifiable restant",
+      "bilan_balance_mismatch": "Bilan : écart actif/passif au-delà de la tolérance",
+      "bilan_balance_minor_gap": "Bilan : léger écart actif/passif (tolérance élargie)",
+      "critical_fields_missing": "Champs critiques manquants pour ce type de document",
     };
     const FLAG_ACTIONS = {
       "uppercase_person_leftovers": "Vérifier les zones en majuscules restantes puis confirmer/masquer.",
@@ -659,6 +662,9 @@ async function refreshMaskedSummary(docId) {
       "iban_found": "Vérifier les IBAN visibles puis relancer l'anonymisation.",
       "siret_found": "Vérifier les identifiants entreprise non masqués.",
       "siren_found": "Vérifier les identifiants entreprise non masqués.",
+      "bilan_balance_mismatch": "Contrôler les totaux actif/passif sur le document source ou relancer l'OCR.",
+      "bilan_balance_minor_gap": "Vérifier rapidement les arrondis / synthèse plaquette ; souvent acceptable.",
+      "critical_fields_missing": "Forcer le type de document ou vérifier la qualité du PDF.",
     };
     const rawFlags = Array.isArray(quality.quality_flags) ? quality.quality_flags : [];
     const reviewDetails = rawFlags.length
