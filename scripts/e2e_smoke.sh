@@ -199,6 +199,18 @@ if [[ -z "$DOCUMENT_ID" ]]; then
   exit 1
 fi
 echo "Document ID: $DOCUMENT_ID"
+if [[ -f "$UPLOAD_JSON" ]] && command -v python3 >/dev/null 2>&1; then
+  python3 -c "
+import json, sys
+try:
+    with open('$UPLOAD_JSON', 'r', encoding='utf-8') as f:
+        d = json.load(f)
+    p = d.get('processing') or {}
+    print('upload processing:', p.get('status', '?'), p.get('effective_type', ''), p.get('error', ''))
+except Exception as e:
+    print('upload processing: (parse error)', e)
+" 2>/dev/null || true
+fi
 
 echo "==> 3) Preview check / anonymize si necessaire"
 code="$(http_json "GET" "$BASE_URL/api/v1/documents/$DOCUMENT_ID/preview" "$PREVIEW_JSON" "$TOKEN")"

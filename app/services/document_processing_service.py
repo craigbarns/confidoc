@@ -237,11 +237,11 @@ async def build_anonymization_preview(
             EntityDetection(
                 document_id=document.id,
                 document_version_id=preview_version.id,
-                entity_type=item["entity_type"],
-                start_index=item["start_index"],
-                end_index=item["end_index"],
-                value_excerpt=item.get("value_excerpt", ""),
-                replacement=item["replacement"],
+                entity_type=str(item.get("entity_type", "unknown"))[:40],
+                start_index=int(item.get("start_index", 0)),
+                end_index=int(item.get("end_index", 0)),
+                value_excerpt=str(item.get("value_excerpt", ""))[:50_000],
+                replacement=str(item.get("replacement", "[REDACTED]"))[:10_000],
             )
         )
 

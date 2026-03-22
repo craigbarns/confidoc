@@ -72,3 +72,9 @@ def http_413(detail: str = "Fichier trop volumineux") -> HTTPException:
     return HTTPException(
         status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE, detail=detail
     )
+
+
+def http_500(detail: str = "Erreur interne") -> HTTPException:
+    return HTTPException(
+        status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=detail
+    )

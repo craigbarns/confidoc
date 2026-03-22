@@ -12,7 +12,7 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import delete, desc, func, select, update
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.exceptions import http_400, http_404
+from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
@@ -282,14 +282,25 @@ async def anonymize_document(
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     file_content = _read_file_or_404(document)
 
-    preview_text, detections, effective_type = await build_anonymization_preview(
-        db=db,
-        document=document,
-        file_content=file_content,
-        profile=profile,
-        document_type=document_type,
-    )
-    await db.commit()
+    try:
+        preview_text, detections, effective_type = await build_anonymization_preview(
+            db=db,
+            document=document,
+            file_content=file_content,
+            profile=profile,
+            document_type=document_type,
+        )
+        await db.commit()
+    except Exception as exc:
+        await db.rollback()
+        logger.exception(
+            "anonymize_build_failed",
+            doc_id=str(document.id),
+            error=str(exc),
+        )
+        raise http_500(
+            f"Anonymisation impossible: {str(exc)[:500]}"
+        ) from exc
 
     return AnonymizeResponse(
         document_id=document.id,
