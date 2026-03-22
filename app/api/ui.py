@@ -741,7 +741,7 @@ async function refreshMaskedSummary(docId) {
         <div class="extract-details-line">routing_confidence: <b>${shownRoutingConfidence != null ? shownRoutingConfidence : "unknown"}</b></div>
         <div class="extract-details-line">découpe texte (smart split): <b>${
           extractionDetails.text_segmentation
-            ? `${extractionDetails.text_segmentation.strategy} — ${extractionDetails.text_segmentation.segment_chars}/${extractionDetails.text_segmentation.full_chars} car. (score ${extractionDetails.text_segmentation.window_score ?? "—"})`
+            ? `${extractionDetails.text_segmentation.strategy} — ${extractionDetails.text_segmentation.segment_chars}/${extractionDetails.text_segmentation.full_chars} car. (score ${extractionDetails.text_segmentation.window_score ?? "—"})${extractionDetails.text_segmentation.fallback_to_full_text ? " → repli texte intégral (meilleure qualité)" : ""}`
             : "—"
         }</b></div>
       </div>`;

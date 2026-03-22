@@ -1437,6 +1437,45 @@ EXTRACTOR_REGISTRY_V1: dict[str, Any] = {
 }
 
 
+def _extraction_quality_better(q_new: dict[str, Any], q_old: dict[str, Any]) -> bool:
+    """True si la qualité q_new est strictement meilleure que q_old."""
+    cm_new = len(q_new.get("critical_missing_fields") or [])
+    cm_old = len(q_old.get("critical_missing_fields") or [])
+    if cm_new < cm_old:
+        return True
+    if cm_new > cm_old:
+        return False
+    cov_new = float(q_new.get("coverage_ratio") or 0.0)
+    cov_old = float(q_old.get("coverage_ratio") or 0.0)
+    return cov_new > cov_old
+
+
+def _run_extractor_pipeline(
+    doc_type: str,
+    source_text: str,
+    anonymized_text: str,
+) -> StructuredExtractionResult:
+    """Extraction structurée selon le type (registre, liasse, fallback)."""
+    extractor = EXTRACTOR_REGISTRY_V1.get(doc_type)
+    if extractor is not None:
+        return extractor(source_text, anonymized_text)
+    if doc_type == "liasse_is_simplifiee":
+        fields = _extract_liasse_is_simplifiee(source_text)
+        return StructuredExtractionResult(
+            fields=fields,
+            tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
+            quality=_quality(fields),
+            extractor_name="extractor_liasse_is_simplifiee",
+        )
+    fields = _extract_common_fields(source_text)
+    return StructuredExtractionResult(
+        fields=fields,
+        tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
+        quality=_quality(fields),
+        extractor_name="extractor_common_fallback",
+    )
+
+
 def _build_contract_payload(
     *,
     doc_type: str,
@@ -1510,25 +1549,23 @@ def build_structured_dataset(
         if text_segmentation.get("strategy") == "semantic_window":
             source_text = seg
 
-    extractor = EXTRACTOR_REGISTRY_V1.get(doc_type)
-    if extractor is not None:
-        extracted = extractor(source_text, anonymized_text)
-    elif doc_type == "liasse_is_simplifiee":
-        fields = _extract_liasse_is_simplifiee(source_text)
-        extracted = StructuredExtractionResult(
-            fields=fields,
-            tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
-            quality=_quality(fields),
-            extractor_name="extractor_liasse_is_simplifiee",
-        )
-    else:
-        fields = _extract_common_fields(source_text)
-        extracted = StructuredExtractionResult(
-            fields=fields,
-            tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
-            quality=_quality(fields),
-            extractor_name="extractor_common_fallback",
-        )
+    extracted = _run_extractor_pipeline(doc_type, source_text, anonymized_text)
+
+    # Si la fenêtre sémantique a rogné les tableaux utiles, le texte entier est souvent meilleur.
+    if (
+        text_segmentation.get("strategy") == "semantic_window"
+        and extraction_text is not None
+    ):
+        alt = _run_extractor_pipeline(doc_type, full_text_for_routing, anonymized_text)
+        if _extraction_quality_better(alt.quality, extracted.quality):
+            extracted = alt
+            text_segmentation = {
+                **text_segmentation,
+                "fallback_to_full_text": True,
+                "fallback_reason": "full_text_strictly_better_quality",
+            }
+        else:
+            text_segmentation = {**text_segmentation, "fallback_to_full_text": False}
 
     fields = extracted.fields
     tables = extracted.tables
