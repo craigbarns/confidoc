@@ -1,0 +1,55 @@
+{
+  "description": "Textes synthétiques + sous-ensemble de valeurs attendues pour tests de non-régression (build_structured_dataset). Les libellés creances/disponibilites sont en ASCII car l'extracteur bilan les lit ainsi.",
+  "cases": [
+    {
+      "id": "bilan_synthetic_a",
+      "doc_type": "bilan",
+      "source_filename": "synthetic_plaquette_bilan.pdf",
+      "text": "Dénomination : SCI EXEMPLE TEST\nExercice 2024\ndate de clôture 31/12/2024\nTotal actif 100 000\nTotal passif 100 000\nImmobilisations 90 000\ncreances 5 000\ndisponibilites 5 000\nDettes financières 70 000\nDettes fournisseurs 1 000\nCapitaux propres 29 000\nRésultat de l'exercice 29 000\n",
+      "expected_field_values": {
+        "societe": "SCI EXEMPLE TEST",
+        "exercice": "2024",
+        "date_cloture": "31/12/2024",
+        "total_actif": 100000.0,
+        "total_passif": 100000.0,
+        "immobilisations": 90000.0,
+        "creances": 5000.0,
+        "disponibilites": 5000.0,
+        "dettes_financieres": 70000.0,
+        "dettes_fournisseurs": 1000.0,
+        "capitaux_propres": 29000.0,
+        "resultat_exercice": 29000.0
+      }
+    },
+    {
+      "id": "compte_resultat_synthetic_a",
+      "doc_type": "compte_resultat",
+      "source_filename": "synthetic_plaquette_cr.pdf",
+      "text": "Dénomination : SCI EXEMPLE TEST\nExercice 2024\nChiffre d'affaires 50 000\nCharges externes 20 000\nRésultat d'exploitation 8 000\nRésultat courant 7 500\nRésultat net 7 000\n",
+      "expected_field_values": {
+        "societe": "SCI EXEMPLE TEST",
+        "exercice": "2024",
+        "chiffre_affaires": 50000.0,
+        "charges_externes": 20000.0,
+        "resultat_exploitation": 8000.0,
+        "resultat_courant": 7500.0,
+        "resultat_net": 7000.0
+      }
+    },
+    {
+      "id": "fiscal_2072_synthetic_a",
+      "doc_type": "fiscal_2072",
+      "source_filename": "synthetic_2072.pdf",
+      "text": "Dénomination de la société SCI TEST 2072\nDate de clôture de l'exercice 31/12/2024\nNombre d'associés 2\nRevenus bruts 120 000\nFrais et charges hors intérêts 30 000\nIntérêts d'emprunts 10 000\nRevenu net foncier 80 000\n",
+      "expected_field_values": {
+        "denomination_sci": "SOCIETE_1",
+        "date_cloture_exercice": "31/12/2024",
+        "nombre_associes": 2,
+        "revenus_bruts": 120000.0,
+        "frais_charges_hors_interets": 30000.0,
+        "interets_emprunts": 10000.0,
+        "revenu_net_foncier": 80000.0
+      }
+    }
+  ]
+}

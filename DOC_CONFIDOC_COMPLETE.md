@@ -355,6 +355,7 @@ Strategie:
 - `SECURITY_POLICY_ENGINE.md`
 - `scripts/e2e_smoke.sh`
 - `scripts/extractor_smoke_matrix.sh`
+- `golden/README.md` — jeux de référence + schéma ; `scripts/validate_golden_sets.py` (CI) ; `regression_fixtures.json` + `scripts/run_golden_regression.py`
 
 ---
 

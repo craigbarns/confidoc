@@ -652,6 +652,36 @@ async function refreshMaskedSummary(docId) {
       return "Revue manuelle ciblée recommandée.";
     }
 
+    const CRITICAL_FIELD_LABELS_FR = {
+      total_actif: "Total actif",
+      total_passif: "Total passif",
+      capitaux_propres: "Capitaux propres",
+      resultat_exercice: "Résultat de l'exercice",
+      immobilisations: "Immobilisations",
+      creances: "Créances",
+      disponibilites: "Disponibilités",
+      dettes_financieres: "Dettes financières",
+      dettes_fournisseurs: "Dettes fournisseurs",
+      chiffre_affaires: "Chiffre d'affaires",
+      charges_externes: "Charges externes",
+      resultat_exploitation: "Résultat d'exploitation",
+      resultat_courant: "Résultat courant",
+      resultat_net: "Résultat net",
+      denomination_sci: "Dénomination SCI",
+      date_cloture_exercice: "Date de clôture (exercice)",
+      nombre_associes: "Nombre d'associés",
+      revenus_bruts: "Revenus bruts",
+      frais_charges_hors_interets: "Frais et charges hors intérêts",
+      interets_emprunts: "Intérêts d'emprunts",
+      revenu_net_foncier: "Revenu net foncier",
+      societe: "Raison sociale",
+      exercice: "Exercice",
+      date_cloture: "Date de clôture",
+    };
+    function labelCriticalField(k) {
+      return CRITICAL_FIELD_LABELS_FR[k] || String(k).replace(/_/g, " ");
+    }
+
     const FLAG_LABELS = {
       "emails_found": "Email potentiellement visible",
       "iban_found": "IBAN potentiellement visible",
@@ -681,7 +711,7 @@ async function refreshMaskedSummary(docId) {
       ? rawFlags.map(f => `- ${FLAG_LABELS[f] || f}`).join("\\n")
       : "- Aucun point de revue détecté";
     const criticalDetails = criticalMissing.length
-      ? criticalMissing.map(f => `- ${f}`).join("\\n")
+      ? criticalMissing.map(f => `- ${labelCriticalField(f)} (${f})`).join("\\n")
       : "- Aucun champ critique manquant";
     const recommendedAction = rawFlags.length
       ? (FLAG_ACTIONS[rawFlags[0]] || "Analyser les points listés puis relancer l'extraction.")

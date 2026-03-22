@@ -19,5 +19,7 @@ jobs:
         run: |
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
+      - name: Validate golden sets JSON
+        run: python scripts/validate_golden_sets.py golden/golden_sets.minimal.json
       - name: Pytest
         run: python -m pytest tests/ -q --tb=short

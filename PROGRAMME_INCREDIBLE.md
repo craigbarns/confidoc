@@ -12,6 +12,8 @@ Vision : **confiance mesurable**, **clarté pour le métier**, **opérations ser
 - [x] Couche **`experience`** : niveau, phrase clé FR, items détaillés, note découpe
 - [x] **`experience.traceability`** : écarts / tolérances bilan & chaîne CR (nombres)
 - [x] Jeux **golden synthétiques** (`tests/golden/`) — régression sans PDF
+- [x] Dossier **`golden/`** : schéma JSON (`golden_schema.json`), exemple `golden_sets.minimal.json`, `python scripts/validate_golden_sets.py` + CI
+- [x] **`golden/regression_fixtures.json`** + `app/golden/compare.py` + tests non-régression sur **valeurs** extraites ; `scripts/run_golden_regression.py`
 - [ ] Dashboard interne KPI (hors scope backend seul)
 
 ### 2. Clarté (UX & API)

@@ -1,0 +1,76 @@
+{
+  "golden_sets": [
+    {
+      "doc_type": "bilan",
+      "source_filename": "synthetic_plaquette_bilan.pdf",
+      "golden_reference": {
+        "fields": {
+          "societe": { "value": "SCI EXEMPLE TEST" },
+          "exercice": { "value": 2024 },
+          "date_cloture": { "value": "31/12/2024" },
+          "total_actif": { "value": 100000.0 },
+          "total_passif": { "value": 100000.0 },
+          "immobilisations": { "value": 90000.0 },
+          "creances": { "value": 5000.0 },
+          "disponibilites": { "value": 5000.0 },
+          "dettes_financieres": { "value": 70000.0 },
+          "dettes_fournisseurs": { "value": 1000.0 },
+          "capitaux_propres": { "value": 29000.0 },
+          "resultat_exercice": { "value": 29000.0 }
+        },
+        "metadata": {
+          "generated_by": "synthetic_minimal",
+          "review_required": false,
+          "quality_flags": []
+        }
+      },
+      "expected_api_subset": {
+        "fields": {
+          "societe": { "value": "SCI EXEMPLE TEST", "confidence": 0.95, "source": "golden:compare_value_only" },
+          "exercice": { "value": 2024, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "date_cloture": { "value": "31/12/2024", "confidence": 0.95, "source": "golden:compare_value_only" },
+          "total_actif": { "value": 100000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "total_passif": { "value": 100000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "immobilisations": { "value": 90000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "creances": { "value": 5000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "disponibilites": { "value": 5000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "dettes_financieres": { "value": 70000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "dettes_fournisseurs": { "value": 1000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "capitaux_propres": { "value": 29000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "resultat_exercice": { "value": 29000.0, "confidence": 0.95, "source": "golden:compare_value_only" }
+        }
+      }
+    },
+    {
+      "doc_type": "compte_resultat",
+      "source_filename": "synthetic_plaquette_cr.pdf",
+      "golden_reference": {
+        "fields": {
+          "societe": { "value": "SCI EXEMPLE TEST" },
+          "exercice": { "value": 2024 },
+          "chiffre_affaires": { "value": 50000.0 },
+          "charges_externes": { "value": 20000.0 },
+          "resultat_exploitation": { "value": 8000.0 },
+          "resultat_courant": { "value": 7500.0 },
+          "resultat_net": { "value": 7000.0 }
+        },
+        "metadata": {
+          "generated_by": "synthetic_minimal",
+          "review_required": false,
+          "quality_flags": []
+        }
+      },
+      "expected_api_subset": {
+        "fields": {
+          "societe": { "value": "SCI EXEMPLE TEST", "confidence": 0.95, "source": "golden:compare_value_only" },
+          "exercice": { "value": 2024, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "chiffre_affaires": { "value": 50000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "charges_externes": { "value": 20000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "resultat_exploitation": { "value": 8000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "resultat_courant": { "value": 7500.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "resultat_net": { "value": 7000.0, "confidence": 0.95, "source": "golden:compare_value_only" }
+        }
+      }
+    }
+  ]
+}

@@ -5,6 +5,8 @@
 - Python 3.11+
 - Docker Desktop (ou moteur Docker compatible)
 
+**macOS + Python Homebrew** : si `pip install` affiche *externally-managed-environment* (PEP 668), c’est attendu : **utilise obligatoirement le venv** ci-dessous (ne pas `pip install` sur le Python système).
+
 ## 1) Creer un environnement virtuel
 
 ```bash
