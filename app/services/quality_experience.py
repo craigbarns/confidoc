@@ -47,6 +47,26 @@ def _segmentation_note_fr(provenance: dict[str, Any]) -> str | None:
     return "Document long : extraction focalisée sur une fenêtre thématique."
 
 
+# Champs numériques / seuils exposés par _quality_bilan / _quality_compte_resultat (traçabilité).
+_QUALITY_TRACE_KEYS: tuple[str, ...] = (
+    "bilan_balance_gap",
+    "bilan_balance_tolerance_used",
+    "cr_chain_delta_rex_rc",
+    "cr_chain_delta_rc_rn",
+    "cr_chain_tol_relaxed_rex_rc",
+    "cr_chain_tol_relaxed_rc_rn",
+)
+
+
+def _traceability_from_quality(quality: dict[str, Any]) -> dict[str, Any]:
+    out: dict[str, Any] = {}
+    for k in _QUALITY_TRACE_KEYS:
+        v = quality.get(k)
+        if v is not None:
+            out[k] = v
+    return out
+
+
 def build_quality_experience(
     *,
     doc_type: str,
@@ -102,6 +122,7 @@ def build_quality_experience(
         "headline_fr": headline,
         "items": items,
         "segmentation_note_fr": seg_note,
+        "traceability": _traceability_from_quality(quality),
         "metrics": {
             "doc_type": doc_type,
             "coverage_ratio": coverage,

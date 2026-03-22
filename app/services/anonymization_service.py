@@ -234,10 +234,17 @@ def extract_text_from_file(content: bytes, extension: str) -> str:
         # 2. Fallback d'extraction de texte native (si markdown a échoué)
         if not ext_text or not str(ext_text).strip():
             try:
+                from app.config import get_settings
+
+                page_markers = bool(get_settings().PDF_PAGE_MARKERS)
                 text_chunks = []
                 with fitz.open(stream=content, filetype="pdf") as doc:
-                    for page in doc:
-                        text_chunks.append(page.get_text("text"))
+                    for i, page in enumerate(doc):
+                        raw = page.get_text("text")
+                        if page_markers:
+                            text_chunks.append(f"---PAGE {i + 1}---\n{raw}")
+                        else:
+                            text_chunks.append(raw)
                 ext_text = "\n".join(text_chunks)
             except Exception as e:
                 logger.warning("native_pdf_text_extraction_failed", error=str(e))
@@ -245,11 +252,33 @@ def extract_text_from_file(content: bytes, extension: str) -> str:
 
         ext_text = str(ext_text).strip()
 
+        # Sortie markdown (pymupdf4llm) : pas de ---PAGE--- dans le corps → préfixe nombre de pages.
+        if ext_text and "---PAGE " not in ext_text[:4000]:
+            try:
+                from app.config import get_settings
+
+                if bool(get_settings().PDF_PAGE_MARKERS):
+                    with fitz.open(stream=content, filetype="pdf") as doc:
+                        npages = len(doc)
+                    if npages > 0:
+                        ext_text = f"---PDF {npages} PAGES---\n\n" + ext_text
+            except Exception:
+                pass
+
         # If text is very short (< 10 words) or empty, maybe it's a scan — try OCR fallback
         if len(ext_text.split()) < 10 and HAS_OCR:
             try:
+                from app.config import get_settings
+
+                page_markers = bool(get_settings().PDF_PAGE_MARKERS)
                 images = convert_from_bytes(content)
-                ocr_chunks = [pytesseract.image_to_string(img, lang="fra") for img in images]
+                ocr_chunks = []
+                for i, img in enumerate(images):
+                    chunk = pytesseract.image_to_string(img, lang="fra")
+                    if page_markers:
+                        ocr_chunks.append(f"---PAGE {i + 1}---\n{chunk}")
+                    else:
+                        ocr_chunks.append(chunk)
                 logger.info("document_extraction", method="ocr_tesseract_pdf", extension="pdf")
                 return "\n".join(ocr_chunks).strip()
             except Exception:

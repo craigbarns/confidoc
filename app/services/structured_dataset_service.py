@@ -1600,6 +1600,13 @@ def build_structured_dataset(
     if isinstance(critical_missing, list) and critical_missing:
         routing_confidence = min(routing_confidence, 0.85)
 
+    if extraction_text is not None:
+        from app.services.text_segment_selector import count_pdf_page_markers
+
+        n_mark = count_pdf_page_markers(extraction_text)
+        if n_mark:
+            text_segmentation = {**text_segmentation, "pdf_page_markers_in_source": n_mark}
+
     return _build_contract_payload(
         doc_type=doc_type,
         detected_doc_type=detected_doc_type,

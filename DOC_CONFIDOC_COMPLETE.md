@@ -154,10 +154,11 @@ Uploads:
 Documents (`/api/v1/documents/{id}`):
 - `POST /anonymize`
 - `GET /preview`
-- `POST /validate`
+- `POST /validate` (webhook optionnel `WEBHOOK_ON_VALIDATE_URL` après succès)
 - `GET /export-dataset`
 - `GET /export-structured-dataset?doc_type=...`
 - `GET /audit-export`
+- `GET /audit-quality-bundle?doc_type=...` (hash + `experience` + `quality`, sans texte brut)
 - `GET /proof`
 - `GET /dataset-summary`
 - `DELETE /`

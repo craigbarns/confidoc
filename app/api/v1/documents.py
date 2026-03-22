@@ -7,7 +7,7 @@ from io import BytesIO
 
 from typing import Literal
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, BackgroundTasks, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import delete, desc, func, select, update
 
@@ -31,7 +31,9 @@ from app.services.anonymization_service import (
     classify_document_type,
     extract_text_from_file,
 )
+from app.config import get_settings
 from app.services.structured_dataset_service import build_structured_dataset
+from app.services.webhook_notify import notify_document_validated
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import delete_bytes, read_bytes
 
@@ -355,7 +357,10 @@ async def original_text_document(
     summary="Valider la preview et figer la version finale",
 )
 async def validate_document(
-    document_id: str, current_user: CurrentUser, db: DbSession
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
@@ -396,6 +401,17 @@ async def validate_document(
     await db.commit()
 
     logger.info("document_validated", doc_id=str(document.id))
+
+    settings = get_settings()
+    wh_url = (settings.WEBHOOK_ON_VALIDATE_URL or "").strip()
+    if wh_url:
+        background_tasks.add_task(
+            notify_document_validated,
+            document_id=str(document.id),
+            url=wh_url,
+            secret=settings.WEBHOOK_ON_VALIDATE_SECRET or "",
+        )
+
     return {"status": "validated", "document_id": str(document.id)}
 
 
@@ -939,6 +955,55 @@ async def document_audit_export(
             },
             "detections_entity_types_count": entity_types_count,
             "llm_requests": list(llm_requests.values()),
+        }
+    )
+
+
+@router.get(
+    "/{document_id}/audit-quality-bundle",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Bundle audit qualité (hash + experience + qualité, sans texte brut)",
+)
+async def document_audit_quality_bundle(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(
+        default="auto",
+        description="auto | bilan | compte_resultat | fiscal_2072 | fiscal_2044 | releve_bancaire | facture",
+    ),
+) -> JSONResponse:
+    """Export JSON pour archivage cabinet : preuve + synthèse qualité (pas de PDF)."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_original_text(db, document)
+    if not original_text:
+        raise http_404("Texte original introuvable. Ré-uploadez le document.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    dataset_text, _detections = anonymize_text(
+        original_text, profile="dataset_accounting", document_type=effective_type
+    )
+    structured = build_structured_dataset(
+        anonymized_text=dataset_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+    prov = structured.get("provenance") if isinstance(structured.get("provenance"), dict) else {}
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "document_sha256": document.sha256,
+            "original_filename": document.original_filename,
+            "generated_at": structured.get("generated_at"),
+            "doc_type": structured.get("doc_type"),
+            "detected_doc_type": structured.get("detected_doc_type"),
+            "routing_confidence": structured.get("routing_confidence"),
+            "experience": structured.get("experience"),
+            "quality": structured.get("quality"),
+            "provenance": prov,
+            "has_raw_text_in_bundle": False,
         }
     )
 

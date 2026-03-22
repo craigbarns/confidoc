@@ -9,6 +9,8 @@ from __future__ import annotations
 import re
 from typing import Any
 
+_PAGE_LINE_RE = re.compile(r"^---PAGE (\d+)---\s*$", re.MULTILINE)
+
 # Au-dessous de ce seuil, le document entier est utilisé (pas de découpe).
 MIN_CHARS_FOR_SEMANTIC_WINDOW: int = 12_000
 
@@ -155,3 +157,8 @@ def select_extraction_segment(full_text: str, doc_type: str) -> tuple[str, dict[
         }
     )
     return segment, meta
+
+
+def count_pdf_page_markers(text: str) -> int:
+    """Nombre de marqueurs ---PAGE N--- dans le texte extrait (PDF natif / OCR)."""
+    return len(_PAGE_LINE_RE.findall(text or ""))

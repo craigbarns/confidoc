@@ -73,6 +73,14 @@ class Settings(BaseSettings):
         "tiff",
     ]
 
+    # PDF extraction (PyMuPDF / OCR)
+    # Insère des marqueurs ---PAGE N--- entre les pages (extraction native et OCR).
+    PDF_PAGE_MARKERS: bool = True
+
+    # Webhook optionnel après validation humaine (POST JSON {event, document_id}).
+    WEBHOOK_ON_VALIDATE_URL: str = ""
+    WEBHOOK_ON_VALIDATE_SECRET: str = ""
+
     # ---- LLM Assistive (V2) ----
     # Vise uniquement les suggestions de spans (pas d'automatisation définitive).
     # Note: le nom "LLM" est conservé par compatibilité, mais on peut provider NER aussi.

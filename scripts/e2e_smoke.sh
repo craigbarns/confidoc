@@ -291,6 +291,20 @@ if [[ -z "${EXTRACTOR_SELECTED:-}" ]]; then
   EXTRACTOR_SELECTED="extractor_unknown_fallback"
 fi
 
+# Seuils optionnels de couverture (ex. CONFIDOC_SMOKE_MIN_COVERAGE_BILAN=0.5)
+case "$DOC_TYPE" in
+  bilan) MIN_COV="${CONFIDOC_SMOKE_MIN_COVERAGE_BILAN:-}" ;;
+  compte_resultat) MIN_COV="${CONFIDOC_SMOKE_MIN_COVERAGE_CR:-}" ;;
+  fiscal_2072) MIN_COV="${CONFIDOC_SMOKE_MIN_COVERAGE_2072:-}" ;;
+  *) MIN_COV="" ;;
+esac
+if [[ -n "$MIN_COV" && -n "$COVERAGE_RATIO" && "$COVERAGE_RATIO" != "unknown" ]]; then
+  if ! python3 -c "import sys; cov=float('$COVERAGE_RATIO'); m=float('$MIN_COV'); sys.exit(0 if cov>=m else 1)"; then
+    echo "Echec: coverage_ratio $COVERAGE_RATIO < seuil $MIN_COV (doc_type=$DOC_TYPE)" >&2
+    exit 1
+  fi
+fi
+
 if [[ "$COMPACT_MODE" == "1" ]]; then
   echo ""
   echo "PASS"

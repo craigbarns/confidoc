@@ -10,30 +10,45 @@ Vision : **confiance mesurable**, **clarté pour le métier**, **opérations ser
 - [x] Garde-fous P1/P2 (bilan, compte de résultat) avec tolérances et `minor_gap`
 - [x] Smart split + **repli texte intégral** si meilleure qualité
 - [x] Couche **`experience`** : niveau, phrase clé FR, items détaillés, note découpe
-- [ ] Seuils d’alerte produit (dashboard interne / métriques)
-- [ ] Jeux de référence PDF anonymisés (golden) par type
+- [x] **`experience.traceability`** : écarts / tolérances bilan & chaîne CR (nombres)
+- [x] Jeux **golden synthétiques** (`tests/golden/`) — régression sans PDF
+- [ ] Dashboard interne KPI (hors scope backend seul)
 
 ### 2. Clarté (UX & API)
 - [x] `export-structured-dataset` inclut `experience`
 - [x] `dataset-summary` expose `experience` pour l’UI
 - [x] UI : synthèse « expérience » dans la carte qualité
-- [ ] Export PDF rapport d’audit (hash + résumé qualité)
-- [ ] Comparaison deux versions / deux exercices
+- [x] **`GET /audit-quality-bundle`** : JSON archivage (hash document + qualité + experience, sans texte brut)
+- [ ] Export **PDF** rapport (nécessite lib dédiée — à planifier)
+- [ ] Comparaison **deux documents** côté API (à planifier)
 
 ### 3. Fiabilité pipeline
 - [x] CI GitHub Actions (pytest + deps dev complètes)
 - [x] Scripts smoke / post-déploiement
-- [ ] Seuils optionnels dans smoke (coverage min par type)
-- [ ] Webhooks « document prêt / à revoir »
+- [x] **Seuils optionnels** smoke : `CONFIDOC_SMOKE_MIN_COVERAGE_BILAN`, `_CR`, `_2072`
+- [x] **Webhook** post-validation : `WEBHOOK_ON_VALIDATE_URL` (+ secret HMAC optionnel)
 
 ### 4. PDF & contenu long
 - [x] Fenêtre sémantique V1 (mots-clés)
-- [ ] Marqueurs de page dans l’extraction (quand PyMuPDF disponible) pour ciblage fin
-- [ ] Routeur multi-sections (bilan + CR dans un même upload)
+- [x] **Marqueurs de page** `---PAGE N---` (extraction native + OCR) ; préfixe `---PDF N PAGES---` pour sortie markdown
+- [x] Compteur **`pdf_page_markers_in_source`** dans `provenance.text_segmentation`
+- [ ] Routeur **multi-sections** dédié (évolution)
 
 ### 5. Différenciation
-- [ ] Traçabilité décisionnelle (pourquoi ce flag, quelle tolérance)
-- [ ] SLA / preuve pour cabinets (exports signés, journaux)
+- [x] Traçabilité **numérique** (écarts, tolérances) dans `experience.traceability`
+- [x] **Preuve** : `audit-export` + `audit-quality-bundle` + SHA256 document
+- [ ] SLA contractuel / page statut (produit)
+
+---
+
+## Variables d’environnement (extraits)
+
+| Variable | Rôle |
+|----------|------|
+| `PDF_PAGE_MARKERS` | `true`/`false` — marqueurs de page dans le texte extrait |
+| `WEBHOOK_ON_VALIDATE_URL` | URL POST `{event, document_id}` après validation |
+| `WEBHOOK_ON_VALIDATE_SECRET` | Secret HMAC-SHA256 (`X-ConfiDoc-Signature: sha256=...`) |
+| `CONFIDOC_SMOKE_MIN_COVERAGE_BILAN` | Seuil optionnel pour `e2e_smoke` (idem `_CR`, `_2072`) |
 
 ---
 
@@ -47,11 +62,5 @@ Vision : **confiance mesurable**, **clarté pour le métier**, **opérations ser
 | Temps moyen jusqu’à validation humaine | ↓ |
 
 ---
-
-## Prochaine vague (priorisée)
-
-1. **Golden set** : 3–5 PDF anonymisés + assertions sur `experience.level` / flags
-2. **Marqueurs de page** dans `extract_text_from_file` (optionnel, feature flag)
-3. **Rapport PDF** one-click pour dossiers clients
 
 *Document vivant — à ajuster avec les retours terrain.*

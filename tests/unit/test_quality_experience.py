@@ -37,6 +37,24 @@ def test_experience_block_when_critical() -> None:
     assert "champ" in exp["headline_fr"].lower()
 
 
+def test_traceability_bilan_numbers() -> None:
+    exp = build_quality_experience(
+        doc_type="bilan",
+        quality={
+            "needs_review": True,
+            "ready_for_ai": False,
+            "quality_flags": ["bilan_balance_mismatch"],
+            "critical_missing_fields": [],
+            "coverage_ratio": 0.8,
+            "bilan_balance_gap": 1234.5,
+            "bilan_balance_tolerance_used": 10000.0,
+        },
+        provenance={},
+    )
+    tr = exp.get("traceability") or {}
+    assert tr.get("bilan_balance_gap") == 1234.5
+
+
 def test_segmentation_note_fallback() -> None:
     exp = build_quality_experience(
         doc_type="bilan",

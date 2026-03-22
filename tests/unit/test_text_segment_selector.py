@@ -2,8 +2,18 @@
 
 from __future__ import annotations
 
-from app.services.text_segment_selector import MIN_CHARS_FOR_SEMANTIC_WINDOW, select_extraction_segment
+from app.services.text_segment_selector import (
+    MIN_CHARS_FOR_SEMANTIC_WINDOW,
+    count_pdf_page_markers,
+    select_extraction_segment,
+)
 from app.services.structured_dataset_service import build_structured_dataset
+
+
+def test_count_pdf_page_markers() -> None:
+    txt = "---PAGE 1---\nfoo\n---PAGE 2---\nbar"
+    assert count_pdf_page_markers(txt) == 2
+    assert count_pdf_page_markers("no markers") == 0
 
 
 def test_short_text_uses_full_document() -> None:
