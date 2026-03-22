@@ -115,6 +115,10 @@ async def _upload_document_body(
     membership = membership_res.scalar_one_or_none()
     org_id = membership.org_id if membership else None
 
+    # Capturer avant tout commit : après commit, User peut être expiré (expire_on_commit)
+    # et accéder à current_user.id déclenche un lazy-load → MissingGreenlet en async.
+    uploaded_by_snapshot = str(current_user.id)
+
     document = Document(
         org_id=org_id,
         uploaded_by_user_id=current_user.id,
@@ -157,6 +161,8 @@ async def _upload_document_body(
                 document_type=document_type,
             )
             await db.commit()
+            # Après commit, Document peut être expiré : recharger avant lecture des attributs.
+            await db.refresh(document)
             excerpt = (preview_text if isinstance(preview_text, str) else "")[:300]
             processing.update({
                 "status": "ready",
@@ -181,7 +187,7 @@ async def _upload_document_body(
         "original_filename": filename,
         "content_type": file.content_type,
         "size_bytes": len(content),
-        "uploaded_by": str(current_user.id),
+        "uploaded_by": uploaded_by_snapshot,
         "processing": processing,
     }
 
