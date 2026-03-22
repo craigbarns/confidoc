@@ -252,6 +252,43 @@ def _sum_accounting_lines_single_prefix(
     return total, f"fallback:accounting_prefix_{prefix}_sum"
 
 
+def _sum_fr_capital_account_lines(text: str) -> tuple[float | None, str]:
+    """Sum typical PCG classe-1 capital / réserves lines when present as coded rows."""
+    records = _extract_generic_accounting_table(text)
+    prefixes = (
+        "101",
+        "102",
+        "104",
+        "105",
+        "106",
+        "107",
+        "108",
+        "109",
+        "110",
+        "111",
+        "112",
+        "118",
+        "119",
+    )
+    vals: list[float] = []
+    for r in records:
+        c = str(r.get("code", ""))
+        if not c or len(c) < 3:
+            continue
+        if not any(c.startswith(p) for p in prefixes):
+            continue
+        amt = r.get("amount")
+        if not isinstance(amt, (int, float)):
+            continue
+        vals.append(float(amt))
+    if len(vals) < 2:
+        return None, "missing"
+    total = sum(vals)
+    if abs(total) < 100.0:
+        return None, "missing"
+    return total, "fallback:pcg_capital_lines_sum"
+
+
 def _extract_first_date_from_patterns(text: str, patterns: list[str]) -> str | None:
     for pat in patterns:
         v = _extract_first(pat, text)
@@ -469,6 +506,44 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             r"capitaux.{0,12}propres|fonds.{0,12}propres|ressources.{0,12}propres",
             min_amount=100.0,
         )
+    if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _extract_first_amount_with_source(
+            text,
+            [
+                ("label:situation_nette", r"situation\s+nette"),
+                ("label:net_comptable", r"net\s+comptable"),
+                ("label:total_fonds_propres", r"total.{0,18}fonds?\s+propres"),
+                ("label:capitaux_detenus", r"capitaux?\s+d[ée]tenus"),
+            ],
+            min_amount=100.0,
+        )
+    if capitaux_propres is None:
+        for src_hint, pat in [
+            ("label_wide:situation_nette", r"situation\s+nette"),
+            ("label_wide:net_comptable", r"net\s+comptable"),
+        ]:
+            w = _extract_financial_amount_for_label_wide(text, pat, max_gap=160, min_amount=100.0)
+            if w is not None:
+                capitaux_propres, capitaux_propres_src = w, src_hint
+                break
+
+    dettes_fin_val = _extract_financial_amount_for_label(text, r"dettes?\s+financi", min_amount=50.0)
+    dettes_four_val = _extract_financial_amount_for_label(text, r"dettes?\s+fournisseurs?", min_amount=50.0)
+    # Conservative: small plaquettes sometimes list only equity + two debt lines under passif.
+    if capitaux_propres is None and isinstance(total_passif, (int, float)):
+        if dettes_fin_val is not None and dettes_four_val is not None:
+            cand = float(total_passif) - float(dettes_fin_val) - float(dettes_four_val)
+            s = float(dettes_fin_val) + float(dettes_four_val) + cand
+            if (
+                cand >= 100.0
+                and abs(s - float(total_passif)) <= max(500.0, abs(float(total_passif)) * 0.04)
+            ):
+                capitaux_propres = cand
+                capitaux_propres_src = "fallback:passif_minus_dettes_fin_et_fournisseurs"
+
+    if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _sum_fr_capital_account_lines(text)
+
     resultat_exercice, resultat_exercice_src = _extract_first_amount_with_source(
         text,
         [
