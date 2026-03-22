@@ -19,11 +19,13 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
 from app.models.llm_suggestion import LlmSuggestion
+from app.models.human_feedback import HumanFeedback
 from app.schemas.document import (
     AnonymizeResponse,
     DetectionResponse,
     DocumentPreviewResponse,
     DocumentResponse,
+    ValidateDocumentRequest,
 )
 from app.services.document_processing_service import build_anonymization_preview
 from app.services.anonymization_service import (
@@ -376,10 +378,11 @@ async def original_text_document(
 @router.post(
     "/{document_id}/validate",
     status_code=status.HTTP_200_OK,
-    summary="Valider la preview et figer la version finale",
+    summary="Valider la preview et figer la version finale (avec capture de feedbacks)",
 )
 async def validate_document(
     document_id: str,
+    args: ValidateDocumentRequest,
     current_user: CurrentUser,
     db: DbSession,
     background_tasks: BackgroundTasks,
@@ -396,6 +399,8 @@ async def validate_document(
     if not preview_version:
         raise http_404("Aucune preview disponible")
 
+    final_text_content = args.final_text if args.final_text is not None else preview_version.content_text
+
     # Remove old final version
     await db.execute(
         delete(DocumentVersion).where(
@@ -407,9 +412,38 @@ async def validate_document(
         DocumentVersion(
             document_id=document.id,
             version_type=DocumentVersionType.FINAL_ANONYMIZED,
-            content_text=preview_version.content_text,
+            content_text=final_text_content,
         )
     )
+
+    # Enregistrer les corrections humaines
+    feedback_count = 0
+    if args.feedbacks:
+        for f_item in args.feedbacks:
+            hf = HumanFeedback(
+                document_id=document.id,
+                user_id=current_user.id,
+                org_id_placeholder=None, # if we had memberships, they would be added here
+                doc_type=args.doc_type,
+                profile_used=args.profile_used,
+                feedback_type=f_item.feedback_type,
+                entity_type=f_item.entity_type,
+                original_value_hash=f_item.original_value_hash,
+                corrected_value_hash=f_item.corrected_value_hash,
+                original_label=f_item.original_label,
+                corrected_label=f_item.corrected_label,
+                action_taken=f_item.action_taken,
+                source_page=f_item.source_page,
+                source_span_start=f_item.source_span_start,
+                source_span_end=f_item.source_span_end,
+                review_comment=f_item.review_comment,
+            )
+            # Remove the placeholder prop above, simply rely on mapped_columns
+            hf.organization_id = None
+            delattr(hf, 'org_id_placeholder')
+
+            db.add(hf)
+            feedback_count += 1
 
     # Mark LLM suggestions as accepted
     await db.execute(
@@ -422,7 +456,7 @@ async def validate_document(
     )
     await db.commit()
 
-    logger.info("document_validated", doc_id=str(document.id))
+    logger.info("document_validated", doc_id=str(document.id), human_feedbacks_saved=feedback_count)
 
     settings = get_settings()
     wh_url = (settings.WEBHOOK_ON_VALIDATE_URL or "").strip()
@@ -434,7 +468,11 @@ async def validate_document(
             secret=settings.WEBHOOK_ON_VALIDATE_SECRET or "",
         )
 
-    return {"status": "validated", "document_id": str(document.id)}
+    return {
+        "status": "validated",
+        "document_id": str(document.id),
+        "human_feedbacks_saved": feedback_count
+    }
 
 
 @router.get(

@@ -13,6 +13,7 @@ from app.models.llm_request import LlmRequest
 from app.models.llm_suggestion import LlmSuggestion
 from app.models.kb_accounting_record import KbAccountingRecord
 from app.models.kb_text_chunk import KbTextChunk
+from app.models.human_feedback import HumanFeedback
 
 __all__ = [
     "Base", "BaseModel", "TenantModel", "TimestampMixin",
@@ -25,4 +26,5 @@ __all__ = [
     "LlmSuggestion",
     "KbAccountingRecord",
     "KbTextChunk",
+    "HumanFeedback",
 ]
