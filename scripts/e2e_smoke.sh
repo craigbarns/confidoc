@@ -109,6 +109,14 @@ require_env CONFIDOC_PASSWORD
 BASE_URL="${CONFIDOC_BASE_URL%/}"
 PROFILE="${CONFIDOC_PROFILE:-dataset_accounting_pseudo}"
 DOC_TYPE="${CONFIDOC_DOC_TYPE:-auto}"
+# POST /validate exige un JSON { doc_type, profile_used } (valeurs par défaut côté API aussi)
+if [[ -n "${CONFIDOC_VALIDATE_DOC_TYPE:-}" ]]; then
+  VALIDATE_DOC_TYPE="$CONFIDOC_VALIDATE_DOC_TYPE"
+elif [[ "$DOC_TYPE" == "auto" ]]; then
+  VALIDATE_DOC_TYPE="generic"
+else
+  VALIDATE_DOC_TYPE="$DOC_TYPE"
+fi
 TIMEOUT_SECONDS="${CONFIDOC_POLL_TIMEOUT_SECONDS:-90}"
 POLL_INTERVAL_SECONDS="${CONFIDOC_POLL_INTERVAL_SECONDS:-3}"
 COMPACT_MODE="${CONFIDOC_COMPACT:-0}"
@@ -123,6 +131,7 @@ UPLOAD_JSON="$TMP_DIR/upload.json"
 ANON_JSON="$TMP_DIR/anonymize.json"
 PREVIEW_JSON="$TMP_DIR/preview.json"
 VALIDATE_JSON="$TMP_DIR/validate.json"
+VALIDATE_PAYLOAD="$TMP_DIR/validate_payload.json"
 AUDIT_JSON="$TMP_DIR/audit.json"
 STRUCTURED_JSON="$TMP_DIR/structured.json"
 SUMMARY_JSON="$TMP_DIR/dataset_summary.json"
@@ -271,7 +280,9 @@ PREVIEW_DETECTIONS="$(json_get "$PREVIEW_JSON" "detections_count")"
 echo "detections_count: ${PREVIEW_DETECTIONS:-n/a}"
 
 echo "==> 6) Validate (feedback humain)"
-code="$(http_json "POST" "$BASE_URL/api/v1/documents/$DOCUMENT_ID/validate" "$VALIDATE_JSON" "$TOKEN")"
+python3 -c 'import json,sys; print(json.dumps({"doc_type":sys.argv[1],"profile_used":sys.argv[2],"feedbacks":[]},ensure_ascii=False))' \
+  "$VALIDATE_DOC_TYPE" "$PROFILE" > "$VALIDATE_PAYLOAD"
+code="$(http_json "POST" "$BASE_URL/api/v1/documents/$DOCUMENT_ID/validate" "$VALIDATE_JSON" "$TOKEN" "$VALIDATE_PAYLOAD")"
 if [[ "$code" != "200" ]]; then
   echo "Echec validate (HTTP $code)"
   cat "$VALIDATE_JSON"

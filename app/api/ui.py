@@ -1209,7 +1209,15 @@ docList.addEventListener("click", async e => {
       if (!a2.res.ok) { toast(a2.data.detail||"Échec preview", "error"); return; }
       setAnonymizedPreview(id, a2.data.preview_text||"");
 
-      const a3 = await api(`/api/v1/documents/${id}/validate`, {method:"POST"});
+      const a3 = await api(`/api/v1/documents/${id}/validate`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          doc_type: requestedDocType === "auto" ? "generic" : requestedDocType,
+          profile_used: profile,
+          feedbacks: [],
+        }),
+      });
       showApi(a3.data);
       if (!a3.res.ok) { toast(a3.data.detail||"Échec validation", "error"); return; }
 
@@ -1247,7 +1255,17 @@ docList.addEventListener("click", async e => {
       showApi(data);
       if (res.ok) setAnonymizedPreview(id, data.preview_text||""); else toast(data.detail||"Pas de preview", "error");
     } else if (action === "validate") {
-      const {res, data} = await api(`/api/v1/documents/${id}/validate`, {method:"POST"});
+      const reqDt = currentDocTypeRequested();
+      const prof = $("profileSelect").value;
+      const {res, data} = await api(`/api/v1/documents/${id}/validate`, {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          doc_type: reqDt === "auto" ? "generic" : reqDt,
+          profile_used: prof,
+          feedbacks: [],
+        }),
+      });
       showApi(data);
       if (res.ok) toast("Version finale validée ✓", "success"); else toast(data.detail||"Échec", "error");
     } else if (action === "exporttxt") {

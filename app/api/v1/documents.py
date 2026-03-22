@@ -7,7 +7,7 @@ from io import BytesIO
 
 from typing import Literal
 
-from fastapi import APIRouter, BackgroundTasks, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import delete, desc, func, select, update
 
@@ -383,10 +383,10 @@ async def original_text_document(
 )
 async def validate_document(
     document_id: str,
-    args: ValidateDocumentRequest,
     current_user: CurrentUser,
     db: DbSession,
     background_tasks: BackgroundTasks,
+    args: ValidateDocumentRequest = Body(default_factory=ValidateDocumentRequest),
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 

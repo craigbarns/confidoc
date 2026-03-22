@@ -71,9 +71,13 @@ curl "https://confidoc-production.up.railway.app/api/v1/documents/DOCUMENT_ID/pr
 
 ## 6) Valider
 
+Corps JSON attendu : `doc_type`, `profile_used` (pour le suivi feedback). Valeurs par défaut côté API si corps vide ou `{}`.
+
 ```bash
 curl -X POST "https://confidoc-production.up.railway.app/api/v1/documents/DOCUMENT_ID/validate" \
-  -H "Authorization: Bearer ACCESS_TOKEN"
+  -H "Authorization: Bearer ACCESS_TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{"doc_type":"generic","profile_used":"dataset_accounting_pseudo","feedbacks":[]}'
 ```
 
 ---

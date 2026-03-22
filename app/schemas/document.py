@@ -77,9 +77,9 @@ class FeedbackItem(BaseModel):
 
 
 class ValidateDocumentRequest(BaseModel):
-    # Allows tracking the context when the user applies manual corrections and saves
-    doc_type: str = Field(..., max_length=50)
-    profile_used: str = Field(..., max_length=50)
+    # Contexte pour le feedback (valeurs par défaut = POST sans body / clients légers)
+    doc_type: str = Field(default="generic", max_length=50)
+    profile_used: str = Field(default="dataset_accounting_pseudo", max_length=50)
     final_text: str | None = Field(
         default=None, 
         description="Le texte final validé par l'humain, s'il a été édité manuellement."
