@@ -116,15 +116,23 @@ async def upload_document(
                 document_type=document_type,
             )
             await db.commit()
+            excerpt = (preview_text if isinstance(preview_text, str) else "")[:300]
             processing.update({
                 "status": "ready",
                 "effective_type": effective_type,
-                "detections_count": len(detections),
-                "preview_excerpt": preview_text[:300],
+                "detections_count": len(detections or []),
+                "preview_excerpt": excerpt,
             })
         except Exception as exc:
+            # Obligatoire : sinon la transaction reste en erreur (PostgreSQL) et le
+            # commit final de get_db() échoue → HTTP 500 sur la réponse upload.
+            await db.rollback()
+            try:
+                await db.refresh(document)
+            except Exception:
+                pass
             logger.error("auto_anonymize_failed", doc_id=str(document.id), error=str(exc))
-            processing.update({"status": "error", "error": str(exc)[:200]})
+            processing.update({"status": "error", "error": str(exc)[:500]})
 
     return {
         "status": document.status.value,
