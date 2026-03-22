@@ -510,6 +510,31 @@ async function api(path, opts={}) {
   return {res, data};
 }
 
+/** Multipart upload : ne pas définir Content-Type (le navigateur pose le boundary). */
+async function apiUploadMultipart(path, formData) {
+  const headers = {};
+  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+  const res = await fetch(path, { method: "POST", body: formData, headers });
+  const raw = await res.text();
+  let data;
+  try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
+  return { res, data };
+}
+
+function formatApiDetail(data) {
+  if (!data || data.detail == null) return "";
+  const d = data.detail;
+  if (typeof d === "string") return d;
+  if (Array.isArray(d)) {
+    return d.map((x) => (x && x.msg) ? x.msg : JSON.stringify(x)).join("; ");
+  }
+  try {
+    return JSON.stringify(d);
+  } catch {
+    return String(d);
+  }
+}
+
 function formatSize(b) {
   if (b < 1024) return b + " B";
   if (b < 1048576) return (b/1024).toFixed(1) + " KB";
@@ -669,17 +694,34 @@ $("logoutBtn").addEventListener("click", async () => {
   toast("Déconnecté", "info");
 });
 
-// Upload drag & drop
+// Upload drag & drop (ne pas assigner fileInput.files : interdit / instable dans les navigateurs)
 const dropZone = $("dropZone");
 const fileInput = $("fileInput");
-["dragenter","dragover"].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.add("dragover"); }));
-["dragleave","drop"].forEach(ev => dropZone.addEventListener(ev, e => { e.preventDefault(); dropZone.classList.remove("dragover"); }));
-dropZone.addEventListener("drop", e => { if (e.dataTransfer.files.length) { fileInput.files = e.dataTransfer.files; doUpload(); } });
-fileInput.addEventListener("change", () => { if (fileInput.files.length) doUpload(); });
+["dragenter", "dragover"].forEach((ev) =>
+  dropZone.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropZone.classList.add("dragover");
+  })
+);
+["dragleave"].forEach((ev) =>
+  dropZone.addEventListener(ev, (e) => {
+    e.preventDefault();
+    dropZone.classList.remove("dragover");
+  })
+);
+dropZone.addEventListener("drop", (e) => {
+  e.preventDefault();
+  dropZone.classList.remove("dragover");
+  if (e.dataTransfer.files && e.dataTransfer.files.length) {
+    doUploadFile(e.dataTransfer.files[0]);
+  }
+});
+fileInput.addEventListener("change", () => {
+  if (fileInput.files && fileInput.files.length) doUploadFile(fileInput.files[0]);
+});
 
-async function doUpload() {
+async function doUploadFile(file) {
   if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
-  const file = fileInput.files[0];
   if (!file) return;
   const prog = $("uploadProgress");
   const fill = $("progressFill");
@@ -689,18 +731,20 @@ async function doUpload() {
   progText.textContent = `Upload de ${file.name}…`;
 
   const form = new FormData();
-  form.append("file", file);
+  form.append("file", file, file.name);
   const profile = $("profileSelect").value;
   const requestedDocType = currentDocTypeRequested();
   const auto = $("autoAnonymize").checked;
+  const uploadUrl = `/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`;
 
   try {
     setStage("upload", "Upload du document en cours...");
     fill.style.width = "60%";
-    const {res, data} = await api(`/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST", body:form});
+    const { res, data } = await apiUploadMultipart(uploadUrl, form);
     showApi(data);
     if (!res.ok) {
-      toast(`Upload échoué: ${data.detail||res.status}`, "error");
+      const msg = formatApiDetail(data) || res.status;
+      toast(`Upload échoué: ${msg}`, "error");
       fill.style.width = "100%"; fill.style.background = "var(--rose)";
       progText.textContent = "Échec";
       setStage("upload", "Échec pendant l'upload.");
@@ -716,8 +760,17 @@ async function doUpload() {
       toast(`${file.name} uploadé — ${count != null ? count + " détections" : "prêt"}`, "success");
       await refreshDocs();
     }
-  } catch(e) { toast("Erreur réseau", "error"); }
-  finally { setTimeout(() => { prog.classList.remove("active"); fill.style.width = "0"; fill.style.background = ""; }, 2500); fileInput.value = ""; }
+  } catch (e) {
+    const errMsg = e && e.message ? e.message : String(e);
+    toast(`Erreur réseau: ${errMsg}`, "error");
+  } finally {
+    setTimeout(() => {
+      prog.classList.remove("active");
+      fill.style.width = "0";
+      fill.style.background = "";
+    }, 2500);
+    fileInput.value = "";
+  }
 }
 
 // Refresh
