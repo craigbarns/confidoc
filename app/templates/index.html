@@ -1,0 +1,167 @@
+<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>ConfiDoc — Console</title>
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
+  <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+
+<div id="loginScreen" class="screen active">
+  <div class="login-bg">
+    <div class="orb orb-1"></div>
+    <div class="orb orb-2"></div>
+    <div class="orb orb-3"></div>
+  </div>
+  <div class="login-wrap">
+    <div class="login-card">
+      <div class="login-logo">
+        <div class="shield">🛡️</div>
+        <span>ConfiDoc</span>
+      </div>
+      <h1>Bienvenue</h1>
+      <p class="subtitle">Plateforme de confidentialité documentaire<br>pour professions réglementées</p>
+      <div class="form-group">
+        <label>Adresse email</label>
+        <input id="email" class="form-input" type="email" placeholder="admin@cabinet.fr" autocomplete="email" />
+      </div>
+      <div class="form-group">
+        <label>Mot de passe</label>
+        <input id="password" class="form-input" type="password" placeholder="••••••••••" autocomplete="current-password" />
+      </div>
+      <button id="loginBtn" class="btn btn-primary">
+        <span class="btn-text">Se connecter</span>
+      </button>
+    </div>
+  </div>
+</div>
+
+
+<div id="dashScreen" class="screen">
+  <div class="dash">
+    <nav class="topnav">
+      <div class="logo">
+        <div class="shield-sm">🛡️</div>
+        <span>ConfiDoc</span>
+      </div>
+      <div class="user-area">
+        <label class="expert-toggle" title="Afficher les détails techniques">
+          <input type="checkbox" id="expertModeToggle" />
+          <span>Mode expert</span>
+        </label>
+        <div class="user-pill">
+          <div class="avatar" id="userAvatar">A</div>
+          <span id="userEmail">admin</span>
+        </div>
+        <button id="logoutBtn" class="btn btn-ghost btn-sm">Déconnexion</button>
+      </div>
+    </nav>
+    <div class="dash-content">
+      <div class="value-prop">Déposez un document, ConfiDoc l'analyse, le sécurise et vous indique en priorité s'il est prêt, à revoir ou insuffisant.</div>
+      <div class="stats-row">
+        <div class="stat-card blue"><div class="stat-label">Documents</div><div class="stat-value" id="statTotal">0</div><div class="stat-sub">total uploadés</div></div>
+        <div class="stat-card emerald"><div class="stat-label">Prêts</div><div class="stat-value" id="statReady">0</div><div class="stat-sub">anonymisés</div></div>
+        <div class="stat-card violet"><div class="stat-label">En cours</div><div class="stat-value" id="statProcessing">0</div><div class="stat-sub">en traitement</div></div>
+        <div class="stat-card amber"><div class="stat-label">Détections</div><div class="stat-value" id="statDetections">—</div><div class="stat-sub" id="statDetectionsSub">dernier document traité</div></div>
+      </div>
+      <div class="main-grid">
+        <div class="panel" style="animation-delay:.08s">
+          <div class="panel-header"><h2><span class="icon">📤</span> Upload</h2></div>
+          <div class="panel-body">
+            <div class="upload-zone" id="dropZone">
+              <div class="upload-icon">📄</div>
+              <h3>Glissez un fichier ici</h3>
+              <p>ou cliquez pour parcourir — PDF, PNG, JPG, TIFF (max 50 MB)</p>
+              <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.tiff" />
+            </div>
+            <div class="upload-config">
+              <div>
+                <label class="form-group" style="margin-bottom:4px"><span style="font-size:12px;color:var(--text-dim)">Profil d'anonymisation</span></label>
+                <select id="profileSelect">
+                  <option value="dataset_accounting_pseudo" selected>✨ Pseudonymisation métier</option>
+                  <option value="dataset_accounting">📊 Dataset comptable (strict)</option>
+                </select>
+              </div>
+              <div>
+                <label class="form-group" style="margin-bottom:4px"><span style="font-size:12px;color:var(--text-dim)">Type d'extraction (forçage)</span></label>
+                <select id="docTypeSelect">
+                  <option value="auto" selected>Auto</option>
+                  <option value="bilan">Bilan</option>
+                  <option value="compte_resultat">Compte de résultat</option>
+                  <option value="fiscal_2072">2072</option>
+                </select>
+              </div>
+              <div class="checkbox-row">
+                <input type="checkbox" id="autoAnonymize" checked />
+                <label for="autoAnonymize">Anonymiser automatiquement</label>
+              </div>
+            </div>
+            <div class="upload-progress" id="uploadProgress">
+              <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
+              <div class="prog-text" id="progText">Upload en cours…</div>
+            </div>
+            <div class="stage-strip" id="stageStrip">
+              <div class="stage-title">Étapes de traitement</div>
+              <div class="stage-flow">
+                <span class="stage-chip" data-stage="upload">Upload</span>
+                <span class="stage-chip" data-stage="ocr">OCR</span>
+                <span class="stage-chip" data-stage="anonymize">Anonymisation</span>
+                <span class="stage-chip" data-stage="extract">Extraction</span>
+                <span class="stage-chip" data-stage="ready">Prêt</span>
+              </div>
+              <div id="stageText" style="margin-top:6px">En attente d'un document.</div>
+            </div>
+          </div>
+        </div>
+        <div class="panel" style="animation-delay:.12s">
+          <div class="panel-header">
+            <h2><span class="icon">📁</span> Mes documents</h2>
+            <button id="refreshBtn" class="btn btn-ghost btn-sm">↻ Actualiser</button>
+          </div>
+          <div class="panel-body">
+            <div id="docList" class="doc-list">
+              <div class="docs-empty"><div class="empty-icon">📂</div><p>Aucun document.<br>Uploadez votre premier fichier.</p></div>
+            </div>
+          </div>
+        </div>
+      </div>
+      <div class="panel kb-ask-panel">
+        <div class="panel-header"><h2><span class="icon">💬</span> Question à la base anonyme</h2></div>
+        <div class="panel-body">
+          <div class="kb-ask-row">
+            <input id="kbQuestion" class="kb-ask-input" type="text" placeholder="Ex: charges marketing T1, compte 622, facture fournisseur..." />
+            <button id="askKbBtn" class="btn btn-ghost btn-sm">Poser la question</button>
+          </div>
+          <div class="kb-ask-hint">Astuce: commencez par ingérer vos documents via l'API <code>/api/v1/kb/ingest/{document_id}</code>.</div>
+        </div>
+      </div>
+      <div class="panel preview-panel">
+        <div class="panel-header"><h2><span class="icon">👁️</span> Prévisualisation</h2></div>
+        <div class="panel-body">
+          <div class="preview-mode-row">
+            <button id="modeAnonOnly" class="preview-mode-btn active" type="button">Anonymisé</button>
+            <button id="modeBeforeAfter" class="preview-mode-btn" type="button">Avant / Après</button>
+          </div>
+          <div class="preview-content" id="previewOutput">Sélectionnez un document et lancez une action pour voir la prévisualisation ici.</div>
+        </div>
+      </div>
+      <div class="panel" style="animation-delay:.22s">
+        <div class="panel-header"><h2><span class="icon">🕵️</span> Ce qui a été masqué</h2></div>
+        <div class="panel-body">
+          <div class="masked-content" id="maskedOutput">Lancez `Anonymiser` / `Traiter tout` pour voir le résumé.</div>
+        </div>
+      </div>
+      <div class="panel api-panel expert-only" style="animation-delay:.2s">
+        <div class="panel-header"><h2><span class="icon">⚡</span> Réponse API</h2></div>
+        <div class="panel-body"><pre class="api-content" id="apiOutput">{}</pre></div>
+      </div>
+    </div>
+  </div>
+</div>
+<div class="toast-container" id="toastContainer"></div>
+
+  <script src="/static/js/app.js"></script>
+</body>
+</html>
