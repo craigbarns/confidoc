@@ -160,6 +160,59 @@ def _extract_amount_from_lines_with_keyword(
     return None, "missing"
 
 
+def _extract_financial_amount_for_label_wide(
+    text: str, label_regex: str, *, max_gap: int = 120, min_amount: float = 100.0
+) -> float | None:
+    """Like _extract_financial_amount_for_label but allows a wider gap (multi-column OCR layouts)."""
+    pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9][0-9\s\u00a0.,]{{0,30}})"
+    value = _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
+    if value is None:
+        return None
+    return value if abs(value) >= min_amount else None
+
+
+def _extract_amount_after_keyword_multiline(
+    text: str, keyword_regex: str, min_amount: float = 50.0, max_lookahead_lines: int = 3
+) -> tuple[float | None, str]:
+    """Find keyword on a line; take amount at end of that line or the next non-empty lines."""
+    lines = text.splitlines()
+    pat_kw = re.compile(keyword_regex, re.IGNORECASE)
+    for i, raw in enumerate(lines):
+        line = raw.strip()
+        if not line or not pat_kw.search(line):
+            continue
+        for j in range(0, max_lookahead_lines + 1):
+            idx = i + j
+            if idx >= len(lines):
+                break
+            scan = lines[idx].strip()
+            if not scan:
+                continue
+            # Prefer last number on the line (typical table: label ... amount).
+            candidates: list[float] = []
+            for m in re.finditer(r"([0-9][0-9\s\u00a0.,]{0,30})(?:\s*$|\s*€|\s*EUR)?", scan, re.IGNORECASE):
+                v = _clean_amount_candidate(_to_float_fr(m.group(1)))
+                if isinstance(v, float) and abs(v) >= min_amount:
+                    candidates.append(v)
+            if candidates:
+                v = candidates[-1]
+                src = "fallback:multiline_after_keyword" if j > 0 else "fallback:line_after_keyword"
+                return v, src
+    return None, "missing"
+
+
+def _plausible_2072_interets_candidate(value: float, revenus_bruts: float | None) -> bool:
+    if abs(value) < 50.0:
+        return False
+    if revenus_bruts is not None and isinstance(revenus_bruts, (int, float)):
+        rb = abs(float(revenus_bruts))
+        if rb > 0 and abs(value) > max(rb * 2.0, 5_000_000.0):
+            return False
+    elif abs(value) > 5_000_000.0:
+        return False
+    return True
+
+
 def _sum_accounting_lines_by_prefixes(
     text: str, prefixes: tuple[str, ...], min_total: float = 100.0
 ) -> tuple[float | None, str]:
@@ -549,22 +602,41 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=50.0,
     )
+    scan_text = results_zone + "\n" + text
     interets, interets_source = _extract_first_amount_with_source(
-        results_zone + "\n" + text,
+        scan_text,
         [
             ("label:interets_emprunts", r"int[eé]r[eê]ts?\s+d[' ]emprunts?"),
             ("label:interets_emprunts_alt", r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
             ("label:interets_emprunt_singulier", r"int[eé]r[eê]t\s+d[' ]emprunt"),
             ("label:charge_interets", r"charges?.{0,10}d[' ]int[eé]r[eê]ts?"),
+            ("label:dont_interets", r"dont.{0,20}int[eé]r[eê]ts?"),
+            ("label:emprunts_interets", r"emprunts?.{0,15}int[eé]r[eê]ts?"),
         ],
         min_amount=50.0,
     )
+    # Wide-gap OCR (amount far to the right of the label).
+    if interets is None:
+        for src_hint, pat in [
+            ("label_wide:interets_emprunts", r"int[eé]r[eê]ts?\s+d[' ]emprunts?"),
+            ("label_wide:interets_des_emprunts", r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
+        ]:
+            w = _extract_financial_amount_for_label_wide(scan_text, pat, max_gap=140, min_amount=50.0)
+            if w is not None:
+                interets, interets_source = w, src_hint
+                break
     if interets is None:
         interets, interets_source = _extract_amount_from_lines_with_keyword(
-            results_zone + "\n" + text, r"int[eé]r[eê]t.{0,12}emprunt", min_amount=50.0
+            scan_text, r"int[eé]r[eê]t.{0,12}emprunt", min_amount=50.0
+        )
+    if interets is None:
+        interets, interets_source = _extract_amount_after_keyword_multiline(
+            scan_text,
+            r"int[eé]r[eê]ts?.{0,25}emprunt|emprunt.{0,20}int[eé]r[eê]t",
+            min_amount=50.0,
         )
     revenu_net = _extract_first_amount_from_patterns(
-        results_zone + "\n" + text,
+        scan_text,
         [
             r"revenu\s+net(?:\s+foncier)?",
             r"d[ée]ficit\s+net",
@@ -572,6 +644,7 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=100.0,
     )
+    revenu_net_from_doc = revenu_net is not None
 
     # Fallbacks from annexes/tables when top-level labels are missing.
     immeubles_frais = sum(
@@ -594,6 +667,18 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         elif associes_interets > 0:
             interets = associes_interets
             interets_source = "fallback:associes_interets_sum"
+
+    # Algebraic closure (conservative): only when revenu net was read from the document,
+    # not when it will be derived from rb - frais - interets (avoids circular reasoning).
+    if interets is None and revenu_net_from_doc:
+        rb_ok = isinstance(revenus_bruts, (int, float))
+        rn_ok = isinstance(revenu_net, (int, float))
+        fc_ok = frais_hors_interets is not None and isinstance(frais_hors_interets, (int, float))
+        if rb_ok and rn_ok and fc_ok:
+            cand = float(revenus_bruts) - float(frais_hors_interets) - float(revenu_net)
+            if _plausible_2072_interets_candidate(cand, float(revenus_bruts)):
+                interets = cand
+                interets_source = "fallback:derived_rb_minus_frais_minus_revenu_net"
 
     if revenus_bruts is None:
         immeubles_rb = sum(float(x.get("revenus_bruts") or 0.0) for x in immeubles)
@@ -702,6 +787,15 @@ def _extract_2072_immeubles_table(text: str) -> list[dict[str, Any]]:
         if b - a < 2:
             continue
         chunk = "\n".join(zone_lines[a:b])
+        ie_im = _extract_amount_for_label(chunk, r"int[eé]r[eê]ts?\s+des?\s+emprunts?")
+        if ie_im is None:
+            ie_im = _extract_financial_amount_for_label_wide(
+                chunk, r"int[eé]r[eê]ts?\s+des?\s+emprunts?", max_gap=140, min_amount=50.0
+            )
+        if ie_im is None:
+            ie_im = _extract_financial_amount_for_label_wide(
+                chunk, r"int[eé]r[eê]ts?\s+d[' ]emprunt", max_gap=140, min_amount=50.0
+            )
         entry = {
             "immeuble_id": f"IMMEUBLE_{len(entries) + 1}",
             "adresse_immeuble": _extract_value_near_label(
@@ -715,7 +809,7 @@ def _extract_2072_immeubles_table(text: str) -> list[dict[str, Any]]:
             "assurance": _extract_amount_for_label(chunk, r"primes?\s+d[' ]assurance|assurance"),
             "travaux": _extract_amount_for_label(chunk, r"travaux|d[ée]penses?\s+de\s+r[ée]paration"),
             "impositions": _extract_amount_for_label(chunk, r"impositions?"),
-            "interets_emprunts": _extract_amount_for_label(chunk, r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
+            "interets_emprunts": ie_im,
             "amortissement": _extract_amount_for_label(chunk, r"amortissement"),
             "revenu_ou_deficit": _extract_amount_for_label(chunk, r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)|revenu\s+net"),
         }
