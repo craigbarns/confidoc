@@ -2,17 +2,48 @@
 
 from __future__ import annotations
 
+import re
 from typing import Any
 
-import re
-
-from presidio_analyzer import AnalyzerEngine
-
 from app.config import get_settings
+from app.core.logging import get_logger
 
-settings = get_settings()
+logger = get_logger(__name__)
 
-_ANALYZER = AnalyzerEngine()
+# Ne pas instancier AnalyzerEngine à l'import : sur Railway/Docker le modèle spaCy
+# (ex. en_core_web_lg) peut être absent → crash de tout le chargement du module.
+try:
+    from presidio_analyzer import AnalyzerEngine
+except ImportError:
+    AnalyzerEngine = None  # type: ignore[misc, assignment]
+
+_analyzer_instance: Any = None
+_analyzer_init_failed: bool = False
+
+
+def _get_analyzer() -> Any | None:
+    """Initialisation paresseuse ; None si Presidio/spaCy indisponible."""
+    global _analyzer_instance, _analyzer_init_failed
+    if _analyzer_init_failed:
+        return None
+    if _analyzer_instance is not None:
+        return _analyzer_instance
+    if AnalyzerEngine is None:
+        logger.warning("presidio_package_missing")
+        _analyzer_init_failed = True
+        return None
+    try:
+        _analyzer_instance = AnalyzerEngine()
+        return _analyzer_instance
+    except Exception as exc:
+        logger.warning(
+            "presidio_analyzer_unavailable",
+            error=str(exc),
+            hint="Installer les modèles spaCy attendus par Presidio ou désactiver LLM_ASSISTIVE / LLM_PROVIDER",
+        )
+        _analyzer_init_failed = True
+        return None
+
 
 ALLOWED_REPLACEMENT_TOKENS: set[str] = {
     "[EMAIL]",
@@ -61,20 +92,24 @@ def _replacement_for_presidio(entity_type: str, entity_text: str) -> str | None:
 
 async def propose_spans_presidio(snippet_text: str) -> list[dict[str, Any]]:
     """Propose des spans (start/end relatifs au snippet) via Presidio local."""
-    # Presidio est offline: aucune donnée n'est envoyée.
+    settings = get_settings()
     if not snippet_text or not settings.LLM_ASSISTIVE_ENABLED:
         return []
 
+    analyzer = _get_analyzer()
+    if analyzer is None:
+        return []
+
     try:
-        # entities = types que nous savons mapper vers tokens ConfiDoc.
         entities = ["PERSON", "LOCATION", "EMAIL_ADDRESS", "PHONE_NUMBER", "IBAN_CODE", "DATE_TIME"]
-        results = _ANALYZER.analyze(
+        results = analyzer.analyze(
             text=snippet_text,
             language="fr",
             entities=entities,
             score_threshold=0.35,
         )
-    except Exception:
+    except Exception as exc:
+        logger.warning("presidio_analyze_failed", error=str(exc))
         return []
 
     spans: list[dict[str, Any]] = []
@@ -102,4 +137,3 @@ async def propose_spans_presidio(snippet_text: str) -> list[dict[str, Any]]:
             continue
 
     return spans
-

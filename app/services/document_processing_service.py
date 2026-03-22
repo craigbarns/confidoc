@@ -57,9 +57,18 @@ async def _call_llm_provider(
         llm_model = settings.HF_MODEL
         propose_fn = propose_spans_huggingface_ner
     elif settings.LLM_PROVIDER == "presidio":
-        from app.services.presidio_ner_assist_service import propose_spans_presidio
-        llm_model = "presidio-local"
-        propose_fn = propose_spans_presidio
+        try:
+            from app.services.presidio_ner_assist_service import propose_spans_presidio
+
+            llm_model = "presidio-local"
+            propose_fn = propose_spans_presidio
+        except Exception as exc:
+            logger.warning(
+                "presidio_import_fallback_mistral",
+                error=str(exc),
+            )
+            propose_fn = propose_spans_mistral
+            llm_model = settings.MISTRAL_MODEL
 
     llm_req = LlmRequest(
         document_id=document.id,
