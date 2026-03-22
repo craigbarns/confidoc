@@ -3,7 +3,7 @@
 import hashlib
 from typing import Literal
 
-from fastapi import APIRouter, File, Query, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -54,13 +54,52 @@ async def upload_document(
             f"Fichier trop volumineux. Maximum: {settings.MAX_UPLOAD_SIZE_MB} MB"
         )
 
+    try:
+        return await _upload_document_body(
+            db=db,
+            current_user=current_user,
+            file=file,
+            content=content,
+            filename=filename,
+            extension=extension,
+            auto_anonymize=auto_anonymize,
+            profile=profile,
+            document_type=document_type,
+        )
+    except HTTPException:
+        raise
+    except Exception as exc:
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+        logger.exception("upload_document_failed", filename=filename)
+        # JSON explicite pour curl / smoke (sinon « Internal Server Error » vide)
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"{type(exc).__name__}: {str(exc)[:800]}",
+        ) from exc
+
+
+async def _upload_document_body(
+    *,
+    db: DbSession,
+    current_user: CurrentUser,
+    file: UploadFile,
+    content: bytes,
+    filename: str,
+    extension: str,
+    auto_anonymize: bool,
+    profile: str,
+    document_type: str,
+) -> dict:
+    """Corps métier upload (isolé pour try/except global)."""
     # Store to external storage (MinIO or local /tmp)
     try:
         storage_backend, storage_key = store_bytes(content=content, extension=extension)
     except Exception as exc:
         logger.warning("external_storage_failed", error=str(exc))
         storage_backend = "database"
-        # Clé unique par upload (aligné sur store_bytes database)
         from uuid import uuid4
 
         storage_key = f"db://{hashlib.sha256(content).hexdigest()}.{uuid4().hex}.{extension}"
@@ -87,7 +126,6 @@ async def upload_document(
         storage_backend=storage_backend,
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
-        # Always store raw bytes in DB as fallback
         raw_content=content,
     )
     db.add(document)
@@ -108,7 +146,7 @@ async def upload_document(
         "document_type": document_type,
         "ocr_available": HAS_OCR,
     }
-    
+
     if auto_anonymize:
         try:
             preview_text, detections, effective_type = await build_anonymization_preview(
@@ -127,8 +165,6 @@ async def upload_document(
                 "preview_excerpt": excerpt,
             })
         except Exception as exc:
-            # Obligatoire : sinon la transaction reste en erreur (PostgreSQL) et le
-            # commit final de get_db() échoue → HTTP 500 sur la réponse upload.
             await db.rollback()
             try:
                 await db.refresh(document)

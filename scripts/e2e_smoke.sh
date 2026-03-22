@@ -189,7 +189,21 @@ while (( upload_attempt <= UPLOAD_MAX_ATTEMPTS )); do
 done
 if [[ "$code" != "201" ]]; then
   echo "Echec upload (HTTP $code)"
-  [[ -f "$UPLOAD_JSON" ]] && cat "$UPLOAD_JSON"
+  if [[ -f "$UPLOAD_JSON" ]]; then
+    echo "--- corps reponse upload ---"
+    cat "$UPLOAD_JSON"
+    echo ""
+    python3 -c "
+import json,sys
+try:
+    with open('$UPLOAD_JSON', encoding='utf-8') as f:
+        d=json.load(f)
+    if isinstance(d, dict) and d.get('detail'):
+        print('>>> detail:', d['detail'])
+except Exception as e:
+    print('(parse json:', e, ')')
+" 2>/dev/null || true
+  fi
   exit 1
 fi
 DOCUMENT_ID="$(json_get "$UPLOAD_JSON" "document_id")"
