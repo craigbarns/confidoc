@@ -723,6 +723,37 @@ async function doUpload() {
 // Refresh
 $("refreshBtn").addEventListener("click", () => { refreshDocs(); toast("Liste actualisée", "info"); });
 
+const purgeAllBtn = $("purgeAllDocsBtn");
+if (purgeAllBtn) {
+  purgeAllBtn.addEventListener("click", async () => {
+    if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
+    if (!confirm("Supprimer définitivement TOUS vos documents ? Cette action est irréversible.")) return;
+    if (prompt("Pour confirmer, tapez exactement : VIDER") !== "VIDER") {
+      toast("Suppression annulée", "info");
+      return;
+    }
+    try {
+      const { res, data } = await api(`/api/v1/documents?confirm=true`, { method: "DELETE" });
+      showApi(data);
+      if (res.ok) {
+        const n = (data && typeof data.deleted === "number") ? data.deleted : 0;
+        toast(`${n} document(s) supprimé(s)`, "success");
+        showPreview("Sélectionnez un document ou uploadez un fichier.");
+        if (maskedOut) maskedOut.textContent = "Aucun document.";
+        lastAnonDocId = null;
+        lastAnonText = "";
+        lastOriginalDocId = null;
+        lastOriginalText = "";
+        await refreshDocs();
+      } else {
+        toast((data && data.detail) ? String(data.detail) : "Échec suppression", "error");
+      }
+    } catch (e) {
+      toast("Erreur réseau", "error");
+    }
+  });
+}
+
 function applyExpertMode(enabled) {
   document.querySelectorAll(".expert-only").forEach(el => {
     el.classList.toggle("show", !!enabled);

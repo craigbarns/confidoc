@@ -255,6 +255,46 @@ async def list_documents(
     return list(result.scalars().all())
 
 
+@router.delete(
+    "",
+    status_code=status.HTTP_200_OK,
+    summary="Supprimer tous les documents de l'utilisateur connecté",
+)
+async def delete_all_my_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+    confirm: bool = Query(
+        False,
+        description="Doit être true pour exécuter (protection anti-clic accidentel).",
+    ),
+) -> dict[str, int]:
+    """Supprime tous les documents uploadés par l'utilisateur (fichiers + lignes BDD, cascades)."""
+    if not confirm:
+        raise http_400(
+            "Suppression groupée : ajoutez le paramètre de requête ?confirm=true"
+        )
+
+    result = await db.execute(
+        select(Document).where(Document.uploaded_by_user_id == current_user.id)
+    )
+    docs = list(result.scalars().all())
+    deleted = 0
+    for document in docs:
+        try:
+            delete_bytes(document.storage_backend, document.storage_key)
+        except Exception as exc:
+            logger.warning(
+                "storage_delete_failed_bulk",
+                doc_id=str(document.id),
+                error=str(exc),
+            )
+        await db.execute(delete(Document).where(Document.id == document.id))
+        deleted += 1
+    await db.commit()
+    logger.info("documents_all_deleted", user_id=str(current_user.id), count=deleted)
+    return {"deleted": deleted}
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,

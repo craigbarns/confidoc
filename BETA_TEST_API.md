@@ -69,6 +69,17 @@ curl "https://confidoc-production.up.railway.app/api/v1/documents/DOCUMENT_ID/pr
 
 ---
 
+## 5b) Vider tous mes documents (bulk)
+
+```bash
+curl -X DELETE "$BASE_URL/api/v1/documents?confirm=true" \
+  -H "Authorization: Bearer ACCESS_TOKEN"
+```
+
+Réponse JSON : `{"deleted": N}`. Sans `confirm=true` → erreur 400 (sécurité).
+
+---
+
 ## 6) Valider
 
 Corps JSON attendu : `doc_type`, `profile_used` (pour le suivi feedback). Valeurs par défaut côté API si corps vide ou `{}`.
