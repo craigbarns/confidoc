@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.config import get_settings
 from app.core.logging import get_logger
+from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
@@ -230,12 +231,12 @@ async def build_anonymization_preview(
     original_version = DocumentVersion(
         document_id=document.id,
         version_type=DocumentVersionType.ORIGINAL_TEXT,
-        content_text=original_text,
+        content_text=postgres_safe_text(original_text),
     )
     preview_version = DocumentVersion(
         document_id=document.id,
         version_type=DocumentVersionType.PREVIEW_ANONYMIZED,
-        content_text=preview_text,
+        content_text=postgres_safe_text(preview_text),
     )
     db.add(original_version)
     db.add(preview_version)
@@ -249,8 +250,8 @@ async def build_anonymization_preview(
                 entity_type=str(item.get("entity_type", "unknown"))[:40],
                 start_index=int(item.get("start_index", 0)),
                 end_index=int(item.get("end_index", 0)),
-                value_excerpt=str(item.get("value_excerpt", ""))[:50_000],
-                replacement=str(item.get("replacement", "[REDACTED]"))[:10_000],
+                value_excerpt=postgres_safe_text(str(item.get("value_excerpt", "")))[:50_000],
+                replacement=postgres_safe_text(str(item.get("replacement", "[REDACTED]")))[:10_000],
             )
         )
 

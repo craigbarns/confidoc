@@ -14,6 +14,7 @@ from sqlalchemy import delete, desc, func, select, update
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
+from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
@@ -200,7 +201,7 @@ async def _get_or_create_final_version(
     final = DocumentVersion(
         document_id=document.id,
         version_type=DocumentVersionType.FINAL_ANONYMIZED,
-        content_text=preview.content_text,
+        content_text=postgres_safe_text(preview.content_text),
     )
     db.add(final)
     await db.flush()
@@ -400,6 +401,7 @@ async def validate_document(
         raise http_404("Aucune preview disponible")
 
     final_text_content = args.final_text if args.final_text is not None else preview_version.content_text
+    final_text_content = postgres_safe_text(final_text_content)
 
     # Remove old final version
     await db.execute(

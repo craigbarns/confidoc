@@ -7,6 +7,7 @@ from typing import Any
 import fitz
 
 from app.core.logging import get_logger
+from app.core.text_sanitize import postgres_safe_text
 
 logger = get_logger(__name__)
 
@@ -211,6 +212,10 @@ def classify_document_type(text: str, filename: str = "") -> str:
 
 def extract_text_from_file(content: bytes, extension: str) -> str:
     """Extract text from uploaded bytes (PDF first, images later) preserving structural layout."""
+    return postgres_safe_text(_extract_text_from_file_raw(content, extension))
+
+
+def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
     extension = extension.lower().strip(".")
 
     if extension == "pdf":
