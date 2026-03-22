@@ -116,6 +116,17 @@ def _sha256_text(text: str | None) -> str | None:
 # HELPERS
 # ──────────────────────────────────────────────────────────────────────
 
+def _detection_item_to_response(item: dict) -> DetectionResponse:
+    """Assainit les dicts de détection pour le contrat API (évite 500 si types souples)."""
+    return DetectionResponse(
+        entity_type=str(item.get("entity_type", "unknown")),
+        start_index=int(item.get("start_index", 0)),
+        end_index=int(item.get("end_index", 0)),
+        value_excerpt=str(item.get("value_excerpt", "")),
+        replacement=str(item.get("replacement", "[REDACTED]")),
+    )
+
+
 async def _get_user_document_or_404(
     db: DbSession, document_id: str, user_id: uuid.UUID
 ) -> Document:
@@ -284,7 +295,7 @@ async def anonymize_document(
         document_id=document.id,
         status=document.status.value,
         detections_count=len(detections),
-        detections=[DetectionResponse(**item) for item in detections],
+        detections=[_detection_item_to_response(item) for item in detections],
         preview_text=f"[type={effective_type}|profile={profile}]\n\n{preview_text}",
     )
 

@@ -150,55 +150,59 @@ async def build_anonymization_preview(
 
     # 2) Extract text from file
     original_text = extract_text_from_file(file_content, document.extension) or ""
-    if not original_text.strip():
-        logger.warning("empty_text_extraction", doc_id=str(document.id))
-        document.status = DocumentStatus.READY
-        await db.flush()
-        return "", [], "empty"
 
-    # 3) Classify document type
-    effective_type = (
-        classify_document_type(original_text, document.original_filename)
-        if document_type == "auto"
-        else document_type
-    )
-
-    # 4) Run regex anonymization
-    preview_text, detections = anonymize_text(
-        original_text, profile=profile, document_type=effective_type
-    )
-
-    # 5) Optionally call LLM/NER provider for additional spans
     llm_detections: list[dict] = []
     llm_req_obj: LlmRequest | None = None
+    merged: list[dict] = []
+    preview_text = ""
+    effective_type = "empty"
 
-    should_call_llm = (
-        settings.LLM_ASSISTIVE_ENABLED
-        and profile in {"moderate", "strict", "dataset_accounting", "dataset_accounting_pseudo"}
-        and len(detections) < settings.LLM_MIN_DETECTIONS
-        and original_text
-    )
-
-    if should_call_llm:
-        from app.services.llm_assist_service import build_snippets
-        snippets = build_snippets(
-            original_text,
-            max_snippets=settings.LLM_MAX_SNIPPETS,
-            snippet_chars=settings.LLM_SNIPPET_CHARS,
-        )
-        llm_detections, llm_req_obj = await _call_llm_provider(
-            settings, snippets, document, profile, db
+    if not original_text.strip():
+        # Même sans texte (PNG vide, scan illisible…), on persiste les versions pour
+        # GET /preview, export-structured, smoke e2e — sinon 404 + anonymize instable.
+        logger.warning("empty_text_extraction", doc_id=str(document.id))
+    else:
+        # 3) Classify document type
+        effective_type = (
+            classify_document_type(original_text, document.original_filename)
+            if document_type == "auto"
+            else document_type
         )
 
-    # 6) Merge detections (regex + LLM), removing overlaps
-    merged = list(detections)
-    for cand in llm_detections:
-        if not any(_overlaps(cand, existing) for existing in merged):
-            merged.append(cand)
+        # 4) Run regex anonymization
+        preview_text, detections = anonymize_text(
+            original_text, profile=profile, document_type=effective_type
+        )
 
-    # Re-apply if LLM added detections
-    if llm_detections:
-        preview_text = _apply_replacements(original_text, merged)
+        # 5) Optionally call LLM/NER provider for additional spans
+        should_call_llm = (
+            settings.LLM_ASSISTIVE_ENABLED
+            and profile in {"moderate", "strict", "dataset_accounting", "dataset_accounting_pseudo"}
+            and len(detections) < settings.LLM_MIN_DETECTIONS
+            and original_text
+        )
+
+        if should_call_llm:
+            from app.services.llm_assist_service import build_snippets
+
+            snippets = build_snippets(
+                original_text,
+                max_snippets=settings.LLM_MAX_SNIPPETS,
+                snippet_chars=settings.LLM_SNIPPET_CHARS,
+            )
+            llm_detections, llm_req_obj = await _call_llm_provider(
+                settings, snippets, document, profile, db
+            )
+
+        # 6) Merge detections (regex + LLM), removing overlaps
+        merged = list(detections)
+        for cand in llm_detections:
+            if not any(_overlaps(cand, existing) for existing in merged):
+                merged.append(cand)
+
+        # Re-apply if LLM added detections
+        if llm_detections:
+            preview_text = _apply_replacements(original_text, merged)
 
     # 7) Persist: clean old data, save new versions/detections
     await db.execute(
