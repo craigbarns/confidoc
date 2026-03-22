@@ -7,6 +7,8 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from app.services.quality_experience import build_quality_experience
+
 
 def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
     return any(k in source for k in keywords)
@@ -1511,6 +1513,12 @@ def _build_contract_payload(
     if text_segmentation:
         provenance["text_segmentation"] = text_segmentation
 
+    experience = build_quality_experience(
+        doc_type=doc_type,
+        quality=quality_out,
+        provenance=provenance,
+    )
+
     return {
         "doc_type": doc_type,
         "detected_doc_type": detected_doc_type,
@@ -1524,6 +1532,7 @@ def _build_contract_payload(
         "tables": tables,
         "quality": quality_out,
         "provenance": provenance,
+        "experience": experience,
     }
 
 

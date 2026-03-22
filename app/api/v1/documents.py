@@ -960,6 +960,8 @@ async def document_dataset_summary(
 ) -> JSONResponse:
     """Petit resume pour l'UI : qualite, besoin de revue, nombre de lignes comptables.
 
+    Inclut `experience` (phrase cle + details) aligne sur export-structured-dataset.
+
     RGPD-friendly : ne renvoie pas l'anonymized_text.
     """
     document = await _get_user_document_or_404(db, document_id, current_user.id)
@@ -1031,6 +1033,8 @@ async def document_dataset_summary(
     merged_quality_flags = list(dict.fromkeys([*quality_flags, *list(structured_quality.get("quality_flags", []))]))
     accounting_records = _extract_accounting_records(dataset_text)
 
+    experience = structured.get("experience") if isinstance(structured, dict) else None
+
     return JSONResponse(
         {
             "document_id": str(document.id),
@@ -1044,6 +1048,7 @@ async def document_dataset_summary(
                 "critical_missing_fields": structured_quality.get("critical_missing_fields", []),
                 "ready_for_ai": bool(structured_quality.get("ready_for_ai", False)),
             },
+            "experience": experience,
             "accounting_records_count": len(accounting_records),
         }
     )

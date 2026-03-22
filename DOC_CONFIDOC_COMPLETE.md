@@ -96,6 +96,9 @@ Le payload structured dataset expose un contrat commun:
 - `tables` (tables metier structurees)
 - `quality`
 - `provenance`
+- `experience` (synthese lisible : `level`, `headline_fr`, `items[]`, `segmentation_note_fr`, `metrics`)
+
+`experience` permet d'afficher une phrase cle et des points actionnables sans parser `quality_flags` a la main.
 
 `quality` est normalise avec au minimum:
 - `coverage_ratio`
@@ -111,6 +114,7 @@ Le payload structured dataset expose un contrat commun:
 - nom extracteur selectionne
 - version routeur
 - source filename
+- optionnel : `text_segmentation` (smart split : strategie, scores, repli texte integral si meilleure qualite)
 
 ---
 

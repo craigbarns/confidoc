@@ -1,5 +1,7 @@
 # ROADMAP 90 Jours - ConfiDoc
 
+> Vision long terme et pistes « produit exceptionnel » : voir **`PROGRAMME_INCREDIBLE.md`**.
+
 ## 1) Objectif global
 
 Passer de "pipeline fonctionnel" a "plateforme extracteurs comptables robuste et pilotable par KPI".

@@ -598,6 +598,9 @@ async function refreshMaskedSummary(docId) {
     // Dataset quality for the "à revoir" card (no raw text).
     const qRes = await api(`/api/v1/documents/${docId}/dataset-summary`);
     const quality = qRes.data && qRes.data.quality ? qRes.data.quality : {};
+    const experience = qRes.data && qRes.data.experience ? qRes.data.experience : null;
+    const experienceHeadline = experience && experience.headline_fr ? experience.headline_fr : "";
+    const experienceSeg = experience && experience.segmentation_note_fr ? experience.segmentation_note_fr : "";
     const accountingCount = qRes.data ? qRes.data.accounting_records_count : null;
     const requested = currentDocTypeRequested();
     const sRes = await api(`/api/v1/documents/${docId}/export-structured-dataset?doc_type=${encodeURIComponent(requested)}`);
@@ -643,6 +646,7 @@ async function refreshMaskedSummary(docId) {
     const maskedCats = fusedEntries.filter(([cat,_]) => cat !== "Montants").slice(0, 8);
 
     function qualityLabel() {
+      if (experienceHeadline) return experienceHeadline;
       if (!quality.needs_review) return "Aucun point qualité bloquant détecté.";
       if (qualityFlagsCount > 0) return `${qualityFlagsCount} point(s) qualité à revoir avant validation.`;
       return "Revue manuelle ciblée recommandée.";
@@ -725,6 +729,7 @@ async function refreshMaskedSummary(docId) {
           <div class="proof-card-title">À revoir</div>
           <div class="proof-card-value">${quality.needs_review ? "Revue recommandée" : "Aucune revue requise"}</div>
           <div class="proof-card-sub">${qualityLabel()}</div>
+          ${experienceSeg ? `<div class="proof-card-sub" style="opacity:0.92;font-size:0.9em">${experienceSeg}</div>` : ""}
           <div class="proof-card-sub" style="white-space:pre-wrap">${reviewDetails}</div>
           <div class="proof-card-sub" style="margin-top:6px;font-weight:700">Champs critiques manquants</div>
           <div class="proof-card-sub" style="white-space:pre-wrap">${criticalDetails}</div>
