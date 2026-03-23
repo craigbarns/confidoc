@@ -39,3 +39,12 @@ def test_common_fields_accepts_real_company_label():
     fields = _extract_common_fields(text)
     assert fields["societe"]["value"] == "CABINET COMPTABLE ALPHA"
     assert fields["societe"]["review_required"] is False
+
+
+def test_common_fields_rejects_non_company_phrase():
+    text = """
+    Cette société a pour objet la rénovation.
+    """
+    fields = _extract_common_fields(text)
+    assert fields["societe"]["value"] is None
+    assert fields["societe"]["review_required"] is True

@@ -30,6 +30,12 @@ def classify_doc_type_scored(
     source = f"{filename}\n{text[:20000]}".lower()
 
     rules: list[tuple[str, tuple[str, ...], int]] = [
+        ("statuts_societe", (
+            "statuts", "société à responsabilité limitée", "société par actions simplifiée",
+            "forme juridique", "capital social", "siège social", "siege social",
+            "objet social", "durée", "duree", "immatriculée au rcs", "immatriculee au rcs",
+            "greffe",
+        ), 3),
         ("liasse_is_simplifiee", (
             "2065", "2065-sd", "2033-a", "2033-b",
             "bilan simplifié", "bilan simplifie",
@@ -535,6 +541,8 @@ def _clean_company_label(value: str | None) -> str | None:
     if not s:
         return None
     up = s.upper()
+    if "A POUR OBJET" in up:
+        return None
     generic = {
         "GENERALE",
         "SOCIETE",
@@ -1780,6 +1788,23 @@ def _extractor_fiscal_2072(source_text: str, _anonymized_text: str) -> Structure
     )
 
 
+def _extractor_statuts_societe(source_text: str, anonymized_text: str) -> StructuredExtractionResult:
+    fields = _extract_common_fields(source_text)
+    quality = _quality(fields)
+    flags = set(quality.get("quality_flags") or [])
+    flags.add("doc_type_not_supported_yet")
+    quality["quality_flags"] = sorted(flags)
+    quality["needs_review"] = True
+    quality["ready_for_ai"] = False
+    quality["ready_for_ai_core"] = False
+    return StructuredExtractionResult(
+        fields=fields,
+        tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
+        quality=quality,
+        extractor_name="extractor_statuts_societe_stub",
+    )
+
+
 def _extractor_releve_bancaire(source_text: str, _anonymized_text: str) -> StructuredExtractionResult:
     fields = _extract_releve_bancaire_fields(source_text)
     tables = {"operations": _extract_releve_bancaire_operations(source_text)}
@@ -1796,6 +1821,7 @@ EXTRACTOR_REGISTRY_V1: dict[str, Any] = {
     "compte_resultat": _extractor_compte_resultat,
     "fiscal_2072": _extractor_fiscal_2072,
     "releve_bancaire": _extractor_releve_bancaire,
+    "statuts_societe": _extractor_statuts_societe,
 }
 
 
