@@ -8,24 +8,10 @@ from datetime import datetime, timezone
 from typing import Any
 
 from app.core.logging import get_logger
+from app.services.extraction_thresholds import THRESHOLDS
 from app.services.quality_experience import build_quality_experience
 
 logger = get_logger(__name__)
-
-# Centralized thresholds (v1): tune extraction behavior without editing business logic.
-THRESHOLDS: dict[str, float] = {
-    "amount_min_default": 100.0,
-    "amount_min_low": 50.0,
-    "amount_abs_hard_cap": 5_000_000.0,
-    "component_abs_hard_cap": 10_000_000.0,
-    "component_vs_passif_ratio_cap": 1.2,
-    "quality_ready_coverage_min": 0.8,
-    "quality_ready_consistency_min": 0.85,
-    "quality_core_numeric_min": 0.85,
-    "quality_core_aggregate_min": 0.85,
-    "aggregate_rel_tolerance": 0.03,
-    "aggregate_abs_tolerance_min": 2.0,
-}
 
 
 def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
