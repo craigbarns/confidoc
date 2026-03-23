@@ -906,15 +906,72 @@ def _extract_liasse_is_simplifiee(text: str) -> dict[str, dict[str, Any]]:
         r"(?:r[ée]gime\s+simplifi[ée]\s+d[' ]imposition|regime\s+simplifie\s+d[' ]imposition)",
         text,
     )
+    total_actif = _value(bilan.get("total_actif", {}))
+    total_passif = _value(bilan.get("total_passif", {}))
+    chiffre_affaires = _value(cr.get("chiffre_affaires", {}))
+    resultat_exercice = _value(bilan.get("resultat_exercice", {}))
+    resultat_net = _value(cr.get("resultat_net", {}))
+
+    if total_actif is None:
+        total_actif = _extract_first_amount_from_patterns(
+            text,
+            [
+                r"total\s+g[ée]n[ée]ral\s+actif",
+                r"total\s+actif",
+                r"actif\s+total",
+            ],
+            min_amount=100.0,
+        )
+    if total_passif is None:
+        total_passif = _extract_first_amount_from_patterns(
+            text,
+            [
+                r"total\s+g[ée]n[ée]ral\s+passif",
+                r"total\s+passif",
+                r"passif\s+total",
+            ],
+            min_amount=100.0,
+        )
+    if total_actif is None and isinstance(total_passif, (int, float)):
+        total_actif = float(total_passif)
+    if total_passif is None and isinstance(total_actif, (int, float)):
+        total_passif = float(total_actif)
+
+    if chiffre_affaires is None:
+        chiffre_affaires = _extract_first_amount_from_patterns(
+            text,
+            [
+                r"chiffre\s+d[' ]affaires",
+                r"ventes?\s+de\s+marchandises?",
+                r"production\s+vendue.{0,20}services?",
+            ],
+            min_amount=50.0,
+        )
+    if resultat_exercice is None:
+        resultat_exercice = _extract_first_amount_from_patterns(
+            text,
+            [
+                r"r[ée]sultat\s+de?\s+l[' ]?exercice",
+                r"b[ée]n[ée]fice\s+net",
+            ],
+            min_amount=50.0,
+        )
+    if resultat_net is None and isinstance(resultat_exercice, (int, float)):
+        resultat_net = float(resultat_exercice)
+
     return {
         "liasse_type": _field("2065_2033", 0.9, "liasse:is_simplifiee"),
         "exercice": _field(exercice, 0.85 if exercice else 0.0, "header:exercice"),
         "regime_imposition": _field(regime or "rsi", 0.75 if regime else 0.55, "header:regime"),
-        "total_actif": bilan.get("total_actif", _field(None, 0.0, "bilan:total_actif")),
-        "total_passif": bilan.get("total_passif", _field(None, 0.0, "bilan:total_passif")),
-        "chiffre_affaires": cr.get("chiffre_affaires", _field(None, 0.0, "cr:chiffre_affaires")),
-        "resultat_exercice": bilan.get("resultat_exercice", _field(None, 0.0, "bilan:resultat_exercice")),
-        "resultat_net": cr.get("resultat_net", _field(None, 0.0, "cr:resultat_net")),
+        "total_actif": _field(total_actif, 0.84 if total_actif is not None else 0.0, "liasse:total_actif"),
+        "total_passif": _field(total_passif, 0.84 if total_passif is not None else 0.0, "liasse:total_passif"),
+        "chiffre_affaires": _field(
+            chiffre_affaires, 0.82 if chiffre_affaires is not None else 0.0, "liasse:chiffre_affaires"
+        ),
+        "resultat_exercice": _field(
+            resultat_exercice, 0.82 if resultat_exercice is not None else 0.0, "liasse:resultat_exercice"
+        ),
+        "resultat_net": _field(resultat_net, 0.82 if resultat_net is not None else 0.0, "liasse:resultat_net"),
     }
 
 
