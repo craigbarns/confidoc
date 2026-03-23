@@ -1,0 +1,32 @@
+SAS WEMADE
+41 RUE FONGATE 13006 MARSEILLE
+SIRET: 83241942800038
+Exercice du 01/01/2023 au 31/12/2023
+BILAN AU 31/12/2023
+ACTIF
+Actif Immobilise:
+  Immobilisations incorporelles: 23 608 EUR (net)
+  Immobilisations corporelles: 23 608 EUR (net)
+  Immobilisations financieres: 2 149 EUR (net)
+  Total I: 25 757 EUR (net)
+Actif Circulant:
+  Creances clients: 7 749 EUR
+  Autres creances: 516 894 EUR
+  Disponibilites: 7 758 EUR
+  Total II: 532 402 EUR
+Total General Actif: 558 159 EUR
+PASSIF
+Capitaux Propres:
+  Capital social: 100 EUR
+  Reserve legale: 10 EUR
+  Autres reserves: 250 752 EUR
+  Resultat de l'exercice: 108 567 EUR
+  Total I: 359 429 EUR
+Dettes:
+  Emprunts: 31 237 EUR
+  Fournisseurs: 58 450 EUR
+  Dettes fiscales et sociales: 61 178 EUR
+  Comptes courants associes: 37 EUR
+  Autres dettes: 47 827 EUR
+  Total III: 198 730 EUR
+Total General Passif: 558 159 EUR

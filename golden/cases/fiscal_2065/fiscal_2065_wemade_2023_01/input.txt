@@ -1,0 +1,15 @@
+DECLARATION N° 2065 - IMPOT SUR LES SOCIETES
+SAS WEMADE - SIRET: 83241942800038
+Exercice du 01/01/2023 au 31/12/2023
+CADRE C - RECAPITULATION DES ELEMENTS D'IMPOSITION:
+1. Resultat fiscal:
+   Benefice imposable au taux normal: 96 929 EUR
+   Benefice imposable a 15%: 42 500 EUR
+2. Plus-values: (neant)
+3. Abattements et exonerations: (neant)
+RESULTAT FISCAL AVANT IMPUTATION: 139 429 EUR
+RESULTAT FISCAL APRES IMPUTATION: 139 429 EUR
+CADRE I - DISTRIBUTIONS:
+Montant global brut des distributions: 86 714 EUR
+Revenus eligibles abattement 40%: 86 714 EUR
+IMPOT SUR LES BENEFICES: 30 607 EUR

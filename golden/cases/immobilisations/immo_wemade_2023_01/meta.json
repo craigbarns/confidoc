@@ -1,0 +1,8 @@
+{
+  "id": "immo_wemade_2023_01",
+  "requested_doc_type": "immobilisations",
+  "source_filename": "Etat_des_immoblisations_2023.pdf",
+  "tags": ["real", "cabinet", "clean", "SAS", "2023"],
+  "notes": "Etat des immobilisations SAS WEMADE - Exercice 2023 (draft, extracteur non implemente)",
+  "active": false
+}

@@ -1,0 +1,21 @@
+FORMULAIRE 2033-B - COMPTE DE RESULTAT SIMPLIFIE
+SAS WEMADE - Exercice clos le 31/12/2023
+A - RESULTAT COMPTABLE:
+  Total produits exploitation: 268 099 EUR
+  Total charges exploitation: 112 797 EUR
+  Resultat d'exploitation: 155 302 EUR
+  Resultat financier: -769 EUR
+  Resultat exceptionnel: -15 332 EUR
+  Impots sur benefices: 30 607 EUR
+  BENEFICE NET: 108 567 EUR
+B - RESULTAT FISCAL:
+  Resultat comptable: 108 567 EUR
+  Reintegrations:
+    - Impots non deductibles: 30 607 EUR
+    - Divers: 255 EUR
+  RESULTAT FISCAL: 139 429 EUR
+E - VALEUR AJOUTEE:
+  Chiffre d'affaires: 268 093 EUR
+  Valeur ajoutee produite: 217 668 EUR
+D - EFFECTIFS:
+  Effectif moyen: 1

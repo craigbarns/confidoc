@@ -1,0 +1,22 @@
+ETAT DES IMMOBILISATIONS - SAS WEMADE
+Exercice du 01/01/2023 au 31/12/2023
+IMMOBILISATIONS INCORPORELLES:
+  Installations et agencements divers: 20 658,79 EUR (debut) -> 20 658,79 EUR (fin)
+IMMOBILISATIONS CORPORELLES:
+  Materiel de transport:
+    - MOTO PIAGGIO 500 HPE: 1 494,87 EUR (sortie)
+    - MOTO GUZZI: 12 921,45 EUR (acquisition)
+  Materiel bureau et info: 7 321,68 EUR
+  Mobilier: 1 698,60 EUR
+IMMOBILISATIONS FINANCIERES:
+  Titres de participation: 799,00 EUR
+  Depot et garantie: 1 350,00 EUR
+TOTAL IMMOBILISATIONS:
+  Valeur brute debut: 51 095,37 EUR
+  Acquisitions: 12 921,45 EUR
+  Sorties: 19 267,30 EUR
+  Valeur brute fin: 44 749,52 EUR
+AMORTISSEMENTS:
+  Montant debut: 11 296,00 EUR
+  Dotations: 7 730,00 EUR
+  Montant fin: 18 992,00 EUR
