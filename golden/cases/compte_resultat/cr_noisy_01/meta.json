@@ -5,6 +5,6 @@
   "tags": [
     "noisy"
   ],
-  "notes": "Template de cas golden — compléter expected/min et input.",
-  "active": false
+  "notes": "Cas bruité actif V1 OCR regression",
+  "active": true
 }

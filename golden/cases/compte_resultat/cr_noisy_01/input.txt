@@ -1,2 +1,7 @@
-# cr_noisy_01
-# Remplacez par texte OCR/texte extrait anonymisé
+Denomination : CABINET ALPHA
+Exercice 2024
+Chiffre d affaires 1 200 000
+Charges externes 500 000
+Resultat d exploitation 120 000
+Resultat courant 110 000
+Resultat net 95 000

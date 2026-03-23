@@ -1,2 +1,12 @@
-# bilan_noisy_01
-# Remplacez par texte OCR/texte extrait anonymisé
+Dénominati0n : CABINET ALPHA
+Exercice 2O24
+date de cl0ture 31/12/2024
+Total actif .... 1 250 000
+Total passif .... 1 250 000
+Immobilisations 900 000
+creances 250 000
+disponibilites 100 000
+Dettes financieres 45510000
+Dettes fournisseurs 40100000
+Capitaux propres 300 000
+Résultat de l'exercice 42 000
