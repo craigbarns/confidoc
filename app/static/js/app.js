@@ -656,6 +656,28 @@ function renderDocs(items) {
   });
 }
 
+async function refreshStatusSummary() {
+  if (!accessToken) return;
+  const fullEl = $("sumFullReady");
+  const coreEl = $("sumCoreReady");
+  const reviewEl = $("sumReview");
+  const avgEl = $("sumAvgReady");
+  const flagsEl = $("sumTopFlags");
+  if (!fullEl || !coreEl || !reviewEl || !avgEl || !flagsEl) return;
+  try {
+    const { res, data } = await api("/api/v1/documents/status-summary?days=30&doc_type=auto&max_docs_for_quality=30");
+    if (!res.ok) return;
+    const q = data && data.quality_distribution ? data.quality_distribution : {};
+    fullEl.textContent = String(q.full_ready || 0);
+    coreEl.textContent = String(q.core_ready || 0);
+    reviewEl.textContent = String(q.review || 0);
+    const avg = data && data.avg_ready_latency_seconds;
+    avgEl.textContent = (typeof avg === "number") ? `${avg.toFixed(1)}s` : "—";
+    const top = Array.isArray(data && data.top_quality_flags) ? data.top_quality_flags : [];
+    flagsEl.textContent = top.length ? `${top[0].flag} (${top[0].count})` : "—";
+  } catch {}
+}
+
 async function refreshDocs() {
   if (!accessToken) return;
   try {
@@ -664,6 +686,7 @@ async function refreshDocs() {
     if (res.ok) {
       renderDocs(data);
       await refreshDocDetections(data);
+      await refreshStatusSummary();
     }
   } catch(e) { toast("Erreur réseau", "error"); }
 }

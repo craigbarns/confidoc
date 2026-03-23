@@ -3,6 +3,7 @@
 import uuid
 import re
 import hashlib
+from collections import Counter
 from io import BytesIO
 
 from typing import Literal
@@ -253,6 +254,103 @@ async def list_documents(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+@router.get(
+    "/status-summary",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Synthèse analytics des statuts documents",
+)
+async def status_summary(
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = Query(default=30, ge=1, le=365),
+    doc_type: str = Query(default="auto"),
+    max_docs_for_quality: int = Query(default=30, ge=1, le=100),
+) -> JSONResponse:
+    """Retourne une vue synthétique pour pilotage produit/ops.
+
+    V1: compteurs de statuts + répartition full/core/review + top quality flags.
+    """
+    cutoff_expr = func.now() - func.make_interval(days=days)
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.created_at >= cutoff_expr,
+        )
+        .order_by(desc(Document.created_at))
+    )
+    docs = list(result.scalars().all())
+
+    counts_by_status = Counter(str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown") for d in docs)
+    by_extension = Counter(str((d.extension or "unknown")).lower() for d in docs)
+
+    ready_docs = [d for d in docs if d.status == DocumentStatus.READY]
+    avg_ready_latency_seconds = None
+    if ready_docs:
+        lags = []
+        for d in ready_docs:
+            if d.created_at and d.updated_at:
+                lag = (d.updated_at - d.created_at).total_seconds()
+                if lag >= 0:
+                    lags.append(lag)
+        if lags:
+            avg_ready_latency_seconds = round(sum(lags) / len(lags), 2)
+
+    # Quality distribution (sampled for cost/perf control).
+    sampled_ready = ready_docs[:max_docs_for_quality]
+    quality_dist = {"full_ready": 0, "core_ready": 0, "review": 0}
+    quality_flags_counter: Counter[str] = Counter()
+    quality_errors = 0
+
+    for d in sampled_ready:
+        try:
+            original_text = await _get_original_text(db, d)
+            if not original_text:
+                quality_errors += 1
+                continue
+            effective_type = classify_document_type(original_text, d.original_filename)
+            anonymized_text, _ = anonymize_text(
+                original_text,
+                profile="dataset_accounting",
+                document_type=effective_type,
+            )
+            structured = build_structured_dataset(
+                anonymized_text=anonymized_text,
+                original_filename=d.original_filename,
+                requested_doc_type=doc_type,
+                extraction_text=original_text,
+            )
+            q = structured.get("quality") or {}
+            if q.get("ready_for_ai") is True:
+                quality_dist["full_ready"] += 1
+            elif q.get("ready_for_ai_core") is True:
+                quality_dist["core_ready"] += 1
+            else:
+                quality_dist["review"] += 1
+            quality_flags_counter.update([str(x) for x in (q.get("quality_flags") or [])])
+        except Exception:
+            quality_errors += 1
+
+    return JSONResponse(
+        {
+            "window_days": days,
+            "documents_total": len(docs),
+            "counts_by_status": dict(counts_by_status),
+            "counts_by_extension": dict(by_extension),
+            "ready_docs_count": len(ready_docs),
+            "avg_ready_latency_seconds": avg_ready_latency_seconds,
+            "quality_distribution": quality_dist,
+            "top_quality_flags": [
+                {"flag": flag, "count": cnt}
+                for flag, cnt in quality_flags_counter.most_common(7)
+            ],
+            "quality_sampled_docs": len(sampled_ready),
+            "quality_errors": quality_errors,
+        }
+    )
 
 
 @router.delete(

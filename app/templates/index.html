@@ -66,6 +66,13 @@
         <div class="stat-card violet"><div class="stat-label">En cours</div><div class="stat-value" id="statProcessing">0</div><div class="stat-sub">en traitement</div></div>
         <div class="stat-card amber"><div class="stat-label">Détections</div><div class="stat-value" id="statDetections">—</div><div class="stat-sub" id="statDetectionsSub">dernier document traité</div></div>
       </div>
+      <div class="status-summary-row">
+        <div class="status-chip full">Full Ready <b id="sumFullReady">0</b></div>
+        <div class="status-chip core">Core Ready <b id="sumCoreReady">0</b></div>
+        <div class="status-chip review">Review <b id="sumReview">0</b></div>
+        <div class="status-chip neutral">Latence moyenne prêt <b id="sumAvgReady">—</b></div>
+        <div class="status-chip neutral">Top flags <b id="sumTopFlags">—</b></div>
+      </div>
       <div class="purge-all-row">
         <button type="button" id="purgeAllDocsBtn" class="btn-act danger">🗑️ Vider tous mes documents</button>
         <span class="purge-all-hint">Supprime définitivement tous vos fichiers et entrées (irréversible).</span>
