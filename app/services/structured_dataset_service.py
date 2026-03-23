@@ -7,7 +7,10 @@ from dataclasses import dataclass
 from datetime import datetime, timezone
 from typing import Any
 
+from app.core.logging import get_logger
 from app.services.quality_experience import build_quality_experience
+
+logger = get_logger(__name__)
 
 
 def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
@@ -1620,6 +1623,20 @@ def _build_contract_payload(
     }
 
 
+def _fallback_source_stats(fields: dict[str, dict[str, Any]]) -> dict[str, int]:
+    """Count source families to observe extractor behavior in production."""
+    stats: dict[str, int] = {}
+    for item in (fields or {}).values():
+        if not isinstance(item, dict):
+            continue
+        src = str(item.get("source_hint") or "")
+        family = "missing"
+        if src:
+            family = src.split(":", 1)[0]
+        stats[family] = stats.get(family, 0) + 1
+    return stats
+
+
 def build_structured_dataset(
     anonymized_text: str,
     original_filename: str = "",
@@ -1691,7 +1708,7 @@ def build_structured_dataset(
         if n_mark:
             text_segmentation = {**text_segmentation, "pdf_page_markers_in_source": n_mark}
 
-    return _build_contract_payload(
+    payload = _build_contract_payload(
         doc_type=doc_type,
         detected_doc_type=detected_doc_type,
         routing_confidence=routing_confidence,
@@ -1705,4 +1722,27 @@ def build_structured_dataset(
         extractor_name=extracted.extractor_name,
         text_segmentation=text_segmentation,
     )
+    quality = payload.get("quality") if isinstance(payload, dict) else {}
+    critical_missing = (
+        quality.get("critical_missing_fields", [])
+        if isinstance(quality, dict)
+        else []
+    )
+    fallback_stats = _fallback_source_stats(payload.get("fields", {})) if isinstance(payload, dict) else {}
+    logger.info(
+        "structured_dataset_built",
+        requested_doc_type=requested_doc_type,
+        doc_type=payload.get("doc_type") if isinstance(payload, dict) else doc_type,
+        detected_doc_type=payload.get("detected_doc_type") if isinstance(payload, dict) else detected_doc_type,
+        extractor_name=payload.get("provenance", {}).get("extractor_name") if isinstance(payload, dict) else extracted.extractor_name,
+        routing_confidence=payload.get("routing_confidence") if isinstance(payload, dict) else routing_confidence,
+        coverage_ratio=(quality or {}).get("coverage_ratio") if isinstance(quality, dict) else None,
+        ready_for_ai=(quality or {}).get("ready_for_ai") if isinstance(quality, dict) else False,
+        ready_for_ai_core=(quality or {}).get("ready_for_ai_core") if isinstance(quality, dict) else False,
+        needs_review=(quality or {}).get("needs_review") if isinstance(quality, dict) else True,
+        critical_missing_count=len(critical_missing) if isinstance(critical_missing, list) else 0,
+        quality_flags=(quality or {}).get("quality_flags") if isinstance(quality, dict) else [],
+        fallback_source_stats=fallback_stats,
+    )
+    return payload
 
