@@ -23,9 +23,28 @@ Comparer seulement:
 5. `quality_flags_must_include` / `quality_flags_must_exclude`
 6. `needs_review`, `ready_for_ai`, `ready_for_ai_core`
 
-## Commande
+## Commande (runner V2)
 
-Intégrer ces cas dans le runner golden pour obtenir:
+```bash
+python scripts/run_golden_v2.py
+```
+
+Exemples utiles:
+
+```bash
+# Un seul cas
+python scripts/run_golden_v2.py --case-id 2072_clean_01
+
+# Racine personnalisée
+python scripts/run_golden_v2.py --cases-root golden/cases
+```
+
+```bash
+# Inclure aussi les templates/drafts (meta.active=false)
+python scripts/run_golden_v2.py --include-inactive
+```
+
+Sortie:
 
 - PASS/FAIL par cas
-- diff lisible sur champs critiques/flags/statuts
+- diff lisible sur champs critiques, flags qualite et statuts
