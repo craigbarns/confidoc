@@ -1,0 +1,9 @@
+{
+  "id": "bilan_noisy_02",
+  "requested_doc_type": "bilan",
+  "source_filename": "bilan_noisy_02.pdf",
+  "tags": [
+    "noisy"
+  ],
+  "notes": "Template de cas golden — compléter expected/min et input."
+}

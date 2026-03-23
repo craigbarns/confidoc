@@ -1,0 +1,9 @@
+{
+  "id": "2072_noisy_01",
+  "requested_doc_type": "fiscal_2072",
+  "source_filename": "2072_noisy_01.pdf",
+  "tags": [
+    "noisy"
+  ],
+  "notes": "Template de cas golden — compléter expected/min et input."
+}

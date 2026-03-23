@@ -1,0 +1,9 @@
+{
+  "id": "cr_noisy_02",
+  "requested_doc_type": "compte_resultat",
+  "source_filename": "cr_noisy_02.pdf",
+  "tags": [
+    "noisy"
+  ],
+  "notes": "Template de cas golden — compléter expected/min et input."
+}

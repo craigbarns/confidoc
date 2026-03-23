@@ -1,0 +1,73 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "ConfiDoc Golden Expected Minimal",
+  "type": "object",
+  "required": [
+    "doc_type",
+    "critical_fields",
+    "quality"
+  ],
+  "properties": {
+    "doc_type": {
+      "type": "string"
+    },
+    "extractor_name": {
+      "type": "string"
+    },
+    "critical_fields": {
+      "type": "object",
+      "additionalProperties": {
+        "anyOf": [
+          {
+            "type": "number"
+          },
+          {
+            "type": "string"
+          },
+          {
+            "type": "boolean"
+          },
+          {
+            "type": "null"
+          }
+        ]
+      }
+    },
+    "quality": {
+      "type": "object",
+      "required": [
+        "critical_missing_fields",
+        "needs_review"
+      ],
+      "properties": {
+        "critical_missing_fields": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quality_flags_must_include": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "quality_flags_must_exclude": {
+          "type": "array",
+          "items": {
+            "type": "string"
+          }
+        },
+        "needs_review": {
+          "type": "boolean"
+        },
+        "ready_for_ai": {
+          "type": "boolean"
+        },
+        "ready_for_ai_core": {
+          "type": "boolean"
+        }
+      }
+    }
+  }
+}

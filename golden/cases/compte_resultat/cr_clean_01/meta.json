@@ -1,0 +1,9 @@
+{
+  "id": "cr_clean_01",
+  "requested_doc_type": "compte_resultat",
+  "source_filename": "cr_clean_01.pdf",
+  "tags": [
+    "clean"
+  ],
+  "notes": "Template de cas golden — compléter expected/min et input."
+}
