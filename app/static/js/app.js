@@ -1,6 +1,7 @@
 let accessToken = "";
 let currentDocs = [];
 let docDetectionMap = {};
+let docQualityMap = {};
 let lastAnonDocId = null;
 let lastAnonText = "";
 let lastOriginalDocId = null;
@@ -500,6 +501,46 @@ function setDocDetection(docId, count) {
   if (el) el.textContent = `entités: ${count}`;
 }
 
+function qualityBadgeFromQuality(q) {
+  const quality = q || {};
+  if (quality.ready_for_ai === true) {
+    return {
+      cls: "full-ready",
+      label: "Full Ready",
+      hint: "Extraction complète validée, prête pour export automatisé.",
+    };
+  }
+  if (quality.ready_for_ai_core === true) {
+    return {
+      cls: "core-ready",
+      label: "Core Ready",
+      hint: "Données critiques validées ; enrichissement secondaire recommandé.",
+    };
+  }
+  if (quality.needs_review === true) {
+    return {
+      cls: "review",
+      label: "Review",
+      hint: "Revue manuelle recommandée avant usage automatisé.",
+    };
+  }
+  return {
+    cls: "unknown",
+    label: "Analyse",
+    hint: "Qualité en cours d'évaluation.",
+  };
+}
+
+function setDocQualityBadge(docId, quality) {
+  docQualityMap[docId] = quality || null;
+  const el = document.querySelector(`[data-doc-quality="${docId}"]`);
+  if (!el) return;
+  const badge = qualityBadgeFromQuality(quality || {});
+  el.className = `doc-kpi doc-quality ${badge.cls}`;
+  el.textContent = badge.label;
+  el.title = badge.hint;
+}
+
 async function api(path, opts={}) {
   const headers = opts.headers || {};
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
@@ -588,6 +629,7 @@ function renderDocs(items) {
         <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span><span class="doc-status ${doc.status}">${statusLabel(doc.status)}</span></div>
         <div class="doc-kpis">
           <span class="doc-kpi" data-doc-detection="${doc.id}">${docDetectionMap[doc.id] != null ? `entités: ${docDetectionMap[doc.id]}` : "entités: —"}</span>
+          <span class="doc-kpi doc-quality unknown" data-doc-quality="${doc.id}">Analyse</span>
         </div>
         <div class="doc-next">${nextAction(doc)}</div>
         <div class="doc-actions">
@@ -610,6 +652,7 @@ function renderDocs(items) {
         </div>
       </div>`;
     docList.appendChild(el);
+    setDocQualityBadge(doc.id, docQualityMap[doc.id]);
   });
 }
 
@@ -632,6 +675,17 @@ async function refreshDocDetections(items) {
       const {res, data} = await api(`/api/v1/documents/${doc.id}/preview`);
       if (res.ok) setDocDetection(doc.id, data.detections_count || 0);
     } catch {}
+    try {
+      const { res, data } = await api(`/api/v1/documents/${doc.id}/dataset-summary`);
+      if (res.ok) {
+        const q = (data && data.quality) ? data.quality : {};
+        setDocQualityBadge(doc.id, q);
+      } else {
+        setDocQualityBadge(doc.id, null);
+      }
+    } catch {
+      setDocQualityBadge(doc.id, null);
+    }
   }
 }
 

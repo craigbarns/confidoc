@@ -133,6 +133,11 @@ body{background:var(--bg-deep)}
 .doc-item .doc-meta{font-size:11px;color:var(--text-dim);margin-top:2px;display:flex;align-items:center;gap:8px}
 .doc-item .doc-kpis{font-size:11px;color:var(--text-dim);margin-top:6px;display:flex;align-items:center;gap:8px;flex-wrap:wrap}
 .doc-item .doc-kpi{display:inline-flex;align-items:center;padding:2px 7px;border-radius:999px;border:1px solid var(--glass-border);background:rgba(2,6,23,0.45)}
+.doc-item .doc-kpi.doc-quality{font-weight:700;letter-spacing:.01em}
+.doc-item .doc-kpi.doc-quality.full-ready{border-color:rgba(16,185,129,0.45);color:var(--emerald);background:rgba(16,185,129,0.12)}
+.doc-item .doc-kpi.doc-quality.core-ready{border-color:rgba(59,130,246,0.45);color:var(--accent);background:rgba(59,130,246,0.12)}
+.doc-item .doc-kpi.doc-quality.review{border-color:rgba(245,158,11,0.45);color:var(--amber);background:rgba(245,158,11,0.12)}
+.doc-item .doc-kpi.doc-quality.unknown{border-color:var(--glass-border);color:var(--text-dim);background:rgba(2,6,23,0.45)}
 .doc-item .doc-next{margin-top:8px;padding:8px 10px;border-radius:8px;border:1px dashed var(--glass-border);background:rgba(2,6,23,0.35);font-size:12px;color:var(--text-muted)}
 .doc-item .doc-status{display:inline-flex;align-items:center;gap:4px;padding:3px 8px;border-radius:6px;font-size:10px;font-weight:600;text-transform:uppercase;letter-spacing:.04em;flex-shrink:0}
 .doc-status.uploaded{background:rgba(59,130,246,0.12);color:var(--accent)}
