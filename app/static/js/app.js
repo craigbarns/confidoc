@@ -64,6 +64,19 @@ function downloadJsonFile(filename, data) {
   }
 }
 
+function triggerBlobDownload(blob, filename) {
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement("a");
+  a.href = url;
+  a.download = filename;
+  a.style.display = "none";
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  // Safari peut annuler le download si on revoke immédiatement.
+  setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
 function highlightTags(text) {
   if (!text) return "Aucune donnée.";
   const map = {"EMAIL":"tag-email","PHONE":"tag-phone","PERSON":"tag-person","ADDRESS":"tag-address","CITY":"tag-city"};
@@ -1098,17 +1111,19 @@ docList.addEventListener("click", async e => {
     } else if (action === "rerunextract") {
       setStage("extract", `Relance extraction (${requestedDocType}) en cours...`);
       toast(`Relance extraction (${requestedDocType})…`, "info");
-      const {res, data} = await api(`/api/v1/documents/${id}/anonymize?profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
+      // Utilise l'endpoint structuré (plus léger et plus stable) au lieu de renvoyer tout le preview anonymisé.
+      const {res, data} = await api(`/api/v1/documents/${id}/export-structured-dataset?doc_type=${encodeURIComponent(requestedDocType)}`);
       showApi(data);
-      if (res.ok) {
-        setAnonymizedPreview(id, data.preview_text||"");
-        setDetections(data.detections_count||0, "dernier document traité");
-        setDocDetection(id, data.detections_count||0);
-        toast(`Extraction relancée (${requestedDocType})`, "success");
-        setStage("extract", `Extraction relancée (${requestedDocType}) terminée.`);
-      } else {
+      if (!res.ok) {
         toast(data.detail || "Relance extraction échouée", "error");
+        return;
       }
+      const q = (data && data.quality) ? data.quality : {};
+      setDocQualityBadge(id, q);
+      const badge = qualityBadgeFromQuality(q);
+      toast(`Extraction relancée (${requestedDocType}) • ${badge.label}`, "success");
+      setStage("extract", `Extraction relancée (${requestedDocType}) terminée.`);
+      await refreshMaskedSummary(id);
     } else if (action === "preview") {
       const {res, data} = await api(`/api/v1/documents/${id}/preview`);
       showApi(data);
@@ -1184,12 +1199,7 @@ docList.addEventListener("click", async e => {
         return;
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `rapport_confidoc_${id}.doc`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `rapport_confidoc_${id}.doc`);
       toast("Rapport .doc téléchargé", "success");
     } else if (action === "exportreportpdf") {
       toast("Génération du rapport .pdf…", "info");
@@ -1202,12 +1212,7 @@ docList.addEventListener("click", async e => {
         return;
       }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a");
-      a.href = url;
-      a.download = `rapport_confidoc_${id}.pdf`;
-      a.click();
-      URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `rapport_confidoc_${id}.pdf`);
       toast("Rapport .pdf téléchargé", "success");
     } else if (action === "aisummary") {
       toast("Génération de la synthèse IA…", "info");
