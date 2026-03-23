@@ -97,6 +97,8 @@ def _to_float_fr(num_text: str | None) -> float | None:
         return None
     raw = num_text.replace("\u00a0", " ")
     raw = raw.replace("€", "").replace("eur", "").replace("EUR", "")
+    # Anti-bruit OCR sur les chiffres (O/0).
+    raw = raw.replace("O", "0").replace("o", "0")
     raw = raw.strip()
     raw = re.sub(r"[ ]+", "", raw)
     raw = raw.replace(",", ".")
@@ -119,7 +121,7 @@ def _extract_first(pattern: str, text: str, flags: int = re.IGNORECASE) -> str |
 
 
 def _extract_amount_for_label(text: str, label_regex: str) -> float | None:
-    pat = rf"{label_regex}[^0-9\-]{{0,40}}([0-9][0-9\s\u00a0.,]{{0,30}})"
+    pat = rf"{label_regex}[^0-9\-]{{0,40}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
     return _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
 
 
@@ -169,7 +171,11 @@ def _extract_amount_from_lines_with_keyword(
         line = raw.strip()
         if not line or not pat_kw.search(line):
             continue
-        m = re.search(r"([0-9][0-9\s\u00a0.,]{0,30})\s*$", line)
+        m = re.search(
+            r"([0-9Oo][0-9Oo \t\u00a0.,]{0,30})(?:\s*€|\s*EUR)?\s*$",
+            line,
+            re.IGNORECASE,
+        )
         if not m:
             continue
         v = _clean_amount_candidate(_to_float_fr(m.group(1)))
@@ -186,7 +192,7 @@ def _extract_financial_amount_for_label_wide(
     min_amount: float = THRESHOLDS["amount_min_default"],
 ) -> float | None:
     """Like _extract_financial_amount_for_label but allows a wider gap (multi-column OCR layouts)."""
-    pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9][0-9\s\u00a0.,]{{0,30}})"
+    pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
     value = _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
     if value is None:
         return None
@@ -215,7 +221,7 @@ def _extract_amount_after_keyword_multiline(
                 continue
             # Prefer last number on the line (typical table: label ... amount).
             candidates: list[float] = []
-            for m in re.finditer(r"([0-9][0-9\s\u00a0.,]{0,30})(?:\s*$|\s*€|\s*EUR)?", scan, re.IGNORECASE):
+            for m in re.finditer(r"([0-9Oo][0-9Oo \t\u00a0.,]{0,30})(?:\s*$|\s*€|\s*EUR)?", scan, re.IGNORECASE):
                 v = _clean_amount_candidate(_to_float_fr(m.group(1)))
                 if isinstance(v, float) and abs(v) >= min_amount:
                     candidates.append(v)
@@ -805,11 +811,11 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     # V3 focus: reliably fill only critical fields first.
     denom = _extract_value_near_label(
         header_zone,
-        r"d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci",
+        r"d[ée]n[o0]mination\s+de\s+(?:la|1a|l[4a])\s+s[o0]ci[ée]t[ée]|d[ée]n[o0]mination\s+sci",
         r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
     ) or _extract_value_near_label(
         text,
-        r"d[ée]nomination\s+de\s+la\s+soci[ée]t[ée]|d[ée]nomination\s+sci",
+        r"d[ée]n[o0]mination\s+de\s+(?:la|1a|l[4a])\s+s[o0]ci[ée]t[ée]|d[ée]n[o0]mination\s+sci",
         r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
     )
 
@@ -824,7 +830,7 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     nb_associes = _extract_first_int_from_patterns(
         header_zone + "\n" + text,
         [
-            r"(?:nombre\s+d[' ]associ[ée]s?)\s*[:\-]?\s*([0-9]{1,3})",
+            r"(?:n[o0]mbre\s+d[' ]ass[o0]ci[ée]s?)\s*[:\-]?\s*([0-9]{1,3})",
             r"(?:soc18).{0,20}([0-9]{1,3})",
         ],
     )
@@ -832,15 +838,21 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         results_zone + "\n" + text,
         [
             r"revenus?\s+bruts?",
-            r"montant\s+brut.{0,30}loyers?\s+encaiss",
+            r"montant\s+brut.{0,30}[lI!1]oyers?\s+encaiss",
         ],
         min_amount=100.0,
     )
+    if revenus_bruts is None:
+        revenus_bruts, _ = _extract_amount_from_lines_with_keyword(
+            results_zone + "\n" + text,
+            r"revenus?\s+bruts?|montant\s+brut.{0,40}[lI!1]oyers?\s+encaiss",
+            min_amount=100.0,
+        )
     frais_hors_interets = _extract_first_amount_from_patterns(
         results_zone + "\n" + text,
         [
-            r"frais?\s+et\s+charges?.{0,40}hors.{0,20}int[eé]r[eê]ts?",
-            r"frais?\s+et\s+charges?.{0,40}autres?.{0,20}int[eé]r",
+            r"frais?\s+et\s+char[gq]es?.{0,40}hors.{0,20}[i1l]nt[eé]r[eéê]ts?",
+            r"frais?\s+et\s+char[gq]es?.{0,40}autres?.{0,20}[i1l]nt[eé]r",
             r"frais?\s+de\s+gestion",
         ],
         min_amount=50.0,
@@ -849,20 +861,20 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     interets, interets_source = _extract_first_amount_with_source(
         scan_text,
         [
-            ("label:interets_emprunts", r"int[eé]r[eê]ts?\s+d[' ]emprunts?"),
-            ("label:interets_emprunts_alt", r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
-            ("label:interets_emprunt_singulier", r"int[eé]r[eê]t\s+d[' ]emprunt"),
-            ("label:charge_interets", r"charges?.{0,10}d[' ]int[eé]r[eê]ts?"),
-            ("label:dont_interets", r"dont.{0,20}int[eé]r[eê]ts?"),
-            ("label:emprunts_interets", r"emprunts?.{0,15}int[eé]r[eê]ts?"),
+            ("label:interets_emprunts", r"[i1l]nt[eé]r[eéê]ts?\s+d[' ]emprun[tf]s?"),
+            ("label:interets_emprunts_alt", r"[i1l]nt[eé]r[eéê]ts?\s+des?\s+emprun[tf]s?"),
+            ("label:interets_emprunt_singulier", r"[i1l]nt[eé]r[eéê]t\s+d[' ]emprun[tf]"),
+            ("label:charge_interets", r"char[gq]es?.{0,10}d[' ][i1l]nt[eé]r[eéê]ts?"),
+            ("label:dont_interets", r"dont.{0,20}[i1l]nt[eé]r[eéê]ts?"),
+            ("label:emprunts_interets", r"emprun[tf]s?.{0,15}[i1l]nt[eé]r[eéê]ts?"),
         ],
         min_amount=50.0,
     )
     # Wide-gap OCR (amount far to the right of the label).
     if interets is None:
         for src_hint, pat in [
-            ("label_wide:interets_emprunts", r"int[eé]r[eê]ts?\s+d[' ]emprunts?"),
-            ("label_wide:interets_des_emprunts", r"int[eé]r[eê]ts?\s+des?\s+emprunts?"),
+            ("label_wide:interets_emprunts", r"[i1l]nt[eé]r[eéê]ts?\s+d[' ]emprun[tf]s?"),
+            ("label_wide:interets_des_emprunts", r"[i1l]nt[eé]r[eéê]ts?\s+des?\s+emprun[tf]s?"),
         ]:
             w = _extract_financial_amount_for_label_wide(scan_text, pat, max_gap=140, min_amount=50.0)
             if w is not None:
@@ -870,23 +882,29 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
                 break
     if interets is None:
         interets, interets_source = _extract_amount_from_lines_with_keyword(
-            scan_text, r"int[eé]r[eê]t.{0,12}emprunt", min_amount=50.0
+            scan_text, r"[i1l]nt[eé]r[eéê]t.{0,12}emprun[tf]", min_amount=50.0
         )
     if interets is None:
         interets, interets_source = _extract_amount_after_keyword_multiline(
             scan_text,
-            r"int[eé]r[eê]ts?.{0,25}emprunt|emprunt.{0,20}int[eé]r[eê]t",
+            r"[i1l]nt[eé]r[eéê]ts?.{0,25}emprun[tf]|emprun[tf].{0,20}[i1l]nt[eé]r[eéê]t",
             min_amount=50.0,
         )
     revenu_net = _extract_first_amount_from_patterns(
         scan_text,
         [
             r"revenu\s+net(?:\s+foncier)?",
-            r"d[ée]ficit\s+net",
-            r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)",
+            r"d[ée]f[i1]cit\s+net",
+            r"revenu\s*\(\+\)|d[ée]f[i1]cit\s*\(\-\)",
         ],
         min_amount=100.0,
     )
+    if revenu_net is None:
+        revenu_net, _ = _extract_amount_from_lines_with_keyword(
+            scan_text,
+            r"revenu\s+net|d[ée]f[i1]cit|revenu\s*\(\+\)|d[ée]f[i1]cit\s*\(\-\)",
+            min_amount=100.0,
+        )
     revenu_net_from_doc = revenu_net is not None
 
     # Fallbacks from annexes/tables when top-level labels are missing.
@@ -1441,7 +1459,10 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     ready_for_ai_core = (
         not critical_missing
         and numeric_consistency_score >= THRESHOLDS["quality_core_numeric_min"]
-        and aggregate_consistency_score >= THRESHOLDS["quality_core_aggregate_min"]
+        and (
+            agg_checks == 0
+            or aggregate_consistency_score >= THRESHOLDS["quality_core_aggregate_min"]
+        )
     )
     needs_review = (not ready_for_ai) or base["needs_review"]
     flags = list(base.get("quality_flags", []))
@@ -1451,7 +1472,7 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
         flags.append("annex_consistency_failed")
     if numeric_consistency_score < THRESHOLDS["quality_core_numeric_min"]:
         flags.append("numeric_consistency_low")
-    if aggregate_consistency_score < THRESHOLDS["quality_core_aggregate_min"]:
+    if agg_checks > 0 and aggregate_consistency_score < THRESHOLDS["quality_core_aggregate_min"]:
         flags.append("aggregate_consistency_low")
 
     return {

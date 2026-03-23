@@ -1,0 +1,8 @@
+{
+  "active": true,
+  "description": "2072 très bruitée avec confusion O/0, coquilles OCR et déduction algébrique requise sur ligne bruitée",
+  "focus": [
+    "to_float_fr_robustness",
+    "algebraic_fallback_on_noise"
+  ]
+}
