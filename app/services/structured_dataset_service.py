@@ -215,6 +215,20 @@ def _plausible_2072_interets_candidate(value: float, revenus_bruts: float | None
     return True
 
 
+def _plausible_2072_frais_candidate(value: float, revenus_bruts: float | None) -> bool:
+    # Frais hors intérêts peuvent être nuls (case vide légitime), ou positifs.
+    # On refuse les valeurs négatives et les montants aberrants.
+    if value < 0.0:
+        return False
+    if revenus_bruts is not None and isinstance(revenus_bruts, (int, float)):
+        rb = abs(float(revenus_bruts))
+        if rb > 0 and value > max(rb * 2.0, 5_000_000.0):
+            return False
+    elif value > 5_000_000.0:
+        return False
+    return True
+
+
 def _sum_accounting_lines_by_prefixes(
     text: str, prefixes: tuple[str, ...], min_total: float = 100.0
 ) -> tuple[float | None, str]:
@@ -827,14 +841,29 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
 
     # Algebraic closure (conservative): only when revenu net was read from the document,
     # not when it will be derived from rb - frais - interets (avoids circular reasoning).
-    if interets is None and revenu_net_from_doc:
-        rb_ok = isinstance(revenus_bruts, (int, float))
-        rn_ok = isinstance(revenu_net, (int, float))
-        fc_ok = frais_hors_interets is not None and isinstance(frais_hors_interets, (int, float))
-        if rb_ok and rn_ok and fc_ok:
-            cand = float(revenus_bruts) - float(frais_hors_interets) - float(revenu_net)
-            if _plausible_2072_interets_candidate(cand, float(revenus_bruts)):
-                interets = cand
+    rb_ok = isinstance(revenus_bruts, (int, float))
+    rn_ok = isinstance(revenu_net, (int, float))
+    rb_val = float(revenus_bruts) if rb_ok else None
+    rn_val = float(revenu_net) if rn_ok else None
+
+    if revenu_net_from_doc and rb_val is not None and rn_val is not None:
+        # 1) Deduce missing frais_hors_interets when RB, RN, and interests are known.
+        if frais_hors_interets is None:
+            ie_val = float(interets) if isinstance(interets, (int, float)) else 0.0
+            cand_frais = rb_val - ie_val - rn_val
+            # Tolerance to absorb OCR rounding noise around zero.
+            if abs(cand_frais) <= 1.0:
+                cand_frais = 0.0
+            if _plausible_2072_frais_candidate(cand_frais, rb_val):
+                frais_hors_interets = cand_frais
+
+        # 2) Deduce missing interests when RB, RN, and frais_hors_interets are known.
+        if interets is None and isinstance(frais_hors_interets, (int, float)):
+            cand_interets = rb_val - float(frais_hors_interets) - rn_val
+            if abs(cand_interets) <= 1.0:
+                cand_interets = 0.0
+            if _plausible_2072_interets_candidate(cand_interets, rb_val):
+                interets = cand_interets
                 interets_source = "fallback:derived_rb_minus_frais_minus_revenu_net"
 
     if revenus_bruts is None:
