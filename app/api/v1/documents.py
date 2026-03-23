@@ -5,6 +5,7 @@ import re
 import hashlib
 from collections import Counter
 from io import BytesIO
+import fitz
 
 from typing import Literal
 
@@ -114,6 +115,170 @@ def _sha256_text(text: str | None) -> str | None:
     if not isinstance(text, str):
         text = str(text)
     return hashlib.sha256(text.encode("utf-8")).hexdigest()
+
+
+def _safe_doc_stem(filename: str) -> str:
+    stem = (filename or "document").rsplit(".", 1)[0]
+    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-")
+    return stem or "document"
+
+
+def _flatten_fields_for_report(fields: dict) -> list[tuple[str, str]]:
+    out: list[tuple[str, str]] = []
+    for key, meta in (fields or {}).items():
+        if not isinstance(meta, dict):
+            continue
+        value = meta.get("value")
+        if value in (None, "", []):
+            continue
+        if isinstance(value, (dict, list)):
+            rendered = str(value)
+        else:
+            rendered = str(value)
+        out.append((str(key), rendered))
+    return out
+
+
+def _build_structured_report_doc_html(payload: dict, *, original_filename: str) -> str:
+    quality = payload.get("quality") or {}
+    experience = payload.get("experience") or {}
+    fields = payload.get("fields") or {}
+    tables = payload.get("tables") or {}
+    rows = _flatten_fields_for_report(fields)
+    quality_flags = quality.get("quality_flags") or []
+    status_label = (
+        "Full Ready" if quality.get("ready_for_ai") is True
+        else "Core Ready" if quality.get("ready_for_ai_core") is True
+        else "Review"
+    )
+    headline = str(experience.get("headline_fr") or "Rapport d'extraction ConfiDoc")
+    generated_at = str(payload.get("generated_at") or "")
+    doc_type = str(payload.get("doc_type") or "unknown")
+    coverage = float(quality.get("coverage_ratio") or 0.0)
+
+    rows_html = "".join(
+        f"<tr><td>{k}</td><td>{v}</td></tr>"
+        for k, v in rows
+    ) or "<tr><td colspan='2'>Aucune donnée structurée disponible.</td></tr>"
+    flags_html = "".join(f"<li>{str(flag)}</li>" for flag in quality_flags) or "<li>Aucun</li>"
+    tables_summary = "".join(
+        f"<li>{name}: {len(value) if isinstance(value, list) else 1} élément(s)</li>"
+        for name, value in tables.items()
+    ) or "<li>Aucun tableau</li>"
+
+    return f"""<!doctype html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <title>ConfiDoc - Rapport extraction</title>
+  <style>
+    body {{ font-family: Arial, sans-serif; color: #111; margin: 24px; line-height: 1.4; }}
+    h1 {{ margin: 0 0 8px 0; font-size: 22px; }}
+    h2 {{ margin: 24px 0 8px 0; font-size: 16px; }}
+    .meta {{ font-size: 12px; color: #444; }}
+    .badge {{ display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ccc; font-size: 12px; }}
+    table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
+    td, th {{ border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; font-size: 12px; }}
+    th {{ background: #f7f7f7; text-align: left; }}
+    ul {{ margin: 6px 0 0 18px; }}
+  </style>
+</head>
+<body>
+  <h1>Rapport d'extraction ConfiDoc</h1>
+  <div class="meta">Document: {original_filename}</div>
+  <div class="meta">Type: {doc_type} | Généré le: {generated_at}</div>
+  <div style="margin-top:8px"><span class="badge">Statut: {status_label}</span></div>
+  <p>{headline}</p>
+
+  <h2>Résumé qualité</h2>
+  <ul>
+    <li>Coverage ratio: {round(coverage * 100)}%</li>
+    <li>Needs review: {"oui" if quality.get("needs_review") else "non"}</li>
+    <li>Ready for AI: {"oui" if quality.get("ready_for_ai") else "non"}</li>
+    <li>Ready for AI Core: {"oui" if quality.get("ready_for_ai_core") else "non"}</li>
+  </ul>
+
+  <h2>Champs extraits</h2>
+  <table>
+    <thead><tr><th>Champ</th><th>Valeur</th></tr></thead>
+    <tbody>{rows_html}</tbody>
+  </table>
+
+  <h2>Drapeaux qualité</h2>
+  <ul>{flags_html}</ul>
+
+  <h2>Tableaux détectés</h2>
+  <ul>{tables_summary}</ul>
+</body>
+</html>
+"""
+
+
+def _build_structured_report_pdf_bytes(payload: dict, *, original_filename: str) -> bytes:
+    quality = payload.get("quality") or {}
+    experience = payload.get("experience") or {}
+    fields = payload.get("fields") or {}
+    tables = payload.get("tables") or {}
+    rows = _flatten_fields_for_report(fields)
+    quality_flags = quality.get("quality_flags") or []
+    status_label = (
+        "Full Ready" if quality.get("ready_for_ai") is True
+        else "Core Ready" if quality.get("ready_for_ai_core") is True
+        else "Review"
+    )
+    headline = str(experience.get("headline_fr") or "Rapport d'extraction ConfiDoc")
+    generated_at = str(payload.get("generated_at") or "")
+    doc_type = str(payload.get("doc_type") or "unknown")
+    coverage = float(quality.get("coverage_ratio") or 0.0)
+
+    lines: list[str] = [
+        "Rapport d'extraction ConfiDoc",
+        f"Document: {original_filename}",
+        f"Type: {doc_type}",
+        f"Genere le: {generated_at}",
+        f"Statut: {status_label}",
+        "",
+        f"Resume: {headline}",
+        "",
+        "Qualite:",
+        f"- Coverage ratio: {round(coverage * 100)}%",
+        f"- Needs review: {'oui' if quality.get('needs_review') else 'non'}",
+        f"- Ready for AI: {'oui' if quality.get('ready_for_ai') else 'non'}",
+        f"- Ready for AI Core: {'oui' if quality.get('ready_for_ai_core') else 'non'}",
+        "",
+        "Champs extraits:",
+    ]
+    if rows:
+        lines.extend([f"- {k}: {v}" for k, v in rows])
+    else:
+        lines.append("- Aucune donnee structuree disponible.")
+    lines.append("")
+    lines.append("Drapeaux qualite:")
+    if quality_flags:
+        lines.extend([f"- {str(flag)}" for flag in quality_flags])
+    else:
+        lines.append("- Aucun")
+    lines.append("")
+    lines.append("Tableaux detectes:")
+    if isinstance(tables, dict) and tables:
+        for name, value in tables.items():
+            n = len(value) if isinstance(value, list) else 1
+            lines.append(f"- {name}: {n} element(s)")
+    else:
+        lines.append("- Aucun tableau")
+
+    doc = fitz.open()
+    page = doc.new_page()
+    y = 48.0
+    for line in lines:
+        if y > 790:
+            page = doc.new_page()
+            y = 48.0
+        page.insert_text((42, y), line, fontsize=10)
+        y += 14.0
+    out = doc.tobytes()
+    doc.close()
+    return out
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -823,6 +988,94 @@ async def export_structured_dataset(
         }
     )
     return JSONResponse(structured)
+
+
+@router.get(
+    "/{document_id}/export-report-doc",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter un rapport lisible (.doc) après traitement",
+)
+async def export_structured_report_doc(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+) -> StreamingResponse:
+    """Rapport lisible pour utilisateurs non techniques (format .doc HTML-compatible)."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_original_text(db, document)
+    if not original_text:
+        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _detections = anonymize_text(
+        original_text, profile="dataset_accounting", document_type=effective_type
+    )
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+    html = _build_structured_report_doc_html(
+        structured,
+        original_filename=document.original_filename or f"document_{document.id}",
+    )
+    filename = f"rapport_confidoc_{_safe_doc_stem(document.original_filename)}.doc"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+    }
+    return StreamingResponse(
+        BytesIO(html.encode("utf-8")),
+        media_type="application/msword; charset=utf-8",
+        headers=headers,
+    )
+
+
+@router.get(
+    "/{document_id}/export-report-pdf",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter un rapport lisible (.pdf) après traitement",
+)
+async def export_structured_report_pdf(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+) -> StreamingResponse:
+    """Rapport PDF lisible pour partage interne (non technique)."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_original_text(db, document)
+    if not original_text:
+        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _detections = anonymize_text(
+        original_text, profile="dataset_accounting", document_type=effective_type
+    )
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+    pdf_bytes = _build_structured_report_pdf_bytes(
+        structured,
+        original_filename=document.original_filename or f"document_{document.id}",
+    )
+    filename = f"rapport_confidoc_{_safe_doc_stem(document.original_filename)}.pdf"
+    headers = {
+        "Content-Disposition": f'attachment; filename="{filename}"',
+        "Cache-Control": "no-store",
+    }
+    return StreamingResponse(
+        BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers=headers,
+    )
 
 
 @router.delete(

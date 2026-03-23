@@ -638,6 +638,8 @@ function renderDocs(items) {
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
           <button class="btn-act" data-a="rerunextract" data-id="${doc.id}">🔁 Relancer l'extraction</button>
           <button class="btn-act primary" data-a="exportstructured" data-id="${doc.id}">📤 Exporter</button>
+          <button class="btn-act" data-a="exportreportdoc" data-id="${doc.id}">📝 Rapport .doc</button>
+          <button class="btn-act" data-a="exportreportpdf" data-id="${doc.id}">📄 Rapport .pdf</button>
           <details class="expert-only">
             <summary class="btn-act" style="display:inline-flex;list-style:none">Plus</summary>
             <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
@@ -1006,6 +1008,8 @@ docList.addEventListener("click", async e => {
     preview: "Chargement...",
     validate: "Validation...",
     exportstructured: "Export...",
+    exportreportdoc: "Export...",
+    exportreportpdf: "Export...",
     exportdataset: "Export...",
     aisummary: "Synthèse...",
     proof: "Preuve...",
@@ -1134,6 +1138,42 @@ docList.addEventListener("click", async e => {
       } else {
         toast(data.detail || "Export dataset métier échoué", "error");
       }
+    } else if (action === "exportreportdoc") {
+      toast("Génération du rapport .doc…", "info");
+      const res = await fetch(`/api/v1/documents/${id}/export-report-doc?doc_type=${encodeURIComponent(requestedDocType)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        const maybe = await res.json().catch(() => ({}));
+        toast((maybe && maybe.detail) ? String(maybe.detail) : "Export rapport .doc échoué", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport_confidoc_${id}.doc`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Rapport .doc téléchargé", "success");
+    } else if (action === "exportreportpdf") {
+      toast("Génération du rapport .pdf…", "info");
+      const res = await fetch(`/api/v1/documents/${id}/export-report-pdf?doc_type=${encodeURIComponent(requestedDocType)}`, {
+        headers: { Authorization: `Bearer ${accessToken}` },
+      });
+      if (!res.ok) {
+        const maybe = await res.json().catch(() => ({}));
+        toast((maybe && maybe.detail) ? String(maybe.detail) : "Export rapport .pdf échoué", "error");
+        return;
+      }
+      const blob = await res.blob();
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = `rapport_confidoc_${id}.pdf`;
+      a.click();
+      URL.revokeObjectURL(url);
+      toast("Rapport .pdf téléchargé", "success");
     } else if (action === "aisummary") {
       toast("Génération de la synthèse IA…", "info");
       const {res, data} = await api(`/api/v1/ai/summary/${id}?doc_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
