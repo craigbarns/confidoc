@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_064",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:64",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 64,
+    "imported_at": "2026-03-23T18:21:33.472496+00:00",
+    "hints": {
+      "words_count": 46,
+      "entities": {
+        "company": "SUN WONG KUT SDN BHD",
+        "date": "21/02/18",
+        "address": "176 JLN SUNGEI BESI 57100 KUALA LUMPUR.",
+        "total": "88.17"
+      }
+    }
+  }
+}

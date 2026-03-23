@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_005",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:5",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 5,
+    "imported_at": "2026-03-23T18:21:33.431065+00:00",
+    "hints": {
+      "words_count": 35,
+      "entities": {
+        "company": "ABC HO TRADING",
+        "date": "09/01/2019",
+        "address": "NO.2&4, JALAN HARMONI 3/2, TAMAN DESA HARMONI. 81100 JOHOR BAHRU JOHOR",
+        "total": "31.00"
+      }
+    }
+  }
+}

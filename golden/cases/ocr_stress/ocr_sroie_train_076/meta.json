@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_076",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:76",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 76,
+    "imported_at": "2026-03-23T18:21:33.479769+00:00",
+    "hints": {
+      "words_count": 43,
+      "entities": {
+        "company": "LIAN HING STATIONERY SDN BHD",
+        "date": "27/03/2018",
+        "address": "NO.32 & 33, JALAN SR 1/9, SEKSYEN 9, TAMAN SERDANG RAYA, 43300 SERI KEMBANGAN, SELANGOR DARUL EHSAN",
+        "total": "12.00"
+      }
+    }
+  }
+}

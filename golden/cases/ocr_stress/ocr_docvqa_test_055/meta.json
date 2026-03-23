@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_055",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:55",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 55,
+    "imported_at": "2026-03-23T18:21:34.098360+00:00",
+    "hints": {
+      "question": "Which technique has 24% in EDLP stores as per the data?",
+      "fallback_serialized": true
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_011",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:11",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 11,
+    "imported_at": "2026-03-23T18:21:33.436800+00:00",
+    "hints": {
+      "words_count": 58,
+      "entities": {
+        "company": "AIK HUAT HARDWARE ENTERPRISE (SETIA ALAM) SDN BHD",
+        "date": "15/06/2017",
+        "address": "NO. 17-G, JALAN SETIA INDAH (X) U13/X, SETIA ALAM, SEKSYEN U13, 40170 SHAH ALAM,",
+        "total": "15.00"
+      }
+    }
+  }
+}

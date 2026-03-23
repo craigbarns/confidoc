@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_041",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:41",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 41,
+    "imported_at": "2026-03-23T18:21:33.456023+00:00",
+    "hints": {
+      "words_count": 41,
+      "entities": {
+        "company": "THREE STOOGES",
+        "date": "03/03/2018",
+        "address": "109, SS21/1A, DAMANSARA UTAMA",
+        "total": "174.90"
+      }
+    }
+  }
+}

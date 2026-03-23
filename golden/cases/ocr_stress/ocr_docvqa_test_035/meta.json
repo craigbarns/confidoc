@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_035",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:35",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 35,
+    "imported_at": "2026-03-23T18:21:34.084484+00:00",
+    "hints": {
+      "question": "What are the 'integrated rural services hubs' called?",
+      "fallback_serialized": true
+    }
+  }
+}

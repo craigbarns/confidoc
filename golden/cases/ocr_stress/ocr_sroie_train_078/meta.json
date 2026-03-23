@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_078",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:78",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 78,
+    "imported_at": "2026-03-23T18:21:33.480672+00:00",
+    "hints": {
+      "words_count": 83,
+      "entities": {
+        "company": "THAI DELICIOUS RESTAURANT",
+        "date": "02/02/2017",
+        "address": "NO.22 JALAN PUTERI 2/4 BANDAR PUTERI 47100 PUCHONG, SELANGOR",
+        "total": "92.80"
+      }
+    }
+  }
+}

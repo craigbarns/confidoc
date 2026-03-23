@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_050",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:50",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 50,
+    "imported_at": "2026-03-23T18:21:33.463557+00:00",
+    "hints": {
+      "words_count": 66,
+      "entities": {
+        "company": "TIMELESS KITCHENETTE SDN BHD",
+        "date": "2018-03-23",
+        "address": "LOT 50, FLOOR T2,SKY AVENUE GENTING HIGHLANDS PAHANG, 69000 PAHANG MALAYSIA",
+        "total": "593.10"
+      }
+    }
+  }
+}

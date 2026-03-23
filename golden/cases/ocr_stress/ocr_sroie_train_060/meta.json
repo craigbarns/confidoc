@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_060",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:60",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 60,
+    "imported_at": "2026-03-23T18:21:33.470109+00:00",
+    "hints": {
+      "words_count": 52,
+      "entities": {
+        "company": "BENS INDEPENDENT GROCER SDN. BHD",
+        "date": "12/03/18",
+        "address": "LOT 6, JALAN BATAI, PLAZA BATAI, DAMANSARA HEIGHTS 50490, KUALA LUMPUR",
+        "total": "77.20"
+      }
+    }
+  }
+}

@@ -48,3 +48,37 @@ Sortie:
 
 - PASS/FAIL par cas
 - diff lisible sur champs critiques, flags qualite et statuts
+
+## OCR stress imports (Hugging Face)
+
+Pour enrichir la robustesse OCR/parsing avec des cas non-métier:
+
+```bash
+python scripts/import_hf_ocr_to_golden.py --rows-per-source 8
+```
+
+Ce script:
+
+- crée des cas `golden/cases/ocr_stress/*`,
+- les marque en `active=false` (drafts non bloquants pour CI),
+- génère `golden/OCR_HF_IMPORT_REPORT.md`.
+
+Inspection des drafts:
+
+```bash
+python scripts/run_golden_v2.py --include-inactive
+```
+
+## Curation "top cas" OCR stress
+
+Analyser et scorer les cas OCR stress:
+
+```bash
+python scripts/curate_ocr_stress_golden.py
+```
+
+Promouvoir automatiquement un sous-ensemble (active=true + expected minimal):
+
+```bash
+python scripts/curate_ocr_stress_golden.py --promote --max-total 12 --max-per-source 4
+```

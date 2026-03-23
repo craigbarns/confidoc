@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_002",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:2",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test). [promoted:2026-03-23T18:24:26.224621+00:00]",
+  "active": true,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 2,
+    "imported_at": "2026-03-23T18:21:34.064207+00:00",
+    "hints": {
+      "question": "What is the % of Employees in 2012 based on graph 'Distribution of Value-Added'?",
+      "fallback_serialized": true
+    }
+  }
+}

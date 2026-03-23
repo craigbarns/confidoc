@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_021",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:21",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 21,
+    "imported_at": "2026-03-23T18:21:33.443126+00:00",
+    "hints": {
+      "words_count": 68,
+      "entities": {
+        "company": "TEO HENG STATIONERY & BOOKS",
+        "date": "18/01/2018",
+        "address": "NO. 53, JALAN BESAR, 45600 BATANG BERJUNTAI SELANGOR DARUL EHSAN",
+        "total": "4.90"
+      }
+    }
+  }
+}

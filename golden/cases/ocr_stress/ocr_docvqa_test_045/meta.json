@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_045",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:45",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 45,
+    "imported_at": "2026-03-23T18:21:34.091494+00:00",
+    "hints": {
+      "question": "Which 2 tobacco brands were successfully launched by GPI?",
+      "fallback_serialized": true
+    }
+  }
+}

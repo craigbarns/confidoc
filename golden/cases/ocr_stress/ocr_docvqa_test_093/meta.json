@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_093",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:93",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 93,
+    "imported_at": "2026-03-23T18:21:34.125568+00:00",
+    "hints": {
+      "question": "How many number of females were examined in total ?",
+      "fallback_serialized": true
+    }
+  }
+}

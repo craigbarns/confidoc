@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_059",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:59",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 59,
+    "imported_at": "2026-03-23T18:21:33.469504+00:00",
+    "hints": {
+      "words_count": 28,
+      "entities": {
+        "company": "TRIPLE SIX POINT ENTERPRISE 666",
+        "date": "25-03-2018",
+        "address": "NO 14 & 16 JALAN PERMAS 4/3 BANDAR BARU PERMAS JAY",
+        "total": "7.60"
+      }
+    }
+  }
+}

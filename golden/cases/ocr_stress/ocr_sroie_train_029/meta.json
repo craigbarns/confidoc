@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_029",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:29",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 29,
+    "imported_at": "2026-03-23T18:21:33.448520+00:00",
+    "hints": {
+      "words_count": 53,
+      "entities": {
+        "company": "C W KHOO HARDWARE SDN BHD",
+        "date": "01-03-18",
+        "address": "NO.50,JALAN PBS 14/11, KAWASAN PERINDUSTRIAN BUKIT SERDANG,",
+        "total": "21.20"
+      }
+    }
+  }
+}

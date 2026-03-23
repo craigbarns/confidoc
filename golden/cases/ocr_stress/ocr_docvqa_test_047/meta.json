@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_047",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:47",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 47,
+    "imported_at": "2026-03-23T18:21:34.092669+00:00",
+    "hints": {
+      "question": "What is the lifestyle apparel brand, of ITC shown in the first picture?",
+      "fallback_serialized": true
+    }
+  }
+}

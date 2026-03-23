@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_022",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:22",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 22,
+    "imported_at": "2026-03-23T18:21:33.444006+00:00",
+    "hints": {
+      "words_count": 41,
+      "entities": {
+        "company": "FUYI MINI MARKET",
+        "date": "25/01/2018",
+        "address": "NO 43-45-47G, TAMAN SEJATI, IJOK, 45600 BESTARI JAYA, KUALA SELANGOR.",
+        "total": "9.00"
+      }
+    }
+  }
+}

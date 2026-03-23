@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_000",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:0",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train). [promoted:2026-03-23T18:24:26.224621+00:00]",
+  "active": true,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 0,
+    "imported_at": "2026-03-23T18:21:59.636324+00:00",
+    "hints": {
+      "words_count": 44,
+      "entities": {
+        "company": "BOOK TA .K (TAMAN DAYA) SDN BHD",
+        "date": "25/12/2018",
+        "address": "NO.53 55,57 & 59, JALAN SAGU 18, TAMAN DAYA, 81100 JOHOR BAHRU, JOHOR.",
+        "total": "9.00"
+      }
+    }
+  }
+}

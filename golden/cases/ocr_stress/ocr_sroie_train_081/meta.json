@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_081",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:81",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 81,
+    "imported_at": "2026-03-23T18:21:33.482346+00:00",
+    "hints": {
+      "words_count": 35,
+      "entities": {
+        "company": "MR. D.I.Y. SDN BHD",
+        "date": "24-11-17",
+        "address": "LOT 1851-A & 1851-B, JALAN KPB 6, KAWASAN PERINDUSTRIAN BALAKONG, 43300 SERI KEMBANGAN, SELANGOR",
+        "total": "RM 3.90"
+      }
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_008",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:8",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 8,
+    "imported_at": "2026-03-23T18:21:33.433769+00:00",
+    "hints": {
+      "words_count": 76,
+      "entities": {
+        "company": "PERNIAGAAN ZHENG HUI",
+        "date": "12/02/2018",
+        "address": "NO.59 JALAN PERMAS 9/5 BANDAR BARU PERMAS JAYA 81760 JOHOR BAHRU",
+        "total": "112.45"
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_013",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:13",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 13,
+    "imported_at": "2026-03-23T18:21:34.071937+00:00",
+    "hints": {
+      "question": "What is the total costs for proposed project period?",
+      "fallback_serialized": true
+    }
+  }
+}

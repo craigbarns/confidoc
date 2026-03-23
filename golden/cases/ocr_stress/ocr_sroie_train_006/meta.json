@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_006",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:6",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 6,
+    "imported_at": "2026-03-23T18:21:33.431962+00:00",
+    "hints": {
+      "words_count": 93,
+      "entities": {
+        "company": "SOON HUAT MACHINERY ENTERPRISE",
+        "date": "11/01/2019",
+        "address": "NO.53 JALAN PUTRA 1, TAMAN SRI PUTRA, 81200 JOHOR BAHRU JOHOR",
+        "total": "327.00"
+      }
+    }
+  }
+}

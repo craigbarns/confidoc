@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_066",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:66",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 66,
+    "imported_at": "2026-03-23T18:21:33.473577+00:00",
+    "hints": {
+      "words_count": 63,
+      "entities": {
+        "company": "PASARAYA BORONG PINTAR SDN BHD",
+        "date": "14/03/2018",
+        "address": "NO 19-G& 19-1& 19-2 JALAN TASIK UTAMA 4, MEDAN NIAGA TASIK DAMAI",
+        "total": "8.20"
+      }
+    }
+  }
+}

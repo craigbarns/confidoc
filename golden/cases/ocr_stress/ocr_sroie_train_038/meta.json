@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_038",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:38",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 38,
+    "imported_at": "2026-03-23T18:21:33.454024+00:00",
+    "hints": {
+      "words_count": 69,
+      "entities": {
+        "company": "YHM AEON TEBRAU CITY",
+        "date": "11/03/2018",
+        "address": "S117, SECOND FLOOR, AEON TEBRAU CITY, 1, JALAN DESA TEBRAU, TAMAN DESA TEBRAU, 81100 JOHOR BAHRU, JOHOR.",
+        "total": "13.10"
+      }
+    }
+  }
+}

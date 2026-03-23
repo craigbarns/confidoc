@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_002",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:2",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train). [promoted:2026-03-23T18:24:26.224621+00:00]",
+  "active": true,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 2,
+    "imported_at": "2026-03-23T18:21:33.426724+00:00",
+    "hints": {
+      "words_count": 54,
+      "entities": {
+        "company": "MR D.I.Y. (JOHOR) SDN BHD",
+        "date": "12-01-19",
+        "address": "LOT 1851-A & 1851-B, JALAN KPB 6, KAWASAN PERINDUSTRIAN BALAKONG, 43300 SERI KEMBANGAN, SELANGOR (MR DIY TESCO TERBAU)",
+        "total": "33.90"
+      }
+    }
+  }
+}

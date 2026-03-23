@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_003",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:3",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train). [promoted:2026-03-23T18:24:26.224621+00:00]",
+  "active": true,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 3,
+    "imported_at": "2026-03-23T18:21:33.428594+00:00",
+    "hints": {
+      "words_count": 60,
+      "entities": {
+        "company": "YONGFATT ENTERPRISE",
+        "date": "25/12/2018",
+        "address": "NO 122.124. JALAN DEDAP 13 81100 JOHOR BAHRU",
+        "total": "80.90"
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_014",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:14",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 14,
+    "imported_at": "2026-03-23T18:21:34.072593+00:00",
+    "hints": {
+      "question": "What is the name of the divison ?",
+      "fallback_serialized": true
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_067",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:67",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 67,
+    "imported_at": "2026-03-23T18:21:33.474346+00:00",
+    "hints": {
+      "words_count": 75,
+      "entities": {
+        "company": "LIAN CHI PU TIAN VEGETARIAN RESTAURANT SDN BHD",
+        "date": "06/01/18",
+        "address": "54,JALAN SS23/11 TAMAN SEA,47400 PETALING JAYA,SELANGOR",
+        "total": "53.55"
+      }
+    }
+  }
+}

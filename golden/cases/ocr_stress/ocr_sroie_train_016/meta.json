@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_016",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:16",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 16,
+    "imported_at": "2026-03-23T18:21:33.439830+00:00",
+    "hints": {
+      "words_count": 82,
+      "entities": {
+        "company": "LIGHTROOM GALLERY SDN BHD",
+        "date": "20/12/2017",
+        "address": "NO: 28, JALAN ASTANA 1C, BANDAR BUKIT RAJA, 41050 KLANG SELANGOR D.E, MALAYSIA",
+        "total": "73.00"
+      }
+    }
+  }
+}

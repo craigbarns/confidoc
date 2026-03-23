@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_072",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:72",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 72,
+    "imported_at": "2026-03-23T18:21:33.477709+00:00",
+    "hints": {
+      "words_count": 57,
+      "entities": {
+        "company": "POPULAR BOOK CO. (M) SDN BHD",
+        "date": "01/03/18",
+        "address": "NO 8, JALAN 7/118B, DESA TUN RAZAK 56000 KUALA LUMPUR, MALAYSIA",
+        "total": "49.40"
+      }
+    }
+  }
+}

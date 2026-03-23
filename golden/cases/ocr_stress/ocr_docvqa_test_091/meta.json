@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_091",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:91",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 91,
+    "imported_at": "2026-03-23T18:21:34.124447+00:00",
+    "hints": {
+      "question": "Which year's report was this?",
+      "fallback_serialized": true
+    }
+  }
+}

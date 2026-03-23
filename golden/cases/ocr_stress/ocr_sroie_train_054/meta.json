@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_054",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:54",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 54,
+    "imported_at": "2026-03-23T18:21:33.466108+00:00",
+    "hints": {
+      "words_count": 55,
+      "entities": {
+        "company": "CARREFOUR RESTAURANT",
+        "date": "20/03/2018",
+        "address": "18,JALAN PERMAS 10/7 BANDAR BARU PERMAS JAYA, MASAI,JOHOR",
+        "total": "13.80"
+      }
+    }
+  }
+}

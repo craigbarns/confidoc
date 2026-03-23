@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_061",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:61",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 61,
+    "imported_at": "2026-03-23T18:21:34.105380+00:00",
+    "hints": {
+      "question": "Approximately, how many person-days training was provided to employees of ITC in 2012-13?",
+      "fallback_serialized": true
+    }
+  }
+}

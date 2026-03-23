@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_099",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:99",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 99,
+    "imported_at": "2026-03-23T18:21:34.128694+00:00",
+    "hints": {
+      "question": "Which gender of students is reported with '0' percent 'Geographic' TONGUE findings?",
+      "fallback_serialized": true
+    }
+  }
+}

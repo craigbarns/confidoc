@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_061",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:61",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 61,
+    "imported_at": "2026-03-23T18:21:33.470454+00:00",
+    "hints": {
+      "words_count": 66,
+      "entities": {
+        "company": "NANDO'S CHICKENLAND MALAYSIA SDN BHD",
+        "date": "28 MAR 18",
+        "address": "UNIT G-13, GROUND FLOOR, NO.1 JLN KIARA, MONT KIARA 50480 KUALA LUMPUR",
+        "total": "129.30"
+      }
+    }
+  }
+}

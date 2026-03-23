@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_001",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:1",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train). [promoted:2026-03-23T18:24:26.224621+00:00]",
+  "active": true,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 1,
+    "imported_at": "2026-03-23T18:21:33.423812+00:00",
+    "hints": {
+      "words_count": 48,
+      "entities": {
+        "company": "INDAH GIFT & HOME DECO",
+        "date": "19/10/2018",
+        "address": "27, JALAN DEDAP 13, TAMAN JOHOR JAYA, 81100 JOHOR BAHRU, JOHOR.",
+        "total": "60.30"
+      }
+    }
+  }
+}

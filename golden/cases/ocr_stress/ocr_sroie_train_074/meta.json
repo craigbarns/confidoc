@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_074",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:74",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 74,
+    "imported_at": "2026-03-23T18:21:33.478634+00:00",
+    "hints": {
+      "words_count": 45,
+      "entities": {
+        "company": "GL HANDICRAFT & TAIL ORING",
+        "date": "20/03/2018",
+        "address": "19, JALAN KANCIL, OFF JALAN PUDU, 55100 KUALA LUMPUR MALAYSIA",
+        "total": "102.00"
+      }
+    }
+  }
+}

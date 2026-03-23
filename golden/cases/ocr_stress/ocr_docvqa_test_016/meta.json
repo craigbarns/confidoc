@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_016",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:16",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 16,
+    "imported_at": "2026-03-23T18:21:34.074405+00:00",
+    "hints": {
+      "question": "What is plotted along the x axis ?",
+      "fallback_serialized": true
+    }
+  }
+}

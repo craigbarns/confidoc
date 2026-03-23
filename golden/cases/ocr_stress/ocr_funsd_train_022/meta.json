@@ -1,0 +1,22 @@
+{
+  "id": "ocr_funsd_train_022",
+  "requested_doc_type": "auto",
+  "source_filename": "nielsr/funsd:train:22",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "funsd"
+  ],
+  "notes": "OCR stress draft imported from nielsr/funsd (train).",
+  "active": false,
+  "import": {
+    "dataset": "nielsr/funsd",
+    "split": "train",
+    "row_index": 22,
+    "imported_at": "2026-03-23T18:21:32.500096+00:00",
+    "hints": {
+      "words_count": 87,
+      "ner_tags_count": 87
+    }
+  }
+}

@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_056",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:56",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 56,
+    "imported_at": "2026-03-23T18:21:33.467064+00:00",
+    "hints": {
+      "words_count": 39,
+      "entities": {
+        "company": "UNIHAKKA INTERNATIONAL SDN BHD",
+        "date": "21 MAR 2018",
+        "address": "12, JALAN TAMPOI 7/4,KAWASAN PERINDUSTRIAN TAMPOI,81200 JOHOR BAHRU,JOHOR",
+        "total": "$8.70"
+      }
+    }
+  }
+}

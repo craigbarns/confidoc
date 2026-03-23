@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_037",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:37",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 37,
+    "imported_at": "2026-03-23T18:21:33.453418+00:00",
+    "hints": {
+      "words_count": 48,
+      "entities": {
+        "company": "WARAKUYA PERMAS CITY SDN BHD",
+        "date": "10/03/2018",
+        "address": "JALAN PERMAS UTARA 1 PERMAS JAYA 81750 MASAI JOHOR",
+        "total": "57.80"
+      }
+    }
+  }
+}

@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_095",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:95",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 95,
+    "imported_at": "2026-03-23T18:21:34.126246+00:00",
+    "hints": {
+      "question": "How many number of Females have 'Cavities in four or more teeth' ?",
+      "fallback_serialized": true
+    }
+  }
+}

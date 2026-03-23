@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_039",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:39",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 39,
+    "imported_at": "2026-03-23T18:21:33.454505+00:00",
+    "hints": {
+      "words_count": 53,
+      "entities": {
+        "company": "OWNER BY CASTLE BLUE S/B",
+        "date": "30/03/2018",
+        "address": "AVTIVO PLAZA,LOT B-F-11, BLOCK B NO1.JALAN PJU 9/1,D'SARA AVEVUE BANDAR SRI D'SARA, 52000 KL",
+        "total": "189.75"
+      }
+    }
+  }
+}

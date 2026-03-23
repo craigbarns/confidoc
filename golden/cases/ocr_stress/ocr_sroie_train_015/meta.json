@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_015",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:15",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 15,
+    "imported_at": "2026-03-23T18:21:33.439200+00:00",
+    "hints": {
+      "words_count": 44,
+      "entities": {
+        "company": "HOME MASTER HARDWARE & ELECTRICAL",
+        "date": "22/12/2017",
+        "address": "NO.113G & 115G, JALAN SETIA GEMBILANG U13/BG BANDAR SETIA ALAM, 40170 BANDAR SETIA ALAM, SELANGOR.",
+        "total": "15.90"
+      }
+    }
+  }
+}

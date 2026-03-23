@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_070",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:70",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 70,
+    "imported_at": "2026-03-23T18:21:34.112132+00:00",
+    "hints": {
+      "question": "By which three organizations was the Centre co-created?",
+      "fallback_serialized": true
+    }
+  }
+}

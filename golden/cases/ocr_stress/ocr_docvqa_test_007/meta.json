@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_007",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:7",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 7,
+    "imported_at": "2026-03-23T18:21:34.067307+00:00",
+    "hints": {
+      "question": "What is the % of Exchequer in 2008 based on 'Distribution of Value-Added' graph?",
+      "fallback_serialized": true
+    }
+  }
+}

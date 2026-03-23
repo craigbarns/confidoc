@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_079",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:79",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 79,
+    "imported_at": "2026-03-23T18:21:34.117448+00:00",
+    "hints": {
+      "question": "Which hospital is mentioned in Appendix V ?",
+      "fallback_serialized": true
+    }
+  }
+}

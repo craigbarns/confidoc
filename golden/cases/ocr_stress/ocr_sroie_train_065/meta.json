@@ -1,0 +1,27 @@
+{
+  "id": "ocr_sroie_train_065",
+  "requested_doc_type": "auto",
+  "source_filename": "jsdnrs/ICDAR2019-SROIE:train:65",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "sroie"
+  ],
+  "notes": "OCR stress draft imported from jsdnrs/ICDAR2019-SROIE (train).",
+  "active": false,
+  "import": {
+    "dataset": "jsdnrs/ICDAR2019-SROIE",
+    "split": "train",
+    "row_index": 65,
+    "imported_at": "2026-03-23T18:21:33.472955+00:00",
+    "hints": {
+      "words_count": 53,
+      "entities": {
+        "company": "RESTAURANT JIAWEI JIAWEI HOUSE",
+        "date": "9/3/2018",
+        "address": "13, JLN TASIK UTAMA 8 MEDAN NIAGA DAMAI SG BESI 57000 KL",
+        "total": "65.20"
+      }
+    }
+  }
+}

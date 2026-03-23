@@ -1,0 +1,22 @@
+{
+  "id": "ocr_docvqa_test_041",
+  "requested_doc_type": "auto",
+  "source_filename": "lmms-lab/DocVQA:test:41",
+  "tags": [
+    "ocr_stress",
+    "huggingface",
+    "docvqa"
+  ],
+  "notes": "OCR stress draft imported from lmms-lab/DocVQA (test).",
+  "active": false,
+  "import": {
+    "dataset": "lmms-lab/DocVQA",
+    "split": "test",
+    "row_index": 41,
+    "imported_at": "2026-03-23T18:21:34.088540+00:00",
+    "hints": {
+      "question": "How many Newborns are there in the 2nd quarter report of 1978 ?",
+      "fallback_serialized": true
+    }
+  }
+}
