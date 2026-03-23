@@ -540,6 +540,13 @@ function setDocQualityBadge(docId, quality) {
   el.className = `doc-kpi doc-quality ${badge.cls}`;
   el.textContent = badge.label;
   el.title = badge.hint;
+  const whyEl = document.querySelector(`[data-doc-why="${docId}"]`);
+  if (whyEl) whyEl.textContent = qualityReasonText(quality || {});
+  const actionEl = document.querySelector(`[data-doc-action="${docId}"]`);
+  if (actionEl) {
+    const doc = (currentDocs || []).find((d) => d.id === docId);
+    actionEl.textContent = qualityActionText(doc || {}, quality || {});
+  }
 }
 
 async function api(path, opts={}) {
@@ -604,6 +611,30 @@ function nextAction(doc) {
   return "Prochaine action: ouvrir le document.";
 }
 
+function qualityReasonText(quality) {
+  const q = quality || {};
+  if (q.ready_for_ai === true) return "Document exploitable immédiatement.";
+  if (q.ready_for_ai_core === true) return "Données clés exploitables, enrichissement secondaire recommandé.";
+  if (Array.isArray(q.critical_missing_fields) && q.critical_missing_fields.length) {
+    const miss = q.critical_missing_fields.slice(0, 2).join(", ");
+    return `Champs critiques manquants: ${miss}${q.critical_missing_fields.length > 2 ? "…" : ""}.`;
+  }
+  if (q.needs_review === true) return "Revue humaine recommandée avant usage.";
+  return "Analyse qualité en cours.";
+}
+
+function qualityActionText(doc, quality) {
+  const s = (doc && doc.status) || "";
+  const q = quality || {};
+  if (s === "uploaded") return "Action: lancer le traitement.";
+  if (s === "processing") return "Action: attendre puis actualiser.";
+  if (s === "failed") return "Action: réuploader une version plus lisible.";
+  if (q.ready_for_ai === true) return "Action: exporter le rapport PDF et partager.";
+  if (q.ready_for_ai_core === true) return "Action: exporter le rapport puis vérifier les points secondaires.";
+  if (Array.isArray(q.critical_missing_fields) && q.critical_missing_fields.length) return "Action: corriger/revalider avant export final.";
+  return "Action: valider puis exporter un rapport lisible.";
+}
+
 function renderDocs(items) {
   currentDocs = items || [];
   const total = currentDocs.length;
@@ -626,25 +657,29 @@ function renderDocs(items) {
     el.innerHTML = `
       <div class="doc-icon ${ic.cls}">${ic.icon}</div>
       <div class="doc-info">
-        <div class="doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
-        <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span><span class="doc-status ${doc.status}">${statusLabel(doc.status)}</span></div>
+        <div class="doc-head">
+          <div class="doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
+          <span class="doc-status ${doc.status}">${statusLabel(doc.status)}</span>
+        </div>
+        <div class="doc-meta"><span>${formatSize(doc.size_bytes)}</span></div>
         <div class="doc-kpis">
-          <span class="doc-kpi" data-doc-detection="${doc.id}">${docDetectionMap[doc.id] != null ? `entités: ${docDetectionMap[doc.id]}` : "entités: —"}</span>
+          <span class="doc-kpi expert-only" data-doc-detection="${doc.id}">${docDetectionMap[doc.id] != null ? `entités: ${docDetectionMap[doc.id]}` : "entités: —"}</span>
           <span class="doc-kpi doc-quality unknown" data-doc-quality="${doc.id}">Analyse</span>
         </div>
-        <div class="doc-next">${nextAction(doc)}</div>
+        <div class="doc-why" data-doc-why="${doc.id}">${qualityReasonText(docQualityMap[doc.id])}</div>
+        <div class="doc-next" data-doc-action="${doc.id}">${qualityActionText(doc, docQualityMap[doc.id])}</div>
         <div class="doc-actions">
           <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
-          <button class="btn-act" data-a="rerunextract" data-id="${doc.id}">🔁 Relancer l'extraction</button>
-          <button class="btn-act primary" data-a="exportstructured" data-id="${doc.id}">📤 Exporter</button>
-          <button class="btn-act" data-a="exportreportdoc" data-id="${doc.id}">📝 Rapport .doc</button>
-          <button class="btn-act" data-a="exportreportpdf" data-id="${doc.id}">📄 Rapport .pdf</button>
+          <button class="btn-act primary" data-a="exportreportpdf" data-id="${doc.id}">📄 Exporter PDF</button>
+          <button class="btn-act" data-a="exportreportdoc" data-id="${doc.id}">📝 Exporter DOC</button>
           <details class="expert-only">
             <summary class="btn-act" style="display:inline-flex;list-style:none">Plus</summary>
             <div style="display:flex;gap:4px;flex-wrap:wrap;margin-top:6px">
+              <button class="btn-act" data-a="rerunextract" data-id="${doc.id}">🔁 Relancer l'extraction</button>
               <button class="btn-act" data-a="anonymize" data-id="${doc.id}">🔒 Anonymiser</button>
               <button class="btn-act" data-a="preview" data-id="${doc.id}">👁️ Prévisualiser</button>
+              <button class="btn-act" data-a="exportstructured" data-id="${doc.id}">📤 Exporter structuré</button>
               <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 Exporter dataset</button>
               <button class="btn-act" data-a="aisummary" data-id="${doc.id}">🤖 Synthèse IA</button>
               <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ Preuve</button>

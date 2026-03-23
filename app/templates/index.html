@@ -59,7 +59,7 @@
       </div>
     </nav>
     <div class="dash-content">
-      <div class="value-prop">Déposez un document, ConfiDoc l'analyse, le sécurise et vous indique en priorité s'il est prêt, à revoir ou insuffisant.</div>
+      <div class="value-prop">Déposez un document. ConfiDoc vous dit s'il est exploitable, pourquoi, et vous génère un export lisible pour votre équipe.</div>
       <div class="stats-row">
         <div class="stat-card blue"><div class="stat-label">Documents</div><div class="stat-value" id="statTotal">0</div><div class="stat-sub">total uploadés</div></div>
         <div class="stat-card emerald"><div class="stat-label">Prêts</div><div class="stat-value" id="statReady">0</div><div class="stat-sub">anonymisés</div></div>
@@ -144,7 +144,7 @@
           </div>
         </div>
       </div>
-      <div class="panel kb-ask-panel">
+      <div class="panel kb-ask-panel expert-only">
         <div class="panel-header"><h2><span class="icon">💬</span> Question à la base anonyme</h2></div>
         <div class="panel-body">
           <div class="kb-ask-row">
@@ -154,7 +154,7 @@
           <div class="kb-ask-hint">Astuce: commencez par ingérer vos documents via l'API <code>/api/v1/kb/ingest/{document_id}</code>.</div>
         </div>
       </div>
-      <div class="panel preview-panel">
+      <div class="panel preview-panel expert-only">
         <div class="panel-header"><h2><span class="icon">👁️</span> Prévisualisation</h2></div>
         <div class="panel-body">
           <div class="preview-mode-row">
@@ -164,7 +164,7 @@
           <div class="preview-content" id="previewOutput">Sélectionnez un document et lancez une action pour voir la prévisualisation ici.</div>
         </div>
       </div>
-      <div class="panel" style="animation-delay:.22s">
+      <div class="panel expert-only" style="animation-delay:.22s">
         <div class="panel-header"><h2><span class="icon">🕵️</span> Ce qui a été masqué</h2></div>
         <div class="panel-body">
           <div class="masked-content" id="maskedOutput">Lancez `Anonymiser` / `Traiter tout` pour voir le résumé.</div>
