@@ -120,6 +120,37 @@ def _extract_first(pattern: str, text: str, flags: int = re.IGNORECASE) -> str |
     return _norm_spaces(m.group(0))
 
 
+def _to_iso_date_fr(text: str | None) -> str | None:
+    if not text:
+        return None
+    s = str(text).strip().replace("-", "/").replace(".", "/")
+    m = re.search(r"\b([0-3]?\d)[/ ]([0-1]?\d)[/ ]([12]\d{3})\b", s)
+    if not m:
+        return None
+    try:
+        d, mo, y = int(m.group(1)), int(m.group(2)), int(m.group(3))
+        dt = datetime(y, mo, d)
+    except ValueError:
+        return None
+    return dt.strftime("%Y-%m-%d")
+
+
+def _iso_date_in_range(iso: str | None, start_iso: str | None, end_iso: str | None) -> bool:
+    if not iso:
+        return False
+    try:
+        d = datetime.fromisoformat(iso)
+        if start_iso:
+            if d < datetime.fromisoformat(start_iso):
+                return False
+        if end_iso:
+            if d > datetime.fromisoformat(end_iso):
+                return False
+        return True
+    except ValueError:
+        return False
+
+
 def _extract_amount_for_label(text: str, label_regex: str) -> float | None:
     pat = rf"{label_regex}[^0-9\-]{{0,40}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
     return _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
@@ -1198,6 +1229,122 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
     return entries
 
 
+def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
+    bank = _extract_first(
+        r"\b(BNP\s*PARIBAS|SOCIETE\s*GENERALE|CR[ÉE]DIT\s*AGRICOLE|LCL|CIC|CAISSE\s+D[’' ]EPARGNE|BANQUE\s+POPULAIRE|HELLO\s+BANK|BOURSORAMA)\b",
+        text,
+    )
+    titulaire = _extract_first(
+        r"(?:titulaire|intitul[ée]\s+du\s+compte|nom\s+du\s+compte)\s*[:\-]?\s*([A-Z][A-Z0-9 .'\-]{2,80})",
+        text,
+    )
+    account_hint = _extract_first(
+        r"(?:compte|n[°o]|num[ée]ro)\s*[:\-]?\s*([A-Z0-9]{4,34})",
+        text,
+    )
+    period_start = _to_iso_date_fr(
+        _extract_first(r"(?:p[ée]riode|du)\s*[:\-]?\s*([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})\s*(?:au|\-)", text)
+    )
+    period_end = _to_iso_date_fr(
+        _extract_first(r"(?:au|jusqu[' ]au)\s*([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})", text)
+    )
+    solde_initial = _extract_first_amount_from_patterns(
+        text,
+        [
+            r"solde\s+initial",
+            r"solde\s+au\s+d[ée]but",
+            r"ancien\s+solde",
+        ],
+        min_amount=1.0,
+    )
+    solde_final = _extract_first_amount_from_patterns(
+        text,
+        [
+            r"nouveau\s+solde",
+            r"solde\s+final",
+            r"solde\s+de\s+cl[oô]ture",
+            r"solde\s+au\s+[0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3}",
+        ],
+        min_amount=1.0,
+    )
+    titulaire_pseudo = "TITULAIRE_1" if titulaire else None
+    compte_pseudo = "COMPTE_1" if account_hint else None
+    return {
+        "banque": _field(_norm_spaces(bank) if bank else None, 0.84 if bank else 0.0, "header:banque"),
+        "titulaire_compte_pseudo": _field(titulaire_pseudo, 0.8 if titulaire_pseudo else 0.0, "pseudo:titulaire"),
+        "compte_reference_pseudo": _field(compte_pseudo, 0.78 if compte_pseudo else 0.0, "pseudo:compte_reference"),
+        "periode_debut": _field(period_start, 0.82 if period_start else 0.0, "header:periode_debut"),
+        "periode_fin": _field(period_end, 0.82 if period_end else 0.0, "header:periode_fin"),
+        "solde_initial": _field(solde_initial, 0.88 if solde_initial is not None else 0.0, "header:solde_initial"),
+        "solde_final": _field(solde_final, 0.88 if solde_final is not None else 0.0, "header:solde_final"),
+    }
+
+
+def _extract_releve_bancaire_operations(text: str) -> list[dict[str, Any]]:
+    ops: list[dict[str, Any]] = []
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line:
+            continue
+        # Typical line: "02/01/2025 VIREMENT CLIENT X 0,00 1 200,00"
+        m = re.match(r"^([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})\s+(.+)$", line, re.IGNORECASE)
+        if not m:
+            continue
+        op_iso = _to_iso_date_fr(m.group(1))
+        if not op_iso:
+            continue
+        tail = m.group(2).strip()
+        amount_matches = list(
+            re.finditer(
+                r"-?(?:[0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+|[0-9Oo]+)(?:[.,][0-9Oo]{2})?",
+                tail,
+                re.IGNORECASE,
+            )
+        )
+        if not amount_matches:
+            continue
+        # Keep parsed numeric candidates only and use the last one(s) as amount columns.
+        candidates: list[tuple[float, tuple[int, int]]] = []
+        for am in amount_matches:
+            v = _to_float_fr(am.group(0))
+            if isinstance(v, float):
+                candidates.append((v, am.span()))
+        if not candidates:
+            continue
+
+        a1 = candidates[-2][0] if len(candidates) >= 2 else candidates[-1][0]
+        a2 = candidates[-1][0] if len(candidates) >= 2 else None
+        first_amount_start = candidates[-2][1][0] if len(candidates) >= 2 else candidates[-1][1][0]
+        label = _norm_spaces(tail[:first_amount_start]) or "OPERATION"
+
+        debit = None
+        credit = None
+        if isinstance(a2, float):
+            # Assume "debit credit" ordering when two amount columns are present.
+            debit = max(0.0, float(a1 or 0.0))
+            credit = max(0.0, float(a2 or 0.0))
+        else:
+            amt = float(a1 or 0.0)
+            if amt < 0:
+                debit = abs(amt)
+                credit = 0.0
+            else:
+                debit = 0.0
+                credit = amt
+        if debit is None or credit is None:
+            continue
+        ops.append(
+            {
+                "date_operation": op_iso,
+                "libelle": label,
+                "debit": round(float(debit), 2),
+                "credit": round(float(credit), 2),
+                "contrepartie": None,
+            }
+        )
+    return ops[:1000]
+
+
 def _extract_generic_accounting_table(text: str) -> list[dict[str, Any]]:
     records: list[dict[str, Any]] = []
     for raw in text.splitlines():
@@ -1490,6 +1637,79 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     }
 
 
+def _quality_releve_bancaire(fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str) -> dict[str, Any]:
+    base = _quality(fields)
+    critical = [
+        "periode_debut",
+        "periode_fin",
+        "solde_initial",
+        "solde_final",
+    ]
+    critical_missing = [k for k in critical if fields.get(k, {}).get("value") in (None, "", [])]
+
+    ops = tables.get("operations") if isinstance(tables, dict) else None
+    ops_list = ops if isinstance(ops, list) else []
+    sum_debit = sum(float(op.get("debit") or 0.0) for op in ops_list)
+    sum_credit = sum(float(op.get("credit") or 0.0) for op in ops_list)
+    lines_total = len([ln for ln in text.splitlines() if re.search(r"\b[0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3}\b", ln)])
+    parsed_lines = len(ops_list)
+    parsed_ratio = (parsed_lines / lines_total) if lines_total > 0 else 0.0
+
+    s0 = fields.get("solde_initial", {}).get("value")
+    s1 = fields.get("solde_final", {}).get("value")
+    balance_gap: float | None = None
+    balance_ok = False
+    if isinstance(s0, (int, float)) and isinstance(s1, (int, float)):
+        expected = float(s0) + float(sum_credit) - float(sum_debit)
+        balance_gap = abs(expected - float(s1))
+        ref = max(abs(float(s1)), abs(expected), 1.0)
+        tol = max(1.0, ref * 0.02)
+        balance_ok = balance_gap <= tol
+
+    start_iso = fields.get("periode_debut", {}).get("value")
+    end_iso = fields.get("periode_fin", {}).get("value")
+    out_of_range = 0
+    if isinstance(start_iso, str) and isinstance(end_iso, str):
+        for op in ops_list:
+            if not _iso_date_in_range(op.get("date_operation"), start_iso, end_iso):
+                out_of_range += 1
+    dates_ok = out_of_range == 0
+
+    flags = list(base.get("quality_flags", []))
+    if critical_missing:
+        flags.append("critical_fields_missing")
+    if not balance_ok and not {"solde_initial", "solde_final"} & set(critical_missing):
+        flags.append("balance_mismatch")
+    if parsed_ratio < 0.6:
+        flags.append("low_line_parse_ratio")
+    if not dates_ok:
+        flags.append("date_out_of_range")
+
+    ready_for_ai_core = (
+        not critical_missing
+        and balance_ok
+    )
+    ready_for_ai = (
+        ready_for_ai_core
+        and parsed_ratio >= 0.7
+        and dates_ok
+    )
+    needs_review = (not ready_for_ai) or base.get("needs_review", False)
+    return {
+        **base,
+        "critical_missing_fields": critical_missing,
+        "needs_review": needs_review,
+        "ready_for_ai": ready_for_ai,
+        "ready_for_ai_core": ready_for_ai_core,
+        "quality_flags": sorted(set(flags)),
+        "balance_gap": round(balance_gap, 2) if balance_gap is not None else None,
+        "operations_parsed_count": int(parsed_lines),
+        "operations_candidate_lines_count": int(lines_total),
+        "parsed_lines_ratio": round(parsed_ratio, 3),
+        "out_of_period_operations_count": int(out_of_range),
+    }
+
+
 def _pseudonymize_2072_output(fields: dict[str, dict[str, Any]], tables: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Keep extraction quality from raw while exposing anonymized structured output."""
     out_fields = dict(fields)
@@ -1560,10 +1780,22 @@ def _extractor_fiscal_2072(source_text: str, _anonymized_text: str) -> Structure
     )
 
 
+def _extractor_releve_bancaire(source_text: str, _anonymized_text: str) -> StructuredExtractionResult:
+    fields = _extract_releve_bancaire_fields(source_text)
+    tables = {"operations": _extract_releve_bancaire_operations(source_text)}
+    return StructuredExtractionResult(
+        fields=fields,
+        tables=tables,
+        quality=_quality_releve_bancaire(fields, tables, source_text),
+        extractor_name="extractor_releve_bancaire",
+    )
+
+
 EXTRACTOR_REGISTRY_V1: dict[str, Any] = {
     "bilan": _extractor_bilan,
     "compte_resultat": _extractor_compte_resultat,
     "fiscal_2072": _extractor_fiscal_2072,
+    "releve_bancaire": _extractor_releve_bancaire,
 }
 
 

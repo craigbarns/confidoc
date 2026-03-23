@@ -21,6 +21,9 @@ _FLAG_CATALOG: dict[str, tuple[str, str, str]] = {
     "annex_consistency_failed": ("warning", "Annexes 2072 : incohérence", "Vérifier annexes 1/2 vs tableaux extraits."),
     "numeric_consistency_low": ("warning", "Cohérence numérique 2072 limitée", "Relire revenus, charges et résultat net."),
     "aggregate_consistency_low": ("warning", "Totaux agrégés vs lignes : écart", "Contrôler sommes des tableaux vs champs."),
+    "balance_mismatch": ("warning", "Relevé bancaire : balance incohérente", "Vérifier soldes initial/final et colonnes débit/crédit."),
+    "date_out_of_range": ("warning", "Opérations hors période détectées", "Contrôler les dates d'opérations vs période du relevé."),
+    "low_line_parse_ratio": ("warning", "Peu de lignes d'opérations exploitables", "OCR/format de colonnes à revoir pour fiabiliser l'extraction."),
 }
 
 

@@ -1,0 +1,11 @@
+{
+  "id": "releve_clean_01",
+  "requested_doc_type": "releve_bancaire",
+  "source_filename": "releve_clean_01.pdf",
+  "tags": [
+    "clean",
+    "bank_statement"
+  ],
+  "notes": "Cas de base relevé bancaire avec balance exacte.",
+  "active": true
+}

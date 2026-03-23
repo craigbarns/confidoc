@@ -82,6 +82,12 @@ body{background:var(--bg-deep)}
 .stat-card.violet .stat-value{color:var(--violet)}
 .stat-card.amber .stat-value{color:var(--amber)}
 
+.status-range-row{display:flex;align-items:center;gap:8px;flex-wrap:wrap;margin-top:-10px;margin-bottom:8px}
+.status-range-label{font-size:12px;color:var(--text-dim)}
+.status-range-btn{padding:5px 10px;border-radius:999px;border:1px solid var(--glass-border);background:rgba(2,6,23,0.4);color:var(--text-muted);font-size:12px;cursor:pointer;transition:var(--transition)}
+.status-range-btn:hover{border-color:rgba(59,130,246,0.45);color:var(--text)}
+.status-range-btn.active{border-color:rgba(59,130,246,0.55);background:rgba(59,130,246,0.16);color:var(--text)}
+
 .status-summary-row{display:flex;gap:10px;flex-wrap:wrap;margin-top:-12px;margin-bottom:16px}
 .status-chip{display:inline-flex;align-items:center;gap:6px;padding:8px 12px;border-radius:999px;border:1px solid var(--glass-border);font-size:12px;color:var(--text-muted);background:rgba(2,6,23,0.4)}
 .status-chip b{font-size:12px;color:var(--text)}

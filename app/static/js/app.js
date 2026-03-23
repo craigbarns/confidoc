@@ -8,6 +8,7 @@ let lastOriginalDocId = null;
 let lastOriginalText = "";
 let previewMode = "anon"; // "anon" | "beforeafter"
 let docExtractionDetails = {};
+let statusSummaryDays = 30;
 
 const $ = id => document.getElementById(id);
 const previewOut = $("previewOutput");
@@ -665,7 +666,9 @@ async function refreshStatusSummary() {
   const flagsEl = $("sumTopFlags");
   if (!fullEl || !coreEl || !reviewEl || !avgEl || !flagsEl) return;
   try {
-    const { res, data } = await api("/api/v1/documents/status-summary?days=30&doc_type=auto&max_docs_for_quality=30");
+    const days = Number(statusSummaryDays || 30);
+    const qs = `days=${encodeURIComponent(String(days))}&doc_type=auto&max_docs_for_quality=30`;
+    const { res, data } = await api(`/api/v1/documents/status-summary?${qs}`);
     if (!res.ok) return;
     const q = data && data.quality_distribution ? data.quality_distribution : {};
     fullEl.textContent = String(q.full_ready || 0);
@@ -676,6 +679,32 @@ async function refreshStatusSummary() {
     const top = Array.isArray(data && data.top_quality_flags) ? data.top_quality_flags : [];
     flagsEl.textContent = top.length ? `${top[0].flag} (${top[0].count})` : "—";
   } catch {}
+}
+
+function updateStatusRangeButtons() {
+  const row = $("statusRangeRow");
+  if (!row) return;
+  row.querySelectorAll(".status-range-btn").forEach((btn) => {
+    const days = Number(btn.dataset.days || 0);
+    btn.classList.toggle("active", days === Number(statusSummaryDays));
+  });
+}
+
+function bindStatusRangeControls() {
+  const row = $("statusRangeRow");
+  if (!row || row.dataset.bound === "1") return;
+  row.dataset.bound = "1";
+  row.addEventListener("click", async (e) => {
+    const btn = e.target.closest(".status-range-btn");
+    if (!btn) return;
+    const next = Number(btn.dataset.days || 0);
+    if (![7, 30, 90].includes(next)) return;
+    if (next === Number(statusSummaryDays)) return;
+    statusSummaryDays = next;
+    updateStatusRangeButtons();
+    await refreshStatusSummary();
+  });
+  updateStatusRangeButtons();
 }
 
 async function refreshDocs() {
@@ -852,6 +881,7 @@ async function doUploadFile(file) {
 
 // Refresh
 $("refreshBtn").addEventListener("click", () => { refreshDocs(); toast("Liste actualisée", "info"); });
+bindStatusRangeControls();
 
 const purgeAllBtn = $("purgeAllDocsBtn");
 if (purgeAllBtn) {

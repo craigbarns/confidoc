@@ -66,6 +66,12 @@
         <div class="stat-card violet"><div class="stat-label">En cours</div><div class="stat-value" id="statProcessing">0</div><div class="stat-sub">en traitement</div></div>
         <div class="stat-card amber"><div class="stat-label">Détections</div><div class="stat-value" id="statDetections">—</div><div class="stat-sub" id="statDetectionsSub">dernier document traité</div></div>
       </div>
+      <div class="status-range-row" id="statusRangeRow">
+        <span class="status-range-label">Tendance:</span>
+        <button type="button" class="status-range-btn" id="sumRange7" data-days="7">7j</button>
+        <button type="button" class="status-range-btn active" id="sumRange30" data-days="30">30j</button>
+        <button type="button" class="status-range-btn" id="sumRange90" data-days="90">90j</button>
+      </div>
       <div class="status-summary-row">
         <div class="status-chip full">Full Ready <b id="sumFullReady">0</b></div>
         <div class="status-chip core">Core Ready <b id="sumCoreReady">0</b></div>
