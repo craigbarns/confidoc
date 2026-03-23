@@ -455,15 +455,62 @@ def _extract_common_fields(text: str) -> dict[str, dict[str, Any]]:
         r"(?:clos le|clôture|date de clôture)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
         text,
     )
-    societe = _extract_first(
+    societe_raw = _extract_first(
         r"(?:dénomination|denomination|raison sociale|société|societe)\s*[:\-]?\s*([A-Z0-9 _.\-]{3,80})",
         text,
     )
+    societe = _clean_company_label(societe_raw)
     return {
         "societe": _field(societe, 0.75 if societe else 0.0, "header:societe"),
         "exercice": _field(exercice, 0.8 if exercice else 0.0, "header:exercice"),
         "date_cloture": _field(date_cloture, 0.82 if date_cloture else 0.0, "header:date_cloture"),
     }
+
+
+def _clean_company_label(value: str | None) -> str | None:
+    """Normalize/reject noisy company labels extracted from OCR headers."""
+    if not value:
+        return None
+    s = _norm_spaces(str(value)).strip(" _-:.")
+    if not s:
+        return None
+    up = s.upper()
+    generic = {
+        "GENERALE",
+        "SOCIETE",
+        "SOCIÉTÉ",
+        "RAISON SOCIALE",
+        "ENTREPRISE",
+        "COMPAGNIE",
+        "DE",
+        "DU",
+        "DES",
+        "DE L",
+        "DE LA",
+    }
+    # Reject too generic/noisy single labels (e.g. "GENERALE_", "DE L")
+    if up in generic:
+        return None
+    if len(up) < 4:
+        return None
+    return s
+
+
+def _coerce_component_amount(value: float | None, total_passif: float | None) -> float | None:
+    """Reject implausible component amounts (often account-code leakage)."""
+    if value is None:
+        return None
+    v = float(value)
+    if v < 0:
+        return None
+    if isinstance(total_passif, (int, float)) and float(total_passif) > 0:
+        # A passif component should not dwarf total passif.
+        if v > float(total_passif) * 1.2:
+            return None
+    # Hard cap against OCR-account-code confusion (e.g. 40100000, 45510000).
+    if v >= 10_000_000:
+        return None
+    return v
 
 
 def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
@@ -545,6 +592,8 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
 
     dettes_fin_val = _extract_financial_amount_for_label(text, r"dettes?\s+financi", min_amount=50.0)
     dettes_four_val = _extract_financial_amount_for_label(text, r"dettes?\s+fournisseurs?", min_amount=50.0)
+    dettes_fin_val = _coerce_component_amount(dettes_fin_val, total_passif)
+    dettes_four_val = _coerce_component_amount(dettes_four_val, total_passif)
     # Conservative: small plaquettes sometimes list only equity + two debt lines under passif.
     if capitaux_propres is None and isinstance(total_passif, (int, float)):
         if dettes_fin_val is not None and dettes_four_val is not None:
@@ -576,8 +625,8 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         "immobilisations": _field(_extract_amount_for_label(text, r"immobilisations"), 0.78, "label:immobilisations"),
         "creances": _field(_extract_amount_for_label(text, r"créances|creances"), 0.78, "label:creances"),
         "disponibilites": _field(_extract_amount_for_label(text, r"disponibilités|disponibilites"), 0.78, "label:disponibilites"),
-        "dettes_financieres": _field(_extract_amount_for_label(text, r"dettes?\s+financi"), 0.76, "label:dettes financieres"),
-        "dettes_fournisseurs": _field(_extract_amount_for_label(text, r"dettes?\s+fournisseurs?"), 0.76, "label:dettes fournisseurs"),
+        "dettes_financieres": _field(dettes_fin_val, 0.76 if dettes_fin_val is not None else 0.0, "label:dettes financieres"),
+        "dettes_fournisseurs": _field(dettes_four_val, 0.76 if dettes_four_val is not None else 0.0, "label:dettes fournisseurs"),
         "capitaux_propres": _field(
             capitaux_propres, 0.8 if capitaux_propres is not None else 0.0, capitaux_propres_src
         ),
