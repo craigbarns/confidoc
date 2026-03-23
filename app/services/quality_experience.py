@@ -76,6 +76,7 @@ def build_quality_experience(
     """Résumé structuré pour UI, exports et intégrations."""
     needs_review = bool(quality.get("needs_review", True))
     ready = bool(quality.get("ready_for_ai", False))
+    ready_core = bool(quality.get("ready_for_ai_core", False))
     flags = list(quality.get("quality_flags") or [])
     critical = list(quality.get("critical_missing_fields") or [])
     coverage = quality.get("coverage_ratio")
@@ -89,6 +90,12 @@ def build_quality_experience(
     elif not needs_review and ready:
         level = "ok"
         headline = "Extraction alignée avec les garde-fous : prête pour la suite (sous réserve métier)."
+    elif ready_core:
+        level = "info"
+        headline = (
+            "Données comptables critiques validées (prêt usage de base). "
+            "Enrichissement secondaire recommandé."
+        )
     elif not needs_review:
         level = "ok"
         headline = "Aucun point bloquant détecté sur les règles actuelles."
@@ -128,6 +135,7 @@ def build_quality_experience(
             "coverage_ratio": coverage,
             "needs_review": needs_review,
             "ready_for_ai": ready,
+            "ready_for_ai_core": ready_core,
             "critical_missing_count": len(critical),
         },
     }

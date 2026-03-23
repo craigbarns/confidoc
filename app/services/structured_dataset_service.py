@@ -1366,6 +1366,11 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
         and ann2_ok
         and not critical_missing
     )
+    ready_for_ai_core = (
+        not critical_missing
+        and numeric_consistency_score >= 0.85
+        and aggregate_consistency_score >= 0.85
+    )
     needs_review = (not ready_for_ai) or base["needs_review"]
     flags = list(base.get("quality_flags", []))
     if critical_missing:
@@ -1387,6 +1392,7 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
         "critical_missing_fields": critical_missing,
         "needs_review": needs_review,
         "ready_for_ai": ready_for_ai,
+        "ready_for_ai_core": ready_for_ai_core,
         "quality_flags": sorted(set(flags)),
     }
 
