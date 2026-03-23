@@ -12,6 +12,21 @@ from app.services.quality_experience import build_quality_experience
 
 logger = get_logger(__name__)
 
+# Centralized thresholds (v1): tune extraction behavior without editing business logic.
+THRESHOLDS: dict[str, float] = {
+    "amount_min_default": 100.0,
+    "amount_min_low": 50.0,
+    "amount_abs_hard_cap": 5_000_000.0,
+    "component_abs_hard_cap": 10_000_000.0,
+    "component_vs_passif_ratio_cap": 1.2,
+    "quality_ready_coverage_min": 0.8,
+    "quality_ready_consistency_min": 0.85,
+    "quality_core_numeric_min": 0.85,
+    "quality_core_aggregate_min": 0.85,
+    "aggregate_rel_tolerance": 0.03,
+    "aggregate_abs_tolerance_min": 2.0,
+}
+
 
 def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
     return any(k in source for k in keywords)
@@ -122,7 +137,11 @@ def _extract_amount_for_label(text: str, label_regex: str) -> float | None:
     return _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
 
 
-def _extract_financial_amount_for_label(text: str, label_regex: str, min_amount: float = 100.0) -> float | None:
+def _extract_financial_amount_for_label(
+    text: str,
+    label_regex: str,
+    min_amount: float = THRESHOLDS["amount_min_default"],
+) -> float | None:
     """Financial amount extractor with plausibility threshold (avoid index-like numbers)."""
     value = _extract_amount_for_label(text, label_regex)
     if value is None:
@@ -130,7 +149,11 @@ def _extract_financial_amount_for_label(text: str, label_regex: str, min_amount:
     return value if abs(value) >= min_amount else None
 
 
-def _extract_first_amount_from_patterns(text: str, patterns: list[str], min_amount: float = 100.0) -> float | None:
+def _extract_first_amount_from_patterns(
+    text: str,
+    patterns: list[str],
+    min_amount: float = THRESHOLDS["amount_min_default"],
+) -> float | None:
     for pat in patterns:
         val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount)
         if val is not None:
@@ -139,7 +162,9 @@ def _extract_first_amount_from_patterns(text: str, patterns: list[str], min_amou
 
 
 def _extract_first_amount_with_source(
-    text: str, patterns: list[tuple[str, str]], min_amount: float = 100.0
+    text: str,
+    patterns: list[tuple[str, str]],
+    min_amount: float = THRESHOLDS["amount_min_default"],
 ) -> tuple[float | None, str]:
     for source_hint, pat in patterns:
         val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount)
@@ -149,7 +174,9 @@ def _extract_first_amount_with_source(
 
 
 def _extract_amount_from_lines_with_keyword(
-    text: str, keyword_regex: str, min_amount: float = 100.0
+    text: str,
+    keyword_regex: str,
+    min_amount: float = THRESHOLDS["amount_min_default"],
 ) -> tuple[float | None, str]:
     pat_kw = re.compile(keyword_regex, re.IGNORECASE)
     for raw in text.splitlines():
@@ -166,7 +193,11 @@ def _extract_amount_from_lines_with_keyword(
 
 
 def _extract_financial_amount_for_label_wide(
-    text: str, label_regex: str, *, max_gap: int = 120, min_amount: float = 100.0
+    text: str,
+    label_regex: str,
+    *,
+    max_gap: int = 120,
+    min_amount: float = THRESHOLDS["amount_min_default"],
 ) -> float | None:
     """Like _extract_financial_amount_for_label but allows a wider gap (multi-column OCR layouts)."""
     pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9][0-9\s\u00a0.,]{{0,30}})"
@@ -177,7 +208,10 @@ def _extract_financial_amount_for_label_wide(
 
 
 def _extract_amount_after_keyword_multiline(
-    text: str, keyword_regex: str, min_amount: float = 50.0, max_lookahead_lines: int = 3
+    text: str,
+    keyword_regex: str,
+    min_amount: float = THRESHOLDS["amount_min_low"],
+    max_lookahead_lines: int = 3,
 ) -> tuple[float | None, str]:
     """Find keyword on a line; take amount at end of that line or the next non-empty lines."""
     lines = text.splitlines()
@@ -207,13 +241,13 @@ def _extract_amount_after_keyword_multiline(
 
 
 def _plausible_2072_interets_candidate(value: float, revenus_bruts: float | None) -> bool:
-    if abs(value) < 50.0:
+    if abs(value) < THRESHOLDS["amount_min_low"]:
         return False
     if revenus_bruts is not None and isinstance(revenus_bruts, (int, float)):
         rb = abs(float(revenus_bruts))
-        if rb > 0 and abs(value) > max(rb * 2.0, 5_000_000.0):
+        if rb > 0 and abs(value) > max(rb * 2.0, THRESHOLDS["amount_abs_hard_cap"]):
             return False
-    elif abs(value) > 5_000_000.0:
+    elif abs(value) > THRESHOLDS["amount_abs_hard_cap"]:
         return False
     return True
 
@@ -225,9 +259,9 @@ def _plausible_2072_frais_candidate(value: float, revenus_bruts: float | None) -
         return False
     if revenus_bruts is not None and isinstance(revenus_bruts, (int, float)):
         rb = abs(float(revenus_bruts))
-        if rb > 0 and value > max(rb * 2.0, 5_000_000.0):
+        if rb > 0 and value > max(rb * 2.0, THRESHOLDS["amount_abs_hard_cap"]):
             return False
-    elif value > 5_000_000.0:
+    elif value > THRESHOLDS["amount_abs_hard_cap"]:
         return False
     return True
 
@@ -508,10 +542,10 @@ def _coerce_component_amount(value: float | None, total_passif: float | None) ->
         return None
     if isinstance(total_passif, (int, float)) and float(total_passif) > 0:
         # A passif component should not dwarf total passif.
-        if v > float(total_passif) * 1.2:
+        if v > float(total_passif) * THRESHOLDS["component_vs_passif_ratio_cap"]:
             return None
     # Hard cap against OCR-account-code confusion (e.g. 40100000, 45510000).
-    if v >= 10_000_000:
+    if v >= THRESHOLDS["component_abs_hard_cap"]:
         return None
     return v
 
@@ -1386,42 +1420,42 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     agg_ok = 0
     if isinstance(rb, (int, float)) and associes_rb > 0:
         agg_checks += 1
-        if abs(rb - associes_rb) <= max(2.0, abs(rb) * 0.03):
+        if abs(rb - associes_rb) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(rb) * THRESHOLDS["aggregate_rel_tolerance"]):
             agg_ok += 1
     if isinstance(rb, (int, float)) and immeubles_rb > 0:
         agg_checks += 1
-        if abs(rb - immeubles_rb) <= max(2.0, abs(rb) * 0.03):
+        if abs(rb - immeubles_rb) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(rb) * THRESHOLDS["aggregate_rel_tolerance"]):
             agg_ok += 1
     if isinstance(fc, (int, float)) and associes_fc > 0:
         agg_checks += 1
-        if abs(fc - associes_fc) <= max(2.0, abs(fc) * 0.03):
+        if abs(fc - associes_fc) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(fc) * THRESHOLDS["aggregate_rel_tolerance"]):
             agg_ok += 1
     if isinstance(fc, (int, float)) and immeubles_fc > 0:
         agg_checks += 1
-        if abs(fc - immeubles_fc) <= max(2.0, abs(fc) * 0.03):
+        if abs(fc - immeubles_fc) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(fc) * THRESHOLDS["aggregate_rel_tolerance"]):
             agg_ok += 1
     if isinstance(ie, (int, float)) and associes_ie > 0:
         agg_checks += 1
-        if abs(ie - associes_ie) <= max(2.0, abs(ie) * 0.03):
+        if abs(ie - associes_ie) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(ie) * THRESHOLDS["aggregate_rel_tolerance"]):
             agg_ok += 1
     if isinstance(ie, (int, float)) and immeubles_ie > 0:
         agg_checks += 1
-        if abs(ie - immeubles_ie) <= max(2.0, abs(ie) * 0.03):
+        if abs(ie - immeubles_ie) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(ie) * THRESHOLDS["aggregate_rel_tolerance"]):
             agg_ok += 1
     aggregate_consistency_score = (agg_ok / agg_checks) if agg_checks else 0.7
 
     consistency = (numeric_consistency_score + annex_consistency_score + aggregate_consistency_score) / 3
     ready_for_ai = (
-        base["coverage_ratio"] >= 0.8
-        and consistency >= 0.85
+        base["coverage_ratio"] >= THRESHOLDS["quality_ready_coverage_min"]
+        and consistency >= THRESHOLDS["quality_ready_consistency_min"]
         and ann1_ok
         and ann2_ok
         and not critical_missing
     )
     ready_for_ai_core = (
         not critical_missing
-        and numeric_consistency_score >= 0.85
-        and aggregate_consistency_score >= 0.85
+        and numeric_consistency_score >= THRESHOLDS["quality_core_numeric_min"]
+        and aggregate_consistency_score >= THRESHOLDS["quality_core_aggregate_min"]
     )
     needs_review = (not ready_for_ai) or base["needs_review"]
     flags = list(base.get("quality_flags", []))
@@ -1429,9 +1463,9 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
         flags.append("critical_fields_missing")
     if not ann1_ok or not ann2_ok:
         flags.append("annex_consistency_failed")
-    if numeric_consistency_score < 0.85:
+    if numeric_consistency_score < THRESHOLDS["quality_core_numeric_min"]:
         flags.append("numeric_consistency_low")
-    if aggregate_consistency_score < 0.85:
+    if aggregate_consistency_score < THRESHOLDS["quality_core_aggregate_min"]:
         flags.append("aggregate_consistency_low")
 
     return {
