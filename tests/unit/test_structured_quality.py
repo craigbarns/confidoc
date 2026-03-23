@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from app.services.structured_dataset_service import (
     _cr_step_tolerances,
+    _quality_liasse_is_simplifiee,
     _quality_bilan,
     _quality_compte_resultat,
 )
@@ -115,3 +116,23 @@ class TestQualityCompteResultat:
         assert q["cr_chain_delta_rc_rn"] == 10_000.0
         assert q["cr_chain_tol_relaxed_rex_rc"] == 1_000_000.0  # max(500k, 2×500k)
         assert q["cr_chain_tol_relaxed_rc_rn"] == 1_040_000.0  # max(500k, 2×520k)
+
+
+class TestQualityLiasseSimplifiee:
+    def test_missing_critical_fields_are_exposed(self):
+        fields = {
+            "liasse_type": _field("2065_2033"),
+            "exercice": _field(None),
+            "regime_imposition": _field("Régime simplifié d'imposition"),
+            "total_actif": _field(None),
+            "total_passif": _field(None),
+            "chiffre_affaires": _field(None),
+            "resultat_exercice": _field(108_567.0),
+            "resultat_net": _field(108_567.0),
+        }
+        q = _quality_liasse_is_simplifiee(fields)
+        assert q["ready_for_ai"] is False
+        assert q["ready_for_ai_core"] is False
+        assert set(q["critical_missing_fields"]) == {"total_actif", "total_passif", "chiffre_affaires"}
+        assert "critical_fields_missing" in q["quality_flags"]
+        assert "liasse_critical_fields_missing" in q["quality_flags"]

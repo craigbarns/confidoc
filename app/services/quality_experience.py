@@ -18,6 +18,7 @@ _FLAG_CATALOG: dict[str, tuple[str, str, str]] = {
     "bilan_balance_minor_gap": ("info", "Bilan : léger écart actif/passif", "Souvent des arrondis ou synthèse — contrôle rapide."),
     "result_chain_inconsistent": ("risk", "Chaîne REX / RC / RN incohérente", "Vérifier les trois résultats sur le document."),
     "result_chain_minor_gap": ("info", "Écart modéré sur la chaîne des résultats", "Contrôler postes financiers / exceptionnels."),
+    "liasse_critical_fields_missing": ("risk", "Liasse simplifiée: champs clés manquants", "Renseigner ou améliorer extraction des totaux bilan/CA/résultat."),
     "annex_consistency_failed": ("warning", "Annexes 2072 : incohérence", "Vérifier annexes 1/2 vs tableaux extraits."),
     "numeric_consistency_low": ("warning", "Cohérence numérique 2072 limitée", "Relire revenus, charges et résultat net."),
     "aggregate_consistency_low": ("warning", "Totaux agrégés vs lignes : écart", "Contrôler sommes des tableaux vs champs."),

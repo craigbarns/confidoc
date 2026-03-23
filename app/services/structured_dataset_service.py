@@ -1534,6 +1534,50 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
     }
 
 
+def _quality_liasse_is_simplifiee(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Quality gate dédié 2065/2033 : champs clés obligatoires."""
+    base = _quality(fields)
+    critical = [
+        "total_actif",
+        "total_passif",
+        "chiffre_affaires",
+        "resultat_exercice",
+    ]
+    critical_missing = [k for k in critical if fields.get(k, {}).get("value") in (None, "", [])]
+
+    # Cohérence minimale bilan.
+    actif = fields.get("total_actif", {}).get("value")
+    passif = fields.get("total_passif", {}).get("value")
+    balance_ok = False
+    balance_gap: float | None = None
+    if isinstance(actif, (int, float)) and isinstance(passif, (int, float)):
+        fa, fp = float(actif), float(passif)
+        balance_gap = abs(fa - fp)
+        ref = max(abs(fa), abs(fp), 1.0)
+        tol = max(10.0, ref * 0.04)
+        balance_ok = balance_gap <= tol
+
+    flags = list(base.get("quality_flags", []))
+    if critical_missing:
+        flags.append("critical_fields_missing")
+        flags.append("liasse_critical_fields_missing")
+    if not balance_ok and "total_actif" not in critical_missing and "total_passif" not in critical_missing:
+        flags.append("bilan_balance_mismatch")
+
+    ready_for_ai_core = (not critical_missing) and balance_ok
+    ready_for_ai = ready_for_ai_core and base["coverage_ratio"] >= 0.75
+    needs_review = (not ready_for_ai) or base["needs_review"]
+    return {
+        **base,
+        "critical_missing_fields": critical_missing,
+        "needs_review": needs_review,
+        "ready_for_ai": ready_for_ai,
+        "ready_for_ai_core": ready_for_ai_core,
+        "quality_flags": sorted(set(flags)),
+        "liasse_balance_gap": round(balance_gap, 2) if balance_gap is not None else None,
+    }
+
+
 def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str) -> dict[str, Any]:
     base = _quality(fields)
     critical = [
@@ -1852,7 +1896,7 @@ def _run_extractor_pipeline(
         return StructuredExtractionResult(
             fields=fields,
             tables={"accounting_lines": _extract_generic_accounting_table(anonymized_text)},
-            quality=_quality(fields),
+            quality=_quality_liasse_is_simplifiee(fields),
             extractor_name="extractor_liasse_is_simplifiee",
         )
     fields = _extract_common_fields(source_text)
