@@ -5,6 +5,6 @@
   "tags": [
     "clean"
   ],
-  "notes": "Template de cas golden — compléter expected/min et input.",
-  "active": false
+  "notes": "Cas actif initial basé sur regression_fixtures.json",
+  "active": true
 }

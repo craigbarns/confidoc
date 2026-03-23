@@ -1,2 +1,7 @@
-# cr_clean_01
-# Remplacez par texte OCR/texte extrait anonymisé
+Dénomination : SCI EXEMPLE TEST
+Exercice 2024
+Chiffre d'affaires 50 000
+Charges externes 20 000
+Résultat d'exploitation 8 000
+Résultat courant 7 500
+Résultat net 7 000

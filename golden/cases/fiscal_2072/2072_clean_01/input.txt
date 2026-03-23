@@ -1,2 +1,7 @@
-# 2072_clean_01
-# Remplacez par texte OCR/texte extrait anonymisé
+Dénomination de la société SCI TEST 2072
+Date de clôture de l'exercice 31/12/2024
+Nombre d'associés 2
+Revenus bruts 120 000
+Frais et charges hors intérêts 30 000
+Intérêts d'emprunts 10 000
+Revenu net foncier 80 000

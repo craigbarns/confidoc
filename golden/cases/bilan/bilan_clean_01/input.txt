@@ -1,2 +1,12 @@
-# bilan_clean_01
-# Remplacez par texte OCR/texte extrait anonymisé
+Dénomination : SCI EXEMPLE TEST
+Exercice 2024
+date de clôture 31/12/2024
+Total actif 100 000
+Total passif 100 000
+Immobilisations 90 000
+creances 5 000
+disponibilites 5 000
+Dettes financières 70 000
+Dettes fournisseurs 1 000
+Capitaux propres 29 000
+Résultat de l'exercice 29 000
