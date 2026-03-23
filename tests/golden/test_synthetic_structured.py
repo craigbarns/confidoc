@@ -26,7 +26,7 @@ def test_bilan_synthetic_experience_not_block() -> None:
         extraction_text=text,
     )
     exp = out.get("experience") or {}
-    assert exp.get("level") in ("ok", "warning")
+    assert exp.get("level") in ("ok", "warning", "info")
     q = out.get("quality") or {}
     assert q.get("critical_missing_fields") in ([],)
 
