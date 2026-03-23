@@ -111,6 +111,19 @@ class Settings(BaseSettings):
     OLLAMA_TIMEOUT_SECONDS: int = 90
     ADMIN_RECOVERY_TOKEN: str = ""
 
+    # ---- Structured extraction thresholds (optional overrides) ----
+    EXTRACT_AMOUNT_MIN_DEFAULT: float | None = None
+    EXTRACT_AMOUNT_MIN_LOW: float | None = None
+    EXTRACT_AMOUNT_ABS_HARD_CAP: float | None = None
+    EXTRACT_COMPONENT_ABS_HARD_CAP: float | None = None
+    EXTRACT_COMPONENT_VS_PASSIF_RATIO_CAP: float | None = None
+    EXTRACT_QUALITY_READY_COVERAGE_MIN: float | None = None
+    EXTRACT_QUALITY_READY_CONSISTENCY_MIN: float | None = None
+    EXTRACT_QUALITY_CORE_NUMERIC_MIN: float | None = None
+    EXTRACT_QUALITY_CORE_AGGREGATE_MIN: float | None = None
+    EXTRACT_AGGREGATE_REL_TOLERANCE: float | None = None
+    EXTRACT_AGGREGATE_ABS_TOLERANCE_MIN: float | None = None
+
     @field_validator("APP_ENV", mode="before")
     @classmethod
     def normalize_app_env(cls, value: str) -> str:
