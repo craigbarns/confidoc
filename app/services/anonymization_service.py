@@ -13,12 +13,18 @@ logger = get_logger(__name__)
 
 try:
     import pytesseract
-    from PIL import Image
+    from PIL import Image, ImageFilter, ImageOps, ImageEnhance
     from io import BytesIO
     from pdf2image import convert_from_bytes
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
+
+try:
+    import numpy as np
+    HAS_NUMPY = True
+except ImportError:
+    HAS_NUMPY = False
 
 try:
     import pymupdf4llm
@@ -190,6 +196,91 @@ FALSE_POSITIVE_WORDS: set[str] = {
 # ══════════════════════════════════════════════════════════════════════
 
 
+# ──────────────────────────────────────────────────────────────────────
+# OCR IMAGE PREPROCESSING — dramatically improves Tesseract accuracy
+# ──────────────────────────────────────────────────────────────────────
+
+
+def _preprocess_image_for_ocr(img: "Image.Image") -> "Image.Image":
+    """Apply a multi-step preprocessing pipeline to boost OCR accuracy.
+
+    Steps:
+    1. Convert to grayscale
+    2. Up-scale small images (< 300 DPI equivalent)
+    3. Denoise with median filter
+    4. Enhance contrast (CLAHE-like via adaptive histogram)
+    5. Sharpen
+    6. Binarize with adaptive threshold (Otsu-style via ImageOps.autocontrast)
+    7. Deskew if numpy is available
+    """
+    # 1. Grayscale
+    img = img.convert("L")
+
+    # 2. Up-scale small images — Tesseract works best at 300+ DPI
+    width, height = img.size
+    if width < 1800 or height < 1800:
+        scale = max(2, 2400 // min(width, height))
+        scale = min(scale, 4)  # cap at 4x
+        img = img.resize((width * scale, height * scale), Image.LANCZOS)
+
+    # 3. Denoise — removes speckles from scans
+    img = img.filter(ImageFilter.MedianFilter(size=3))
+
+    # 4. Contrast enhancement
+    enhancer = ImageEnhance.Contrast(img)
+    img = enhancer.enhance(1.8)
+
+    # 5. Sharpen — recover edges after denoise
+    img = img.filter(ImageFilter.SHARPEN)
+
+    # 6. Binarize (black & white) — adaptive autocontrast + threshold
+    img = ImageOps.autocontrast(img, cutoff=2)
+
+    # 7. Deskew (straighten tilted scans) — requires numpy
+    if HAS_NUMPY:
+        try:
+            img = _deskew_image(img)
+        except Exception:
+            pass  # deskew is best-effort
+
+    return img
+
+
+def _deskew_image(img: "Image.Image") -> "Image.Image":
+    """Deskew a grayscale image by detecting dominant line angle."""
+    arr = np.array(img)
+    # Compute horizontal projection profile variance at different angles
+    best_angle = 0.0
+    best_score = 0.0
+    for angle_10x in range(-50, 51, 5):  # -5.0° to +5.0° in 0.5° steps
+        angle = angle_10x / 10.0
+        rotated = img.rotate(angle, fillcolor=255, expand=False)
+        row_sums = np.sum(np.array(rotated) < 128, axis=1)
+        score = float(np.var(row_sums))
+        if score > best_score:
+            best_score = score
+            best_angle = angle
+    if abs(best_angle) > 0.3:
+        img = img.rotate(best_angle, fillcolor=255, expand=True)
+        logger.debug("deskew_applied", angle=best_angle)
+    return img
+
+
+def _get_tesseract_config() -> str:
+    """Build optimal Tesseract configuration string."""
+    # --oem 3: LSTM + legacy combined engine (best accuracy)
+    # --psm 6: Assume uniform block of text (best for scanned docs)
+    # preserve_interword_spaces: keep spacing for table-heavy docs
+    return "--oem 3 --psm 6 -c preserve_interword_spaces=1"
+
+
+def _ocr_image(img: "Image.Image", lang: str = "fra+eng") -> str:
+    """Run Tesseract OCR on a single image with preprocessing and optimal config."""
+    processed = _preprocess_image_for_ocr(img)
+    config = _get_tesseract_config()
+    return str(pytesseract.image_to_string(processed, lang=lang, config=config)).strip()
+
+
 def classify_document_type(text: str, filename: str = "") -> str:
     """Heuristic document-type classification (v2)."""
     source = f"{filename}\n{text[:6000]}".lower()
@@ -275,32 +366,77 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
             try:
                 from app.config import get_settings
 
-                page_markers = bool(get_settings().PDF_PAGE_MARKERS)
-                images = convert_from_bytes(content)
+                settings = get_settings()
+                page_markers = bool(settings.PDF_PAGE_MARKERS)
+                ocr_dpi = getattr(settings, "OCR_DPI", 300)
+                ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
+                images = convert_from_bytes(content, dpi=ocr_dpi)
                 ocr_chunks = []
                 for i, img in enumerate(images):
-                    chunk = pytesseract.image_to_string(img, lang="fra")
+                    chunk = _ocr_image(img, lang=ocr_lang)
                     if page_markers:
                         ocr_chunks.append(f"---PAGE {i + 1}---\n{chunk}")
                     else:
                         ocr_chunks.append(chunk)
-                logger.info("document_extraction", method="ocr_tesseract_pdf", extension="pdf")
+                logger.info(
+                    "document_extraction",
+                    method="ocr_tesseract_pdf_enhanced",
+                    extension="pdf",
+                    pages=len(images),
+                    dpi=ocr_dpi,
+                )
                 return "\n".join(ocr_chunks).strip()
-            except Exception:
-                logger.info("document_extraction", method="native_pdf_empty_ocr_failed", extension="pdf")
+            except Exception as exc:
+                logger.warning(
+                    "document_extraction",
+                    method="native_pdf_empty_ocr_failed",
+                    extension="pdf",
+                    error=str(exc),
+                )
                 return ext_text
         
         logger.info("document_extraction", method="native_pdf_pymupdf", extension="pdf")
         return ext_text
 
-    # Image support (PNG, JPG, TIFF) via OCR
+    # Image support (PNG, JPG, TIFF) via OCR with full preprocessing
     if extension in ["png", "jpg", "jpeg", "tiff", "tif"] and HAS_OCR:
         try:
+            from app.config import get_settings
+            settings = get_settings()
+            ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
             img = Image.open(BytesIO(content))
-            logger.info("document_extraction", method="ocr_tesseract_image", extension=extension)
-            return str(pytesseract.image_to_string(img, lang="fra")).strip()
-        except Exception:
-            pass
+
+            # For multi-page TIFF, process all frames
+            if extension in ["tiff", "tif"]:
+                ocr_chunks = []
+                frame_idx = 0
+                try:
+                    while True:
+                        img.seek(frame_idx)
+                        chunk = _ocr_image(img.copy(), lang=ocr_lang)
+                        if chunk:
+                            ocr_chunks.append(f"---PAGE {frame_idx + 1}---\n{chunk}")
+                        frame_idx += 1
+                except EOFError:
+                    pass
+                if ocr_chunks:
+                    logger.info(
+                        "document_extraction",
+                        method="ocr_tesseract_tiff_enhanced",
+                        extension=extension,
+                        pages=frame_idx,
+                    )
+                    return "\n".join(ocr_chunks).strip()
+
+            result = _ocr_image(img, lang=ocr_lang)
+            logger.info(
+                "document_extraction",
+                method="ocr_tesseract_image_enhanced",
+                extension=extension,
+            )
+            return result
+        except Exception as exc:
+            logger.warning("ocr_image_failed", extension=extension, error=str(exc))
 
     logger.warning("document_extraction", method="fallback_plain_text_or_error", extension=extension)
     # Plain text fallback

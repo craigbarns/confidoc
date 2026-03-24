@@ -3,7 +3,7 @@
 import uuid
 from datetime import datetime
 
-from sqlalchemy import DateTime, func
+from sqlalchemy import DateTime, func, Boolean
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import DeclarativeBase, Mapped, mapped_column
 
@@ -27,6 +27,17 @@ class TimestampMixin:
         server_default=func.now(),
         onupdate=func.now(),
         nullable=False,
+    )
+
+
+class SoftDeleteMixin:
+    """Mixin pour soft delete — les lignes supprimées sont marquées, pas effacées."""
+
+    is_deleted: Mapped[bool] = mapped_column(
+        Boolean, default=False, nullable=False, server_default="false", index=True,
+    )
+    deleted_at: Mapped[datetime | None] = mapped_column(
+        DateTime(timezone=True), nullable=True, default=None,
     )
 
 

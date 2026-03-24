@@ -91,3 +91,23 @@ def test_debug_defaults_to_false():
     """DEBUG defaults to False for safety."""
     s = Settings()
     assert s.DEBUG is False
+
+
+def test_ocr_config_defaults():
+    """OCR configuration has sensible defaults."""
+    s = Settings()
+    assert s.OCR_DPI == 300
+    assert s.OCR_LANG == "fra+eng"
+    assert s.OCR_PREPROCESSING is True
+
+
+def test_ocr_dpi_override():
+    """OCR_DPI can be overridden."""
+    s = Settings(OCR_DPI=600)
+    assert s.OCR_DPI == 600
+
+
+def test_ocr_lang_override():
+    """OCR_LANG can be overridden."""
+    s = Settings(OCR_LANG="fra")
+    assert s.OCR_LANG == "fra"

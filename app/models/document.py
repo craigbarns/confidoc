@@ -3,11 +3,11 @@
 from enum import Enum as PyEnum
 import uuid
 
-from sqlalchemy import Enum, ForeignKey, LargeBinary, String, Text
+from sqlalchemy import Enum, ForeignKey, Index, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
-from app.models.base import BaseModel
+from app.models.base import BaseModel, SoftDeleteMixin
 
 
 class DocumentStatus(str, PyEnum):
@@ -17,8 +17,18 @@ class DocumentStatus(str, PyEnum):
     FAILED = "failed"
 
 
-class Document(BaseModel):
+class Document(SoftDeleteMixin, BaseModel):
     __tablename__ = "documents"
+    __table_args__ = (
+        # Composite index: user's documents sorted by date (most common query)
+        Index("ix_documents_user_created", "uploaded_by_user_id", "created_at"),
+        # Composite index: org-level queries sorted by date (tenant isolation)
+        Index("ix_documents_org_created", "org_id", "created_at"),
+        # Composite index: active (non-deleted) documents per user
+        Index("ix_documents_user_active", "uploaded_by_user_id", "is_deleted"),
+        # Composite index: status filtering per org
+        Index("ix_documents_org_status", "org_id", "status"),
+    )
 
     org_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),

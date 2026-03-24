@@ -313,6 +313,7 @@ async def _get_user_document_or_404(
         select(Document).where(
             Document.id == document_uuid,
             Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
         )
     )
     document = result.scalar_one_or_none()
@@ -459,7 +460,10 @@ async def list_documents(
 ) -> list[Document]:
     result = await db.execute(
         select(Document)
-        .where(Document.uploaded_by_user_id == current_user.id)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+        )
         .order_by(desc(Document.created_at))
         .offset(offset)
         .limit(limit)
@@ -489,6 +493,7 @@ async def status_summary(
         select(Document)
         .where(
             Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
             Document.created_at >= cutoff_expr,
         )
         .order_by(desc(Document.created_at))
@@ -583,24 +588,24 @@ async def delete_all_my_documents(
             "Suppression groupée : ajoutez le paramètre de requête ?confirm=true"
         )
 
+    from datetime import datetime, timezone
+
     result = await db.execute(
-        select(Document).where(Document.uploaded_by_user_id == current_user.id)
+        select(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+        )
     )
     docs = list(result.scalars().all())
     deleted = 0
+    now = datetime.now(timezone.utc)
     for document in docs:
-        try:
-            delete_bytes(document.storage_backend, document.storage_key)
-        except Exception as exc:
-            logger.warning(
-                "storage_delete_failed_bulk",
-                doc_id=str(document.id),
-                error=str(exc),
-            )
-        await db.execute(delete(Document).where(Document.id == document.id))
+        # Soft delete: mark as deleted instead of removing from DB
+        document.is_deleted = True
+        document.deleted_at = now
         deleted += 1
     await db.commit()
-    logger.info("documents_all_deleted", user_id=str(current_user.id), count=deleted)
+    logger.info("documents_all_soft_deleted", user_id=str(current_user.id), count=deleted)
     return {"deleted": deleted}
 
 
@@ -1153,18 +1158,15 @@ async def delete_document(
     current_user: CurrentUser,
     db: DbSession,
 ) -> None:
+    from datetime import datetime, timezone
+
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
-    # 1) Delete file from storage (best effort)
-    try:
-        delete_bytes(document.storage_backend, document.storage_key)
-    except Exception as exc:
-        logger.warning("storage_delete_failed", doc_id=str(document.id), error=str(exc))
-
-    # 2) Delete from database (cascades to versions/detections)
-    await db.execute(delete(Document).where(Document.id == document.id))
+    # Soft delete: mark as deleted instead of removing from DB
+    document.is_deleted = True
+    document.deleted_at = datetime.now(timezone.utc)
     await db.commit()
-    logger.info("document_deleted", doc_id=str(document.id))
+    logger.info("document_soft_deleted", doc_id=str(document.id))
 
 
 @router.get(
