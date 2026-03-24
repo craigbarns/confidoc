@@ -45,3 +45,13 @@ minio_data/
 # Uploads (local dev)
 uploads/
 temp/
+
+# Golden — sources brutes (RGPD, volume) et exports OCR nominatifs hors jeu versionné.
+# Les cas `golden/cases/**/input.txt` restent versionnés lorsque ce sont des fixtures synthétiques.
+golden/**/*.pdf
+golden/**/*.PDF
+golden/**/*_ocr.txt
+golden/**/*_extracted.txt
+
+# PDF de test locaux (voir golden/README.md)
+testdata/

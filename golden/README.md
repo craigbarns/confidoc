@@ -75,3 +75,16 @@ pytest tests/golden/test_golden_regression.py -q
 ## Anonymisation
 
 Ne pas committer de noms / adresses réels. Utiliser des sociétés fictives et des identifiants stables (`ASSOCIE_1`, …).
+
+## RGPD : PDF et OCR hors dépôt
+
+**À versionner** : schémas, `expected.min.json`, `meta.json`, `regression_fixtures.json`, `input.txt` **synthétiques** ou déjà anonymisés pour la CI.
+
+**À ne pas versionner** (voir `.gitignore` à la racine) :
+
+- tout PDF sous `golden/**` (2072, plaquettes, relevés, états réels, etc.) ;
+- dumps OCR nominatifs : `*_ocr.txt`, `*_extracted.txt`.
+
+Stocker les PDF réels **localement** (ex. `testdata/` ignoré par git), sur stockage interne, ou **CI secrets** / S3 privé. Documenter dans `meta.json` le `source_filename` attendu sans mettre le fichier dans le repo.
+
+Pour la liasse **2072** et documents « personnes », privilégier **local-first** pour tout traitement sur données brutes ; les golden publics restent des **textes et JSON** sans PII.
