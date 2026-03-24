@@ -626,7 +626,7 @@ async function apiUploadMultipart(path, formData) {
 async function diagnoseUploadConnectivity() {
   // Best-effort network diagnosis to replace vague "transport failed" errors.
   try {
-    const h = await fetch("/api/health", { method: "GET", cache: "no-store" });
+    const h = await fetch("/health", { method: "GET", cache: "no-store" });
     if (!h.ok) return { kind: "backend_unhealthy", status: h.status };
   } catch {
     return { kind: "backend_unreachable" };
