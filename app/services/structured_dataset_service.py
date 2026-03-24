@@ -2963,8 +2963,18 @@ def _quality_2072(
     arithmetic_consistency_ok = False
     if isinstance(rb, (int, float)) and isinstance(rn, (int, float)):
         expected = rb - pt - fc - ie
-        arithmetic_consistency_ok = abs(expected - rn) <= 5.0
-        numeric_consistency_score = 1.0 if abs(expected - rn) <= 2 else 0.7
+        gap = abs(expected - rn)
+        arithmetic_consistency_ok = gap <= 5.0
+        # Aligner le score numérique sur la tolérance arithmétique : sinon on a arith OK
+        # mais numeric_consistency_score=0.7 < quality_core_numeric_min (0.85) → IA bloquée.
+        if gap <= 2.0:
+            numeric_consistency_score = 1.0
+        elif arithmetic_consistency_ok:
+            numeric_consistency_score = max(
+                0.88, THRESHOLDS["quality_core_numeric_min"]
+            )
+        else:
+            numeric_consistency_score = 0.6
 
     ann1_declared = bool(re.search(r"annexe\s*1", text, re.IGNORECASE))
     ann2_declared = bool(re.search(r"annexe\s*2", text, re.IGNORECASE))
@@ -3036,6 +3046,9 @@ def _quality_2072(
             agg_ok += 1
     aggregate_consistency_score = (agg_ok / agg_checks) if agg_checks else 0.7
 
+    # Seuil agrégats un peu plus souple que 0.85 : une ligne annexe mal OCR suffit à bloquer l'IA.
+    agg_min_for_core = max(0.75, THRESHOLDS["quality_core_aggregate_min"] - 0.10)
+
     consistency = (
         numeric_consistency_score + annex_consistency_score + aggregate_consistency_score
     ) / 3
@@ -3052,7 +3065,12 @@ def _quality_2072(
         and arithmetic_consistency_ok
         and (
             agg_checks == 0
-            or aggregate_consistency_score >= THRESHOLDS["quality_core_aggregate_min"]
+            or aggregate_consistency_score >= agg_min_for_core
+            or (
+                arithmetic_consistency_ok
+                and aggregate_consistency_score >= 0.66
+                and agg_ok >= max(1, agg_checks - 1)
+            )
         )
     )
     needs_review = not ready_for_ai_core
