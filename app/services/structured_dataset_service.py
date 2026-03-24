@@ -315,6 +315,33 @@ def _extract_first_amount_token_from_keyword_line(
     return None, "missing"
 
 
+def _extract_first_amount_token_from_keyword_line_excluding(
+    text: str,
+    keyword_regex: str,
+    *,
+    min_amount: float = THRESHOLDS["amount_min_default"],
+    exclude_regex: str | None = None,
+    max_lines: int = 8,
+) -> tuple[float | None, str]:
+    """Like line-token extraction, but skipping lines matching exclude_regex."""
+    pat_kw = re.compile(keyword_regex, re.IGNORECASE)
+    pat_ex = re.compile(exclude_regex, re.IGNORECASE) if exclude_regex else None
+    seen = 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or not pat_kw.search(line):
+            continue
+        if pat_ex and pat_ex.search(line):
+            continue
+        seen += 1
+        tokens = [v for v in _extract_line_amount_tokens(line) if abs(v) >= min_amount]
+        if tokens:
+            return tokens[0], "fallback:line_keyword_first_token_excluding"
+        if seen >= max_lines:
+            break
+    return None, "missing"
+
+
 def _extract_amount_tokens_for_keyword_lines(
     text: str,
     keyword_regex: str,
@@ -890,10 +917,11 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     )
     # Prefer line-token extraction first for N/N-1 layouts (avoid cross-line capture).
     if capitaux_propres is None:
-        capitaux_propres, capitaux_propres_src = _extract_first_amount_token_from_keyword_line(
+        capitaux_propres, capitaux_propres_src = _extract_first_amount_token_from_keyword_line_excluding(
             text,
             r"capitaux?\s+propres|situation\s+nette|fonds?\s+propres",
             min_amount=100.0,
+            exclude_regex=r"r[ée]sultat|b[ée]n[ée]fice|perte",
         )
     if capitaux_propres is None:
         for src_hint, pat in [
@@ -953,10 +981,11 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             ],
             min_amount=50.0,
         )
-    dettes_four_val, _ = _extract_first_amount_token_from_keyword_line(
+    dettes_four_val, _ = _extract_first_amount_token_from_keyword_line_excluding(
         text,
         r"dettes?\s+fournisseurs?|fournisseurs?",
         min_amount=50.0,
+        exclude_regex=r"avances?\s+et\s+acomptes?|acomptes?\s+re[cç]us",
     )
     if dettes_four_val is None:
         dettes_four_val = _extract_financial_amount_for_label(
@@ -1043,7 +1072,7 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     if resultat_exercice is None:
         resultat_exercice, resultat_exercice_src = _extract_first_amount_token_from_keyword_line(
             text,
-            r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice|perte",
+            r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
             min_amount=50.0,
         )
     # Anti-collision on noisy "100" lines when totals indicate large company amounts.
@@ -1060,11 +1089,37 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         if isinstance(resultat_exercice, (int, float)) and abs(float(resultat_exercice)) <= 150.0:
             alt, alt_src = _extract_first_amount_token_from_keyword_line(
                 text,
-                r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice|perte",
+                r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
                 min_amount=200.0,
             )
             resultat_exercice = alt
             resultat_exercice_src = alt_src if alt is not None else "missing"
+    # Guardrail: if equity and result are identical on large docs, prefer dedicated result line
+    # and force equity from explicit equity labels excluding result lines.
+    if (
+        isinstance(passif_ref, float)
+        and passif_ref >= 10_000.0
+        and isinstance(capitaux_propres, (int, float))
+        and isinstance(resultat_exercice, (int, float))
+        and abs(float(capitaux_propres) - float(resultat_exercice)) < 1e-6
+    ):
+        res_alt, res_alt_src = _extract_first_amount_token_from_keyword_line(
+            text,
+            r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
+            min_amount=50.0,
+        )
+        cp_alt, cp_alt_src = _extract_first_amount_token_from_keyword_line_excluding(
+            text,
+            r"capitaux?\s+propres|situation\s+nette|fonds?\s+propres",
+            min_amount=100.0,
+            exclude_regex=r"r[ée]sultat|b[ée]n[ée]fice|perte",
+        )
+        if isinstance(res_alt, float):
+            resultat_exercice = res_alt
+            resultat_exercice_src = res_alt_src
+        if isinstance(cp_alt, float):
+            capitaux_propres = cp_alt
+            capitaux_propres_src = cp_alt_src
 
     return {
         **_extract_common_fields(text),
