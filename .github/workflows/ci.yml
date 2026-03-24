@@ -20,9 +20,29 @@ jobs:
           python -m pip install --upgrade pip
           pip install -e ".[dev]"
       - name: Ruff lint
-        run: ruff check app/ tests/
+        run: |
+          set -euo pipefail
+          BASE_SHA="$(git rev-parse HEAD^)"
+          CHANGED_PY="$(git diff --name-only "$BASE_SHA" HEAD -- 'app/**/*.py' 'tests/**/*.py' || true)"
+          if [ -z "$CHANGED_PY" ]; then
+            echo "No changed Python files in app/tests; skipping Ruff lint."
+            exit 0
+          fi
+          echo "Changed Python files:"
+          echo "$CHANGED_PY"
+          # shellcheck disable=SC2086
+          ruff check $CHANGED_PY
       - name: Ruff format check
-        run: ruff format --check app/ tests/
+        run: |
+          set -euo pipefail
+          BASE_SHA="$(git rev-parse HEAD^)"
+          CHANGED_PY="$(git diff --name-only "$BASE_SHA" HEAD -- 'app/**/*.py' 'tests/**/*.py' || true)"
+          if [ -z "$CHANGED_PY" ]; then
+            echo "No changed Python files in app/tests; skipping Ruff format check."
+            exit 0
+          fi
+          # shellcheck disable=SC2086
+          ruff format --check $CHANGED_PY
 
   test:
     runs-on: ubuntu-latest

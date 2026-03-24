@@ -574,7 +574,7 @@ async function api(path, opts={}) {
 
 /** Multipart upload : ne pas définir Content-Type (le navigateur pose le boundary). */
 async function apiUploadMultipart(path, formData) {
-  return await new Promise((resolve, reject) => {
+  const xhrUpload = () => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", path, true);
     xhr.timeout = 120000;
@@ -598,6 +598,29 @@ async function apiUploadMultipart(path, formData) {
     xhr.onabort = () => reject(new Error("aborted_upload"));
     xhr.send(formData);
   });
+
+  const fetchUpload = async () => {
+    const headers = {};
+    if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
+    const res = await fetch(path, { method: "POST", body: formData, headers });
+    const raw = await res.text();
+    let data;
+    try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
+    return { res, data };
+  };
+
+  // Fallback transport: certains navigateurs/environnements cassent XHR ou fetch selon le contexte.
+  try {
+    return await xhrUpload();
+  } catch (firstErr) {
+    const msg = String((firstErr && firstErr.message) || "").toLowerCase();
+    const retriable =
+      msg.includes("network_error_upload")
+      || msg.includes("timeout_upload")
+      || msg.includes("aborted_upload");
+    if (!retriable) throw firstErr;
+    return await fetchUpload();
+  }
 }
 
 function formatApiDetail(data) {
@@ -950,7 +973,7 @@ async function doUploadFile(file) {
       || lower.includes("network_error_upload")
       || lower.includes("aborted_upload")
     ) {
-      toast("Upload bloqué par le navigateur/réseau. Désactive VPN/proxy puis réessaie.", "error");
+      toast("Échec de transport navigateur pendant l'upload. Réessaie, puis recharge la page si besoin.", "error");
     } else if (lower.includes("timeout_upload")) {
       toast("Upload trop long (timeout 120s). Réessaie avec un fichier plus léger.", "error");
     } else {
