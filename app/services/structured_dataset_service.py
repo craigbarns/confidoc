@@ -443,6 +443,153 @@ def _extract_amount_after_keyword_multiline(
     return None, "missing"
 
 
+def _extract_value_from_anchor_window(
+    text: str,
+    *,
+    anchor_regex: str,
+    value_regex: str,
+    window_lines: int = 5,
+    flags: int = re.IGNORECASE,
+) -> str | None:
+    """Extract a raw value in the next N lines following an anchor label."""
+    lines = text.splitlines()
+    pat_anchor = re.compile(anchor_regex, flags)
+    pat_value = re.compile(value_regex, flags)
+    for i, raw in enumerate(lines):
+        if not pat_anchor.search(raw):
+            continue
+        start = i + 1
+        end = min(len(lines), start + max(1, window_lines))
+        window = "\n".join(lines[start:end])
+        m = pat_value.search(window)
+        if m:
+            return m.group(1)
+    return None
+
+
+def _extract_2072_amount_from_anchor_window(
+    text: str,
+    *,
+    anchor_regex: str,
+    window_lines: int = 8,
+    min_amount: float = 50.0,
+) -> tuple[float | None, str]:
+    """
+    2072-specific fallback: find first plausible amount token in N lines after anchor.
+    Chooses the first token to prefer column N over N-1 on form-like layouts.
+    """
+    lines = text.splitlines()
+    pat_anchor = re.compile(anchor_regex, re.IGNORECASE)
+    for i, raw in enumerate(lines):
+        if not pat_anchor.search(raw):
+            continue
+        start = i + 1
+        end = min(len(lines), start + max(1, window_lines))
+        for scan in lines[start:end]:
+            tokens = [v for v in _extract_line_amount_tokens(scan) if abs(v) >= min_amount]
+            if tokens:
+                picked = _clean_amount_candidate(float(tokens[0]))
+                if isinstance(picked, float):
+                    return picked, "fallback:2072_anchor_window_first_token"
+    return None, "missing"
+
+
+def _is_2072_arithmetically_coherent(
+    revenus_bruts: float | None,
+    frais_hors_interets: float | None,
+    interets: float | None,
+    revenu_net: float | None,
+) -> bool:
+    """Check RB - frais - intérêts ~= revenu net with pragmatic tolerance."""
+    if not all(isinstance(v, (int, float)) for v in [revenus_bruts, frais_hors_interets, interets, revenu_net]):
+        return False
+    expected = float(revenus_bruts) - float(frais_hors_interets) - float(interets)
+    actual = float(revenu_net)
+    tol = max(2.0, abs(expected) * 0.05)
+    return abs(expected - actual) <= tol
+
+
+def _extract_2072_totals_from_quote_part_blocks(text: str) -> dict[str, float]:
+    """
+    Parse 2072 annexe-2 quote-part blocks when table labels/values are vertically shifted.
+    Expected sequence per associate: revenus bruts, frais/charges, intérêts, revenu net.
+    """
+    lines = text.splitlines()
+    marker = re.compile(r"dont\s+quote[\- ]part\s+de\s+r[ée]novation", re.IGNORECASE)
+    blocks: list[tuple[float, float, float, float]] = []
+    for i, raw in enumerate(lines):
+        if not marker.search(raw):
+            continue
+        window = lines[i : min(len(lines), i + 35)]
+        amounts: list[float] = []
+        for scan in window:
+            v = _clean_amount_candidate(_to_float_fr(scan.strip()))
+            if isinstance(v, float) and abs(v) >= 1.0:
+                amounts.append(v)
+        # Drop tiny labels-like noise (13, 31) before the actual 4 financial values.
+        amounts = [a for a in amounts if a >= 10.0]
+        if len(amounts) < 4:
+            continue
+        rb = fc = ie = rn = None
+        # rb: first large amount
+        for a in amounts:
+            if a >= 1000.0:
+                rb = a
+                break
+        if rb is None:
+            continue
+        # fc: next large amount
+        started = False
+        for a in amounts:
+            if not started:
+                if a == rb:
+                    started = True
+                continue
+            if a >= 1000.0:
+                fc = a
+                break
+        if fc is None:
+            continue
+        # rn: first medium amount after fc (often OCR keeps RN but drops IE line value).
+        started_fc = False
+        for a in amounts:
+            if not started_fc:
+                if a == fc:
+                    started_fc = True
+                continue
+            if 100.0 <= a <= rb:
+                rn = a
+                break
+        if rn is None:
+            continue
+        # ie: prefer algebraic closure at associate level (RB - FC - RN), robust when line 20 value is missing.
+        ie = rb - fc - rn
+        if ie < 0.0:
+            continue
+        if rb < 100.0 or fc < 100.0:
+            continue
+        if ie > max(1000.0, rb * 0.25):
+            continue
+        if rn > rb:
+            continue
+        blocks.append((rb, fc, ie, rn))
+    # Deduplicate repeated OCR echoes of the same associate block.
+    uniq = list(dict.fromkeys(blocks))
+    if not uniq:
+        return {}
+    return {
+        "revenus_bruts": sum(b[0] for b in uniq),
+        "frais_charges_hors_interets": sum(b[1] for b in uniq),
+        "interets_emprunts": sum(b[2] for b in uniq),
+        "revenu_net_foncier": sum(b[3] for b in uniq),
+    }
+
+
+def _count_2072_quote_part_blocks(text: str) -> int:
+    marker = re.compile(r"dont\s+quote[\- ]part\s+de\s+r[ée]novation", re.IGNORECASE)
+    return sum(1 for line in text.splitlines() if marker.search(line))
+
+
 def _plausible_2072_interets_candidate(value: float, revenus_bruts: float | None) -> bool:
     if abs(value) < THRESHOLDS["amount_min_low"]:
         return False
@@ -1444,6 +1591,13 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         )
         if year:
             date_cloture = f"31/12/{year}"
+    if not date_cloture:
+        date_cloture = _extract_value_from_anchor_window(
+            text,
+            anchor_regex=r"(?:soc5|date\s+de\s+cl[ôo]ture\s+de\s+l[' ]exercice)",
+            value_regex=r"\b([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})\b",
+            window_lines=5,
+        )
     nb_associes = _extract_first_int_from_patterns(
         header_zone + "\n" + text,
         [
@@ -1451,6 +1605,33 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             r"(?:soc18).{0,20}([0-9]{1,3})",
         ],
     )
+    if nb_associes is None:
+        nb_associes_raw = _extract_value_from_anchor_window(
+            text,
+            anchor_regex=r"(?:soc18|nombre\s+d[' ]associ[ée]s?)",
+            value_regex=r"\b([0-9]{1,3})\b",
+            window_lines=3,
+        )
+        if nb_associes_raw:
+            nb_candidate = _to_float_fr(nb_associes_raw)
+            # Guardrail: ignore obvious address numbers accidentally captured in shifted OCR.
+            if isinstance(nb_candidate, float) and 1.0 <= nb_candidate <= 50.0:
+                nb_associes = nb_candidate
+    if nb_associes is None:
+        nb_associes_raw_wide = _extract_value_from_anchor_window(
+            text,
+            anchor_regex=r"(?:soc18|nombre\s+d[' ]associ[ée]s?)",
+            value_regex=r"\b([1-9][0-9]?)\b",
+            window_lines=80,
+        )
+        if nb_associes_raw_wide:
+            nb_candidate_wide = _to_float_fr(nb_associes_raw_wide)
+            if isinstance(nb_candidate_wide, float) and 1.0 <= nb_candidate_wide <= 50.0:
+                nb_associes = nb_candidate_wide
+    if not isinstance(nb_associes, (int, float)) or float(nb_associes) > 10.0:
+        blocks_count = _count_2072_quote_part_blocks(text)
+        if 1 <= blocks_count <= 50:
+            nb_associes = float(blocks_count)
     revenus_bruts = _extract_first_amount_from_patterns(
         results_zone + "\n" + text,
         [
@@ -1465,6 +1646,14 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             r"revenus?\s+bruts?|montant\s+brut.{0,40}[lI!1]oyers?\s+encaiss",
             min_amount=100.0,
         )
+    scan_text = results_zone + "\n" + text
+    if revenus_bruts is None:
+        revenus_bruts, _ = _extract_2072_amount_from_anchor_window(
+            scan_text,
+            anchor_regex=r"revenus?\s+bruts?|total\s+des\s+lignes?.{0,15}5\s*\+\s*22",
+            window_lines=10,
+            min_amount=100.0,
+        )
     frais_hors_interets = _extract_first_amount_from_patterns(
         results_zone + "\n" + text,
         [
@@ -1474,7 +1663,13 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=50.0,
     )
-    scan_text = results_zone + "\n" + text
+    if frais_hors_interets is None:
+        frais_hors_interets, _ = _extract_2072_amount_from_anchor_window(
+            scan_text,
+            anchor_regex=r"frais?\s+et\s+char[gq]es?.{0,60}(?:autres?.{0,20}qu[' ]?int[eé]r[eéê]ts?|ligne\s*17\+18)",
+            window_lines=10,
+            min_amount=50.0,
+        )
     interets = None
     interets_source = "missing"
     # Priorité aux lignes qui commencent explicitement par "Intérêts d'emprunts"
@@ -1531,6 +1726,13 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             r"[i1l]nt[eé]r[eéê]ts?.{0,25}emprun[tf]|emprun[tf].{0,20}[i1l]nt[eé]r[eéê]t",
             min_amount=50.0,
         )
+    if interets is None:
+        interets, interets_source = _extract_2072_amount_from_anchor_window(
+            scan_text,
+            anchor_regex=r"(?:[i1l]nt[eé]r[eéê]ts?\s+d[' ]emprun[tf]s?|ligne\s*20)",
+            window_lines=10,
+            min_amount=1.0,
+        )
     revenu_net = _extract_first_amount_from_patterns(
         scan_text,
         [
@@ -1544,6 +1746,13 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         revenu_net, _ = _extract_amount_from_lines_with_keyword(
             scan_text,
             r"revenu\s+net|d[ée]f[i1]cit|revenu\s*\(\+\)|d[ée]f[i1]cit\s*\(\-\)",
+            min_amount=100.0,
+        )
+    if revenu_net is None:
+        revenu_net, _ = _extract_2072_amount_from_anchor_window(
+            scan_text,
+            anchor_regex=r"(?:revenu\s+net.{0,30}r[ée]partir|revenu.*a\s*repartir|ligne\s*26)",
+            window_lines=10,
             min_amount=100.0,
         )
     revenu_net_from_doc = revenu_net is not None
@@ -1609,6 +1818,64 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             revenus_bruts = immeubles_rb
         elif associes_rb > 0:
             revenus_bruts = associes_rb
+
+    # Annex associates fallback (strict): use only if arithmetic remains coherent.
+    associes_totals = {
+        "revenus_bruts": sum(float(x.get("quote_part_revenus_bruts") or 0.0) for x in associes),
+        "frais_charges_hors_interets": sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes),
+        "interets_emprunts": sum(float(x.get("quote_part_interets_emprunts") or 0.0) for x in associes),
+        "revenu_net_foncier": sum(float(x.get("quote_part_revenu_net") or 0.0) for x in associes),
+    }
+    if any(v <= 0.0 for v in associes_totals.values()):
+        quote_part_block_totals = _extract_2072_totals_from_quote_part_blocks(text)
+        for k, v in quote_part_block_totals.items():
+            if associes_totals.get(k, 0.0) <= 0.0 and v > 0.0:
+                associes_totals[k] = v
+    associes_blocks_are_coherent = _is_2072_arithmetically_coherent(
+        associes_totals.get("revenus_bruts"),
+        associes_totals.get("frais_charges_hors_interets"),
+        associes_totals.get("interets_emprunts"),
+        associes_totals.get("revenu_net_foncier"),
+    )
+
+    if associes and (
+        revenus_bruts is None
+        or frais_hors_interets is None
+        or interets is None
+        or revenu_net is None
+    ):
+        rb_fb = float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else associes_totals["revenus_bruts"]
+        fc_fb = (
+            float(frais_hors_interets)
+            if isinstance(frais_hors_interets, (int, float))
+            else associes_totals["frais_charges_hors_interets"]
+        )
+        ie_fb = float(interets) if isinstance(interets, (int, float)) else associes_totals["interets_emprunts"]
+        rn_fb = float(revenu_net) if isinstance(revenu_net, (int, float)) else associes_totals["revenu_net_foncier"]
+        if _is_2072_arithmetically_coherent(rb_fb, fc_fb, ie_fb, rn_fb):
+            if revenus_bruts is None and associes_totals["revenus_bruts"] > 0:
+                revenus_bruts = associes_totals["revenus_bruts"]
+            if frais_hors_interets is None and associes_totals["frais_charges_hors_interets"] > 0:
+                frais_hors_interets = associes_totals["frais_charges_hors_interets"]
+            if interets is None and associes_totals["interets_emprunts"] > 0:
+                interets = associes_totals["interets_emprunts"]
+                interets_source = "fallback:associes_interets_sum_validated"
+            if revenu_net is None and associes_totals["revenu_net_foncier"] != 0:
+                revenu_net = associes_totals["revenu_net_foncier"]
+        elif associes_blocks_are_coherent:
+            # If top-level RN is a likely collision artifact, prefer coherent annexe totals.
+            if revenus_bruts is None and associes_totals["revenus_bruts"] > 0:
+                revenus_bruts = associes_totals["revenus_bruts"]
+            if frais_hors_interets is None and associes_totals["frais_charges_hors_interets"] > 0:
+                frais_hors_interets = associes_totals["frais_charges_hors_interets"]
+            if interets is None and associes_totals["interets_emprunts"] > 0:
+                interets = associes_totals["interets_emprunts"]
+                interets_source = "fallback:associes_interets_sum_validated"
+            if isinstance(revenu_net, (int, float)) and isinstance(revenus_bruts, (int, float)):
+                if abs(float(revenu_net) - float(revenus_bruts)) <= 1.0:
+                    revenu_net = associes_totals["revenu_net_foncier"]
+            elif revenu_net is None and associes_totals["revenu_net_foncier"] != 0:
+                revenu_net = associes_totals["revenu_net_foncier"]
 
     if revenu_net is None and isinstance(revenus_bruts, (int, float)):
         fc = float(frais_hors_interets or 0.0)
