@@ -164,6 +164,27 @@
           <div class="preview-content" id="previewOutput">Sélectionnez un document et lancez une action pour voir la prévisualisation ici.</div>
         </div>
       </div>
+      <div class="panel" style="animation-delay:.2s">
+        <div class="panel-header"><h2><span class="icon">💬</span> Poser une question sur ce document</h2></div>
+        <div class="panel-body">
+          <div class="kb-ask-row">
+            <select id="docQaSelect" class="kb-ask-input" aria-label="Document pour Q&A">
+              <option value="">Sélectionnez un document...</option>
+            </select>
+          </div>
+          <div class="kb-ask-row" style="margin-top:8px">
+            <input id="docQaQuestion" class="kb-ask-input" type="text" placeholder="Ex: Quel est le résultat de l'exercice ?" />
+            <button id="askDocBtn" class="btn btn-ghost btn-sm">Poser la question</button>
+          </div>
+          <div class="kb-ask-row" style="margin-top:8px; display:flex; flex-wrap:wrap; gap:6px">
+            <button class="btn-act" type="button" data-qa-suggest="Quel est le résultat de l'exercice ?">Résultat exercice</button>
+            <button class="btn-act" type="button" data-qa-suggest="Quels montants dois-je vérifier en priorité ?">Montants à vérifier</button>
+            <button class="btn-act" type="button" data-qa-suggest="Pourquoi ce document est-il Core Ready ?">Pourquoi Core Ready</button>
+            <button class="btn-act" type="button" data-qa-suggest="Quels sont les points clés à retenir ?">Points clés</button>
+          </div>
+          <div class="kb-ask-hint">Le Q&A est bloqué si <code>ready_for_ai_core=false</code>, prudent si <code>ready_for_ai_core=true</code>, enrichi si <code>ready_for_ai=true</code>.</div>
+        </div>
+      </div>
       <div class="panel expert-only" style="animation-delay:.22s">
         <div class="panel-header"><h2><span class="icon">🕵️</span> Ce qui a été masqué</h2></div>
         <div class="panel-body">

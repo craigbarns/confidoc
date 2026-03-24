@@ -112,3 +112,11 @@ def test_ocr_lang_override():
     """OCR_LANG can be overridden."""
     s = Settings(OCR_LANG="fra")
     assert s.OCR_LANG == "fra"
+
+
+def test_kimi_config_defaults():
+    """Kimi configuration defaults are present and safe."""
+    s = Settings(KIMI_ENABLED=False, KIMI_API_KEY="")
+    assert s.KIMI_ENABLED is False
+    assert s.KIMI_BASE_URL.startswith("https://")
+    assert isinstance(s.KIMI_MODEL, str) and len(s.KIMI_MODEL) > 0

@@ -9,6 +9,7 @@ let lastOriginalText = "";
 let previewMode = "anon"; // "anon" | "beforeafter"
 let docExtractionDetails = {};
 let statusSummaryDays = 30;
+let lastActiveDocId = null;
 
 const $ = id => document.getElementById(id);
 const previewOut = $("previewOutput");
@@ -515,6 +516,23 @@ function setDocDetection(docId, count) {
   if (el) el.textContent = `entités: ${count}`;
 }
 
+function refreshDocQaOptions() {
+  const sel = $("docQaSelect");
+  if (!sel) return;
+  const prev = sel.value || lastActiveDocId || "";
+  const docs = (currentDocs || []).filter(d => d.status === "ready");
+  sel.innerHTML = '<option value="">Sélectionnez un document...</option>';
+  docs.forEach((d) => {
+    const q = docQualityMap[d.id] || {};
+    const badge = q.ready_for_ai ? "Full" : (q.ready_for_ai_core ? "Core" : "Review");
+    const opt = document.createElement("option");
+    opt.value = d.id;
+    opt.textContent = `${d.original_filename} (${badge})`;
+    sel.appendChild(opt);
+  });
+  if (prev && docs.some(d => d.id === prev)) sel.value = prev;
+}
+
 function qualityBadgeFromQuality(q) {
   const quality = q || {};
   if (quality.ready_for_ai === true) {
@@ -559,6 +577,21 @@ function setDocQualityBadge(docId, quality) {
   if (actionEl) {
     const doc = (currentDocs || []).find((d) => d.id === docId);
     actionEl.textContent = qualityActionText(doc || {}, quality || {});
+  }
+  const aiButtons = document.querySelectorAll(`[data-ai-btn-doc="${docId}"]`);
+  const canUseAi = !!((quality || {}).ready_for_ai_core);
+  aiButtons.forEach((btn) => {
+    btn.disabled = !canUseAi;
+    btn.classList.toggle("disabled", !canUseAi);
+    btn.title = canUseAi
+      ? "Action IA disponible"
+      : "Action IA indisponible: ready_for_ai_core=false";
+  });
+  const aiHint = document.querySelector(`[data-ai-hint="${docId}"]`);
+  if (aiHint) {
+    aiHint.textContent = canUseAi
+      ? (((quality || {}).ready_for_ai ? "IA enrichie disponible" : "IA disponible en mode prudent"))
+      : "IA bloquée: document à revoir (ready_for_ai_core=false)";
   }
 }
 
@@ -745,7 +778,16 @@ function renderDocs(items) {
         </div>
         <div class="doc-why" data-doc-why="${doc.id}">${qualityReasonText(docQualityMap[doc.id])}</div>
         <div class="doc-next" data-doc-action="${doc.id}">${qualityActionText(doc, docQualityMap[doc.id])}</div>
-        <div class="doc-actions">
+        <div class="doc-actions ai-actions">
+          <span class="doc-actions-title">Actions IA</span>
+          <button class="btn-act" data-a="kimisummary" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">✨ Résumer</button>
+          <button class="btn-act" data-a="kimireview" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">🔎 Points à vérifier</button>
+          <button class="btn-act" data-a="kimidraft" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">📝 Rédiger une note</button>
+          <button class="btn-act" data-a="askdoc" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">💬 Poser une question</button>
+          <span class="doc-ai-hint" data-ai-hint="${doc.id}">Vérification qualité en cours…</span>
+        </div>
+        <div class="doc-actions core-actions">
+          <span class="doc-actions-title">Actions document</span>
           <button class="btn-act success" data-a="processall" data-id="${doc.id}">🚀 Traiter</button>
           <button class="btn-act success" data-a="validate" data-id="${doc.id}">✓ Valider</button>
           <button class="btn-act primary" data-a="exportreportpdf" data-id="${doc.id}">📄 Exporter PDF</button>
@@ -769,6 +811,7 @@ function renderDocs(items) {
     docList.appendChild(el);
     setDocQualityBadge(doc.id, docQualityMap[doc.id]);
   });
+  refreshDocQaOptions();
 }
 
 async function refreshStatusSummary() {
@@ -853,6 +896,105 @@ async function refreshDocDetections(items) {
       setDocQualityBadge(doc.id, null);
     }
   }
+  refreshDocQaOptions();
+}
+
+async function loadDocQualitySnapshot(docId) {
+  const { res, data } = await api(`/api/v1/documents/${docId}/dataset-summary`);
+  if (!res.ok) throw new Error((data && data.detail) ? String(data.detail) : "Impossible de lire la qualité");
+  return (data && data.quality) ? data.quality : {};
+}
+
+function renderDocQaAnswer(question, data, quality) {
+  let parsed = {};
+  try { parsed = JSON.parse(data.summary_json_text || "{}"); } catch {}
+  const q = quality || {};
+  const points = Array.isArray(parsed.points_cles) ? parsed.points_cles : [];
+  const alerts = Array.isArray(parsed.anomalies_ou_alertes) ? parsed.anomalies_ou_alertes : [];
+  const follow = Array.isArray(parsed.questions_de_revue) ? parsed.questions_de_revue : [];
+  previewOut.innerHTML = `
+    <div class="ai-summary">
+      <div class="ai-head">
+        <div class="ai-tools"><div class="ai-mode ok">Q&A document</div></div>
+        <div class="ai-confidence">Mode: <b>${q.ready_for_ai ? "riche" : "prudent"}</b></div>
+      </div>
+      <div class="ai-status">Question: <b>${escapeHtml(question)}</b></div>
+      <div class="ai-security">Réponse cadrée par les facts backend (ConfiDoc source de vérité).</div>
+      <div class="ai-block"><div class="ai-title">Réponse</div><div>${escapeHtml(parsed.resume_executif || "Aucune réponse disponible.")}</div></div>
+      <div class="ai-block"><div class="ai-title">Points clés</div><ul class="ai-list">${points.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+      <div class="ai-block"><div class="ai-title">Points à vérifier</div><ul class="ai-list">${alerts.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+      <div class="ai-block"><div class="ai-title">Questions de revue</div><ul class="ai-list">${follow.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
+    </div>`;
+}
+
+async function askDocumentQuestion() {
+  const qInput = $("docQaQuestion");
+  const docSel = $("docQaSelect");
+  const askBtn = $("askDocBtn");
+  if (!qInput || !docSel || !askBtn) return;
+  if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
+  const docId = (docSel.value || "").trim();
+  const question = (qInput.value || "").trim();
+  if (!docId) { toast("Sélectionnez un document", "error"); return; }
+  if (!question) { toast("Saisissez une question", "error"); return; }
+
+  setActionBusy(askBtn, true, "Question...");
+  try {
+    const quality = await loadDocQualitySnapshot(docId);
+    if (!quality.ready_for_ai_core) {
+      previewOut.innerHTML = `
+        <div class="ai-summary">
+          <div class="ai-head"><div class="ai-tools"><div class="ai-mode fallback">Q&A limité</div></div></div>
+          <div class="ai-status">Document non prêt pour Q&A (<b>ready_for_ai_core=false</b>).</div>
+          <div class="ai-block"><div class="ai-title">Points bloquants</div><div>${escapeHtml((quality.quality_flags || []).join(", ") || "Aucun détail disponible.")}</div></div>
+        </div>`;
+      toast("Q&A bloqué: document à revoir", "error");
+      return;
+    }
+    const requestedDocType = currentDocTypeRequested();
+    const path = `/api/v1/ai/summary/${docId}?doc_type=${encodeURIComponent(requestedDocType)}&llm_provider=kimi&kimi_mode=question&question=${encodeURIComponent(question)}`;
+    const { res, data } = await api(path, { method: "POST" });
+    showApi(data);
+    if (!res.ok) {
+      toast((data && data.detail) ? String(data.detail) : "Q&A échoué", "error");
+      return;
+    }
+    renderDocQaAnswer(question, data, quality);
+    toast(quality.ready_for_ai ? "Réponse Q&A prête" : "Réponse Q&A (mode prudent)", "success");
+  } catch (e) {
+    toast((e && e.message) ? e.message : "Erreur réseau Q&A", "error");
+  } finally {
+    setActionBusy(askBtn, false);
+  }
+}
+
+async function runKimiDocAction(docId, kimiMode) {
+  const quality = await loadDocQualitySnapshot(docId);
+  if (!quality.ready_for_ai_core) {
+    previewOut.innerHTML = `
+      <div class="ai-summary">
+        <div class="ai-head"><div class="ai-tools"><div class="ai-mode fallback">Action IA limitée</div></div></div>
+        <div class="ai-status">Document non prêt pour analyse assistée (<b>ready_for_ai_core=false</b>).</div>
+        <div class="ai-block"><div class="ai-title">Points bloquants</div><div>${escapeHtml((quality.quality_flags || []).join(", ") || "Aucun détail disponible.")}</div></div>
+      </div>`;
+    toast("Action IA bloquée: document à revoir", "error");
+    return;
+  }
+  const requestedDocType = currentDocTypeRequested();
+  const path = `/api/v1/ai/summary/${docId}?doc_type=${encodeURIComponent(requestedDocType)}&llm_provider=kimi&kimi_mode=${encodeURIComponent(kimiMode)}`;
+  const { res, data } = await api(path, { method: "POST" });
+  showApi(data);
+  if (!res.ok) {
+    toast((data && data.detail) ? String(data.detail) : "Action IA échouée", "error");
+    return;
+  }
+  let parsed = null;
+  try { parsed = JSON.parse(data.summary_json_text || "{}"); } catch {}
+  showAiSummaryCard({ ...data, summary: parsed || {} });
+  const modeLabel = kimiMode === "summary" ? "Résumé"
+    : kimiMode === "review" ? "Points à vérifier"
+    : "Rédaction";
+  toast(quality.ready_for_ai ? `${modeLabel} prêt` : `${modeLabel} prêt (mode prudent)`, "success");
 }
 
 // Preview mode (anonymisé / avant-apres)
@@ -1145,6 +1287,17 @@ ${lines.join("\n\n")}`);
 
 $("askKbBtn").addEventListener("click", askKb);
 $("kbQuestion").addEventListener("keydown", e => { if (e.key === "Enter") askKb(); });
+const askDocBtn = $("askDocBtn");
+if (askDocBtn) askDocBtn.addEventListener("click", askDocumentQuestion);
+const docQaQuestion = $("docQaQuestion");
+if (docQaQuestion) docQaQuestion.addEventListener("keydown", e => { if (e.key === "Enter") askDocumentQuestion(); });
+document.querySelectorAll("[data-qa-suggest]").forEach((btn) => {
+  btn.addEventListener("click", () => {
+    const txt = btn.getAttribute("data-qa-suggest") || "";
+    if ($("docQaQuestion")) $("docQaQuestion").value = txt;
+    if ($("docQaQuestion")) $("docQaQuestion").focus();
+  });
+});
 
 // Document actions
 docList.addEventListener("click", async e => {
@@ -1152,6 +1305,8 @@ docList.addEventListener("click", async e => {
   if (!btn || !accessToken) return;
   const action = btn.dataset.a;
   const id = btn.dataset.id;
+    lastActiveDocId = id || lastActiveDocId;
+    if ($("docQaSelect") && id) $("docQaSelect").value = id;
   const profile = $("profileSelect").value;
   const requestedDocType = currentDocTypeRequested();
   const busyLabelByAction = {
@@ -1165,6 +1320,9 @@ docList.addEventListener("click", async e => {
     exportreportpdf: "Export...",
     exportdataset: "Export...",
     aisummary: "Synthèse...",
+    kimisummary: "Résumé...",
+    kimireview: "Revue...",
+    kimidraft: "Rédaction...",
     proof: "Preuve...",
     auditexport: "Audit...",
     delete: "Suppression...",
@@ -1360,6 +1518,19 @@ docList.addEventListener("click", async e => {
         summary: parsed || data.summary_json_text || "",
       });
       toast("Synthèse IA prête (.json)", "success");
+    } else if (action === "kimisummary") {
+      toast("Résumé Kimi en cours…", "info");
+      await runKimiDocAction(id, "summary");
+    } else if (action === "kimireview") {
+      toast("Analyse des points à vérifier en cours…", "info");
+      await runKimiDocAction(id, "review");
+    } else if (action === "kimidraft") {
+      toast("Rédaction assistée en cours…", "info");
+      await runKimiDocAction(id, "draft");
+    } else if (action === "askdoc") {
+      if ($("docQaSelect")) $("docQaSelect").value = id;
+      if ($("docQaQuestion")) $("docQaQuestion").focus();
+      toast("Saisissez votre question puis cliquez « Poser la question ».", "info");
     } else if (action === "auditexport") {
       const {res, data} = await api(`/api/v1/documents/${id}/audit-export`);
       showApi(data);

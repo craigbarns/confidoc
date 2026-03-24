@@ -15,6 +15,7 @@ from app.core.exceptions import http_400, http_404
 from app.models.document import Document
 from app.services.anonymization_service import anonymize_text, classify_document_type
 from app.services.ollama_service import generate_summary_with_ollama, generate_audit_with_ollama
+from app.services.kimi_service import generate_summary_with_kimi, generate_audit_with_kimi
 from app.services.structured_dataset_service import build_structured_dataset
 from app.api.v1.documents import _get_best_text_for_reporting
 
@@ -121,6 +122,104 @@ def _build_fallback_summary(ai_payload: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _apply_quality_facts_guardrails(summary: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
+    """Force output consistency: backend quality facts remain authoritative."""
+    if not isinstance(summary, dict):
+        return summary
+    out = dict(summary)
+    critical_missing = quality.get("critical_missing_fields", []) or []
+    ready_for_ai = bool(quality.get("ready_for_ai", False))
+    ready_for_ai_core = bool(quality.get("ready_for_ai_core", False))
+
+    # Remove contradictions when backend reports no critical missing fields.
+    if not critical_missing:
+        anomalies = out.get("anomalies_ou_alertes")
+        if isinstance(anomalies, list):
+            filtered: list[str] = []
+            for item in anomalies:
+                text = str(item or "")
+                low = text.lower()
+                if "champ" in low and "manquan" in low and "crit" in low:
+                    continue
+                filtered.append(text)
+            out["anomalies_ou_alertes"] = filtered
+
+    # Optional factual line to pin the backend quality status.
+    points = out.get("points_cles")
+    if isinstance(points, list):
+        points.insert(
+            0,
+            (
+                "Statut qualité backend: "
+                f"ready_for_ai={str(ready_for_ai).lower()}, "
+                f"ready_for_ai_core={str(ready_for_ai_core).lower()}, "
+                f"critical_missing_fields={len(critical_missing)}."
+            ),
+        )
+        out["points_cles"] = points
+    return out
+
+
+def _humanize_quality_flags(quality_flags: list[str]) -> list[str]:
+    mapping = {
+        "critical_fields_missing": "Des champs critiques manquent; une vérification humaine est nécessaire.",
+        "low_field_coverage": "La couverture d'extraction est faible; prudence sur l'interprétation.",
+        "manual_review_recommended": "Une revue humaine est recommandée avant exploitation complète.",
+        "numeric_consistency_low": "Certains montants semblent insuffisamment cohérents pour une exploitation fiable.",
+        "bilan_balance_mismatch": "Le bilan ne semble pas équilibré; vérifier actif/passif.",
+        "bilan_balance_minor_gap": "Le bilan présente un léger écart; une vérification est conseillée.",
+    }
+    out: list[str] = []
+    for flag in quality_flags or []:
+        out.append(mapping.get(flag, f"Indicateur qualité: {flag}."))
+    return out
+
+
+def _apply_audit_quality_guardrails(audit: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
+    """Normalize audit output so backend quality facts remain authoritative."""
+    if not isinstance(audit, dict):
+        return audit
+    out = dict(audit)
+    critical_missing = quality.get("critical_missing_fields", []) or []
+    ready_for_ai = bool(quality.get("ready_for_ai", False))
+    ready_for_ai_core = bool(quality.get("ready_for_ai_core", False))
+    needs_review = bool(quality.get("needs_review", True))
+    quality_flags = quality.get("quality_flags", []) or []
+
+    checks = out.get("checks")
+    if not isinstance(checks, list):
+        checks = []
+    normalized_checks: list[dict[str, Any]] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            continue
+        exp = str(check.get("explanation") or "")
+        low = exp.lower()
+        if not critical_missing and ("champ" in low and "manquan" in low and "crit" in low):
+            # Drop contradictory check explanation against backend facts.
+            continue
+        normalized_checks.append(check)
+
+    # Insert authoritative backend-facts check first.
+    normalized_checks.insert(
+        0,
+        {
+            "code": "CHK_BACKEND_FACTS",
+            "description": "Statut qualité backend (source de vérité)",
+            "status": "passed",
+            "explanation": (
+                f"ready_for_ai={str(ready_for_ai).lower()}, "
+                f"ready_for_ai_core={str(ready_for_ai_core).lower()}, "
+                f"needs_review={str(needs_review).lower()}, "
+                f"critical_missing_fields={len(critical_missing)}, "
+                f"quality_flags={quality_flags}."
+            ),
+        },
+    )
+    out["checks"] = normalized_checks
+    return out
+
+
 @router.post(
     "/audit/{document_id}",
     response_class=JSONResponse,
@@ -132,6 +231,7 @@ async def ai_audit(
     current_user: CurrentUser,
     db: DbSession,
     doc_type: str = Query(default="auto"),
+    llm_provider: str = Query(default="ollama"),
 ) -> JSONResponse:
     try:
         document_uuid = uuid.UUID(document_id)
@@ -169,17 +269,27 @@ async def ai_audit(
     ai_payload = {
         "document_id": str(document.id),
         "doc_type": structured.get("doc_type"),
+        "quality": structured.get("quality", {}),
         "fields": _sanitize_fields_for_ai(structured.get("fields", {})),
         "anonymized_excerpt": anonymized_text[:5000],
     }
 
     try:
-        # Appelle le nouvel agent restrictif
-        llm = await generate_audit_with_ollama(ai_payload, doc_type=structured.get("doc_type", "generic"))
+        if llm_provider == "kimi":
+            llm = await generate_audit_with_kimi(
+                ai_payload, doc_type=structured.get("doc_type", "generic")
+            )
+            provider_name = "kimi"
+        else:
+            llm = await generate_audit_with_ollama(
+                ai_payload, doc_type=structured.get("doc_type", "generic")
+            )
+            provider_name = "ollama (local)"
     except Exception as exc:
-        raise http_400(f"Erreur IA locale (AuditAgent): {exc}") from exc
+        raise http_400(f"Erreur IA ({llm_provider}) AuditAgent: {exc}") from exc
 
     parsed = llm.get("validated")
+    quality = structured.get("quality") or {}
     if not isinstance(parsed, dict):
         err_hint = (llm.get("last_validation_error") or "").strip()
         expl = "L'IA locale n'a pas fourni un JSON conforme au schéma après plusieurs tentatives."
@@ -196,12 +306,13 @@ async def ai_audit(
                 }
             ],
         }
+    parsed = _apply_audit_quality_guardrails(parsed, quality)
 
     return JSONResponse(
         {
             "document_id": str(document.id),
             "audit_results": parsed,
-            "provider": "ollama (local)",
+            "provider": provider_name,
             "model": llm.get("model", "unknown"),
             "ollama_validation": {
                 "ok": bool(llm.get("validation_ok")),
@@ -222,6 +333,9 @@ async def ai_summary(
     current_user: CurrentUser,
     db: DbSession,
     doc_type: str = Query(default="auto"),
+    llm_provider: str = Query(default="ollama"),
+    kimi_mode: str = Query(default="summary"),
+    question: str = Query(default=""),
 ) -> JSONResponse:
     try:
         document_uuid = uuid.UUID(document_id)
@@ -256,17 +370,20 @@ async def ai_summary(
         extraction_text=original_text,
     )
     quality = structured.get("quality") or {}
-    if not bool(quality.get("ready_for_ai")):
+    ready_for_ai = bool(quality.get("ready_for_ai"))
+    ready_for_ai_core = bool(quality.get("ready_for_ai_core"))
+    if (not ready_for_ai) and (not ready_for_ai_core):
         return JSONResponse(
             status_code=status.HTTP_409_CONFLICT,
             content={
-                "detail": "Synthèse IA indisponible: document non prêt pour l'IA (ready_for_ai=false).",
+                "detail": "Synthèse IA indisponible: document non prêt pour l'IA (ready_for_ai_core=false).",
                 "summary_available": False,
                 "detected_doc_type": structured.get("detected_doc_type"),
                 "doc_type": structured.get("doc_type"),
                 "quality_snapshot": {
                     "needs_review": bool(quality.get("needs_review", True)),
                     "ready_for_ai": bool(quality.get("ready_for_ai", False)),
+                    "ready_for_ai_core": bool(quality.get("ready_for_ai_core", False)),
                     "coverage_ratio": quality.get("coverage_ratio"),
                     "critical_missing_fields": quality.get("critical_missing_fields", []),
                     "quality_flags": quality.get("quality_flags", []),
@@ -278,6 +395,7 @@ async def ai_summary(
         "document_id": str(document.id),
         "doc_type": structured.get("doc_type"),
         "quality": structured.get("quality", {}),
+        "quality_flags_humanized": _humanize_quality_flags((structured.get("quality") or {}).get("quality_flags", [])),
         "fields": _sanitize_fields_for_ai(structured.get("fields", {})),
         "tables_counts": {
             "immeubles": len((structured.get("tables") or {}).get("immeubles", []) or []),
@@ -286,22 +404,39 @@ async def ai_summary(
         "anonymized_excerpt": anonymized_text[:4000],
         "detections_count": len(detections),
     }
+    if question.strip():
+        ai_payload["user_question"] = question.strip()
 
+    prudent_mode = ready_for_ai_core and (not ready_for_ai)
+    if kimi_mode not in {"summary", "review", "draft", "question"}:
+        raise http_400("Paramètre kimi_mode invalide. Valeurs: summary|review|draft|question.")
+    if kimi_mode == "question" and not question.strip():
+        raise http_400("Paramètre question requis quand kimi_mode=question.")
     try:
-        llm = await generate_summary_with_ollama(ai_payload)
+        if llm_provider == "kimi":
+            llm = await generate_summary_with_kimi(
+                ai_payload,
+                prudent_mode=prudent_mode,
+                mode=kimi_mode,
+            )
+            provider_name = "kimi"
+        else:
+            llm = await generate_summary_with_ollama(ai_payload)
+            provider_name = "ollama"
     except Exception as exc:
-        raise http_400(f"Erreur IA locale (Ollama): {exc}") from exc
+        raise http_400(f"Erreur IA ({llm_provider}): {exc}") from exc
 
     parsed = llm.get("validated")
     used_fallback = not isinstance(parsed, dict)
     if used_fallback:
         parsed = _build_fallback_summary(ai_payload)
+    parsed = _apply_quality_facts_guardrails(parsed, quality)
     summary_json_text = json.dumps(parsed, ensure_ascii=False)
 
     return JSONResponse(
         {
             "document_id": str(document.id),
-            "provider": "ollama",
+            "provider": provider_name,
             "model": llm.get("model"),
             "ollama_validation": {
                 "ok": bool(llm.get("validation_ok")),
@@ -310,6 +445,7 @@ async def ai_summary(
             "quality_snapshot": {
                 "needs_review": bool((structured.get("quality") or {}).get("needs_review", True)),
                 "ready_for_ai": bool((structured.get("quality") or {}).get("ready_for_ai", False)),
+                "ready_for_ai_core": bool((structured.get("quality") or {}).get("ready_for_ai_core", False)),
                 "coverage_ratio": (structured.get("quality") or {}).get("coverage_ratio"),
             },
             "payload_policy": {
@@ -318,7 +454,9 @@ async def ai_summary(
                 "non_placeholder_text_fields_redacted": True,
             },
             "summary_json_text": summary_json_text,
-            "summary_source": "fallback_local" if used_fallback else "ollama",
+            "summary_source": "fallback_local" if used_fallback else provider_name,
+            "prudent_mode": prudent_mode,
+            "kimi_mode": kimi_mode if llm_provider == "kimi" else None,
         }
     )
 

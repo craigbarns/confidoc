@@ -120,6 +120,12 @@ class Settings(BaseSettings):
     OLLAMA_BASE_URL: str = "http://localhost:11434"
     OLLAMA_MODEL: str = "qwen3:1.7b"
     OLLAMA_TIMEOUT_SECONDS: int = 90
+    # ---- Kimi (Moonshot) ----
+    KIMI_ENABLED: bool = False
+    KIMI_BASE_URL: str = "https://api.moonshot.ai/v1"
+    KIMI_API_KEY: str = ""
+    KIMI_MODEL: str = "kimi-k2.5"
+    KIMI_TIMEOUT_SECONDS: int = 90
     ADMIN_RECOVERY_TOKEN: str = ""
 
     # ---- Structured extraction thresholds (optional overrides) ----
