@@ -574,26 +574,30 @@ async function api(path, opts={}) {
 
 /** Multipart upload : ne pas définir Content-Type (le navigateur pose le boundary). */
 async function apiUploadMultipart(path, formData) {
-  const headers = {};
-  if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-  let lastErr = null;
-  for (let attempt = 0; attempt < 2; attempt++) {
-    try {
-      const res = await fetch(path, { method: "POST", body: formData, headers });
-      const raw = await res.text();
+  return await new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.open("POST", path, true);
+    xhr.timeout = 120000;
+    if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+
+    xhr.onload = () => {
+      const raw = xhr.responseText || "";
       let data;
       try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
-      return { res, data };
-    } catch (err) {
-      lastErr = err;
-      const msg = String((err && err.message) || "").toLowerCase();
-      const retriable = msg.includes("load failed") || msg.includes("networkerror") || msg.includes("failed to fetch");
-      if (!retriable || attempt === 1) break;
-      // Retry unique pour les coupures réseau transitoires (Safari/Proxy/Wi-Fi).
-      await new Promise((r) => setTimeout(r, 700));
-    }
-  }
-  throw lastErr || new Error("Upload interrompu");
+      resolve({
+        res: {
+          ok: xhr.status >= 200 && xhr.status < 300,
+          status: xhr.status,
+        },
+        data,
+      });
+    };
+
+    xhr.onerror = () => reject(new Error("network_error_upload"));
+    xhr.ontimeout = () => reject(new Error("timeout_upload"));
+    xhr.onabort = () => reject(new Error("aborted_upload"));
+    xhr.send(formData);
+  });
 }
 
 function formatApiDetail(data) {
@@ -939,8 +943,16 @@ async function doUploadFile(file) {
   } catch (e) {
     const errMsg = e && e.message ? e.message : String(e);
     const lower = String(errMsg).toLowerCase();
-    if (lower.includes("load failed") || lower.includes("failed to fetch") || lower.includes("networkerror")) {
-      toast("Erreur réseau pendant l'upload (connexion interrompue). Réessaie dans 5 secondes.", "error");
+    if (
+      lower.includes("load failed")
+      || lower.includes("failed to fetch")
+      || lower.includes("networkerror")
+      || lower.includes("network_error_upload")
+      || lower.includes("aborted_upload")
+    ) {
+      toast("Upload bloqué par le navigateur/réseau. Désactive VPN/proxy puis réessaie.", "error");
+    } else if (lower.includes("timeout_upload")) {
+      toast("Upload trop long (timeout 120s). Réessaie avec un fichier plus léger.", "error");
     } else {
       toast(`Erreur réseau: ${errMsg}`, "error");
     }
