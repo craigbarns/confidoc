@@ -22,7 +22,13 @@ jobs:
       - name: Ruff lint
         run: |
           set -euo pipefail
-          BASE_SHA="$(git rev-parse HEAD^)"
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            BASE_SHA="$(git rev-parse HEAD^)"
+          elif git rev-parse --verify origin/main >/dev/null 2>&1; then
+            BASE_SHA="$(git merge-base HEAD origin/main)"
+          else
+            BASE_SHA="HEAD"
+          fi
           CHANGED_PY="$(git diff --name-only "$BASE_SHA" HEAD -- 'app/**/*.py' 'tests/**/*.py' || true)"
           if [ -z "$CHANGED_PY" ]; then
             echo "No changed Python files in app/tests; skipping Ruff lint."
@@ -35,7 +41,13 @@ jobs:
       - name: Ruff format check
         run: |
           set -euo pipefail
-          BASE_SHA="$(git rev-parse HEAD^)"
+          if git rev-parse --verify HEAD^ >/dev/null 2>&1; then
+            BASE_SHA="$(git rev-parse HEAD^)"
+          elif git rev-parse --verify origin/main >/dev/null 2>&1; then
+            BASE_SHA="$(git merge-base HEAD origin/main)"
+          else
+            BASE_SHA="HEAD"
+          fi
           CHANGED_PY="$(git diff --name-only "$BASE_SHA" HEAD -- 'app/**/*.py' 'tests/**/*.py' || true)"
           if [ -z "$CHANGED_PY" ]; then
             echo "No changed Python files in app/tests; skipping Ruff format check."
