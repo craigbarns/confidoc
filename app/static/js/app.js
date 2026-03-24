@@ -943,6 +943,18 @@ fileInput.addEventListener("change", () => {
 async function doUploadFile(file) {
   if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
   if (!file) return;
+  const MAX_UPLOAD_BYTES = 50 * 1024 * 1024;
+  if (file.size > MAX_UPLOAD_BYTES) {
+    toast(`Fichier trop volumineux (${Math.round(file.size / (1024 * 1024))} MB). Maximum: 50 MB.`, "error");
+    return;
+  }
+  // Vérifie que le fichier est réellement lisible localement (iCloud/Drive placeholders).
+  try {
+    await file.slice(0, Math.min(file.size, 64 * 1024)).arrayBuffer();
+  } catch {
+    toast("Fichier non lisible localement. Ouvre-le d'abord pour forcer son téléchargement puis réessaie.", "error");
+    return;
+  }
   const prog = $("uploadProgress");
   const fill = $("progressFill");
   const progText = $("progText");
