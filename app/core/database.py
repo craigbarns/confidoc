@@ -39,6 +39,28 @@ async def init_database() -> None:
         await conn.execute(
             text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS raw_content bytea;")
         )
+        # Soft delete columns (added in v0.3.0)
+        await conn.execute(
+            text(
+                "ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_deleted boolean "
+                "NOT NULL DEFAULT false;"
+            )
+        )
+        await conn.execute(
+            text(
+                "ALTER TABLE documents ADD COLUMN IF NOT EXISTS deleted_at "
+                "timestamp with time zone;"
+            )
+        )
+        # Composite indexes (idempotent — CREATE INDEX IF NOT EXISTS)
+        for idx_sql in [
+            "CREATE INDEX IF NOT EXISTS ix_documents_is_deleted ON documents (is_deleted);",
+            "CREATE INDEX IF NOT EXISTS ix_documents_user_created ON documents (uploaded_by_user_id, created_at);",
+            "CREATE INDEX IF NOT EXISTS ix_documents_org_created ON documents (org_id, created_at);",
+            "CREATE INDEX IF NOT EXISTS ix_documents_user_active ON documents (uploaded_by_user_id, is_deleted);",
+            "CREATE INDEX IF NOT EXISTS ix_documents_org_status ON documents (org_id, status);",
+        ]:
+            await conn.execute(text(idx_sql))
 
 
 async def get_db() -> AsyncGenerator[AsyncSession, None]:

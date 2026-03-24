@@ -78,6 +78,14 @@ class Settings(BaseSettings):
     # Insère des marqueurs ---PAGE N--- entre les pages (extraction native et OCR).
     PDF_PAGE_MARKERS: bool = True
 
+    # ---- OCR Engine Tuning ----
+    # DPI for pdf2image conversion (higher = better accuracy but slower). 300 is standard.
+    OCR_DPI: int = 300
+    # Tesseract language(s). "fra+eng" detects both French and English text.
+    OCR_LANG: str = "fra+eng"
+    # Enable image preprocessing (deskew, denoise, contrast, binarize) before OCR.
+    OCR_PREPROCESSING: bool = True
+
     # Webhook optionnel après validation humaine (POST JSON {event, document_id}).
     WEBHOOK_ON_VALIDATE_URL: str = ""
     WEBHOOK_ON_VALIDATE_SECRET: str = ""
