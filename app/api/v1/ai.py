@@ -51,33 +51,65 @@ def _build_fallback_summary(ai_payload: dict[str, Any]) -> dict[str, Any]:
     quality = ai_payload.get("quality", {}) or {}
     fields = ai_payload.get("fields", {}) or {}
     tables_counts = ai_payload.get("tables_counts", {}) or {}
+    doc_type = str(ai_payload.get("doc_type") or "unknown_other")
 
-    critical_keys = [
-        "denomination_sci",
-        "date_cloture_exercice",
-        "nombre_associes",
-        "revenus_bruts",
-        "interets_emprunts",
-        "revenu_net_foncier",
-    ]
+    if doc_type == "fiscal_2072":
+        critical_keys = [
+            "denomination_sci",
+            "date_cloture_exercice",
+            "nombre_associes",
+            "revenus_bruts",
+            "interets_emprunts",
+            "revenu_net_foncier",
+        ]
+        questions = [
+            "Pouvez-vous vérifier les champs critiques manquants dans la 2072 ?",
+            "Les montants revenus/charges sont-ils cohérents avec les annexes ?",
+        ]
+    elif doc_type == "bilan":
+        critical_keys = [
+            "total_actif",
+            "total_passif",
+            "capitaux_propres",
+            "resultat_exercice",
+            "dettes_financieres",
+            "dettes_fournisseurs",
+        ]
+        questions = [
+            "Pouvez-vous confirmer les totaux actif/passif sur le bilan source ?",
+            "Les dettes financières et fournisseurs sont-elles correctement reprises ?",
+        ]
+    else:
+        critical_keys = []
+        questions = [
+            "Pouvez-vous valider les champs clés extraits sur le document source ?",
+            "Des incohérences métier nécessitent-elles une correction manuelle ?",
+        ]
+
     critical_missing = [k for k in critical_keys if (fields.get(k, {}) or {}).get("value") in (None, "", [])]
     points_cles: list[str] = []
-    if (fields.get("denomination_sci", {}) or {}).get("value"):
-        points_cles.append(f"Société: {(fields['denomination_sci'] or {}).get('value')}.")
-    if (fields.get("revenu_net_foncier", {}) or {}).get("value") is not None:
-        points_cles.append(f"Revenu net foncier: {(fields['revenu_net_foncier'] or {}).get('value')}.")
-    points_cles.append(f"Annexes détectées: immeubles={tables_counts.get('immeubles', 0)}, associés={tables_counts.get('associes_revenus_fonciers', 0)}.")
+    if doc_type == "fiscal_2072":
+        if (fields.get("denomination_sci", {}) or {}).get("value"):
+            points_cles.append(f"Société: {(fields['denomination_sci'] or {}).get('value')}.")
+        if (fields.get("revenu_net_foncier", {}) or {}).get("value") is not None:
+            points_cles.append(f"Revenu net foncier: {(fields['revenu_net_foncier'] or {}).get('value')}.")
+        points_cles.append(
+            f"Annexes détectées: immeubles={tables_counts.get('immeubles', 0)}, "
+            f"associés={tables_counts.get('associes_revenus_fonciers', 0)}."
+        )
+    elif doc_type == "bilan":
+        actif = (fields.get("total_actif", {}) or {}).get("value")
+        passif = (fields.get("total_passif", {}) or {}).get("value")
+        if actif is not None or passif is not None:
+            points_cles.append(f"Totaux bilan: actif={actif}, passif={passif}.")
+    else:
+        points_cles.append("Aucun point clé métier stable n'a pu être déterminé automatiquement.")
 
     anomalies: list[str] = []
     if quality.get("needs_review"):
         anomalies.append("Le dossier nécessite une revue humaine avant usage IA.")
     if critical_missing:
         anomalies.append(f"Champs critiques manquants: {', '.join(critical_missing)}.")
-
-    questions = [
-        "Pouvez-vous vérifier les champs critiques manquants dans la 2072 ?",
-        "Les montants revenus/charges sont-ils cohérents avec les annexes ?",
-    ]
     confidence = 0.35 if quality.get("needs_review") else 0.7
 
     return {
@@ -223,6 +255,25 @@ async def ai_summary(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    quality = structured.get("quality") or {}
+    if not bool(quality.get("ready_for_ai")):
+        return JSONResponse(
+            status_code=status.HTTP_409_CONFLICT,
+            content={
+                "detail": "Synthèse IA indisponible: document non prêt pour l'IA (ready_for_ai=false).",
+                "summary_available": False,
+                "detected_doc_type": structured.get("detected_doc_type"),
+                "doc_type": structured.get("doc_type"),
+                "quality_snapshot": {
+                    "needs_review": bool(quality.get("needs_review", True)),
+                    "ready_for_ai": bool(quality.get("ready_for_ai", False)),
+                    "coverage_ratio": quality.get("coverage_ratio"),
+                    "critical_missing_fields": quality.get("critical_missing_fields", []),
+                    "quality_flags": quality.get("quality_flags", []),
+                },
+            },
+        )
+
     ai_payload = {
         "document_id": str(document.id),
         "doc_type": structured.get("doc_type"),

@@ -1323,6 +1323,24 @@ docList.addEventListener("click", async e => {
       const {res, data} = await api(`/api/v1/ai/summary/${id}?doc_type=${encodeURIComponent(requestedDocType)}`, {method:"POST"});
       showApi(data);
       if (!res.ok) {
+        if (res.status === 409) {
+          const q = data && data.quality_snapshot ? data.quality_snapshot : {};
+          const miss = Array.isArray(q.critical_missing_fields) ? q.critical_missing_fields : [];
+          const missTxt = miss.length ? ` Champs critiques manquants: ${miss.slice(0, 3).join(", ")}${miss.length > 3 ? "…" : ""}.` : "";
+          previewOut.innerHTML = `
+            <div class="ai-summary">
+              <div class="ai-head">
+                <div class="ai-tools"><div class="ai-mode fallback">Synthèse IA indisponible</div></div>
+              </div>
+              <div class="ai-status">Document non prêt IA (<b>ready_for_ai=false</b>).</div>
+              <div class="ai-block">
+                <div class="ai-title">Action requise</div>
+                <div>Corriger/valider les champs critiques puis relancer la synthèse.${missTxt}</div>
+              </div>
+            </div>`;
+          toast(data.detail || "Synthèse IA indisponible", "error");
+          return;
+        }
         toast(data.detail || "Synthèse IA échouée", "error");
         return;
       }
