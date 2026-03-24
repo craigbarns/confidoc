@@ -837,6 +837,13 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=100.0,
     )
+    # Prefer line-token extraction first for N/N-1 layouts (avoid cross-line capture).
+    if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _extract_first_amount_token_from_keyword_line(
+            text,
+            r"capitaux?\s+propres|situation\s+nette|fonds?\s+propres",
+            min_amount=100.0,
+        )
     if capitaux_propres is None:
         for src_hint, pat in [
             ("label_wide:capitaux_propres", r"capitaux?\s+propres"),
@@ -846,12 +853,6 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             if w is not None:
                 capitaux_propres, capitaux_propres_src = w, src_hint
                 break
-    if capitaux_propres is None:
-        capitaux_propres, capitaux_propres_src = _extract_first_amount_token_from_keyword_line(
-            text,
-            r"capitaux?\s+propres|situation\s+nette|fonds?\s+propres",
-            min_amount=100.0,
-        )
     if capitaux_propres is None:
         capitaux_propres, capitaux_propres_src = _extract_amount_after_keyword_multiline(
             "\n".join(text.splitlines()[-320:]),
@@ -879,14 +880,15 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 capitaux_propres, capitaux_propres_src = w, src_hint
                 break
 
-    dettes_fin_val = _extract_financial_amount_for_label(
-        text, r"dettes?\s+financi", min_amount=50.0
+    # Prefer per-line token extraction to avoid N/N-1 and neighbor-line collisions.
+    dettes_fin_val, _ = _extract_first_amount_token_from_keyword_line(
+        text,
+        r"dettes?\s+financi|emprunts?\s+et\s+dettes?",
+        min_amount=50.0,
     )
     if dettes_fin_val is None:
-        dettes_fin_val, _ = _extract_first_amount_token_from_keyword_line(
-            text,
-            r"dettes?\s+financi|emprunts?\s+et\s+dettes?",
-            min_amount=50.0,
+        dettes_fin_val = _extract_financial_amount_for_label(
+            text, r"dettes?\s+financi", min_amount=50.0
         )
     if dettes_fin_val is None:
         dettes_fin_val = _extract_first_amount_from_patterns(
@@ -900,14 +902,14 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             ],
             min_amount=50.0,
         )
-    dettes_four_val = _extract_financial_amount_for_label(
-        text, r"dettes?\s+fournisseurs?", min_amount=50.0
+    dettes_four_val, _ = _extract_first_amount_token_from_keyword_line(
+        text,
+        r"dettes?\s+fournisseurs?|fournisseurs?",
+        min_amount=50.0,
     )
     if dettes_four_val is None:
-        dettes_four_val, _ = _extract_first_amount_token_from_keyword_line(
-            text,
-            r"dettes?\s+fournisseurs?|fournisseurs?",
-            min_amount=50.0,
+        dettes_four_val = _extract_financial_amount_for_label(
+            text, r"dettes?\s+fournisseurs?", min_amount=50.0
         )
     if dettes_four_val is None:
         dettes_four_val = _extract_first_amount_from_patterns(
@@ -926,6 +928,21 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         )
     dettes_fin_val = _coerce_component_amount(dettes_fin_val, total_passif)
     dettes_four_val = _coerce_component_amount(dettes_four_val, total_passif)
+    # Guardrail: avoid duplicated debt values when supplier line provides a distinct token.
+    if (
+        isinstance(dettes_fin_val, (int, float))
+        and isinstance(dettes_four_val, (int, float))
+        and abs(float(dettes_fin_val) - float(dettes_four_val)) < 1e-6
+    ):
+        fournisseurs_tokens = _extract_amount_tokens_for_keyword_lines(
+            text, r"dettes?\s+fournisseurs?|fournisseurs?", min_amount=50.0, max_lines=8
+        )
+        for tok in fournisseurs_tokens:
+            if abs(float(tok) - float(dettes_fin_val)) > 1e-6:
+                cand = _coerce_component_amount(float(tok), total_passif)
+                if isinstance(cand, float):
+                    dettes_four_val = cand
+                    break
     # Conservative: small plaquettes sometimes list only equity + two debt lines under passif.
     if (
         capitaux_propres is None
@@ -978,6 +995,25 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice|perte",
             min_amount=50.0,
         )
+    # Anti-collision on noisy "100" lines when totals indicate large company amounts.
+    passif_ref = float(total_passif) if isinstance(total_passif, (int, float)) else None
+    if isinstance(passif_ref, float) and passif_ref >= 10_000.0:
+        if isinstance(capitaux_propres, (int, float)) and abs(float(capitaux_propres)) <= 150.0:
+            alt, alt_src = _extract_first_amount_token_from_keyword_line(
+                text,
+                r"situation\s+nette|capitaux?\s+propres|fonds?\s+propres",
+                min_amount=200.0,
+            )
+            capitaux_propres = alt
+            capitaux_propres_src = alt_src if alt is not None else "missing"
+        if isinstance(resultat_exercice, (int, float)) and abs(float(resultat_exercice)) <= 150.0:
+            alt, alt_src = _extract_first_amount_token_from_keyword_line(
+                text,
+                r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice|perte",
+                min_amount=200.0,
+            )
+            resultat_exercice = alt
+            resultat_exercice_src = alt_src if alt is not None else "missing"
 
     return {
         **_extract_common_fields(text),
