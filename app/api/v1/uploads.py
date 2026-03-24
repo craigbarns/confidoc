@@ -77,7 +77,7 @@ async def upload_document(
         # JSON explicite pour curl / smoke (sinon « Internal Server Error » vide)
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail=f"{type(exc).__name__}: {str(exc)[:800]}",
+            detail="Erreur lors du traitement du document. Veuillez réessayer.",
         ) from exc
 
 
