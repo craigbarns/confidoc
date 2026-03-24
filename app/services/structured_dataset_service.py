@@ -4,7 +4,7 @@ from __future__ import annotations
 
 import re
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from app.core.logging import get_logger
@@ -188,13 +188,9 @@ def _iso_date_in_range(iso: str | None, start_iso: str | None, end_iso: str | No
         return False
     try:
         d = datetime.fromisoformat(iso)
-        if start_iso:
-            if d < datetime.fromisoformat(start_iso):
-                return False
-        if end_iso:
-            if d > datetime.fromisoformat(end_iso):
-                return False
-        return True
+        if start_iso and d < datetime.fromisoformat(start_iso):
+            return False
+        return not (end_iso and d > datetime.fromisoformat(end_iso))
     except ValueError:
         return False
 
@@ -273,7 +269,7 @@ def _extract_financial_amount_for_label_wide(
     max_gap: int = 120,
     min_amount: float = THRESHOLDS["amount_min_default"],
 ) -> float | None:
-    """Like _extract_financial_amount_for_label but allows a wider gap (multi-column OCR layouts)."""
+    """Like _extract_financial_amount_for_label with a wider OCR-tolerant gap."""
     pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
     value = _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
     if value is None:
@@ -478,11 +474,10 @@ def _looks_like_form_label(value: str | None) -> bool:
     if any(lbl in v for lbl in FORM_LABEL_BLACKLIST):
         return True
     # Reject obvious header-only fragments with almost no value signal
-    if re.search(
-        r"\b(adresse|dénomination|denomination|nom|date|associ[ée]s?)\b", v
-    ) and not re.search(r"\d|_|[a-z]{3,}", v):
-        return True
-    return False
+    return bool(
+        re.search(r"\b(adresse|dénomination|denomination|nom|date|associ[ée]s?)\b", v)
+        and not re.search(r"\d|_|[a-z]{3,}", v)
+    )
 
 
 def _clean_text_candidate(value: str | None) -> str | None:
@@ -578,7 +573,8 @@ def _extract_common_fields(text: str) -> dict[str, dict[str, Any]]:
         text,
     )
     societe_raw = _extract_first(
-        r"(?:dénomination|denomination|raison sociale|société|societe)\s*[:\-]?\s*([A-Z0-9 _.\-]{3,80})",
+        r"(?:dénomination|denomination|raison sociale|société|societe)\s*[:\-]?"
+        r"\s*([A-Z0-9 _.\-]{3,80})",
         text,
     )
     societe = _clean_company_label(societe_raw)
@@ -629,7 +625,8 @@ def _coerce_component_amount(value: float | None, total_passif: float | None) ->
         return None
     if isinstance(total_passif, (int, float)) and float(total_passif) > 0:
         # A passif component should not dwarf total passif.
-        if v > float(total_passif) * THRESHOLDS["component_vs_passif_ratio_cap"]:
+        passif_cap = float(total_passif) * THRESHOLDS["component_vs_passif_ratio_cap"]
+        if v > passif_cap:
             return None
     # Hard cap against OCR-account-code confusion (e.g. 40100000, 45510000).
     if v >= THRESHOLDS["component_abs_hard_cap"]:
@@ -670,7 +667,10 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     if total_actif is None or total_passif is None:
         amount_counter: dict[int, int] = {}
         for m in re.findall(
-            r"([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+(?:[.,][0-9Oo]{2})?|[0-9Oo]{4,}(?:[.,][0-9Oo]{2})?)",
+            (
+                r"([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+(?:[.,][0-9Oo]{2})?"
+                r"|[0-9Oo]{4,}(?:[.,][0-9Oo]{2})?)"
+            ),
             text,
             flags=re.IGNORECASE,
         ):
@@ -782,32 +782,40 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     dettes_fin_val = _coerce_component_amount(dettes_fin_val, total_passif)
     dettes_four_val = _coerce_component_amount(dettes_four_val, total_passif)
     # Conservative: small plaquettes sometimes list only equity + two debt lines under passif.
-    if capitaux_propres is None and isinstance(total_passif, (int, float)):
-        if dettes_fin_val is not None and dettes_four_val is not None:
-            cand = float(total_passif) - float(dettes_fin_val) - float(dettes_four_val)
-            s = float(dettes_fin_val) + float(dettes_four_val) + cand
-            if cand >= 100.0 and abs(s - float(total_passif)) <= max(
-                500.0, abs(float(total_passif)) * 0.04
-            ):
-                capitaux_propres = cand
-                capitaux_propres_src = "fallback:passif_minus_dettes_fin_et_fournisseurs"
+    if (
+        capitaux_propres is None
+        and isinstance(total_passif, (int, float))
+        and dettes_fin_val is not None
+        and dettes_four_val is not None
+    ):
+        cand = float(total_passif) - float(dettes_fin_val) - float(dettes_four_val)
+        s = float(dettes_fin_val) + float(dettes_four_val) + cand
+        if cand >= 100.0 and abs(s - float(total_passif)) <= max(
+            500.0, abs(float(total_passif)) * 0.04
+        ):
+            capitaux_propres = cand
+            capitaux_propres_src = "fallback:passif_minus_dettes_fin_et_fournisseurs"
 
     if capitaux_propres is None:
         capitaux_propres, capitaux_propres_src = _sum_fr_capital_account_lines(text)
     # Plaquettes: "CAPITAUX PROPRES (I) ... TOTAL (I): X"
     m_cp = re.search(
-        r"capitaux?\s+propres.{0,260}?total\s*(?:\(?i\)?)?\s*[:\-]?\s*([0-9Oo][0-9Oo \t\u00a0.,]{0,30})",
+        (
+            r"capitaux?\s+propres.{0,260}?total\s*(?:\(?i\)?)?\s*[:\-]?"
+            r"\s*([0-9Oo][0-9Oo \t\u00a0.,]{0,30})"
+        ),
         text,
         re.IGNORECASE | re.DOTALL,
     )
     if m_cp:
         cand = _to_float_fr(m_cp.group(1))
         if isinstance(cand, float) and abs(cand) >= 100.0:
-            # Prefer block total over a single "capital:" line when it is clearly larger.
-            if capitaux_propres is None or (
+            should_replace = capitaux_propres is None or (
                 isinstance(capitaux_propres, (int, float))
                 and float(cand) > float(capitaux_propres) * 1.5
-            ):
+            )
+            # Prefer block total over a single "capital:" line when it is clearly larger.
+            if should_replace:
                 capitaux_propres = cand
                 capitaux_propres_src = "label:block_total_capitaux_propres_i"
 
@@ -1130,7 +1138,8 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     date_cloture = _extract_first_date_from_patterns(
         header_zone + "\n" + text,
         [
-            r"(?:date\s+de\s+cl[ôo]ture(?:\s+de\s+l[' ]exercice)?)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
+            r"(?:date\s+de\s+cl[ôo]ture(?:\s+de\s+l[' ]exercice)?)\s*[:\-]?"
+            r"\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
             r"(?:exercice\s+clos\s+le)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
             r"(?:soc5).{0,40}([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
             r"(?:cl[ôo]ture).{0,40}([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
@@ -1594,11 +1603,13 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
 
 def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
     bank = _extract_first(
-        r"\b(BNP\s*PARIBAS|SOCIETE\s*GENERALE|CR[ÉE]DIT\s*AGRICOLE|LCL|CIC|CAISSE\s+D[’' ]EPARGNE|BANQUE\s+POPULAIRE|HELLO\s+BANK|BOURSORAMA)\b",
+        r"\b(BNP\s*PARIBAS|SOCIETE\s*GENERALE|CR[ÉE]DIT\s*AGRICOLE|LCL|CIC|"
+        r"CAISSE\s+D[’' ]EPARGNE|BANQUE\s+POPULAIRE|HELLO\s+BANK|BOURSORAMA)\b",
         text,
     )
     titulaire = _extract_first(
-        r"(?:titulaire|intitul[ée]\s+du\s+compte|nom\s+du\s+compte)\s*[:\-]?\s*([A-Z][A-Z0-9 .'\-]{2,80})",
+        r"(?:titulaire|intitul[ée]\s+du\s+compte|nom\s+du\s+compte)\s*[:\-]?"
+        r"\s*([A-Z][A-Z0-9 .'\-]{2,80})",
         text,
     )
     account_hint = _extract_first(
@@ -2392,7 +2403,7 @@ def _build_contract_payload(
         "routing_reasons": routing_reasons,
         "routing_runner_up": routing_runner_up,
         "anonymized": True,
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "fields": fields,
         "tables": tables,
         "quality": quality_out,
