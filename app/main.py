@@ -11,6 +11,7 @@ from fastapi.staticfiles import StaticFiles
 from app.config import get_settings
 from app.core.database import init_database
 from app.core.logging import get_logger, setup_logging
+from app.middleware import RequestIdMiddleware, SecurityHeadersMiddleware, TimingMiddleware
 from app.api.health import router as health_router
 from app.api.ui import router as ui_router
 from app.api.v1.router import router as v1_router
@@ -29,6 +30,7 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
         "application_starting",
         app_name=settings.APP_NAME,
         environment=settings.APP_ENV,
+        version="0.2.0",
     )
     await init_database()
     logger.info("database_initialized")
@@ -48,7 +50,7 @@ def create_app() -> FastAPI:
             "API backend de confidentialité documentaire "
             "pour professions réglementées."
         ),
-        version="0.1.0",
+        version="0.2.0",
         docs_url="/docs",
         redoc_url="/redoc",
         openapi_url="/openapi.json",
@@ -59,13 +61,16 @@ def create_app() -> FastAPI:
     static_dir = Path(__file__).resolve().parent / "static"
     app.mount("/static", StaticFiles(directory=str(static_dir)), name="static")
 
-    # ---- Middlewares ----
+    # ---- Middlewares (order: outermost first) ----
+    app.add_middleware(TimingMiddleware)
+    app.add_middleware(SecurityHeadersMiddleware)
+    app.add_middleware(RequestIdMiddleware)
     app.add_middleware(
         CORSMiddleware,
         allow_origins=settings.ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["*"],
+        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
     )
 
     # ---- Routers ----

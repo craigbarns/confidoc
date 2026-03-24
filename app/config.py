@@ -1,9 +1,10 @@
 """ConfiDoc Backend — Configuration centralisée via pydantic-settings."""
 
+import warnings
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import field_validator
+from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
 
@@ -23,9 +24,9 @@ class Settings(BaseSettings):
     # ---- Application ----
     APP_NAME: str = "ConfiDoc"
     APP_ENV: Literal["development", "staging", "production"] = "development"
-    DEBUG: bool = True
+    DEBUG: bool = False
     SECRET_KEY: str = "CHANGE-ME"
-    LOG_LEVEL: str = "DEBUG"
+    LOG_LEVEL: str = "INFO"
 
     # ---- API ----
     API_V1_PREFIX: str = "/api/v1"
@@ -185,6 +186,30 @@ class Settings(BaseSettings):
                     pass
             return [item.strip().lower() for item in raw.split(",") if item.strip()]
         return value
+
+    # ---- Rate Limiting ----
+    RATE_LIMIT_LOGIN: str = "10/minute"
+    RATE_LIMIT_UPLOAD: str = "30/minute"
+    RATE_LIMIT_DEFAULT: str = "120/minute"
+
+    @model_validator(mode="after")
+    def _warn_insecure_defaults(self) -> "Settings":
+        """Emit loud warnings when production runs with default secrets."""
+        if self.APP_ENV == "production":
+            insecure = []
+            if self.SECRET_KEY == "CHANGE-ME":
+                insecure.append("SECRET_KEY")
+            if self.JWT_SECRET_KEY == "CHANGE-ME":
+                insecure.append("JWT_SECRET_KEY")
+            if self.ENCRYPTION_MASTER_KEY == "CHANGE-ME":
+                insecure.append("ENCRYPTION_MASTER_KEY")
+            if insecure:
+                warnings.warn(
+                    f"SECURITY: Running in production with default values for: "
+                    f"{', '.join(insecure)}. Set these via environment variables!",
+                    stacklevel=2,
+                )
+        return self
 
     @property
     def max_upload_size_bytes(self) -> int:

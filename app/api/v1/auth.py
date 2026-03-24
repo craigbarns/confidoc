@@ -1,10 +1,12 @@
 """ConfiDoc Backend — Auth Endpoints."""
 
+import re
+import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, status
+from fastapi import APIRouter, Depends, Request, status
 from fastapi.security import OAuth2PasswordRequestForm
-from pydantic import BaseModel, EmailStr
+from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
@@ -26,11 +28,52 @@ router = APIRouter()
 logger = get_logger(__name__)
 settings = get_settings()
 
+# ---- Simple in-memory rate limiter for auth endpoints ----
+_login_attempts: dict[str, list[float]] = {}
+_RATE_WINDOW = 300  # 5 minutes
+_RATE_MAX = 10  # max attempts per window
+
+
+def _check_rate_limit(key: str) -> None:
+    """Raise 429 if too many attempts from key within window."""
+    import time
+
+    now = time.time()
+    attempts = _login_attempts.get(key, [])
+    attempts = [t for t in attempts if now - t < _RATE_WINDOW]
+    if len(attempts) >= _RATE_MAX:
+        from fastapi import HTTPException
+
+        logger.warning("auth_rate_limited", key=key, attempts=len(attempts))
+        raise HTTPException(
+            status_code=429,
+            detail="Trop de tentatives. Réessayez dans quelques minutes.",
+        )
+    attempts.append(now)
+    _login_attempts[key] = attempts
+
+
+_PASSWORD_MIN_LENGTH = 8
+_PASSWORD_PATTERN = re.compile(
+    r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$"
+)
+
 
 class RecoveryResetRequest(BaseModel):
     email: EmailStr
     new_password: str
     recovery_token: str
+
+    @field_validator("new_password")
+    @classmethod
+    def validate_password_strength(cls, v: str) -> str:
+        if len(v) < _PASSWORD_MIN_LENGTH:
+            raise ValueError("Le mot de passe doit contenir au moins 8 caractères")
+        if not _PASSWORD_PATTERN.match(v):
+            raise ValueError(
+                "Le mot de passe doit contenir au moins une majuscule, une minuscule et un chiffre"
+            )
+        return v
 
 
 @router.post(
@@ -42,9 +85,12 @@ class RecoveryResetRequest(BaseModel):
 async def login(
     login_req: LoginRequest,
     db: DbSession,
+    request: Request,
 ) -> TokenResponse:
     """Authentifie un utilisateur et retourne la paire de tokens."""
-    logger.info("auth_login_attempt", email=login_req.email)
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"login:{client_ip}")
+    logger.info("auth_login_attempt", email=login_req.email, client_ip=client_ip)
     return await auth_service.authenticate_user(db, login_req)
 
 
@@ -143,10 +189,10 @@ async def recover_access(
     recovery_token = (getattr(settings, "ADMIN_RECOVERY_TOKEN", "") or "").strip()
     if not recovery_token:
         raise http_400("Recovery désactivé: configurez ADMIN_RECOVERY_TOKEN")
-    if payload.recovery_token.strip() != recovery_token:
+    # Timing-safe comparison to prevent timing attacks
+    if not secrets.compare_digest(payload.recovery_token.strip(), recovery_token):
+        logger.warning("auth_recovery_invalid_token", email=str(payload.email))
         raise http_400("Recovery token invalide")
-    if len(payload.new_password or "") < 8:
-        raise http_400("Le nouveau mot de passe doit contenir au moins 8 caractères")
 
     user_res = await db.execute(
         select(User).where(User.email == str(payload.email).strip().lower())

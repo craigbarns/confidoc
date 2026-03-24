@@ -1,9 +1,11 @@
 """ConfiDoc Backend — Documents endpoints (v2)."""
 
+import asyncio
 import uuid
 import re
 import hashlib
 from collections import Counter
+from html import escape as html_escape
 from io import BytesIO
 from types import SimpleNamespace
 import fitz
@@ -158,12 +160,14 @@ def _build_structured_report_doc_html(payload: dict, *, original_filename: str) 
     coverage = float(quality.get("coverage_ratio") or 0.0)
 
     rows_html = "".join(
-        f"<tr><td>{k}</td><td>{v}</td></tr>"
+        f"<tr><td>{html_escape(str(k))}</td><td>{html_escape(str(v))}</td></tr>"
         for k, v in rows
     ) or "<tr><td colspan='2'>Aucune donnée structurée disponible.</td></tr>"
-    flags_html = "".join(f"<li>{str(flag)}</li>" for flag in quality_flags) or "<li>Aucun</li>"
+    flags_html = "".join(
+        f"<li>{html_escape(str(flag))}</li>" for flag in quality_flags
+    ) or "<li>Aucun</li>"
     tables_summary = "".join(
-        f"<li>{name}: {len(value) if isinstance(value, list) else 1} élément(s)</li>"
+        f"<li>{html_escape(str(name))}: {len(value) if isinstance(value, list) else 1} élément(s)</li>"
         for name, value in tables.items()
     ) or "<li>Aucun tableau</li>"
 
@@ -186,8 +190,8 @@ def _build_structured_report_doc_html(payload: dict, *, original_filename: str) 
 </head>
 <body>
   <h1>Rapport d'extraction ConfiDoc</h1>
-  <div class="meta">Document: {original_filename}</div>
-  <div class="meta">Type: {doc_type} | Généré le: {generated_at}</div>
+  <div class="meta">Document: {html_escape(original_filename)}</div>
+  <div class="meta">Type: {html_escape(doc_type)} | Généré le: {html_escape(generated_at)}</div>
   <div style="margin-top:8px"><span class="badge">Statut: {status_label}</span></div>
   <p>{headline}</p>
 
@@ -879,7 +883,11 @@ async def export_redacted_pdf(
     # Collect sensitive values and apply redaction
     sensitive_values = [item.value_excerpt for item in detections if item.value_excerpt]
     try:
-        redacted_bytes = redact_pdf_bytes(original_bytes, sensitive_values)
+        # Run CPU-bound PDF redaction in a thread pool to avoid blocking the event loop
+        loop = asyncio.get_running_loop()
+        redacted_bytes = await loop.run_in_executor(
+            None, redact_pdf_bytes, original_bytes, sensitive_values
+        )
     except Exception as exc:
         logger.error("pdf_redaction_failed", doc_id=str(document.id), error=str(exc))
         raise http_400(
