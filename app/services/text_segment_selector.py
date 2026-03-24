@@ -73,6 +73,31 @@ _SPECS: dict[str, dict[str, list[tuple[re.Pattern[str], float]]]] = {
     },
 }
 
+_SECTION_ANCHORS: dict[str, dict[str, list[re.Pattern[str]]]] = {
+    "bilan": {
+        "start": [
+            re.compile(r"\bbilan\s*[-–—]?\s*actif\b", re.I),
+            re.compile(r"\bbilan\b", re.I),
+            re.compile(r"\bactif\b", re.I),
+        ],
+        "end": [
+            re.compile(r"\btotal\s+g[ée]n[ée]ral\s+passif\b", re.I),
+            re.compile(r"\btotal\s+du\s+passif\b", re.I),
+            re.compile(r"\bcompte\s+de\s+r[ée]sultat\b", re.I),
+        ],
+    },
+    "compte_resultat": {
+        "start": [
+            re.compile(r"\bcompte\s+de\s+r[ée]sultat\b", re.I),
+        ],
+        "end": [
+            re.compile(r"\br[ée]sultat\s+net\b", re.I),
+            re.compile(r"\bb[ée]n[ée]fice\s+ou\s+perte\b", re.I),
+            re.compile(r"\bannexe\b", re.I),
+        ],
+    },
+}
+
 
 def _score_window(text_lower: str, doc_type: str) -> float:
     spec = _SPECS.get(doc_type)
@@ -99,6 +124,61 @@ def _iter_windows(full: str) -> list[tuple[int, int, str]]:
             break
         start += _STEP_CHARS
     return out
+
+
+def _find_first_anchor_pos(text: str, patterns: list[re.Pattern[str]]) -> int | None:
+    best: int | None = None
+    for pat in patterns:
+        m = pat.search(text)
+        if m:
+            p = int(m.start())
+            if best is None or p < best:
+                best = p
+    return best
+
+
+def _find_end_anchor_after(text: str, patterns: list[re.Pattern[str]], start: int) -> int | None:
+    best_end: int | None = None
+    for pat in patterns:
+        m = pat.search(text, pos=max(0, start))
+        if m:
+            e = int(m.end())
+            if best_end is None or e < best_end:
+                best_end = e
+    return best_end
+
+
+def select_section_block(full_text: str, doc_type: str) -> tuple[str, dict[str, Any] | None]:
+    """Try extracting a full section block using start/end anchors."""
+    spec = _SECTION_ANCHORS.get(doc_type)
+    if not spec:
+        return "", None
+    start = _find_first_anchor_pos(full_text, spec["start"])
+    if start is None:
+        return "", None
+    end = _find_end_anchor_after(full_text, spec["end"], start + 1)
+    if end is None:
+        end = len(full_text)
+    # Keep a bit of context around section boundaries.
+    pad = 300
+    s2 = max(0, start - pad)
+    e2 = min(len(full_text), end + pad)
+    if e2 <= s2:
+        return "", None
+    seg = full_text[s2:e2]
+    meta: dict[str, Any] = {
+        "strategy": "section_block",
+        "reason": "anchor_block",
+        "char_start": s2,
+        "char_end": e2,
+        "window_score": 0.0,
+        "full_chars": len(full_text),
+        "segment_chars": len(seg),
+        "doc_type_target": doc_type,
+        "section_anchor_start_pos": start,
+        "section_anchor_end_pos": end,
+    }
+    return seg, meta
 
 
 def select_extraction_segment(full_text: str, doc_type: str) -> tuple[str, dict[str, Any]]:

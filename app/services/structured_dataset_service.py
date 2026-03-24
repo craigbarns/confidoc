@@ -2755,7 +2755,7 @@ def build_structured_dataset(
     extraction_text: str | None = None,
 ) -> dict[str, Any]:
     """Build normalized structured dataset payload for downstream analytics/AI."""
-    from app.services.text_segment_selector import select_extraction_segment
+    from app.services.text_segment_selector import select_extraction_segment, select_section_block
 
     full_text_for_routing = extraction_text if extraction_text is not None else anonymized_text
     detected_doc_type, routing_confidence, routing_reasons, routing_runner_up = (
@@ -2768,25 +2768,48 @@ def build_structured_dataset(
 
     source_text = full_text_for_routing
     text_segmentation: dict[str, Any] = {}
+    extracted: StructuredExtractionResult | None = None
     if extraction_text is not None:
-        seg, text_segmentation = select_extraction_segment(extraction_text, doc_type)
-        if text_segmentation.get("strategy") == "semantic_window":
-            source_text = seg
+        sem_seg, sem_meta = select_extraction_segment(extraction_text, doc_type)
+        sec_seg, sec_meta = select_section_block(extraction_text, doc_type)
+        candidates: list[tuple[str, dict[str, Any], StructuredExtractionResult]] = []
+        # Candidate 1: semantic window/full_text from existing selector.
+        cand_sem = _run_extractor_pipeline(doc_type, sem_seg, anonymized_text)
+        candidates.append(("semantic_or_full", sem_meta, cand_sem))
+        # Candidate 2: section block for supported doc types.
+        if sec_meta and sec_seg:
+            cand_sec = _run_extractor_pipeline(doc_type, sec_seg, anonymized_text)
+            candidates.append(("section_block", sec_meta, cand_sec))
+        # Candidate 3: explicit full text baseline.
+        full_meta: dict[str, Any] = {
+            "strategy": "full_text",
+            "reason": "quality_comparison_baseline",
+            "char_start": 0,
+            "char_end": len(extraction_text),
+            "window_score": 0.0,
+            "full_chars": len(extraction_text),
+            "segment_chars": len(extraction_text),
+            "doc_type_target": doc_type,
+        }
+        cand_full = _run_extractor_pipeline(doc_type, extraction_text, anonymized_text)
+        candidates.append(("full_text", full_meta, cand_full))
 
-    extracted = _run_extractor_pipeline(doc_type, source_text, anonymized_text)
+        best_label, best_meta, best_res = candidates[0]
+        for label, meta, res in candidates[1:]:
+            if _extraction_quality_better(res.quality, best_res.quality):
+                best_label, best_meta, best_res = label, meta, res
+        extracted = best_res
+        text_segmentation = {
+            **best_meta,
+            "candidate_count": len(candidates),
+            "selected_candidate": best_label,
+        }
+        source_text = extraction_text if text_segmentation.get("strategy") == "full_text" else (
+            sec_seg if text_segmentation.get("strategy") == "section_block" else sem_seg
+        )
 
-    # Si la fenêtre sémantique a rogné les tableaux utiles, le texte entier est souvent meilleur.
-    if text_segmentation.get("strategy") == "semantic_window" and extraction_text is not None:
-        alt = _run_extractor_pipeline(doc_type, full_text_for_routing, anonymized_text)
-        if _extraction_quality_better(alt.quality, extracted.quality):
-            extracted = alt
-            text_segmentation = {
-                **text_segmentation,
-                "fallback_to_full_text": True,
-                "fallback_reason": "full_text_strictly_better_quality",
-            }
-        else:
-            text_segmentation = {**text_segmentation, "fallback_to_full_text": False}
+    if extracted is None:
+        extracted = _run_extractor_pipeline(doc_type, source_text, anonymized_text)
 
     fields = extracted.fields
     tables = extracted.tables

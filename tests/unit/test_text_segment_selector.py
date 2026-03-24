@@ -94,6 +94,6 @@ def test_build_structured_dataset_includes_segmentation_provenance() -> None:
     prov = out.get("provenance") or {}
     seg = prov.get("text_segmentation")
     assert seg is not None
-    assert seg.get("strategy") in ("semantic_window", "full_text")
-    if seg.get("strategy") == "semantic_window":
+    assert seg.get("strategy") in ("semantic_window", "section_block", "full_text")
+    if seg.get("strategy") in ("semantic_window", "section_block"):
         assert seg.get("segment_chars", 0) < seg.get("full_chars", 0)
