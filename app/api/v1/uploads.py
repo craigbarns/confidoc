@@ -3,7 +3,7 @@
 import hashlib
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, Query, UploadFile, status
+from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -12,6 +12,7 @@ from app.core.exceptions import http_400, http_413
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
+from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
 from app.services.document_processing_service import build_anonymization_preview
 from app.services.storage_service import store_bytes
@@ -29,7 +30,9 @@ MAX_BATCH_SIZE = 20
     status_code=status.HTTP_201_CREATED,
     summary="Uploader un document",
 )
+@limiter.limit(settings.RATE_LIMIT_UPLOAD)
 async def upload_document(
+    request: Request,
     current_user: CurrentUser,
     db: DbSession,
     file: UploadFile = File(...),
@@ -200,7 +203,9 @@ async def _upload_document_body(
     status_code=status.HTTP_200_OK,
     summary="Upload et traiter plusieurs documents en batch",
 )
+@limiter.limit("10/minute")
 async def upload_batch(
+    request: Request,
     current_user: CurrentUser,
     db: DbSession,
     files: list[UploadFile] = File(...),
