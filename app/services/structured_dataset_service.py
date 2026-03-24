@@ -509,6 +509,45 @@ def _is_2072_arithmetically_coherent(
     return abs(expected - actual) <= tol
 
 
+def _normalize_2072_closure_date(value: str | None) -> str | None:
+    """Force annual 2072 closure format to 31/12/YYYY when year is known."""
+    if not isinstance(value, str) or not value.strip():
+        return value
+    raw = value.strip()
+    if raw.startswith("31/12/"):
+        return raw
+    year_match = re.search(r"([12]\d{3})$", raw)
+    if not year_match:
+        return raw
+    return f"31/12/{year_match.group(1)}"
+
+
+def _resolve_2072_triplet_permutation(
+    revenus_bruts: float | None,
+    frais_hors_interets: float | None,
+    interets: float | None,
+    revenu_net: float | None,
+) -> tuple[float | None, float | None, float | None, bool]:
+    """
+    Fix possible permutation between (frais, interets, revenu_net) using arithmetic identity:
+    revenus_bruts - frais - interets ~= revenu_net.
+    """
+    if not all(isinstance(v, (int, float)) for v in [revenus_bruts, frais_hors_interets, interets, revenu_net]):
+        return frais_hors_interets, interets, revenu_net, False
+    rb = float(revenus_bruts)
+    fc = float(frais_hors_interets)
+    ie = float(interets)
+    rn = float(revenu_net)
+    tol = 5.0
+    if abs((rb - fc - ie) - rn) <= tol:
+        return fc, ie, rn, False
+    candidates = [fc, ie, rn]
+    for fc_t, ie_t, rn_t in itertools.permutations(candidates, 3):
+        if abs((rb - fc_t - ie_t) - rn_t) <= tol:
+            return float(fc_t), float(ie_t), float(rn_t), True
+    return fc, ie, rn, False
+
+
 def _extract_2072_totals_from_quote_part_blocks(text: str) -> dict[str, float]:
     """
     Parse 2072 annexe-2 quote-part blocks when table labels/values are vertically shifted.
@@ -1598,6 +1637,7 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             value_regex=r"\b([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})\b",
             window_lines=5,
         )
+    date_cloture = _normalize_2072_closure_date(date_cloture)
     nb_associes = _extract_first_int_from_patterns(
         header_zone + "\n" + text,
         [
@@ -1876,6 +1916,29 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
                     revenu_net = associes_totals["revenu_net_foncier"]
             elif revenu_net is None and associes_totals["revenu_net_foncier"] != 0:
                 revenu_net = associes_totals["revenu_net_foncier"]
+
+    # Anti-permutation guardrail for shifted OCR forms (FC/IE/RN can be swapped).
+    fixed_fc, fixed_ie, fixed_rn, perm_fixed = _resolve_2072_triplet_permutation(
+        float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else None,
+        float(frais_hors_interets) if isinstance(frais_hors_interets, (int, float)) else None,
+        float(interets) if isinstance(interets, (int, float)) else None,
+        float(revenu_net) if isinstance(revenu_net, (int, float)) else None,
+    )
+    if perm_fixed:
+        logger.warning(
+            "extract_2072_triplet_permutation_corrected",
+            revenus_bruts=revenus_bruts,
+            old_frais=frais_hors_interets,
+            old_interets=interets,
+            old_revenu_net=revenu_net,
+            new_frais=fixed_fc,
+            new_interets=fixed_ie,
+            new_revenu_net=fixed_rn,
+        )
+        frais_hors_interets = fixed_fc
+        interets = fixed_ie
+        revenu_net = fixed_rn
+        interets_source = "fallback:permutation_corrected"
 
     if revenu_net is None and isinstance(revenus_bruts, (int, float)):
         fc = float(frais_hors_interets or 0.0)
@@ -2677,8 +2740,10 @@ def _quality_2072(
     ie = fields.get("interets_emprunts", {}).get("value") or 0.0
     rn = fields.get("revenu_net_foncier", {}).get("value")
     numeric_consistency_score = 0.6
+    arithmetic_consistency_ok = False
     if isinstance(rb, (int, float)) and isinstance(rn, (int, float)):
         expected = rb - pt - fc - ie
+        arithmetic_consistency_ok = abs(expected - rn) <= 5.0
         numeric_consistency_score = 1.0 if abs(expected - rn) <= 2 else 0.7
 
     ann1_declared = bool(re.search(r"annexe\s*1", text, re.IGNORECASE))
@@ -2764,6 +2829,7 @@ def _quality_2072(
     ready_for_ai_core = (
         not critical_missing
         and numeric_consistency_score >= THRESHOLDS["quality_core_numeric_min"]
+        and arithmetic_consistency_ok
         and (
             agg_checks == 0
             or aggregate_consistency_score >= THRESHOLDS["quality_core_aggregate_min"]
@@ -2777,6 +2843,8 @@ def _quality_2072(
         flags.append("annex_consistency_failed")
     if numeric_consistency_score < THRESHOLDS["quality_core_numeric_min"]:
         flags.append("numeric_consistency_low")
+    if not arithmetic_consistency_ok:
+        flags.append("arithmetic_inconsistency_detected")
     if agg_checks > 0 and aggregate_consistency_score < THRESHOLDS["quality_core_aggregate_min"]:
         flags.append("aggregate_consistency_low")
 
