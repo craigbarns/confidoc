@@ -1024,8 +1024,8 @@ async def export_dataset(
 
     # Get original text (from DB, or re-extract)
     original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour générer l'export dataset.")
+    if original_text is None:
+        original_text = ""
 
     effective_type = classify_document_type(original_text, document.original_filename)
     _, detections = anonymize_text(
@@ -1131,10 +1131,8 @@ async def export_structured_dataset(
     """
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404(
-            "Aucune donnée textuelle disponible pour générer l'export structuré."
-        )
+    if original_text is None:
+        original_text = ""
 
     effective_type = classify_document_type(original_text, document.original_filename)
     anonymized_text, _detections = anonymize_text(
@@ -1595,8 +1593,8 @@ async def document_audit_quality_bundle(
     """Export JSON pour archivage cabinet : preuve + synthèse qualité (pas de PDF)."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour générer l'audit qualité.")
+    if original_text is None:
+        original_text = ""
 
     effective_type = classify_document_type(original_text, document.original_filename)
     dataset_text, _detections = anonymize_text(
@@ -1650,8 +1648,8 @@ async def document_dataset_summary(
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
     original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour générer le résumé.")
+    if original_text is None:
+        original_text = ""
 
     effective_type = classify_document_type(original_text, document.original_filename)
     dataset_text, detections = anonymize_text(
