@@ -1151,8 +1151,7 @@ docList.addEventListener("click", async e => {
       const res = await fetch(`/api/v1/documents/${id}/export-pdf`, {headers:{Authorization:`Bearer ${accessToken}`}});
       if (!res.ok) { toast("Export PDF échoué", "error"); return; }
       const blob = await res.blob();
-      const url = URL.createObjectURL(blob);
-      const a = document.createElement("a"); a.href=url; a.download=`redacted_${id}.pdf`; a.click(); URL.revokeObjectURL(url);
+      triggerBlobDownload(blob, `redacted_${id}.pdf`);
       toast("PDF redacté téléchargé", "success");
     } else if (action === "exportdataset") {
       const res = await fetch(`/api/v1/documents/${id}/export-dataset`, {headers:{Authorization:`Bearer ${accessToken}`}});

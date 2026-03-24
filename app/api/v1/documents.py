@@ -5,6 +5,7 @@ import re
 import hashlib
 from collections import Counter
 from io import BytesIO
+from types import SimpleNamespace
 import fitz
 
 from typing import Literal
@@ -392,6 +393,47 @@ async def _get_original_text(
     # Re-extract from file
     file_content = _read_file_or_404(document)
     return extract_text_from_file(file_content, document.extension) or ""
+
+
+async def _get_best_text_for_reporting(
+    db: DbSession, document: Document
+) -> str:
+    """Best-effort text source for report exports.
+
+    Priority:
+    1) original text (DB or file re-extraction)
+    2) final anonymized version
+    3) preview anonymized version
+    """
+    try:
+        original = await _get_original_text(db, document)
+        if original:
+            return original
+    except Exception:
+        # Fallbacks below are intentionally silent to keep export resilient.
+        pass
+
+    final_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
+        )
+    )
+    final_version = final_result.scalar_one_or_none()
+    if final_version and final_version.content_text:
+        return final_version.content_text
+
+    preview_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview_version = preview_result.scalar_one_or_none()
+    if preview_version and preview_version.content_text:
+        return preview_version.content_text
+
+    return ""
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -816,7 +858,20 @@ async def export_redacted_pdf(
     )
     detections = list(detections_result.scalars().all())
     if not detections:
-        raise http_404("Aucune détection disponible. Lancez /anonymize d'abord.")
+        # Fallback: if detections were not persisted, regenerate from available text.
+        source_text = await _get_best_text_for_reporting(db, document)
+        if source_text:
+            effective_type = classify_document_type(source_text, document.original_filename)
+            _anon_text, regenerated = anonymize_text(
+                source_text, profile="strict", document_type=effective_type
+            )
+            detections = [
+                SimpleNamespace(value_excerpt=item.get("value_excerpt", ""))
+                for item in regenerated
+                if item.get("value_excerpt")
+            ]
+        if not detections:
+            raise http_404("Aucune détection disponible. Lancez /anonymize d'abord.")
 
     # Read original PDF
     original_bytes = _read_file_or_404(document)
@@ -857,9 +912,9 @@ async def export_dataset(
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
     # Get original text (from DB, or re-extract)
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+        raise http_404("Aucune donnée textuelle disponible pour générer l'export dataset.")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     _, detections = anonymize_text(
@@ -964,9 +1019,11 @@ async def export_structured_dataset(
     - renvoie un JSON normalise pret pour analytics/RAG/QA
     """
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+        raise http_404(
+            "Aucune donnée textuelle disponible pour générer l'export structuré."
+        )
 
     effective_type = classify_document_type(original_text, document.original_filename)
     anonymized_text, _detections = anonymize_text(
@@ -1004,9 +1061,9 @@ async def export_structured_report_doc(
 ) -> StreamingResponse:
     """Rapport lisible pour utilisateurs non techniques (format .doc HTML-compatible)."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+        raise http_404("Aucune donnée textuelle disponible pour générer le rapport.")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     anonymized_text, _detections = anonymize_text(
@@ -1048,9 +1105,9 @@ async def export_structured_report_pdf(
 ) -> StreamingResponse:
     """Rapport PDF lisible pour partage interne (non technique)."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_404("Texte original introuvable. Ré-uploadez et anonymisez le document.")
+        raise http_404("Aucune donnée textuelle disponible pour générer le rapport.")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     anonymized_text, _detections = anonymize_text(
@@ -1429,9 +1486,9 @@ async def document_audit_quality_bundle(
 ) -> JSONResponse:
     """Export JSON pour archivage cabinet : preuve + synthèse qualité (pas de PDF)."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_404("Texte original introuvable. Ré-uploadez le document.")
+        raise http_404("Aucune donnée textuelle disponible pour générer l'audit qualité.")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     dataset_text, _detections = anonymize_text(
@@ -1484,9 +1541,9 @@ async def document_dataset_summary(
     """
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_404("Texte original introuvable")
+        raise http_404("Aucune donnée textuelle disponible pour générer le résumé.")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     dataset_text, detections = anonymize_text(

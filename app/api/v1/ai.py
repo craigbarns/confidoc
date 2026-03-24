@@ -16,7 +16,7 @@ from app.models.document import Document
 from app.services.anonymization_service import anonymize_text, classify_document_type
 from app.services.ollama_service import generate_summary_with_ollama, generate_audit_with_ollama
 from app.services.structured_dataset_service import build_structured_dataset
-from app.api.v1.documents import _get_original_text
+from app.api.v1.documents import _get_best_text_for_reporting
 
 router = APIRouter()
 
@@ -116,9 +116,9 @@ async def ai_audit(
     if not document:
         raise http_404("Document introuvable")
 
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_400("Texte source introuvable pour ce document")
+        raise http_400("Aucune donnée textuelle disponible pour l'analyse IA")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     anonymized_text, detections = anonymize_text(
@@ -206,9 +206,9 @@ async def ai_summary(
     if not document:
         raise http_404("Document introuvable")
 
-    original_text = await _get_original_text(db, document)
+    original_text = await _get_best_text_for_reporting(db, document)
     if not original_text:
-        raise http_400("Texte source introuvable pour ce document")
+        raise http_400("Aucune donnée textuelle disponible pour l'analyse IA")
 
     effective_type = classify_document_type(original_text, document.original_filename)
     anonymized_text, detections = anonymize_text(
