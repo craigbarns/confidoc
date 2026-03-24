@@ -706,8 +706,14 @@ def _count_2072_quote_part_blocks(text: str) -> int:
     return sum(1 for line in text.splitlines() if marker.search(line))
 
 
+def _2072_interets_false_zero(interets: float | None) -> bool:
+    """Zéro explicite (souvent un trou OCR si l'annexe totalise un petit montant)."""
+    return isinstance(interets, (int, float)) and abs(float(interets)) < 1e-9
+
+
 def _plausible_2072_interets_candidate(value: float, revenus_bruts: float | None) -> bool:
-    if abs(value) < THRESHOLDS["amount_min_low"]:
+    # Sur 2072 les intérêts peuvent être faibles (ex. 39 €) : ne pas appliquer amount_min_low (50).
+    if abs(value) < 1.0:
         return False
     if revenus_bruts is not None and isinstance(revenus_bruts, (int, float)):
         rb = abs(float(revenus_bruts))
@@ -1868,7 +1874,7 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
                 ("label:dont_interets", r"dont.{0,20}[i1l]nt[eé]r[eéê]ts?"),
                 ("label:emprunts_interets", r"emprun[tf]s?.{0,15}[i1l]nt[eé]r[eéê]ts?"),
             ],
-            min_amount=50.0,
+            min_amount=1.0,
         )
     # Wide-gap OCR (amount far to the right of the label).
     if interets is None:
@@ -1877,20 +1883,20 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             ("label_wide:interets_des_emprunts", r"[i1l]nt[eé]r[eéê]ts?\s+des?\s+emprun[tf]s?"),
         ]:
             w = _extract_financial_amount_for_label_wide(
-                scan_text, pat, max_gap=140, min_amount=50.0
+                scan_text, pat, max_gap=140, min_amount=1.0
             )
             if w is not None:
                 interets, interets_source = w, src_hint
                 break
     if interets is None:
         interets, interets_source = _extract_amount_from_lines_with_keyword(
-            scan_text, r"[i1l]nt[eé]r[eéê]t.{0,12}emprun[tf]", min_amount=50.0
+            scan_text, r"[i1l]nt[eé]r[eéê]t.{0,12}emprun[tf]", min_amount=1.0
         )
     if interets is None:
         interets, interets_source = _extract_amount_after_keyword_multiline(
             scan_text,
             r"[i1l]nt[eé]r[eéê]ts?.{0,25}emprun[tf]|emprun[tf].{0,20}[i1l]nt[eé]r[eéê]t",
-            min_amount=50.0,
+            min_amount=1.0,
         )
     if interets is None:
         interets, interets_source = _extract_2072_amount_from_anchor_window(
@@ -1899,6 +1905,20 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             window_lines=10,
             min_amount=1.0,
         )
+    # Petits montants sur la ligne « ligne 20 » (souvent < 50 €, filtrés ailleurs).
+    if interets is None or _2072_interets_false_zero(interets):
+        rb_for_ie = float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else None
+        for raw in scan_text.splitlines():
+            line = raw.strip()
+            if not re.search(r"\bligne\s*20\b", line, re.IGNORECASE):
+                continue
+            for tok in _extract_line_amount_tokens(line):
+                if 1.0 <= tok <= 500.0 and _plausible_2072_interets_candidate(tok, rb_for_ie):
+                    interets = tok
+                    interets_source = "fallback:ligne_20_small_amount"
+                    break
+            if interets is not None and not _2072_interets_false_zero(interets):
+                break
     revenu_net = _extract_first_amount_from_patterns(
         scan_text,
         [
@@ -1949,6 +1969,13 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         elif associes_interets > 0:
             interets = associes_interets
             interets_source = "fallback:associes_interets_sum"
+    elif _2072_interets_false_zero(interets):
+        if immeubles_interets > 0:
+            interets = immeubles_interets
+            interets_source = "fallback:immeubles_interets_sum"
+        elif associes_interets > 0:
+            interets = associes_interets
+            interets_source = "fallback:associes_interets_sum"
 
     # Algebraic closure (conservative): only when revenu net was read from the document,
     # not when it will be derived from rb - frais - interets (avoids circular reasoning).
@@ -1985,10 +2012,14 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         elif associes_rb > 0:
             revenus_bruts = associes_rb
 
+    _ie_ann_tot = float(associes_totals.get("interets_emprunts") or 0.0)
+    _needs_ie_from_associes = interets is None or (
+        _2072_interets_false_zero(interets) and _ie_ann_tot > 0.0
+    )
     if associes and (
         revenus_bruts is None
         or frais_hors_interets is None
-        or interets is None
+        or _needs_ie_from_associes
         or revenu_net is None
     ):
         rb_fb = float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else associes_totals["revenus_bruts"]
@@ -1997,14 +2028,22 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             if isinstance(frais_hors_interets, (int, float))
             else associes_totals["frais_charges_hors_interets"]
         )
-        ie_fb = float(interets) if isinstance(interets, (int, float)) else associes_totals["interets_emprunts"]
+        if isinstance(interets, (int, float)) and _2072_interets_false_zero(interets) and _ie_ann_tot > 0:
+            ie_fb = _ie_ann_tot
+        elif isinstance(interets, (int, float)):
+            ie_fb = float(interets)
+        else:
+            ie_fb = associes_totals["interets_emprunts"]
         rn_fb = float(revenu_net) if isinstance(revenu_net, (int, float)) else associes_totals["revenu_net_foncier"]
         if _is_2072_arithmetically_coherent(rb_fb, fc_fb, ie_fb, rn_fb):
             if revenus_bruts is None and associes_totals["revenus_bruts"] > 0:
                 revenus_bruts = associes_totals["revenus_bruts"]
             if frais_hors_interets is None and associes_totals["frais_charges_hors_interets"] > 0:
                 frais_hors_interets = associes_totals["frais_charges_hors_interets"]
-            if interets is None and associes_totals["interets_emprunts"] > 0:
+            if (
+                (interets is None or _2072_interets_false_zero(interets))
+                and associes_totals["interets_emprunts"] > 0
+            ):
                 interets = associes_totals["interets_emprunts"]
                 interets_source = "fallback:associes_interets_sum_validated"
             if revenu_net is None and associes_totals["revenu_net_foncier"] != 0:
@@ -2015,7 +2054,10 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
                 revenus_bruts = associes_totals["revenus_bruts"]
             if frais_hors_interets is None and associes_totals["frais_charges_hors_interets"] > 0:
                 frais_hors_interets = associes_totals["frais_charges_hors_interets"]
-            if interets is None and associes_totals["interets_emprunts"] > 0:
+            if (
+                (interets is None or _2072_interets_false_zero(interets))
+                and associes_totals["interets_emprunts"] > 0
+            ):
                 interets = associes_totals["interets_emprunts"]
                 interets_source = "fallback:associes_interets_sum_validated"
             if isinstance(revenu_net, (int, float)) and isinstance(revenus_bruts, (int, float)):
@@ -2038,9 +2080,14 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     rn_ok_after = isinstance(revenu_net, (int, float))
     rb_val_after = float(revenus_bruts) if rb_ok_after else None
     rn_val_after = float(revenu_net) if rn_ok_after else None
-    if interets is None and associes_blocks_are_coherent:
-        interets = float(associes_totals.get("interets_emprunts") or 0.0)
-        interets_source = "annex:after_fc_ie_collision"
+    if associes_blocks_are_coherent:
+        ie_ann_fb = float(associes_totals.get("interets_emprunts") or 0.0)
+        if interets is None:
+            interets = ie_ann_fb
+            interets_source = "annex:after_fc_ie_collision"
+        elif _2072_interets_false_zero(interets) and ie_ann_fb > 0.0:
+            interets = ie_ann_fb
+            interets_source = "annex:after_fc_ie_collision"
     if (
         interets is None
         and rb_ok_after
@@ -2085,6 +2132,22 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         interets = fixed_ie
         revenu_net = fixed_rn
         interets_source = "fallback:permutation_corrected"
+
+    if (
+        isinstance(revenus_bruts, (int, float))
+        and isinstance(frais_hors_interets, (int, float))
+        and isinstance(interets, (int, float))
+        and isinstance(revenu_net, (int, float))
+        and float(interets) > 0.0
+    ):
+        expected_rn = float(revenus_bruts) - float(frais_hors_interets) - float(interets)
+        if abs(expected_rn - float(revenu_net)) > 5.0:
+            logger.warning(
+                "extract_2072_revenu_net_recalculated",
+                old_revenu_net=revenu_net,
+                new_revenu_net=expected_rn,
+            )
+            revenu_net = expected_rn
 
     if revenu_net is None and isinstance(revenus_bruts, (int, float)):
         fc = float(frais_hors_interets or 0.0)
@@ -2328,8 +2391,14 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
             "quote_part_frais_charges": _extract_amount_for_label(
                 chunk, r"quote[\- ]part.{0,25}frais?.{0,25}charges?"
             ),
-            "quote_part_interets_emprunts": _extract_amount_for_label(
-                chunk, r"quote[\- ]part.{0,25}int[eé]r[eê]ts?\s+d[' ]emprunts?"
+            "quote_part_interets_emprunts": (
+                _extract_amount_for_label(
+                    chunk, r"quote[\- ]part.{0,30}int[eé]r[eê]ts?\s+d[' ]emprunts?"
+                )
+                or _extract_amount_for_label(
+                    chunk,
+                    r"quote[\- ]part.{0,40}(?:int[eé]r[eê]t\s+d[' ]emprunt|emprunts?.{0,15}int[eé]r[eê]t)",
+                )
             ),
             "quote_part_amortissement": _extract_amount_for_label(
                 chunk, r"quote[\- ]part.{0,25}amortissement"
