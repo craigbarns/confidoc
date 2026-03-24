@@ -17,10 +17,11 @@ from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import delete, desc, func, select, update
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.exceptions import http_400, http_404, http_500
+from app.core.exceptions import http_400, http_403, http_404, http_500
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
+from app.models.membership import Membership
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
@@ -469,6 +470,103 @@ async def list_documents(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+async def _get_user_org_id(db: DbSession, user_id: uuid.UUID) -> uuid.UUID | None:
+    """Get the active org_id for a user from their membership."""
+    result = await db.execute(
+        select(Membership.org_id).where(
+            Membership.user_id == user_id,
+            Membership.is_active.is_(True),
+        )
+    )
+    return result.scalar_one_or_none()
+
+
+@router.get(
+    "/org",
+    response_model=list[DocumentResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Lister tous les documents de l'organisation",
+)
+async def list_org_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    status_filter: DocumentStatus | None = Query(default=None, alias="status"),
+) -> list[Document]:
+    """List all documents belonging to the user's organization.
+
+    Requires an active membership. Allows managers/admins to see
+    all documents uploaded by any member of the org.
+    """
+    org_id = await _get_user_org_id(db, current_user.id)
+    if not org_id:
+        raise http_403("Aucune organisation active. Rejoignez une organisation d'abord.")
+
+    query = (
+        select(Document)
+        .where(
+            Document.org_id == org_id,
+            Document.is_deleted.is_(False),
+        )
+    )
+    if status_filter is not None:
+        query = query.where(Document.status == status_filter)
+
+    query = query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
+    result = await db.execute(query)
+    return list(result.scalars().all())
+
+
+@router.get(
+    "/org/stats",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Statistiques de l'organisation",
+)
+async def org_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = Query(default=30, ge=1, le=365),
+) -> JSONResponse:
+    """Organization-level analytics: document counts, status breakdown, volume."""
+    org_id = await _get_user_org_id(db, current_user.id)
+    if not org_id:
+        raise http_403("Aucune organisation active.")
+
+    cutoff = func.now() - func.make_interval(days=days)
+    result = await db.execute(
+        select(Document).where(
+            Document.org_id == org_id,
+            Document.is_deleted.is_(False),
+            Document.created_at >= cutoff,
+        )
+    )
+    docs = list(result.scalars().all())
+
+    by_status = Counter(
+        str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown")
+        for d in docs
+    )
+    by_ext = Counter(str((d.extension or "unknown")).lower() for d in docs)
+    by_user: dict[str, int] = Counter()
+    for d in docs:
+        by_user[str(d.uploaded_by_user_id)] += 1
+
+    total_bytes = sum(d.size_bytes for d in docs if d.size_bytes)
+
+    return JSONResponse({
+        "org_id": str(org_id),
+        "window_days": days,
+        "documents_total": len(docs),
+        "counts_by_status": dict(by_status),
+        "counts_by_extension": dict(by_ext),
+        "documents_by_user": dict(by_user),
+        "total_size_bytes": total_bytes,
+        "total_size_mb": round(total_bytes / (1024 * 1024), 2),
+    })
 
 
 @router.get(
