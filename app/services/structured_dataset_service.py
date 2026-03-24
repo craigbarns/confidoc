@@ -544,11 +544,14 @@ def _resolve_2072_triplet_permutation(
     annex_ref: dict[str, float] | None = None,
 ) -> tuple[float | None, float | None, float | None, bool]:
     """
-    Disambiguate (frais, interets, revenu_net). Several permutations can satisfy RB-FC-IE=RN.
+    Disambiguate (frais, interets, revenu_net).
 
-    - Si le triplet courant est arithmétiquement cohérent et aucune annexe fiable ne le contredit,
-      on le garde (évite les régressions type 2072_clean_01 où le RN est le plus grand poste).
-    - Sinon on aligne sur les totaux annexe (quote-parts) ou, à défaut, on énumère les permutations.
+    - Si une annexe (totaux quote-parts) est arithmétiquement cohérente et alignée sur RB,
+      elle prime sur le triplet OCR : les permutations ne peuvent pas fabriquer un petit IE
+      quand FC et IE ont été lus identiques (ex. 28493 / 28493).
+    - Sans annexe fiable : si le triplet courant vérifie RB-FC-IE=RN, on le garde (régression
+      2072_clean_01 où le RN est le plus grand poste).
+    - Sinon : énumération des permutations (heuristique IE minimal).
     """
     if not all(isinstance(v, (int, float)) for v in [revenus_bruts, frais_hors_interets, interets, revenu_net]):
         return frais_hors_interets, interets, revenu_net, False
@@ -588,12 +591,15 @@ def _resolve_2072_triplet_permutation(
             and abs(c - rn_a) <= tol_rn
         )
 
-    current_arith_ok = _arith(fc, ie, rn)
-    if current_arith_ok and annex_ok:
+    # Référence annexe (quote-parts) : si cohérente, c'est la source de vérité pour FC/IE/RN.
+    # Sinon les permutations ne peuvent pas inventer 39 si IE et FC ont été lus tous deux comme 28493.
+    if annex_ok:
         if _matches_annex(fc, ie, rn):
             return fc, ie, rn, False
-        # Annexe contredit le triplet courant malgré équation OK → permuter.
-    elif current_arith_ok and not annex_ok:
+        return float(fc_a), float(ie_a), float(rn_a), True
+
+    current_arith_ok = _arith(fc, ie, rn)
+    if current_arith_ok:
         # Sans annexe fiable, ne pas permuter : plusieurs assignations peuvent vérifier l'équation.
         return fc, ie, rn, False
 
@@ -605,22 +611,6 @@ def _resolve_2072_triplet_permutation(
     if not triplets:
         return fc, ie, rn, False
     uniq = list(dict.fromkeys(triplets))
-
-    if annex_ok:
-        scored: list[tuple[float, tuple[float, float, float]]] = []
-        for a, b, c in uniq:
-            if not _matches_annex(a, b, c):
-                continue
-            err = (
-                abs(a - fc_a) / max(fc_a, 1.0)
-                + abs(b - ie_a) / max(ie_a, 1.0)
-                + abs(c - rn_a) / max(abs(rn_a), 1.0)
-            )
-            scored.append((err, (a, b, c)))
-        if scored:
-            scored.sort(key=lambda x: x[0])
-            t = scored[0][1]
-            return t[0], t[1], t[2], t != orig
 
     # Sans annexe : intérêts = plus petit des trois (souvent vrai 2072) si une seule permutation le vérifie
     vals = sorted({round(x, 2) for x in (fc, ie, rn)})
@@ -1706,6 +1696,25 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     immeubles = _extract_2072_immeubles_table(text)
     associes = _extract_2072_associes_table(text)
 
+    # Totaux annexe (associés + blocs quote-parts) : référence qualité pour FC/IE/RN.
+    associes_totals: dict[str, float] = {
+        "revenus_bruts": sum(float(x.get("quote_part_revenus_bruts") or 0.0) for x in associes),
+        "frais_charges_hors_interets": sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes),
+        "interets_emprunts": sum(float(x.get("quote_part_interets_emprunts") or 0.0) for x in associes),
+        "revenu_net_foncier": sum(float(x.get("quote_part_revenu_net") or 0.0) for x in associes),
+    }
+    if any(v <= 0.0 for v in associes_totals.values()):
+        quote_part_block_totals = _extract_2072_totals_from_quote_part_blocks(text)
+        for k, v in quote_part_block_totals.items():
+            if associes_totals.get(k, 0.0) <= 0.0 and v > 0.0:
+                associes_totals[k] = v
+    associes_blocks_are_coherent = _is_2072_arithmetically_coherent(
+        associes_totals.get("revenus_bruts"),
+        associes_totals.get("frais_charges_hors_interets"),
+        associes_totals.get("interets_emprunts"),
+        associes_totals.get("revenu_net_foncier"),
+    )
+
     # V3 focus: reliably fill only critical fields first.
     denom = _extract_value_near_label(
         header_zone,
@@ -1976,25 +1985,6 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         elif associes_rb > 0:
             revenus_bruts = associes_rb
 
-    # Annex associates fallback (strict): use only if arithmetic remains coherent.
-    associes_totals = {
-        "revenus_bruts": sum(float(x.get("quote_part_revenus_bruts") or 0.0) for x in associes),
-        "frais_charges_hors_interets": sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes),
-        "interets_emprunts": sum(float(x.get("quote_part_interets_emprunts") or 0.0) for x in associes),
-        "revenu_net_foncier": sum(float(x.get("quote_part_revenu_net") or 0.0) for x in associes),
-    }
-    if any(v <= 0.0 for v in associes_totals.values()):
-        quote_part_block_totals = _extract_2072_totals_from_quote_part_blocks(text)
-        for k, v in quote_part_block_totals.items():
-            if associes_totals.get(k, 0.0) <= 0.0 and v > 0.0:
-                associes_totals[k] = v
-    associes_blocks_are_coherent = _is_2072_arithmetically_coherent(
-        associes_totals.get("revenus_bruts"),
-        associes_totals.get("frais_charges_hors_interets"),
-        associes_totals.get("interets_emprunts"),
-        associes_totals.get("revenu_net_foncier"),
-    )
-
     if associes and (
         revenus_bruts is None
         or frais_hors_interets is None
@@ -2034,7 +2024,37 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             elif revenu_net is None and associes_totals["revenu_net_foncier"] != 0:
                 revenu_net = associes_totals["revenu_net_foncier"]
 
-    # Anti-permutation: arithmetic alone is ambiguous; prefer annex totals, else FC=max / IE=min.
+    # Collision fréquente OCR : FC et IE identiques sur gros montants → invalide pour 2072.
+    if (
+        isinstance(frais_hors_interets, (int, float))
+        and isinstance(interets, (int, float))
+        and abs(float(frais_hors_interets) - float(interets)) < 1e-6
+        and float(frais_hors_interets) > 200.0
+    ):
+        interets = None
+        interets_source = "missing"
+    # Re-préparation avant résolveur (qui exige 4 flottants) : annexe d'abord, sinon dérivation.
+    rb_ok_after = isinstance(revenus_bruts, (int, float))
+    rn_ok_after = isinstance(revenu_net, (int, float))
+    rb_val_after = float(revenus_bruts) if rb_ok_after else None
+    rn_val_after = float(revenu_net) if rn_ok_after else None
+    if interets is None and associes_blocks_are_coherent:
+        interets = float(associes_totals.get("interets_emprunts") or 0.0)
+        interets_source = "annex:after_fc_ie_collision"
+    if (
+        interets is None
+        and rb_ok_after
+        and rn_ok_after
+        and isinstance(frais_hors_interets, (int, float))
+    ):
+        cand_ie = rb_val_after - float(frais_hors_interets) - rn_val_after
+        if abs(cand_ie) <= 1.0:
+            cand_ie = 0.0
+        if _plausible_2072_interets_candidate(cand_ie, rb_val_after):
+            interets = cand_ie
+            interets_source = "fallback:derived_rb_minus_frais_minus_rn_after_dup"
+
+    # Anti-permutation / vérité annexe : dictionnaire passé au résolveur (quote-parts cohérents).
     annex_for_resolver: dict[str, float] | None = None
     if associes_blocks_are_coherent:
         annex_for_resolver = {
@@ -2568,19 +2588,19 @@ def _extract_generic_accounting_table(text: str) -> list[dict[str, Any]]:
         line = raw.strip()
         if not line:
             continue
-        # Accept code at start or embedded in OCR-fragmented lines.
-        code_match = re.search(r"\b(\d{3,8})\b", line)
+        # Code en tête de ligne uniquement : évite d'interpréter "17+18" / montants 2072 comme PCG.
+        code_match = re.search(r"^\s*(\d{3,8})\b", line)
         if not code_match:
             continue
         amount_match = re.search(
-            r"([0-9][0-9\s\u00a0.,]{1,40}(?:€|EUR)?)\s*$", line, re.IGNORECASE
+            r"([0-9][0-9\s\u00a0.,]{1,30}(?:€|EUR)?)\s*$", line, re.IGNORECASE
         )
         if not amount_match:
             continue
         records.append(
             {
                 "code": code_match.group(1),
-                "label": _norm_spaces(re.sub(r"\b\d{3,8}\b", "", line, count=1)),
+                "label": _norm_spaces(re.sub(r"^\s*\d{3,8}\s*", "", line)),
                 "amount": _to_float_fr(amount_match.group(1)),
             }
         )
