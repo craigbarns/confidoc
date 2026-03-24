@@ -20,6 +20,9 @@ router = APIRouter()
 settings = get_settings()
 logger = get_logger(__name__)
 
+# Maximum number of files in a single batch upload
+MAX_BATCH_SIZE = 20
+
 
 @router.post(
     "",
@@ -189,5 +192,106 @@ async def _upload_document_body(
         "size_bytes": len(content),
         "uploaded_by": uploaded_by_snapshot,
         "processing": processing,
+    }
+
+
+@router.post(
+    "/batch",
+    status_code=status.HTTP_200_OK,
+    summary="Upload et traiter plusieurs documents en batch",
+)
+async def upload_batch(
+    current_user: CurrentUser,
+    db: DbSession,
+    files: list[UploadFile] = File(...),
+    auto_anonymize: bool = Query(default=True),
+    profile: Literal[
+        "moderate", "strict", "dataset_strict",
+        "dataset_accounting", "dataset_accounting_pseudo",
+    ] = Query(default="dataset_accounting_pseudo"),
+    document_type: str = Query(default="auto"),
+) -> dict:
+    """Upload multiple documents at once (up to 20).
+
+    Each file is validated and processed individually. Failed files do not
+    block successful ones — the response includes per-file status.
+    """
+    if len(files) > MAX_BATCH_SIZE:
+        raise http_400(
+            f"Maximum {MAX_BATCH_SIZE} fichiers par batch. "
+            f"Reçu: {len(files)}."
+        )
+    if not files:
+        raise http_400("Aucun fichier fourni.")
+
+    results: list[dict] = []
+    succeeded = 0
+    failed = 0
+
+    for file in files:
+        filename = file.filename or ""
+        try:
+            if "." not in filename:
+                raise ValueError("Nom de fichier invalide (pas d'extension)")
+
+            extension = filename.rsplit(".", 1)[1].lower()
+            if extension not in settings.ALLOWED_EXTENSIONS:
+                raise ValueError(
+                    f"Extension .{extension} non autorisée"
+                )
+
+            content = await file.read()
+            if not content:
+                raise ValueError("Fichier vide")
+
+            if len(content) > settings.max_upload_size_bytes:
+                raise ValueError(
+                    f"Fichier trop volumineux ({len(content)} bytes > {settings.max_upload_size_bytes})"
+                )
+
+            result = await _upload_document_body(
+                db=db,
+                current_user=current_user,
+                file=file,
+                content=content,
+                filename=filename,
+                extension=extension,
+                auto_anonymize=auto_anonymize,
+                profile=profile,
+                document_type=document_type,
+            )
+            results.append(result)
+            succeeded += 1
+
+        except Exception as exc:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            logger.warning(
+                "batch_upload_file_failed",
+                filename=filename,
+                error=str(exc),
+            )
+            results.append({
+                "status": "error",
+                "original_filename": filename,
+                "error": str(exc)[:500],
+            })
+            failed += 1
+
+    logger.info(
+        "batch_upload_complete",
+        user_id=str(current_user.id),
+        total=len(files),
+        succeeded=succeeded,
+        failed=failed,
+    )
+
+    return {
+        "batch_size": len(files),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results,
     }
 

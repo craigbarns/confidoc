@@ -1690,3 +1690,171 @@ def _extract_accounting_records(text: str) -> list[dict]:
             "libelle": line,
         })
     return records
+
+
+# ──────────────────────────────────────────────────────────────────────
+# CSV EXPORT
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/{document_id}/export-csv",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter les données structurées en CSV",
+)
+async def export_csv(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+    profile: str = Query(default="dataset_accounting"),
+) -> StreamingResponse:
+    """Export structured data as CSV — ideal for Excel/Sheets import."""
+    import csv
+    import io
+
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    original_text = await _get_best_text_for_reporting(db, document)
+    if not original_text:
+        raise http_404("Aucune donnée textuelle disponible pour l'export CSV.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _ = anonymize_text(
+        original_text, profile=profile, document_type=effective_type
+    )
+
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+
+    # Build CSV from fields + tables
+    output = io.StringIO()
+    writer = csv.writer(output, dialect="excel")
+
+    # Section 1: Metadata
+    writer.writerow(["ConfiDoc Export", document.original_filename])
+    writer.writerow(["Type", structured.get("doc_type", "unknown")])
+    writer.writerow(["Date export", structured.get("generated_at", "")])
+    writer.writerow([])
+
+    # Section 2: Fields
+    fields = structured.get("fields") or {}
+    if fields:
+        writer.writerow(["Champ", "Valeur", "Confiance"])
+        for key, meta in fields.items():
+            if not isinstance(meta, dict):
+                continue
+            value = meta.get("value")
+            if value is None:
+                continue
+            confidence = meta.get("confidence", "")
+            writer.writerow([key, str(value), str(confidence)])
+        writer.writerow([])
+
+    # Section 3: Tables
+    tables = structured.get("tables") or {}
+    for table_name, rows in tables.items():
+        if not isinstance(rows, list) or not rows:
+            continue
+        writer.writerow([f"--- {table_name} ---"])
+        if isinstance(rows[0], dict):
+            headers = list(rows[0].keys())
+            writer.writerow(headers)
+            for row in rows:
+                writer.writerow([str(row.get(h, "")) for h in headers])
+        else:
+            for row in rows:
+                writer.writerow([str(row)])
+        writer.writerow([])
+
+    csv_content = output.getvalue().encode("utf-8-sig")  # BOM for Excel compat
+    stem = _safe_doc_stem(document.original_filename)
+    filename = f"{stem}_export.csv"
+
+    return StreamingResponse(
+        BytesIO(csv_content),
+        media_type="text/csv; charset=utf-8",
+        headers={
+            "Content-Disposition": f'attachment; filename="{filename}"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# RESTORE (undelete) SOFT-DELETED DOCUMENTS
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/{document_id}/restore",
+    status_code=status.HTTP_200_OK,
+    summary="Restaurer un document supprimé",
+)
+async def restore_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Restore a soft-deleted document, making it active again."""
+    try:
+        document_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    # Look up including soft-deleted documents
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404(
+            "Document introuvable ou non supprimé. "
+            "Seuls les documents supprimés peuvent être restaurés."
+        )
+
+    document.is_deleted = False
+    document.deleted_at = None
+    await db.commit()
+
+    logger.info("document_restored", doc_id=str(document.id))
+    return {
+        "status": "restored",
+        "document_id": str(document.id),
+        "original_filename": document.original_filename,
+    }
+
+
+@router.get(
+    "/trash",
+    response_model=list[DocumentResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Lister les documents supprimés (corbeille)",
+)
+async def list_deleted_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> list[Document]:
+    """List soft-deleted documents for the current user (trash view)."""
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+        .order_by(desc(Document.deleted_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(result.scalars().all())
