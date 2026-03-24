@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import itertools
 import re
 from dataclasses import dataclass
 from datetime import UTC, datetime
@@ -522,15 +523,32 @@ def _normalize_2072_closure_date(value: str | None) -> str | None:
     return f"31/12/{year_match.group(1)}"
 
 
+def _extract_2072_amount_from_ligne_17_18_line(text: str) -> float | None:
+    """Same-line hint for frais (17+18) — avoids grabbing neighbor lines in shifted forms."""
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or not re.search(r"\b17\s*\+\s*18\b", line, re.IGNORECASE):
+            continue
+        tokens = [v for v in _extract_line_amount_tokens(line) if abs(v) >= 1000.0]
+        if tokens:
+            return float(tokens[-1])
+    return None
+
+
 def _resolve_2072_triplet_permutation(
     revenus_bruts: float | None,
     frais_hors_interets: float | None,
     interets: float | None,
     revenu_net: float | None,
+    *,
+    annex_ref: dict[str, float] | None = None,
 ) -> tuple[float | None, float | None, float | None, bool]:
     """
-    Fix possible permutation between (frais, interets, revenu_net) using arithmetic identity:
-    revenus_bruts - frais - interets ~= revenu_net.
+    Disambiguate (frais, interets, revenu_net). Several permutations can satisfy RB-FC-IE=RN.
+
+    - Si le triplet courant est arithmétiquement cohérent et aucune annexe fiable ne le contredit,
+      on le garde (évite les régressions type 2072_clean_01 où le RN est le plus grand poste).
+    - Sinon on aligne sur les totaux annexe (quote-parts) ou, à défaut, on énumère les permutations.
     """
     if not all(isinstance(v, (int, float)) for v in [revenus_bruts, frais_hors_interets, interets, revenu_net]):
         return frais_hors_interets, interets, revenu_net, False
@@ -538,14 +556,83 @@ def _resolve_2072_triplet_permutation(
     fc = float(frais_hors_interets)
     ie = float(interets)
     rn = float(revenu_net)
-    tol = 5.0
-    if abs((rb - fc - ie) - rn) <= tol:
+    tol_arith = 5.0
+    tol_fc, tol_ie, tol_rn = 120.0, 25.0, 120.0
+    orig = (fc, ie, rn)
+
+    def _arith(a: float, b: float, c: float) -> bool:
+        return abs((rb - a - b) - c) <= tol_arith
+
+    def _annex_ok(ref: dict[str, float]) -> tuple[bool, float, float, float, float]:
+        fc_a = float(ref.get("frais_charges_hors_interets") or 0.0)
+        ie_a = float(ref.get("interets_emprunts") or 0.0)
+        rn_a = float(ref.get("revenu_net_foncier") or 0.0)
+        rb_a = float(ref.get("revenus_bruts") or 0.0)
+        ok = (
+            fc_a > 0.0
+            and abs(rn_a) > 1e-6
+            and ie_a >= 0.0
+            and (rb_a <= 0.0 or abs(rb_a - rb) <= max(200.0, abs(rb) * 0.02))
+            and _is_2072_arithmetically_coherent(rb, fc_a, ie_a, rn_a)
+        )
+        return ok, fc_a, ie_a, rn_a, rb_a
+
+    annex_ok, fc_a, ie_a, rn_a, _rb_a = (
+        _annex_ok(annex_ref) if annex_ref else (False, 0.0, 0.0, 0.0, 0.0)
+    )
+
+    def _matches_annex(a: float, b: float, c: float) -> bool:
+        return (
+            abs(a - fc_a) <= tol_fc
+            and abs(b - ie_a) <= tol_ie
+            and abs(c - rn_a) <= tol_rn
+        )
+
+    current_arith_ok = _arith(fc, ie, rn)
+    if current_arith_ok and annex_ok:
+        if _matches_annex(fc, ie, rn):
+            return fc, ie, rn, False
+        # Annexe contredit le triplet courant malgré équation OK → permuter.
+    elif current_arith_ok and not annex_ok:
+        # Sans annexe fiable, ne pas permuter : plusieurs assignations peuvent vérifier l'équation.
         return fc, ie, rn, False
-    candidates = [fc, ie, rn]
-    for fc_t, ie_t, rn_t in itertools.permutations(candidates, 3):
-        if abs((rb - fc_t - ie_t) - rn_t) <= tol:
-            return float(fc_t), float(ie_t), float(rn_t), True
-    return fc, ie, rn, False
+
+    triplets = [
+        (float(a), float(b), float(c))
+        for a, b, c in itertools.permutations([fc, ie, rn], 3)
+        if _arith(a, b, c)
+    ]
+    if not triplets:
+        return fc, ie, rn, False
+    uniq = list(dict.fromkeys(triplets))
+
+    if annex_ok:
+        scored: list[tuple[float, tuple[float, float, float]]] = []
+        for a, b, c in uniq:
+            if not _matches_annex(a, b, c):
+                continue
+            err = (
+                abs(a - fc_a) / max(fc_a, 1.0)
+                + abs(b - ie_a) / max(ie_a, 1.0)
+                + abs(c - rn_a) / max(abs(rn_a), 1.0)
+            )
+            scored.append((err, (a, b, c)))
+        if scored:
+            scored.sort(key=lambda x: x[0])
+            t = scored[0][1]
+            return t[0], t[1], t[2], t != orig
+
+    # Sans annexe : intérêts = plus petit des trois (souvent vrai 2072) si une seule permutation le vérifie
+    vals = sorted({round(x, 2) for x in (fc, ie, rn)})
+    ie_min_candidates = [tr for tr in uniq if abs(tr[1] - vals[0]) <= 1e-6]
+    if len(ie_min_candidates) == 1:
+        t = ie_min_candidates[0]
+        return t[0], t[1], t[2], t != orig
+    if len(uniq) == 1:
+        t = uniq[0]
+        return t[0], t[1], t[2], t != orig
+    t = uniq[0]
+    return t[0], t[1], t[2], t != orig
 
 
 def _extract_2072_totals_from_quote_part_blocks(text: str) -> dict[str, float]:
@@ -1732,6 +1819,14 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             window_lines=10,
             min_amount=50.0,
         )
+    strict_fc_17_18 = _extract_2072_amount_from_ligne_17_18_line(scan_text)
+    if strict_fc_17_18 is not None:
+        if frais_hors_interets is None or (
+            isinstance(frais_hors_interets, (int, float))
+            and isinstance(revenus_bruts, (int, float))
+            and float(frais_hors_interets) < float(revenus_bruts) * 0.25
+        ):
+            frais_hors_interets = strict_fc_17_18
     interets = None
     interets_source = "missing"
     # Priorité aux lignes qui commencent explicitement par "Intérêts d'emprunts"
@@ -1939,12 +2034,21 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             elif revenu_net is None and associes_totals["revenu_net_foncier"] != 0:
                 revenu_net = associes_totals["revenu_net_foncier"]
 
-    # Anti-permutation guardrail for shifted OCR forms (FC/IE/RN can be swapped).
+    # Anti-permutation: arithmetic alone is ambiguous; prefer annex totals, else FC=max / IE=min.
+    annex_for_resolver: dict[str, float] | None = None
+    if associes_blocks_are_coherent:
+        annex_for_resolver = {
+            **associes_totals,
+            "revenus_bruts": float(revenus_bruts)
+            if isinstance(revenus_bruts, (int, float))
+            else float(associes_totals.get("revenus_bruts") or 0.0),
+        }
     fixed_fc, fixed_ie, fixed_rn, perm_fixed = _resolve_2072_triplet_permutation(
         float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else None,
         float(frais_hors_interets) if isinstance(frais_hors_interets, (int, float)) else None,
         float(interets) if isinstance(interets, (int, float)) else None,
         float(revenu_net) if isinstance(revenu_net, (int, float)) else None,
+        annex_ref=annex_for_resolver,
     )
     if perm_fixed:
         logger.warning(
