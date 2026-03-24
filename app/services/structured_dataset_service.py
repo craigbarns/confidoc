@@ -350,6 +350,22 @@ def _pick_total_value_from_tokens(tokens: list[float]) -> float | None:
     return float(tokens[0])
 
 
+def _extract_total_general_from_line(
+    text: str, keyword_regex: str, *, min_amount: float = 100.0
+) -> tuple[float | None, str]:
+    """Extract total from explicit TOTAL GENERAL line, preferring N-column value."""
+    pat_kw = re.compile(keyword_regex, re.IGNORECASE)
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or not pat_kw.search(line):
+            continue
+        tokens = [v for v in _extract_line_amount_tokens(line) if abs(v) >= min_amount]
+        picked = _pick_total_value_from_tokens(tokens)
+        if isinstance(picked, float):
+            return picked, "fallback:total_general_line_token_heuristic"
+    return None, "missing"
+
+
 def _extract_financial_amount_for_label_wide(
     text: str,
     label_regex: str,
@@ -753,6 +769,34 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         total_passif, total_passif_src = _extract_amount_from_lines_with_keyword(
             "\n".join(text.splitlines()[-260:]), r"total.{0,12}passif", min_amount=100.0
         )
+    # Strong hint on plaquettes: "TOTAL GENERAL ACTIF/PASSIF" lines.
+    tg_actif, tg_actif_src = _extract_total_general_from_line(
+        text, r"total\s+g[ée]n[ée]ral.{0,16}actif", min_amount=100.0
+    )
+    tg_passif, tg_passif_src = _extract_total_general_from_line(
+        text, r"total\s+g[ée]n[ée]ral.{0,16}passif", min_amount=100.0
+    )
+    if isinstance(tg_passif, float):
+        total_passif = tg_passif
+        total_passif_src = tg_passif_src
+    if isinstance(tg_actif, float):
+        total_actif = tg_actif
+        total_actif_src = tg_actif_src
+    # On mixed-column plaquettes, ACTIF total-general line may expose brut/amort/net.
+    # PASSIF total-general token is usually the most stable year-N target.
+    if isinstance(total_actif, (int, float)) and isinstance(total_passif, (int, float)):
+        gap = abs(float(total_actif) - float(total_passif))
+        tol = max(500.0, abs(float(total_passif)) * 0.03)
+        if gap > tol and isinstance(tg_passif, float):
+            total_actif = float(total_passif)
+            total_actif_src = "fallback:align_actif_to_total_general_passif"
+    # If one side missing and explicit total general exists on the other side, align.
+    if total_actif is None and isinstance(total_passif, (int, float)):
+        total_actif = float(total_passif)
+        total_actif_src = "fallback:total_general_passif_align_actif"
+    if total_passif is None and isinstance(total_actif, (int, float)):
+        total_passif = float(total_actif)
+        total_passif_src = "fallback:total_general_actif_align_passif"
     # Column-aware fallback for plaquettes: keep independent line tokens (avoid N/N-1 concat).
     actif_tokens = _extract_amount_tokens_for_keyword_lines(
         text,
@@ -824,6 +868,13 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     if total_passif is None and isinstance(total_actif, (int, float)):
         total_passif = float(total_actif)
         total_passif_src = "fallback:actif_equals_passif"
+    # Final safeguard: on plaquette totals, keep bilan balanced when passif total-general is explicit.
+    if isinstance(total_actif, (int, float)) and isinstance(total_passif, (int, float)):
+        final_gap = abs(float(total_actif) - float(total_passif))
+        final_tol = max(500.0, abs(float(total_passif)) * 0.03)
+        if final_gap > final_tol and "total_general" in str(total_passif_src):
+            total_actif = float(total_passif)
+            total_actif_src = "fallback:final_align_actif_to_passif_total_general_src"
 
     capitaux_propres, capitaux_propres_src = _extract_first_amount_with_source(
         text,
