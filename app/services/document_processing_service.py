@@ -18,7 +18,7 @@ from app.models.llm_suggestion import LlmSuggestion
 from app.services.anonymization_service import (
     anonymize_text,
     classify_document_type,
-    extract_text_from_file,
+    extract_text_from_file_with_meta,
 )
 
 logger = get_logger(__name__)
@@ -146,11 +146,11 @@ async def build_anonymization_preview(
     file_content: bytes,
     profile: str = "moderate",
     document_type: str = "auto",
-) -> tuple[str, list[dict], str]:
+) -> tuple[str, list[dict], str, dict[str, Any]]:
     """Compute anonymization preview and persist versions/detections.
 
     Returns:
-        (preview_text, merged_detections, effective_document_type)
+        (preview_text, merged_detections, effective_document_type, extraction_meta)
     """
     settings = get_settings()
 
@@ -158,8 +158,11 @@ async def build_anonymization_preview(
     document.status = DocumentStatus.PROCESSING
     await db.flush()
 
-    # 2) Extract text from file
-    original_text = extract_text_from_file(file_content, document.extension) or ""
+    # 2) Extract text from file (+ extraction metadata for observability)
+    original_text, extraction_meta = extract_text_from_file_with_meta(
+        file_content, document.extension
+    )
+    original_text = original_text or ""
 
     llm_detections: list[dict] = []
     llm_req_obj: LlmRequest | None = None
@@ -269,4 +272,4 @@ async def build_anonymization_preview(
         detections=len(merged),
     )
 
-    return preview_text, merged, effective_type
+    return preview_text, merged, effective_type, extraction_meta

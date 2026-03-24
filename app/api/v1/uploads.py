@@ -159,12 +159,14 @@ async def _upload_document_body(
 
     if auto_anonymize:
         try:
-            preview_text, detections, effective_type = await build_anonymization_preview(
+            preview_text, detections, effective_type, extraction_meta = (
+                await build_anonymization_preview(
                 db=db,
                 document=document,
                 file_content=content,
                 profile=profile,
                 document_type=document_type,
+            )
             )
             await db.commit()
             # Après commit, Document peut être expiré : recharger avant lecture des attributs.
@@ -175,6 +177,7 @@ async def _upload_document_body(
                 "effective_type": effective_type,
                 "detections_count": len(detections or []),
                 "preview_excerpt": excerpt,
+                "extraction_meta": extraction_meta,
             })
         except Exception as exc:
             await db.rollback()

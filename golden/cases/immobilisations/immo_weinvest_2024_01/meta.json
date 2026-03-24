@@ -1,0 +1,8 @@
+{
+  "id": "immo_weinvest_2024_01",
+  "requested_doc_type": "etat_immobilisations",
+  "source_filename": "etat_immobilisations_2024-12-31_weinvest.pdf",
+  "tags": ["real", "cabinet", "clean", "SCI", "2024", "immobilisations"],
+  "notes": "Etat des immobilisations WEINVEST au 31/12/2024 (extracteur dedie).",
+  "active": true
+}

@@ -1,0 +1,21 @@
+Etat des immobilisations
+WEIN - SCI WEINVEST
+Au 31/12/2024
+
+Valeur
+Amortissable
+VNC Debut
+Amort. Debut
+Amort.
+Amort.
+Cumule
+VNC Fin
+
+Total Amortissement lineaire : 20 060,24
+Total Amortissement degressif : 0,00
+Total tous comptes
+455 683,09
+384 083,09
+418 595,96
+37 087,13
+20 060,24

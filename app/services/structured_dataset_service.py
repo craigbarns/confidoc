@@ -77,6 +77,18 @@ def classify_doc_type_scored(
             ),
             2,
         ),
+        (
+            "etat_immobilisations",
+            (
+                "etat des immobilisations",
+                "tableau des immobilisations",
+                "immobilisations",
+                "amortissements",
+                "valeur nette comptable",
+                "vnc",
+            ),
+            3,
+        ),
         ("fiscal_2044", ("2044", "revenu foncier", "déficit foncier", "deficit foncier"), 2),
         ("bilan", ("bilan", "total actif", "total passif", "capitaux propres"), 2),
         (
@@ -262,6 +274,82 @@ def _extract_amount_from_lines_with_keyword(
     return None, "missing"
 
 
+def _extract_line_amount_tokens(line: str) -> list[float]:
+    """Extract independent numeric tokens from one OCR line (avoid merged columns)."""
+    vals: list[float] = []
+    for m in re.finditer(
+        (
+            r"(-?[0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3}){2}(?![ \u00a0][0-9Oo]{3})(?:[.,][0-9Oo]{2})?"
+            r"|-?[0-9Oo]{1,3}[ \u00a0][0-9Oo]{3}(?:[.,][0-9Oo]{2})?"
+            r"|-?[0-9Oo]{3,}(?:[.,][0-9Oo]{2})?)"
+        ),
+        line,
+        flags=re.IGNORECASE,
+    ):
+        v = _clean_amount_candidate(_to_float_fr(m.group(1)))
+        if isinstance(v, float):
+            vals.append(v)
+    return vals
+
+
+def _extract_first_amount_token_from_keyword_line(
+    text: str,
+    keyword_regex: str,
+    *,
+    min_amount: float = THRESHOLDS["amount_min_default"],
+    max_lines: int = 8,
+) -> tuple[float | None, str]:
+    """Pick the first plausible amount token on a keyword line (year N before N-1)."""
+    pat_kw = re.compile(keyword_regex, re.IGNORECASE)
+    seen = 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or not pat_kw.search(line):
+            continue
+        seen += 1
+        tokens = [v for v in _extract_line_amount_tokens(line) if abs(v) >= min_amount]
+        if tokens:
+            return tokens[0], "fallback:line_keyword_first_token"
+        if seen >= max_lines:
+            break
+    return None, "missing"
+
+
+def _extract_amount_tokens_for_keyword_lines(
+    text: str,
+    keyword_regex: str,
+    *,
+    min_amount: float = THRESHOLDS["amount_min_default"],
+    max_lines: int = 5,
+) -> list[float]:
+    """Collect amount tokens on lines matching a keyword regex."""
+    pat_kw = re.compile(keyword_regex, re.IGNORECASE)
+    out: list[float] = []
+    seen = 0
+    for raw in text.splitlines():
+        line = raw.strip()
+        if not line or not pat_kw.search(line):
+            continue
+        seen += 1
+        out.extend([v for v in _extract_line_amount_tokens(line) if abs(v) >= min_amount])
+        if seen >= max_lines:
+            break
+    return out
+
+
+def _pick_total_value_from_tokens(tokens: list[float]) -> float | None:
+    """Heuristic for balance lines with multiple columns (N, N-1, and sometimes brut/amort)."""
+    if not tokens:
+        return None
+    if len(tokens) >= 4:
+        # Typical actif pattern: brut, amort, net(N), net(N-1).
+        return float(tokens[-2])
+    if len(tokens) == 3:
+        return float(tokens[1])
+    # Typical passif pattern: N then N-1.
+    return float(tokens[0])
+
+
 def _extract_financial_amount_for_label_wide(
     text: str,
     label_regex: str,
@@ -436,6 +524,9 @@ def _extract_first_int_from_patterns(text: str, patterns: list[str]) -> float | 
 def _clean_amount_candidate(value: float | None) -> float | None:
     """Reject numeric noise for business amounts (years, form IDs, zip codes, compact dates)."""
     if value is None:
+        return None
+    # Hard cap to reject merged multi-column OCR tokens (e.g. "340377359429").
+    if abs(value) > THRESHOLDS["amount_abs_hard_cap"]:
         return None
     iv = int(value)
     if abs(value - iv) < 1e-6:
@@ -662,6 +753,42 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         total_passif, total_passif_src = _extract_amount_from_lines_with_keyword(
             "\n".join(text.splitlines()[-260:]), r"total.{0,12}passif", min_amount=100.0
         )
+    # Column-aware fallback for plaquettes: keep independent line tokens (avoid N/N-1 concat).
+    actif_tokens = _extract_amount_tokens_for_keyword_lines(
+        text,
+        r"total\s+g[ée]n[ée]ral.{0,14}actif|total.{0,10}actif",
+        min_amount=100.0,
+    )
+    passif_tokens = _extract_amount_tokens_for_keyword_lines(
+        text,
+        r"total\s+g[ée]n[ée]ral.{0,14}passif|total.{0,10}passif",
+        min_amount=100.0,
+    )
+    actif_picked = _pick_total_value_from_tokens(actif_tokens)
+    passif_picked = _pick_total_value_from_tokens(passif_tokens)
+    common_totals = sorted({int(round(a)) for a in actif_tokens} & {int(round(p)) for p in passif_tokens})
+    if common_totals:
+        aligned_total = float(common_totals[-1])
+        total_actif = aligned_total
+        total_passif = aligned_total
+        total_actif_src = "fallback:aligned_total_actif_passif_common_token"
+        total_passif_src = "fallback:aligned_total_actif_passif_common_token"
+    elif isinstance(actif_picked, float) and isinstance(passif_picked, float):
+        # Both lines resolved: prefer explicit N-column values over global regex grabs.
+        if abs(actif_picked - passif_picked) <= max(500.0, abs(passif_picked) * 0.03):
+            total_actif = actif_picked
+            total_passif = passif_picked
+            total_actif_src = "fallback:aligned_total_actif_token_heuristic"
+            total_passif_src = "fallback:aligned_total_passif_token_heuristic"
+    else:
+        if total_actif is None:
+            if isinstance(actif_picked, float):
+                total_actif = actif_picked
+                total_actif_src = "fallback:actif_total_token_heuristic"
+        if total_passif is None:
+            if isinstance(passif_picked, float):
+                total_passif = passif_picked
+                total_passif_src = "fallback:passif_total_token_heuristic"
     # Plaquettes OCR bruitées: quand les libellés "total actif/passif" sont cassés,
     # le total général apparaît souvent au moins deux fois (actif + passif).
     if total_actif is None or total_passif is None:
@@ -720,6 +847,12 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 capitaux_propres, capitaux_propres_src = w, src_hint
                 break
     if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _extract_first_amount_token_from_keyword_line(
+            text,
+            r"capitaux?\s+propres|situation\s+nette|fonds?\s+propres",
+            min_amount=100.0,
+        )
+    if capitaux_propres is None:
         capitaux_propres, capitaux_propres_src = _extract_amount_after_keyword_multiline(
             "\n".join(text.splitlines()[-320:]),
             r"capitaux.{0,12}propres|fonds.{0,12}propres|ressources.{0,12}propres",
@@ -750,6 +883,12 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         text, r"dettes?\s+financi", min_amount=50.0
     )
     if dettes_fin_val is None:
+        dettes_fin_val, _ = _extract_first_amount_token_from_keyword_line(
+            text,
+            r"dettes?\s+financi|emprunts?\s+et\s+dettes?",
+            min_amount=50.0,
+        )
+    if dettes_fin_val is None:
         dettes_fin_val = _extract_first_amount_from_patterns(
             text,
             [
@@ -764,6 +903,12 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     dettes_four_val = _extract_financial_amount_for_label(
         text, r"dettes?\s+fournisseurs?", min_amount=50.0
     )
+    if dettes_four_val is None:
+        dettes_four_val, _ = _extract_first_amount_token_from_keyword_line(
+            text,
+            r"dettes?\s+fournisseurs?|fournisseurs?",
+            min_amount=50.0,
+        )
     if dettes_four_val is None:
         dettes_four_val = _extract_first_amount_from_patterns(
             text,
@@ -827,6 +972,12 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         ],
         min_amount=50.0,
     )
+    if resultat_exercice is None:
+        resultat_exercice, resultat_exercice_src = _extract_first_amount_token_from_keyword_line(
+            text,
+            r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice|perte",
+            min_amount=50.0,
+        )
 
     return {
         **_extract_common_fields(text),
@@ -1669,6 +1820,85 @@ def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
     }
 
 
+def _extract_etat_immobilisations(text: str) -> dict[str, dict[str, Any]]:
+    total_brut, total_brut_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:total_brut", r"total.{0,12}brut"),
+            ("label:valeur_brute", r"valeur.{0,12}brute"),
+            ("label:immobilisations_brutes", r"immobilisations?.{0,12}brutes?"),
+        ],
+        min_amount=100.0,
+    )
+    total_amort, total_amort_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:total_amortissements", r"total.{0,12}amortissements?"),
+            ("label:amortissements_cumules", r"amortissements?.{0,15}cumul"),
+            ("label:depreciations", r"d[ée]pr[ée]ciations?"),
+        ],
+        min_amount=100.0,
+    )
+    if total_amort is None:
+        amort_candidates: list[float] = []
+        for raw in text.splitlines():
+            line = raw.strip()
+            if not re.search(r"total\s+amortissement", line, re.IGNORECASE):
+                continue
+            nums = _extract_line_amount_tokens(line)
+            for n in nums:
+                if abs(float(n)) >= 100.0:
+                    amort_candidates.append(float(n))
+        if amort_candidates:
+            total_amort = max(amort_candidates)
+            total_amort_src = "fallback:max_total_amortissement_line"
+    total_net, total_net_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:total_net", r"total.{0,12}net"),
+            ("label:valeur_nette_comptable", r"valeur.{0,12}nette.{0,12}comptable"),
+            ("label:vnc", r"\bvnc\b"),
+        ],
+        min_amount=100.0,
+    )
+    if total_brut is None or total_net is None:
+        lines = text.splitlines()
+        for i, raw in enumerate(lines):
+            if "total tous comptes" not in raw.lower():
+                continue
+            vals: list[float] = []
+            for j in range(i + 1, min(len(lines), i + 9)):
+                v = _to_float_fr(lines[j].strip())
+                if isinstance(v, float) and abs(v) >= 1.0:
+                    vals.append(float(v))
+            if vals:
+                if total_brut is None:
+                    total_brut = vals[0]
+                    total_brut_src = "fallback:total_tous_comptes_first_value"
+                if total_net is None:
+                    # Last numeric value is often the closing VNC on these exports.
+                    total_net = vals[-1]
+                    total_net_src = "fallback:total_tous_comptes_last_value"
+                break
+    if total_net is None and isinstance(total_brut, (int, float)) and isinstance(total_amort, (int, float)):
+        cand = float(total_brut) - float(total_amort)
+        if cand >= 0:
+            total_net = cand
+            total_net_src = "fallback:brut_minus_amortissements"
+    return {
+        **_extract_common_fields(text),
+        "total_brut_immobilisations": _field(
+            total_brut, 0.84 if total_brut is not None else 0.0, total_brut_src
+        ),
+        "total_amortissements": _field(
+            total_amort, 0.84 if total_amort is not None else 0.0, total_amort_src
+        ),
+        "total_net_immobilisations": _field(
+            total_net, 0.84 if total_net is not None else 0.0, total_net_src
+        ),
+    }
+
+
 def _extract_releve_bancaire_operations(text: str) -> list[dict[str, Any]]:
     ops: list[dict[str, Any]] = []
     for raw in text.splitlines():
@@ -1970,6 +2200,48 @@ def _quality_liasse_is_simplifiee(fields: dict[str, dict[str, Any]]) -> dict[str
         "ready_for_ai_core": ready_for_ai_core,
         "quality_flags": sorted(set(flags)),
         "liasse_balance_gap": round(balance_gap, 2) if balance_gap is not None else None,
+    }
+
+
+def _quality_etat_immobilisations(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    base = _quality(fields)
+    critical = [
+        "total_brut_immobilisations",
+        "total_amortissements",
+        "total_net_immobilisations",
+    ]
+    critical_missing = [k for k in critical if fields.get(k, {}).get("value") in (None, "", [])]
+    brut = fields.get("total_brut_immobilisations", {}).get("value")
+    amort = fields.get("total_amortissements", {}).get("value")
+    net = fields.get("total_net_immobilisations", {}).get("value")
+    coh_ok = False
+    if isinstance(brut, (int, float)) and isinstance(amort, (int, float)) and isinstance(net, (int, float)):
+        expected = float(brut) - float(amort)
+        gap = abs(float(net) - expected)
+        tol = max(500.0, abs(float(net)) * 0.04)
+        coh_ok = gap <= tol
+    # Pragmatic core: either coherent full triplet, or at least amortissements + one global total.
+    has_min_pair = (
+        fields.get("total_amortissements", {}).get("value") not in (None, "", [])
+        and (
+            fields.get("total_brut_immobilisations", {}).get("value") not in (None, "", [])
+            or fields.get("total_net_immobilisations", {}).get("value") not in (None, "", [])
+        )
+    )
+    ready_for_ai_core = (not critical_missing and coh_ok) or has_min_pair
+    ready_for_ai = ready_for_ai_core and base["coverage_ratio"] >= 0.7
+    flags = list(base.get("quality_flags", []))
+    if critical_missing:
+        flags.append("critical_fields_missing")
+    if not critical_missing and not coh_ok:
+        flags.append("immobilisations_balance_mismatch")
+    return {
+        **base,
+        "critical_missing_fields": critical_missing,
+        "needs_review": not ready_for_ai_core,
+        "ready_for_ai": ready_for_ai,
+        "ready_for_ai_core": ready_for_ai_core,
+        "quality_flags": sorted(set(flags)),
     }
 
 
@@ -2306,11 +2578,25 @@ def _extractor_releve_bancaire(
     )
 
 
+def _extractor_etat_immobilisations(
+    source_text: str, anonymized_text: str
+) -> StructuredExtractionResult:
+    fields = _extract_etat_immobilisations(source_text)
+    tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
+    return StructuredExtractionResult(
+        fields=fields,
+        tables=tables,
+        quality=_quality_etat_immobilisations(fields),
+        extractor_name="extractor_etat_immobilisations",
+    )
+
+
 EXTRACTOR_REGISTRY_V1: dict[str, Any] = {
     "bilan": _extractor_bilan,
     "compte_resultat": _extractor_compte_resultat,
     "fiscal_2072": _extractor_fiscal_2072,
     "releve_bancaire": _extractor_releve_bancaire,
+    "etat_immobilisations": _extractor_etat_immobilisations,
     "statuts_societe": _extractor_statuts_societe,
 }
 
@@ -2440,6 +2726,9 @@ def build_structured_dataset(
         classify_doc_type_scored(full_text_for_routing, original_filename)
     )
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
+    # Backward compatibility with older naming used in draft golden cases.
+    if doc_type == "immobilisations":
+        doc_type = "etat_immobilisations"
 
     source_text = full_text_for_routing
     text_segmentation: dict[str, Any] = {}

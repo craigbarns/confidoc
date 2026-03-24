@@ -738,7 +738,7 @@ async def anonymize_document(
     file_content = _read_file_or_404(document)
 
     try:
-        preview_text, detections, effective_type = await build_anonymization_preview(
+        preview_text, detections, effective_type, extraction_meta = await build_anonymization_preview(
             db=db,
             document=document,
             file_content=file_content,
@@ -762,7 +762,11 @@ async def anonymize_document(
         status=document.status.value,
         detections_count=len(detections),
         detections=[_detection_item_to_response(item) for item in detections],
-        preview_text=f"[type={effective_type}|profile={profile}]\n\n{preview_text}",
+        preview_text=(
+            f"[type={effective_type}|profile={profile}"
+            f"|extract={extraction_meta.get('method','unknown')}"
+            f"|ocr={extraction_meta.get('ocr_engine') or 'none'}]\n\n{preview_text}"
+        ),
     )
 
 

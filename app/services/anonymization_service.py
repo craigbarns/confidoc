@@ -1,5 +1,6 @@
 """ConfiDoc Backend — Text extraction and anonymization service (v2)."""
 
+from functools import lru_cache
 import re
 import unicodedata
 from typing import Any
@@ -31,6 +32,14 @@ try:
     HAS_MD_EXTRACTOR = True
 except ImportError:
     HAS_MD_EXTRACTOR = False
+
+try:
+    from doctr.io import DocumentFile as DoctrDocumentFile
+    from doctr.models import ocr_predictor as doctr_ocr_predictor
+
+    HAS_DOCTR = True
+except ImportError:
+    HAS_DOCTR = False
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -281,6 +290,79 @@ def _ocr_image(img: "Image.Image", lang: str = "fra+eng") -> str:
     return str(pytesseract.image_to_string(processed, lang=lang, config=config)).strip()
 
 
+@lru_cache(maxsize=1)
+def _get_doctr_model():
+    if not HAS_DOCTR:
+        raise RuntimeError("docTR not installed")
+    return doctr_ocr_predictor(pretrained=True)
+
+
+def _ocr_with_doctr_pdf(content: bytes, page_markers: bool) -> str:
+    """Run docTR OCR on a PDF and return page-concatenated text."""
+    model = _get_doctr_model()
+    doc = DoctrDocumentFile.from_pdf(content)
+    result = model(doc)
+    payload = result.export()
+    pages_out: list[str] = []
+    for i, page in enumerate(payload.get("pages", []), start=1):
+        lines: list[str] = []
+        for block in page.get("blocks", []):
+            for line in block.get("lines", []):
+                words = [w.get("value", "") for w in line.get("words", []) if w.get("value")]
+                if words:
+                    lines.append(" ".join(words))
+        page_text = "\n".join(lines).strip()
+        if page_markers:
+            pages_out.append(f"---PAGE {i}---\n{page_text}")
+        else:
+            pages_out.append(page_text)
+    return "\n".join(pages_out).strip()
+
+
+def _score_ocr_text_candidate(text: str) -> int:
+    """Simple robustness score to pick better OCR text candidate."""
+    if not text:
+        return 0
+    words = len(text.split())
+    digits = len(re.findall(r"\d", text))
+    tables = len(re.findall(r"\b(total|résultat|resultat|passif|actif|revenus?)\b", text, re.IGNORECASE))
+    return (words * 2) + digits + (tables * 10)
+
+
+def _extract_pdf_text_via_ocr_engines(
+    content: bytes, *, dpi: int, lang: str, page_markers: bool, engine: str
+) -> tuple[str, str]:
+    """Extract OCR text with selected strategy (tesseract/doctr/auto)."""
+    candidates: list[tuple[str, str]] = []
+
+    # Tesseract candidate
+    if engine in ("auto", "tesseract") and HAS_OCR:
+        try:
+            images = convert_from_bytes(content, dpi=dpi)
+            chunks: list[str] = []
+            for i, img in enumerate(images):
+                chunk = _ocr_image(img, lang=lang)
+                chunks.append(f"---PAGE {i + 1}---\n{chunk}" if page_markers else chunk)
+            candidates.append(("tesseract", "\n".join(chunks).strip()))
+        except Exception as exc:
+            logger.warning("ocr_tesseract_failed", extension="pdf", error=str(exc))
+
+    # docTR candidate
+    if engine in ("auto", "doctr") and HAS_DOCTR:
+        try:
+            txt = _ocr_with_doctr_pdf(content, page_markers=page_markers)
+            candidates.append(("doctr", txt))
+        except Exception as exc:
+            logger.warning("ocr_doctr_failed", extension="pdf", error=str(exc))
+
+    if not candidates:
+        return "", ""
+
+    method, best_text = max(candidates, key=lambda c: _score_ocr_text_candidate(c[1]))
+    logger.info("document_extraction", method=f"ocr_{method}_pdf", extension="pdf")
+    return best_text, method
+
+
 def classify_document_type(text: str, filename: str = "") -> str:
     """Heuristic document-type classification (v2)."""
     source = f"{filename}\n{text[:6000]}".lower()
@@ -303,11 +385,27 @@ def classify_document_type(text: str, filename: str = "") -> str:
 
 def extract_text_from_file(content: bytes, extension: str) -> str:
     """Extract text from uploaded bytes (PDF first, images later) preserving structural layout."""
-    return postgres_safe_text(_extract_text_from_file_raw(content, extension))
+    text, _meta = extract_text_from_file_with_meta(content, extension)
+    return text
 
 
-def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
+def extract_text_from_file_with_meta(content: bytes, extension: str) -> tuple[str, dict[str, Any]]:
+    """Extract text + debug metadata about extraction/OCR engine selection."""
+    extraction_meta: dict[str, Any] = {
+        "extension": extension.lower().strip("."),
+        "method": "unknown",
+        "ocr_engine": None,
+        "ocr_strategy": None,
+    }
+    text = _extract_text_from_file_raw(content, extension, extraction_meta=extraction_meta)
+    return postgres_safe_text(text), extraction_meta
+
+
+def _extract_text_from_file_raw(
+    content: bytes, extension: str, extraction_meta: dict[str, Any] | None = None
+) -> str:
     extension = extension.lower().strip(".")
+    meta = extraction_meta if isinstance(extraction_meta, dict) else {}
 
     if extension == "pdf":
         ext_text = ""
@@ -362,7 +460,7 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
                 pass
 
         # If text is very short (< 10 words) or empty, maybe it's a scan — try OCR fallback
-        if len(ext_text.split()) < 10 and HAS_OCR:
+        if len(ext_text.split()) < 10:
             try:
                 from app.config import get_settings
 
@@ -370,22 +468,19 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
                 page_markers = bool(settings.PDF_PAGE_MARKERS)
                 ocr_dpi = getattr(settings, "OCR_DPI", 300)
                 ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
-                images = convert_from_bytes(content, dpi=ocr_dpi)
-                ocr_chunks = []
-                for i, img in enumerate(images):
-                    chunk = _ocr_image(img, lang=ocr_lang)
-                    if page_markers:
-                        ocr_chunks.append(f"---PAGE {i + 1}---\n{chunk}")
-                    else:
-                        ocr_chunks.append(chunk)
-                logger.info(
-                    "document_extraction",
-                    method="ocr_tesseract_pdf_enhanced",
-                    extension="pdf",
-                    pages=len(images),
+                ocr_engine = getattr(settings, "OCR_ENGINE", "auto")
+                ocr_text, selected_engine = _extract_pdf_text_via_ocr_engines(
+                    content,
                     dpi=ocr_dpi,
+                    lang=ocr_lang,
+                    page_markers=page_markers,
+                    engine=str(ocr_engine),
                 )
-                return "\n".join(ocr_chunks).strip()
+                if ocr_text:
+                    meta["method"] = "ocr_pdf_fallback"
+                    meta["ocr_strategy"] = str(ocr_engine)
+                    meta["ocr_engine"] = selected_engine
+                    return ocr_text
             except Exception as exc:
                 logger.warning(
                     "document_extraction",
@@ -395,6 +490,7 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
                 )
                 return ext_text
         
+        meta["method"] = "native_pdf_pymupdf"
         logger.info("document_extraction", method="native_pdf_pymupdf", extension="pdf")
         return ext_text
 
@@ -420,6 +516,8 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
                 except EOFError:
                     pass
                 if ocr_chunks:
+                    meta["method"] = "ocr_tesseract_tiff_enhanced"
+                    meta["ocr_engine"] = "tesseract"
                     logger.info(
                         "document_extraction",
                         method="ocr_tesseract_tiff_enhanced",
@@ -429,6 +527,8 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
                     return "\n".join(ocr_chunks).strip()
 
             result = _ocr_image(img, lang=ocr_lang)
+            meta["method"] = "ocr_tesseract_image_enhanced"
+            meta["ocr_engine"] = "tesseract"
             logger.info(
                 "document_extraction",
                 method="ocr_tesseract_image_enhanced",
@@ -438,6 +538,7 @@ def _extract_text_from_file_raw(content: bytes, extension: str) -> str:
         except Exception as exc:
             logger.warning("ocr_image_failed", extension=extension, error=str(exc))
 
+    meta["method"] = "fallback_plain_text_or_error"
     logger.warning("document_extraction", method="fallback_plain_text_or_error", extension=extension)
     # Plain text fallback
     try:

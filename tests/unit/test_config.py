@@ -98,6 +98,7 @@ def test_ocr_config_defaults():
     s = Settings()
     assert s.OCR_DPI == 300
     assert s.OCR_LANG == "fra+eng"
+    assert s.OCR_ENGINE == "auto"
     assert s.OCR_PREPROCESSING is True
 
 

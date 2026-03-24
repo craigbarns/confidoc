@@ -83,6 +83,8 @@ class Settings(BaseSettings):
     OCR_DPI: int = 300
     # Tesseract language(s). "fra+eng" detects both French and English text.
     OCR_LANG: str = "fra+eng"
+    # OCR engine strategy for scan fallback: auto|tesseract|doctr.
+    OCR_ENGINE: Literal["auto", "tesseract", "doctr"] = "auto"
     # Enable image preprocessing (deskew, denoise, contrast, binarize) before OCR.
     OCR_PREPROCESSING: bool = True
 

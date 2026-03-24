@@ -1,0 +1,14 @@
+[
+  {
+    "path": "golden/plaquette_annuelle_31122024_wemade.pdf",
+    "doc_type": "bilan"
+  },
+  {
+    "path": "golden/LIASSE FISCALE 2072 2024.PDF",
+    "doc_type": "fiscal_2072"
+  },
+  {
+    "path": "golden/etat_immobilisations_2024-12-31_weinvest.pdf",
+    "doc_type": "bilan"
+  }
+]
