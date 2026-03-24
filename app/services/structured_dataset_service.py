@@ -1307,6 +1307,24 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             capitaux_propres = cp_alt
             capitaux_propres_src = cp_alt_src
 
+    immobilisations_val = _extract_amount_for_label(text, r"immobilisations")
+    if immobilisations_val is None:
+        immobilisations_val, _ = _extract_amount_from_lines_with_keyword(
+            text, r"immobilisations?.{0,20}net", min_amount=100.0
+        )
+
+    creances_val = _extract_amount_for_label(text, r"créances|creances")
+    if creances_val is None:
+        creances_val, _ = _extract_amount_from_lines_with_keyword(
+            text, r"cr[ée]ances?.{0,20}clients?|clients?.{0,20}cr[ée]ances?", min_amount=100.0
+        )
+
+    disponibilites_val = _extract_amount_for_label(text, r"disponibilités|disponibilites")
+    if disponibilites_val is None:
+        disponibilites_val, _ = _extract_amount_from_lines_with_keyword(
+            text, r"disponibilit[ée]s?|banque|caisse", min_amount=100.0
+        )
+
     return {
         **_extract_common_fields(text),
         "total_actif": _field(
@@ -1316,15 +1334,19 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             total_passif, 0.87 if total_passif is not None else 0.0, total_passif_src
         ),
         "immobilisations": _field(
-            _extract_amount_for_label(text, r"immobilisations"), 0.78, "label:immobilisations"
+            immobilisations_val,
+            0.78 if immobilisations_val is not None else 0.0,
+            "fallback:immobilisations",
         ),
         "creances": _field(
-            _extract_amount_for_label(text, r"créances|creances"), 0.78, "label:creances"
+            creances_val,
+            0.78 if creances_val is not None else 0.0,
+            "fallback:creances",
         ),
         "disponibilites": _field(
-            _extract_amount_for_label(text, r"disponibilités|disponibilites"),
-            0.78,
-            "label:disponibilites",
+            disponibilites_val,
+            0.78 if disponibilites_val is not None else 0.0,
+            "fallback:disponibilites",
         ),
         "dettes_financieres": _field(
             dettes_fin_val, 0.76 if dettes_fin_val is not None else 0.0, "label:dettes financieres"
@@ -2442,15 +2464,20 @@ def _extract_generic_accounting_table(text: str) -> list[dict[str, Any]]:
         line = raw.strip()
         if not line:
             continue
-        code_match = re.search(r"^\s*(\d{3,8})\b", line)
+        # Accept code at start or embedded in OCR-fragmented lines.
+        code_match = re.search(r"\b(\d{3,8})\b", line)
         if not code_match:
             continue
-        amount_match = re.search(r"([0-9][0-9\s\u00a0.,]{1,30}(?:€|EUR)?)\s*$", line, re.IGNORECASE)
+        amount_match = re.search(
+            r"([0-9][0-9\s\u00a0.,]{1,40}(?:€|EUR)?)\s*$", line, re.IGNORECASE
+        )
+        if not amount_match:
+            continue
         records.append(
             {
                 "code": code_match.group(1),
-                "label": _norm_spaces(re.sub(r"^\s*\d{3,8}\s*", "", line)),
-                "amount": _to_float_fr(amount_match.group(1) if amount_match else None),
+                "label": _norm_spaces(re.sub(r"\b\d{3,8}\b", "", line, count=1)),
+                "amount": _to_float_fr(amount_match.group(1)),
             }
         )
     return records[:500]
