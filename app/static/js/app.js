@@ -623,6 +623,30 @@ async function apiUploadMultipart(path, formData) {
   }
 }
 
+async function diagnoseUploadConnectivity() {
+  // Best-effort network diagnosis to replace vague "transport failed" errors.
+  try {
+    const h = await fetch("/api/health", { method: "GET", cache: "no-store" });
+    if (!h.ok) return { kind: "backend_unhealthy", status: h.status };
+  } catch {
+    return { kind: "backend_unreachable" };
+  }
+
+  if (!accessToken) return { kind: "missing_token" };
+
+  try {
+    const me = await fetch("/api/v1/users/me", {
+      method: "GET",
+      cache: "no-store",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (me.status === 401 || me.status === 403) return { kind: "auth_expired", status: me.status };
+    return { kind: "ok", status: me.status };
+  } catch {
+    return { kind: "auth_check_failed" };
+  }
+}
+
 function formatApiDetail(data) {
   if (!data || data.detail == null) return "";
   const d = data.detail;
@@ -973,7 +997,16 @@ async function doUploadFile(file) {
       || lower.includes("network_error_upload")
       || lower.includes("aborted_upload")
     ) {
-      toast("Échec de transport navigateur pendant l'upload. Réessaie, puis recharge la page si besoin.", "error");
+      const diag = await diagnoseUploadConnectivity();
+      if (diag.kind === "backend_unreachable") {
+        toast("Backend injoignable depuis le navigateur. Vérifie la connexion puis réessaie.", "error");
+      } else if (diag.kind === "backend_unhealthy") {
+        toast(`Backend indisponible (health ${diag.status}). Réessaie dans 30 secondes.`, "error");
+      } else if (diag.kind === "auth_expired" || diag.kind === "missing_token") {
+        toast("Session expirée. Déconnecte-toi/reconnecte-toi puis réessaie l'upload.", "error");
+      } else {
+        toast("Échec de transport navigateur pendant l'upload. Réessaie, puis recharge la page.", "error");
+      }
     } else if (lower.includes("timeout_upload")) {
       toast("Upload trop long (timeout 120s). Réessaie avec un fichier plus léger.", "error");
     } else {
