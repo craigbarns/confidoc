@@ -1,0 +1,25 @@
+SCI ADAMA
+B 34 LES TERRASSES DE MAGALONE, 126 RUE AUGUSTIN AUBERT 13009 MARSEILLE
+Siret: 51242661000014
+Exercice clos le 31/12/2024
+BILAN - ACTIF
+===========================================
+ACTIF IMMOBILISE (I)
+  Capital souscrit non appelé: 310 664,59 €
+  TOTAL (I): 310 664,59 €
+ACTIF CIRCULANT (II)
+  Créances: 1 929,30 €
+  Disponibilités: 0,00 €
+  TOTAL (II): 1 929,30 €
+TOTAL GENERAL ACTIF (I+II): 312 593,89 €
+BILAN - PASSIF
+===========================================
+CAPITAUX PROPRES (I)
+  Capital: 1 042,73 €
+  TOTAL (I): 1 042,73 €
+DETTES (III)
+  Emprunts établissements de crédit: 190 241,85 €
+  Comptes courants associés: 116 722,72 €
+  Dettes fournisseurs: 4 586,59 €
+  TOTAL (III): 311 551,16 €
+TOTAL GENERAL PASSIF (I+II+III): 312 593,89 €

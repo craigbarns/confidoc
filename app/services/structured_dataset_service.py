@@ -30,25 +30,60 @@ def classify_doc_type_scored(
     source = f"{filename}\n{text[:20000]}".lower()
 
     rules: list[tuple[str, tuple[str, ...], int]] = [
-        ("statuts_societe", (
-            "statuts", "société à responsabilité limitée", "société par actions simplifiée",
-            "forme juridique", "capital social", "siège social", "siege social",
-            "objet social", "durée", "duree", "immatriculée au rcs", "immatriculee au rcs",
-            "greffe",
-        ), 3),
-        ("liasse_is_simplifiee", (
-            "2065", "2065-sd", "2033-a", "2033-b",
-            "bilan simplifié", "bilan simplifie",
-            "compte de résultat simplifié", "compte de resultat simplifie",
-            "régime simplifié d'imposition", "regime simplifie d'imposition",
-        ), 3),
-        ("fiscal_2072", (
-            "2072", "2072-an1", "2072-an2", "revenus fonciers",
-            "associés revenus fonciers", "associes revenus fonciers",
-        ), 2),
+        (
+            "statuts_societe",
+            (
+                "statuts",
+                "société à responsabilité limitée",
+                "société par actions simplifiée",
+                "forme juridique",
+                "capital social",
+                "siège social",
+                "siege social",
+                "objet social",
+                "durée",
+                "duree",
+                "immatriculée au rcs",
+                "immatriculee au rcs",
+                "greffe",
+            ),
+            3,
+        ),
+        (
+            "liasse_is_simplifiee",
+            (
+                "2065",
+                "2065-sd",
+                "2033-a",
+                "2033-b",
+                "bilan simplifié",
+                "bilan simplifie",
+                "compte de résultat simplifié",
+                "compte de resultat simplifie",
+                "régime simplifié d'imposition",
+                "regime simplifie d'imposition",
+            ),
+            3,
+        ),
+        (
+            "fiscal_2072",
+            (
+                "2072",
+                "2072-an1",
+                "2072-an2",
+                "revenus fonciers",
+                "associés revenus fonciers",
+                "associes revenus fonciers",
+            ),
+            2,
+        ),
         ("fiscal_2044", ("2044", "revenu foncier", "déficit foncier", "deficit foncier"), 2),
         ("bilan", ("bilan", "total actif", "total passif", "capitaux propres"), 2),
-        ("compte_resultat", ("compte de résultat", "compte de resultat", "résultat net", "resultat net"), 2),
+        (
+            "compte_resultat",
+            ("compte de résultat", "compte de resultat", "résultat net", "resultat net"),
+            2,
+        ),
         ("releve_bancaire", ("relevé bancaire", "releve bancaire", "iban", "solde", "virement"), 2),
         ("facture_fournisseur", ("facture fournisseur", "facture", "tva", "ht", "ttc"), 2),
     ]
@@ -70,14 +105,21 @@ def classify_doc_type_scored(
 
     if best_type.startswith("unknown_"):
         # coarse unknown buckets for safer downstream routing
-        if any(k in source for k in ("fiscal", "liasse", "impot", "tva", "2065", "2033", "2044", "2072")):
+        if any(
+            k in source
+            for k in ("fiscal", "liasse", "impot", "tva", "2065", "2033", "2044", "2072")
+        ):
             best_type = "unknown_tax"
-        elif any(k in source for k in ("bilan", "compte", "journal", "écriture", "ecriture", "pcg")):
+        elif any(
+            k in source for k in ("bilan", "compte", "journal", "écriture", "ecriture", "pcg")
+        ):
             best_type = "unknown_accounting"
         else:
             best_type = "unknown_other"
 
-    confidence = min(0.99, 0.45 + (best_score * 0.15)) if not best_type.startswith("unknown_") else 0.35
+    confidence = (
+        min(0.99, 0.45 + (best_score * 0.15)) if not best_type.startswith("unknown_") else 0.35
+    )
     reasons = [f"match:{h}" for h in best_hits][:10]
     if not reasons:
         reasons = ["no_strong_marker_match"]
@@ -157,8 +199,8 @@ def _iso_date_in_range(iso: str | None, start_iso: str | None, end_iso: str | No
         return False
 
 
-def _extract_amount_for_label(text: str, label_regex: str) -> float | None:
-    pat = rf"{label_regex}[^0-9\-]{{0,40}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
+def _extract_amount_for_label(text: str, label_regex: str, max_gap: int = 200) -> float | None:
+    pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
     return _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
 
 
@@ -166,9 +208,10 @@ def _extract_financial_amount_for_label(
     text: str,
     label_regex: str,
     min_amount: float = THRESHOLDS["amount_min_default"],
+    max_gap: int = 200,
 ) -> float | None:
     """Financial amount extractor with plausibility threshold (avoid index-like numbers)."""
-    value = _extract_amount_for_label(text, label_regex)
+    value = _extract_amount_for_label(text, label_regex, max_gap)
     if value is None:
         return None
     return value if abs(value) >= min_amount else None
@@ -178,9 +221,10 @@ def _extract_first_amount_from_patterns(
     text: str,
     patterns: list[str],
     min_amount: float = THRESHOLDS["amount_min_default"],
+    max_gap: int = 200,
 ) -> float | None:
     for pat in patterns:
-        val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount)
+        val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount, max_gap=max_gap)
         if val is not None:
             return val
     return None
@@ -190,9 +234,10 @@ def _extract_first_amount_with_source(
     text: str,
     patterns: list[tuple[str, str]],
     min_amount: float = THRESHOLDS["amount_min_default"],
+    max_gap: int = 200,
 ) -> tuple[float | None, str]:
     for source_hint, pat in patterns:
-        val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount)
+        val = _extract_financial_amount_for_label(text, pat, min_amount=min_amount, max_gap=max_gap)
         if val is not None:
             return val, source_hint
     return None, "missing"
@@ -258,7 +303,9 @@ def _extract_amount_after_keyword_multiline(
                 continue
             # Prefer last number on the line (typical table: label ... amount).
             candidates: list[float] = []
-            for m in re.finditer(r"([0-9Oo][0-9Oo \t\u00a0.,]{0,30})(?:\s*$|\s*€|\s*EUR)?", scan, re.IGNORECASE):
+            for m in re.finditer(
+                r"([0-9Oo][0-9Oo \t\u00a0.,]{0,30})(?:\s*$|\s*€|\s*EUR)?", scan, re.IGNORECASE
+            ):
                 v = _clean_amount_candidate(_to_float_fr(m.group(1)))
                 if isinstance(v, float) and abs(v) >= min_amount:
                     candidates.append(v)
@@ -431,7 +478,9 @@ def _looks_like_form_label(value: str | None) -> bool:
     if any(lbl in v for lbl in FORM_LABEL_BLACKLIST):
         return True
     # Reject obvious header-only fragments with almost no value signal
-    if re.search(r"\b(adresse|dénomination|denomination|nom|date|associ[ée]s?)\b", v) and not re.search(r"\d|_|[a-z]{3,}", v):
+    if re.search(
+        r"\b(adresse|dénomination|denomination|nom|date|associ[ée]s?)\b", v
+    ) and not re.search(r"\d|_|[a-z]{3,}", v):
         return True
     return False
 
@@ -513,6 +562,13 @@ def _field(value: Any, confidence: float, source_hint: str) -> dict[str, Any]:
         source_hint=source_hint,
         review_required=is_missing,
     ).as_dict()
+
+
+def _value(field_dict: dict[str, Any]) -> Any:
+    """Compat helper: return normalized field value from field dict."""
+    if not isinstance(field_dict, dict):
+        return None
+    return field_dict.get("value")
 
 
 def _extract_common_fields(text: str) -> dict[str, dict[str, Any]]:
@@ -609,6 +665,38 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         total_passif, total_passif_src = _extract_amount_from_lines_with_keyword(
             "\n".join(text.splitlines()[-260:]), r"total.{0,12}passif", min_amount=100.0
         )
+    # Plaquettes OCR bruitées: quand les libellés "total actif/passif" sont cassés,
+    # le total général apparaît souvent au moins deux fois (actif + passif).
+    if total_actif is None or total_passif is None:
+        amount_counter: dict[int, int] = {}
+        for m in re.findall(
+            r"([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+(?:[.,][0-9Oo]{2})?|[0-9Oo]{4,}(?:[.,][0-9Oo]{2})?)",
+            text,
+            flags=re.IGNORECASE,
+        ):
+            v = _clean_amount_candidate(_to_float_fr(m))
+            if not isinstance(v, float):
+                continue
+            if v < 1000.0 or v > 1_000_000_000.0:
+                continue
+            key = int(round(v))
+            amount_counter[key] = amount_counter.get(key, 0) + 1
+        duplicated = [(k, c) for k, c in amount_counter.items() if c >= 2]
+        if duplicated:
+            duplicated.sort(key=lambda x: (x[1], x[0]), reverse=True)
+            candidate = float(duplicated[0][0])
+            if total_actif is None:
+                total_actif = candidate
+                total_actif_src = "fallback:duplicated_total_amount"
+            if total_passif is None:
+                total_passif = candidate
+                total_passif_src = "fallback:duplicated_total_amount"
+    if total_actif is None and isinstance(total_passif, (int, float)):
+        total_actif = float(total_passif)
+        total_actif_src = "fallback:passif_equals_actif"
+    if total_passif is None and isinstance(total_actif, (int, float)):
+        total_passif = float(total_actif)
+        total_passif_src = "fallback:actif_equals_passif"
 
     capitaux_propres, capitaux_propres_src = _extract_first_amount_with_source(
         text,
@@ -658,7 +746,9 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 capitaux_propres, capitaux_propres_src = w, src_hint
                 break
 
-    dettes_fin_val = _extract_financial_amount_for_label(text, r"dettes?\s+financi", min_amount=50.0)
+    dettes_fin_val = _extract_financial_amount_for_label(
+        text, r"dettes?\s+financi", min_amount=50.0
+    )
     if dettes_fin_val is None:
         dettes_fin_val = _extract_first_amount_from_patterns(
             text,
@@ -671,7 +761,9 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             ],
             min_amount=50.0,
         )
-    dettes_four_val = _extract_financial_amount_for_label(text, r"dettes?\s+fournisseurs?", min_amount=50.0)
+    dettes_four_val = _extract_financial_amount_for_label(
+        text, r"dettes?\s+fournisseurs?", min_amount=50.0
+    )
     if dettes_four_val is None:
         dettes_four_val = _extract_first_amount_from_patterns(
             text,
@@ -694,9 +786,8 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         if dettes_fin_val is not None and dettes_four_val is not None:
             cand = float(total_passif) - float(dettes_fin_val) - float(dettes_four_val)
             s = float(dettes_fin_val) + float(dettes_four_val) + cand
-            if (
-                cand >= 100.0
-                and abs(s - float(total_passif)) <= max(500.0, abs(float(total_passif)) * 0.04)
+            if cand >= 100.0 and abs(s - float(total_passif)) <= max(
+                500.0, abs(float(total_passif)) * 0.04
             ):
                 capitaux_propres = cand
                 capitaux_propres_src = "fallback:passif_minus_dettes_fin_et_fournisseurs"
@@ -713,9 +804,9 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         cand = _to_float_fr(m_cp.group(1))
         if isinstance(cand, float) and abs(cand) >= 100.0:
             # Prefer block total over a single "capital:" line when it is clearly larger.
-            if (
-                capitaux_propres is None
-                or (isinstance(capitaux_propres, (int, float)) and float(cand) > float(capitaux_propres) * 1.5)
+            if capitaux_propres is None or (
+                isinstance(capitaux_propres, (int, float))
+                and float(cand) > float(capitaux_propres) * 1.5
             ):
                 capitaux_propres = cand
                 capitaux_propres_src = "label:block_total_capitaux_propres_i"
@@ -731,13 +822,31 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
 
     return {
         **_extract_common_fields(text),
-        "total_actif": _field(total_actif, 0.87 if total_actif is not None else 0.0, total_actif_src),
-        "total_passif": _field(total_passif, 0.87 if total_passif is not None else 0.0, total_passif_src),
-        "immobilisations": _field(_extract_amount_for_label(text, r"immobilisations"), 0.78, "label:immobilisations"),
-        "creances": _field(_extract_amount_for_label(text, r"créances|creances"), 0.78, "label:creances"),
-        "disponibilites": _field(_extract_amount_for_label(text, r"disponibilités|disponibilites"), 0.78, "label:disponibilites"),
-        "dettes_financieres": _field(dettes_fin_val, 0.76 if dettes_fin_val is not None else 0.0, "label:dettes financieres"),
-        "dettes_fournisseurs": _field(dettes_four_val, 0.76 if dettes_four_val is not None else 0.0, "label:dettes fournisseurs"),
+        "total_actif": _field(
+            total_actif, 0.87 if total_actif is not None else 0.0, total_actif_src
+        ),
+        "total_passif": _field(
+            total_passif, 0.87 if total_passif is not None else 0.0, total_passif_src
+        ),
+        "immobilisations": _field(
+            _extract_amount_for_label(text, r"immobilisations"), 0.78, "label:immobilisations"
+        ),
+        "creances": _field(
+            _extract_amount_for_label(text, r"créances|creances"), 0.78, "label:creances"
+        ),
+        "disponibilites": _field(
+            _extract_amount_for_label(text, r"disponibilités|disponibilites"),
+            0.78,
+            "label:disponibilites",
+        ),
+        "dettes_financieres": _field(
+            dettes_fin_val, 0.76 if dettes_fin_val is not None else 0.0, "label:dettes financieres"
+        ),
+        "dettes_fournisseurs": _field(
+            dettes_four_val,
+            0.76 if dettes_four_val is not None else 0.0,
+            "label:dettes fournisseurs",
+        ),
         "capitaux_propres": _field(
             capitaux_propres, 0.8 if capitaux_propres is not None else 0.0, capitaux_propres_src
         ),
@@ -879,12 +988,20 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
             0.86 if chiffre_affaires is not None else 0.0,
             chiffre_affaires_src if chiffre_affaires is not None else "label:chiffre affaires",
         ),
-        "autres_produits": _field(_extract_amount_for_label(text, r"autres?\s+produits"), 0.76, "label:autres produits"),
+        "autres_produits": _field(
+            _extract_amount_for_label(text, r"autres?\s+produits"), 0.76, "label:autres produits"
+        ),
         "charges_externes": _field(
             charges_externes, 0.76 if charges_externes is not None else 0.0, charges_externes_src
         ),
-        "impots_taxes": _field(_extract_amount_for_label(text, r"imp[oô]ts?\s+et\s+taxes"), 0.76, "label:impots taxes"),
-        "charges_financieres": _field(_extract_amount_for_label(text, r"charges?\s+financi"), 0.76, "label:charges financieres"),
+        "impots_taxes": _field(
+            _extract_amount_for_label(text, r"imp[oô]ts?\s+et\s+taxes"), 0.76, "label:impots taxes"
+        ),
+        "charges_financieres": _field(
+            _extract_amount_for_label(text, r"charges?\s+financi"),
+            0.76,
+            "label:charges financieres",
+        ),
         "resultat_exploitation": _field(
             resultat_exploitation,
             0.82 if resultat_exploitation is not None else 0.0,
@@ -893,7 +1010,9 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
         "resultat_courant": _field(
             resultat_courant, 0.8 if resultat_courant is not None else 0.0, resultat_courant_src
         ),
-        "resultat_net": _field(resultat_net, 0.84 if resultat_net is not None else 0.0, resultat_net_src),
+        "resultat_net": _field(
+            resultat_net, 0.84 if resultat_net is not None else 0.0, resultat_net_src
+        ),
     }
 
 
@@ -963,15 +1082,25 @@ def _extract_liasse_is_simplifiee(text: str) -> dict[str, dict[str, Any]]:
         "liasse_type": _field("2065_2033", 0.9, "liasse:is_simplifiee"),
         "exercice": _field(exercice, 0.85 if exercice else 0.0, "header:exercice"),
         "regime_imposition": _field(regime or "rsi", 0.75 if regime else 0.55, "header:regime"),
-        "total_actif": _field(total_actif, 0.84 if total_actif is not None else 0.0, "liasse:total_actif"),
-        "total_passif": _field(total_passif, 0.84 if total_passif is not None else 0.0, "liasse:total_passif"),
+        "total_actif": _field(
+            total_actif, 0.84 if total_actif is not None else 0.0, "liasse:total_actif"
+        ),
+        "total_passif": _field(
+            total_passif, 0.84 if total_passif is not None else 0.0, "liasse:total_passif"
+        ),
         "chiffre_affaires": _field(
-            chiffre_affaires, 0.82 if chiffre_affaires is not None else 0.0, "liasse:chiffre_affaires"
+            chiffre_affaires,
+            0.82 if chiffre_affaires is not None else 0.0,
+            "liasse:chiffre_affaires",
         ),
         "resultat_exercice": _field(
-            resultat_exercice, 0.82 if resultat_exercice is not None else 0.0, "liasse:resultat_exercice"
+            resultat_exercice,
+            0.82 if resultat_exercice is not None else 0.0,
+            "liasse:resultat_exercice",
         ),
-        "resultat_net": _field(resultat_net, 0.82 if resultat_net is not None else 0.0, "liasse:resultat_net"),
+        "resultat_net": _field(
+            resultat_net, 0.82 if resultat_net is not None else 0.0, "liasse:resultat_net"
+        ),
     }
 
 
@@ -992,7 +1121,9 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         r"([A-Z0-9_][A-Z0-9_.\- ]{2,120})",
     )
     if not denom:
-        sci_line = _extract_first(r"^\s*(SCI\s+[A-Z0-9_.\- ]{2,120})\s*$", text, flags=re.IGNORECASE | re.MULTILINE)
+        sci_line = _extract_first(
+            r"^\s*(SCI\s+[A-Z0-9_.\- ]{2,120})\s*$", text, flags=re.IGNORECASE | re.MULTILINE
+        )
         if sci_line:
             denom = _norm_spaces(sci_line)
 
@@ -1006,7 +1137,9 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         ],
     )
     if not date_cloture:
-        year = _extract_first(r"(?:exercice)\s*clos\s*le\s*[:\-]?\s*[0-3]?\d[\/\-][0-1]?\d[\/\-]([12]\d{3})", text)
+        year = _extract_first(
+            r"(?:exercice)\s*clos\s*le\s*[:\-]?\s*[0-3]?\d[\/\-][0-1]?\d[\/\-]([12]\d{3})", text
+        )
         if year:
             date_cloture = f"31/12/{year}"
     nb_associes = _extract_first_int_from_patterns(
@@ -1049,11 +1182,15 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         if re.search(r"^\s*[i1l]nt[eé]r[eéê]ts?\s+d[' ]emprun[tf]s?", line, re.IGNORECASE):
             strict_lines.append(line)
     for line in strict_lines:
-        m_amt = re.search(r"([0-9Oo][0-9Oo \t\u00a0.,]{0,30})(?:\s*€|\s*EUR)?\s*$", line, re.IGNORECASE)
+        m_amt = re.search(
+            r"([0-9Oo][0-9Oo \t\u00a0.,]{0,30})(?:\s*€|\s*EUR)?\s*$", line, re.IGNORECASE
+        )
         if not m_amt:
             continue
         v = _clean_amount_candidate(_to_float_fr(m_amt.group(1)))
-        if isinstance(v, float) and _plausible_2072_interets_candidate(v, float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else None):
+        if isinstance(v, float) and _plausible_2072_interets_candidate(
+            v, float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else None
+        ):
             interets = v
             interets_source = "label:interets_emprunts_strict_line"
             break
@@ -1076,7 +1213,9 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
             ("label_wide:interets_emprunts", r"[i1l]nt[eé]r[eéê]ts?\s+d[' ]emprun[tf]s?"),
             ("label_wide:interets_des_emprunts", r"[i1l]nt[eé]r[eéê]ts?\s+des?\s+emprun[tf]s?"),
         ]:
-            w = _extract_financial_amount_for_label_wide(scan_text, pat, max_gap=140, min_amount=50.0)
+            w = _extract_financial_amount_for_label_wide(
+                scan_text, pat, max_gap=140, min_amount=50.0
+            )
             if w is not None:
                 interets, interets_source = w, src_hint
                 break
@@ -1109,7 +1248,12 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
 
     # Fallbacks from annexes/tables when top-level labels are missing.
     immeubles_frais = sum(
-        float((x.get("frais_gestion") or 0.0) + (x.get("assurance") or 0.0) + (x.get("travaux") or 0.0) + (x.get("impositions") or 0.0))
+        float(
+            (x.get("frais_gestion") or 0.0)
+            + (x.get("assurance") or 0.0)
+            + (x.get("travaux") or 0.0)
+            + (x.get("impositions") or 0.0)
+        )
         for x in immeubles
     )
     associes_frais = sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes)
@@ -1171,14 +1315,26 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
 
     return {
         "denomination_sci": _field(denom, 0.92 if denom else 0.0, "header:denomination_societe"),
-        "date_cloture_exercice": _field(date_cloture, 0.92 if date_cloture else 0.0, "header:date_cloture_exercice"),
-        "nombre_associes": _field(nb_associes, 0.9 if nb_associes is not None else 0.0, "header:nombre_associes"),
-        "revenus_bruts": _field(revenus_bruts, 0.9 if revenus_bruts is not None else 0.0, "resultats:revenus_bruts"),
-        "frais_charges_hors_interets": _field(frais_hors_interets, 0.88 if frais_hors_interets is not None else 0.0, "resultats:frais_charges_hors_interets"),
+        "date_cloture_exercice": _field(
+            date_cloture, 0.92 if date_cloture else 0.0, "header:date_cloture_exercice"
+        ),
+        "nombre_associes": _field(
+            nb_associes, 0.9 if nb_associes is not None else 0.0, "header:nombre_associes"
+        ),
+        "revenus_bruts": _field(
+            revenus_bruts, 0.9 if revenus_bruts is not None else 0.0, "resultats:revenus_bruts"
+        ),
+        "frais_charges_hors_interets": _field(
+            frais_hors_interets,
+            0.88 if frais_hors_interets is not None else 0.0,
+            "resultats:frais_charges_hors_interets",
+        ),
         "interets_emprunts": _field(
             interets, 0.88 if interets is not None else 0.0, interets_source
         ),
-        "revenu_net_foncier": _field(revenu_net, 0.9 if revenu_net is not None else 0.0, "resultats:revenu_net_foncier"),
+        "revenu_net_foncier": _field(
+            revenu_net, 0.9 if revenu_net is not None else 0.0, "resultats:revenu_net_foncier"
+        ),
         # Keep advanced fields nullable for now; they will be re-enabled once core 5 are stable.
         "adresse_sci": _field(None, 0.0, "deferred:v2.3"),
         "adresse_siege_ouverture": _field(None, 0.0, "deferred:v2.3"),
@@ -1192,8 +1348,17 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         "resultat_exceptionnel": _field(None, 0.0, "deferred:v2.3"),
         "montant_produits_financiers": _field(None, 0.0, "deferred:v2.3"),
         "montant_produits_exceptionnels": _field(None, 0.0, "deferred:v2.3"),
-        "presence_annexes_immeubles": _field(len(immeubles) > 0 or bool(re.search(r"annexe\s*1|adresse\s+de\s+l[' ]immeuble", text, re.IGNORECASE)), 0.84, "annexe:immeubles"),
-        "presence_annexes_associes_rf": _field(len(associes) > 0 or bool(re.search(r"annexe\s*2|quote[\- ]part", text, re.IGNORECASE)), 0.84, "annexe:associes_revenus_fonciers"),
+        "presence_annexes_immeubles": _field(
+            len(immeubles) > 0
+            or bool(re.search(r"annexe\s*1|adresse\s+de\s+l[' ]immeuble", text, re.IGNORECASE)),
+            0.84,
+            "annexe:immeubles",
+        ),
+        "presence_annexes_associes_rf": _field(
+            len(associes) > 0 or bool(re.search(r"annexe\s*2|quote[\- ]part", text, re.IGNORECASE)),
+            0.84,
+            "annexe:associes_revenus_fonciers",
+        ),
     }
 
 
@@ -1218,7 +1383,11 @@ def _extract_2072_results_zone(text: str) -> str:
     start, end = 0, len(lines)
     for i, line in enumerate(lines):
         low = line.lower()
-        if "revenus bruts" in low or "intérêts d'emprunt".lower() in low or "interets d'emprunt" in low:
+        if (
+            "revenus bruts" in low
+            or "intérêts d'emprunt".lower() in low
+            or "interets d'emprunt" in low
+        ):
             start = max(0, i - 8)
             break
     for j in range(start, min(len(lines), start + 320)):
@@ -1279,15 +1448,23 @@ def _extract_2072_immeubles_table(text: str) -> list[dict[str, Any]]:
                 r"adresse\s+de\s+l[' ]immeuble",
                 r"([A-Z0-9_].{6,160})",
             ),
-            "nombre_locaux": _to_float_fr(_extract_first(r"(?:nombre\s+de\s+locaux)\s*[:\-]?\s*([0-9]{1,4})", chunk)),
-            "revenus_bruts": _extract_amount_for_label(chunk, r"montant\s+brut.{0,25}loyers?\s+encaiss|revenus?\s+bruts?"),
+            "nombre_locaux": _to_float_fr(
+                _extract_first(r"(?:nombre\s+de\s+locaux)\s*[:\-]?\s*([0-9]{1,4})", chunk)
+            ),
+            "revenus_bruts": _extract_amount_for_label(
+                chunk, r"montant\s+brut.{0,25}loyers?\s+encaiss|revenus?\s+bruts?"
+            ),
             "frais_gestion": _extract_amount_for_label(chunk, r"frais?\s+de\s+gestion"),
             "assurance": _extract_amount_for_label(chunk, r"primes?\s+d[' ]assurance|assurance"),
-            "travaux": _extract_amount_for_label(chunk, r"travaux|d[ée]penses?\s+de\s+r[ée]paration"),
+            "travaux": _extract_amount_for_label(
+                chunk, r"travaux|d[ée]penses?\s+de\s+r[ée]paration"
+            ),
             "impositions": _extract_amount_for_label(chunk, r"impositions?"),
             "interets_emprunts": ie_im,
             "amortissement": _extract_amount_for_label(chunk, r"amortissement"),
-            "revenu_ou_deficit": _extract_amount_for_label(chunk, r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)|revenu\s+net"),
+            "revenu_ou_deficit": _extract_amount_for_label(
+                chunk, r"revenu\s*\(\+\)|d[ée]ficit\s*\(\-\)|revenu\s+net"
+            ),
         }
         if any(v not in (None, "", 0.0) for k, v in entry.items() if k != "immeuble_id"):
             entries.append(entry)
@@ -1295,7 +1472,9 @@ def _extract_2072_immeubles_table(text: str) -> list[dict[str, Any]]:
     # Fallback: try to create entries from repeated addresses if chunk split failed.
     if not entries:
         zone = "\n".join(zone_lines)
-        addrs = re.findall(r"(?:adresse\s+de\s+l[' ]immeuble)\s*[:\-]?\s*([^\n]{6,160})", zone, re.IGNORECASE)
+        addrs = re.findall(
+            r"(?:adresse\s+de\s+l[' ]immeuble)\s*[:\-]?\s*([^\n]{6,160})", zone, re.IGNORECASE
+        )
         for idx, addr in enumerate(addrs[:10], start=1):
             entries.append(
                 {
@@ -1326,7 +1505,7 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
             break
     if start < 0:
         return []
-    zone_lines = lines[start:min(len(lines), start + 420)]
+    zone_lines = lines[start : min(len(lines), start + 420)]
     zone = "\n".join(zone_lines)
     entries: list[dict[str, Any]] = []
 
@@ -1353,18 +1532,33 @@ def _extract_2072_associes_table(text: str) -> list[dict[str, Any]]:
                 r"nom\s+et\s+pr[ée]nom",
                 r"([A-Z_][A-Z_.\- ]{2,120})",
             ),
-            "date_naissance": _extract_first(r"(?:date\s+de\s+naissance)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})", chunk),
+            "date_naissance": _extract_first(
+                r"(?:date\s+de\s+naissance)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
+                chunk,
+            ),
             "adresse": _extract_value_near_label(
                 chunk,
                 r"(?:\badresse\b)",
                 r"([A-Z0-9_].{8,140})",
             ),
-            "parts_detenues": _to_float_fr(_extract_first(r"(?:parts?\s+d[ée]tenues?)\s*[:\-]?\s*([0-9]{1,10})", chunk)),
-            "quote_part_revenus_bruts": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenus?\s+bruts?"),
-            "quote_part_frais_charges": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}frais?.{0,25}charges?"),
-            "quote_part_interets_emprunts": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}int[eé]r[eê]ts?\s+d[' ]emprunts?"),
-            "quote_part_amortissement": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}amortissement"),
-            "quote_part_revenu_net": _extract_amount_for_label(chunk, r"quote[\- ]part.{0,25}revenu\s+net|quote[\- ]part.{0,25}d[ée]ficit"),
+            "parts_detenues": _to_float_fr(
+                _extract_first(r"(?:parts?\s+d[ée]tenues?)\s*[:\-]?\s*([0-9]{1,10})", chunk)
+            ),
+            "quote_part_revenus_bruts": _extract_amount_for_label(
+                chunk, r"quote[\- ]part.{0,25}revenus?\s+bruts?"
+            ),
+            "quote_part_frais_charges": _extract_amount_for_label(
+                chunk, r"quote[\- ]part.{0,25}frais?.{0,25}charges?"
+            ),
+            "quote_part_interets_emprunts": _extract_amount_for_label(
+                chunk, r"quote[\- ]part.{0,25}int[eé]r[eê]ts?\s+d[' ]emprunts?"
+            ),
+            "quote_part_amortissement": _extract_amount_for_label(
+                chunk, r"quote[\- ]part.{0,25}amortissement"
+            ),
+            "quote_part_revenu_net": _extract_amount_for_label(
+                chunk, r"quote[\- ]part.{0,25}revenu\s+net|quote[\- ]part.{0,25}d[ée]ficit"
+            ),
         }
         # Anti-label cleanup for text columns
         nom_value = entry.get("nom")
@@ -1412,7 +1606,10 @@ def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
         text,
     )
     period_start = _to_iso_date_fr(
-        _extract_first(r"(?:p[ée]riode|du)\s*[:\-]?\s*([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})\s*(?:au|\-)", text)
+        _extract_first(
+            r"(?:p[ée]riode|du)\s*[:\-]?\s*([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})\s*(?:au|\-)",
+            text,
+        )
     )
     period_end = _to_iso_date_fr(
         _extract_first(r"(?:au|jusqu[' ]au)\s*([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})", text)
@@ -1439,13 +1636,25 @@ def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
     titulaire_pseudo = "TITULAIRE_1" if titulaire else None
     compte_pseudo = "COMPTE_1" if account_hint else None
     return {
-        "banque": _field(_norm_spaces(bank) if bank else None, 0.84 if bank else 0.0, "header:banque"),
-        "titulaire_compte_pseudo": _field(titulaire_pseudo, 0.8 if titulaire_pseudo else 0.0, "pseudo:titulaire"),
-        "compte_reference_pseudo": _field(compte_pseudo, 0.78 if compte_pseudo else 0.0, "pseudo:compte_reference"),
-        "periode_debut": _field(period_start, 0.82 if period_start else 0.0, "header:periode_debut"),
+        "banque": _field(
+            _norm_spaces(bank) if bank else None, 0.84 if bank else 0.0, "header:banque"
+        ),
+        "titulaire_compte_pseudo": _field(
+            titulaire_pseudo, 0.8 if titulaire_pseudo else 0.0, "pseudo:titulaire"
+        ),
+        "compte_reference_pseudo": _field(
+            compte_pseudo, 0.78 if compte_pseudo else 0.0, "pseudo:compte_reference"
+        ),
+        "periode_debut": _field(
+            period_start, 0.82 if period_start else 0.0, "header:periode_debut"
+        ),
         "periode_fin": _field(period_end, 0.82 if period_end else 0.0, "header:periode_fin"),
-        "solde_initial": _field(solde_initial, 0.88 if solde_initial is not None else 0.0, "header:solde_initial"),
-        "solde_final": _field(solde_final, 0.88 if solde_final is not None else 0.0, "header:solde_final"),
+        "solde_initial": _field(
+            solde_initial, 0.88 if solde_initial is not None else 0.0, "header:solde_initial"
+        ),
+        "solde_final": _field(
+            solde_final, 0.88 if solde_final is not None else 0.0, "header:solde_final"
+        ),
     }
 
 
@@ -1582,14 +1791,8 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
         tol_relaxed = max(10.0, ref * 0.04)
         balance_ok = balance_gap <= tol_relaxed
 
-    ready_for_ai_core = (
-        not critical_missing
-        and balance_ok
-    )
-    ready_for_ai = (
-        base["coverage_ratio"] >= 0.75
-        and ready_for_ai_core
-    )
+    ready_for_ai_core = not critical_missing and balance_ok
+    ready_for_ai = base["coverage_ratio"] >= 0.75 and ready_for_ai_core
     # Pragmatique produit: si le noyau métier est cohérent, le document est exploitable
     # même avec une couverture secondaire incomplète.
     needs_review = not ready_for_ai_core
@@ -1597,7 +1800,11 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     flags = list(base.get("quality_flags", []))
     if critical_missing:
         flags.append("critical_fields_missing")
-    if isinstance(actif, (int, float)) and isinstance(passif, (int, float)) and balance_gap is not None:
+    if (
+        isinstance(actif, (int, float))
+        and isinstance(passif, (int, float))
+        and balance_gap is not None
+    ):
         if balance_gap > tol_relaxed:
             flags.append("bilan_balance_mismatch")
         elif balance_gap > tol_strict:
@@ -1654,7 +1861,11 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
     delta_rc_rn: float | None = None
     tol_s1 = tol_r1 = tol_s2 = tol_r2 = 0.0
 
-    if isinstance(rex, (int, float)) and isinstance(rc, (int, float)) and isinstance(rn, (int, float)):
+    if (
+        isinstance(rex, (int, float))
+        and isinstance(rc, (int, float))
+        and isinstance(rn, (int, float))
+    ):
         fr, fc, fn = float(rex), float(rc), float(rn)
         delta_rex_rc = abs(fc - fr)
         delta_rc_rn = abs(fn - fc)
@@ -1670,20 +1881,18 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
         # Totaux de chaîne renseignés mais non comparables numériquement.
         progression_ok = False
 
-    ready_for_ai_core = (
-        not critical_missing
-        and progression_ok
-    )
-    ready_for_ai = (
-        base["coverage_ratio"] >= 0.75
-        and ready_for_ai_core
-    )
+    ready_for_ai_core = not critical_missing and progression_ok
+    ready_for_ai = base["coverage_ratio"] >= 0.75 and ready_for_ai_core
     needs_review = not ready_for_ai_core
 
     flags = list(base.get("quality_flags", []))
     if critical_missing:
         flags.append("critical_fields_missing")
-    if isinstance(rex, (int, float)) and isinstance(rc, (int, float)) and isinstance(rn, (int, float)):
+    if (
+        isinstance(rex, (int, float))
+        and isinstance(rc, (int, float))
+        and isinstance(rn, (int, float))
+    ):
         if not progression_ok:
             flags.append("result_chain_inconsistent")
         elif chain_minor_gap:
@@ -1732,7 +1941,11 @@ def _quality_liasse_is_simplifiee(fields: dict[str, dict[str, Any]]) -> dict[str
     if critical_missing:
         flags.append("critical_fields_missing")
         flags.append("liasse_critical_fields_missing")
-    if not balance_ok and "total_actif" not in critical_missing and "total_passif" not in critical_missing:
+    if (
+        not balance_ok
+        and "total_actif" not in critical_missing
+        and "total_passif" not in critical_missing
+    ):
         flags.append("bilan_balance_mismatch")
 
     ready_for_ai_core = (not critical_missing) and balance_ok
@@ -1749,7 +1962,9 @@ def _quality_liasse_is_simplifiee(fields: dict[str, dict[str, Any]]) -> dict[str
     }
 
 
-def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str) -> dict[str, Any]:
+def _quality_2072(
+    fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str
+) -> dict[str, Any]:
     base = _quality(fields)
     critical = [
         "denomination_sci",
@@ -1787,38 +2002,66 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     associes_fc = sum(float(x.get("quote_part_frais_charges") or 0.0) for x in associes)
     associes_ie = sum(float(x.get("quote_part_interets_emprunts") or 0.0) for x in associes)
     immeubles_rb = sum(float(x.get("revenus_bruts") or 0.0) for x in immeubles)
-    immeubles_fc = sum(float((x.get("frais_gestion") or 0.0) + (x.get("assurance") or 0.0) + (x.get("travaux") or 0.0) + (x.get("impositions") or 0.0)) for x in immeubles)
+    immeubles_fc = sum(
+        float(
+            (x.get("frais_gestion") or 0.0)
+            + (x.get("assurance") or 0.0)
+            + (x.get("travaux") or 0.0)
+            + (x.get("impositions") or 0.0)
+        )
+        for x in immeubles
+    )
     immeubles_ie = sum(float(x.get("interets_emprunts") or 0.0) for x in immeubles)
 
     agg_checks = 0
     agg_ok = 0
     if isinstance(rb, (int, float)) and associes_rb > 0:
         agg_checks += 1
-        if abs(rb - associes_rb) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(rb) * THRESHOLDS["aggregate_rel_tolerance"]):
+        if abs(rb - associes_rb) <= max(
+            THRESHOLDS["aggregate_abs_tolerance_min"],
+            abs(rb) * THRESHOLDS["aggregate_rel_tolerance"],
+        ):
             agg_ok += 1
     if isinstance(rb, (int, float)) and immeubles_rb > 0:
         agg_checks += 1
-        if abs(rb - immeubles_rb) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(rb) * THRESHOLDS["aggregate_rel_tolerance"]):
+        if abs(rb - immeubles_rb) <= max(
+            THRESHOLDS["aggregate_abs_tolerance_min"],
+            abs(rb) * THRESHOLDS["aggregate_rel_tolerance"],
+        ):
             agg_ok += 1
     if isinstance(fc, (int, float)) and associes_fc > 0:
         agg_checks += 1
-        if abs(fc - associes_fc) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(fc) * THRESHOLDS["aggregate_rel_tolerance"]):
+        if abs(fc - associes_fc) <= max(
+            THRESHOLDS["aggregate_abs_tolerance_min"],
+            abs(fc) * THRESHOLDS["aggregate_rel_tolerance"],
+        ):
             agg_ok += 1
     if isinstance(fc, (int, float)) and immeubles_fc > 0:
         agg_checks += 1
-        if abs(fc - immeubles_fc) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(fc) * THRESHOLDS["aggregate_rel_tolerance"]):
+        if abs(fc - immeubles_fc) <= max(
+            THRESHOLDS["aggregate_abs_tolerance_min"],
+            abs(fc) * THRESHOLDS["aggregate_rel_tolerance"],
+        ):
             agg_ok += 1
     if isinstance(ie, (int, float)) and associes_ie > 0:
         agg_checks += 1
-        if abs(ie - associes_ie) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(ie) * THRESHOLDS["aggregate_rel_tolerance"]):
+        if abs(ie - associes_ie) <= max(
+            THRESHOLDS["aggregate_abs_tolerance_min"],
+            abs(ie) * THRESHOLDS["aggregate_rel_tolerance"],
+        ):
             agg_ok += 1
     if isinstance(ie, (int, float)) and immeubles_ie > 0:
         agg_checks += 1
-        if abs(ie - immeubles_ie) <= max(THRESHOLDS["aggregate_abs_tolerance_min"], abs(ie) * THRESHOLDS["aggregate_rel_tolerance"]):
+        if abs(ie - immeubles_ie) <= max(
+            THRESHOLDS["aggregate_abs_tolerance_min"],
+            abs(ie) * THRESHOLDS["aggregate_rel_tolerance"],
+        ):
             agg_ok += 1
     aggregate_consistency_score = (agg_ok / agg_checks) if agg_checks else 0.7
 
-    consistency = (numeric_consistency_score + annex_consistency_score + aggregate_consistency_score) / 3
+    consistency = (
+        numeric_consistency_score + annex_consistency_score + aggregate_consistency_score
+    ) / 3
     ready_for_ai = (
         base["coverage_ratio"] >= THRESHOLDS["quality_ready_coverage_min"]
         and consistency >= THRESHOLDS["quality_ready_consistency_min"]
@@ -1860,7 +2103,9 @@ def _quality_2072(fields: dict[str, dict[str, Any]], tables: dict[str, Any], tex
     }
 
 
-def _quality_releve_bancaire(fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str) -> dict[str, Any]:
+def _quality_releve_bancaire(
+    fields: dict[str, dict[str, Any]], tables: dict[str, Any], text: str
+) -> dict[str, Any]:
     base = _quality(fields)
     critical = [
         "periode_debut",
@@ -1874,7 +2119,13 @@ def _quality_releve_bancaire(fields: dict[str, dict[str, Any]], tables: dict[str
     ops_list = ops if isinstance(ops, list) else []
     sum_debit = sum(float(op.get("debit") or 0.0) for op in ops_list)
     sum_credit = sum(float(op.get("credit") or 0.0) for op in ops_list)
-    lines_total = len([ln for ln in text.splitlines() if re.search(r"\b[0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3}\b", ln)])
+    lines_total = len(
+        [
+            ln
+            for ln in text.splitlines()
+            if re.search(r"\b[0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3}\b", ln)
+        ]
+    )
     parsed_lines = len(ops_list)
     parsed_ratio = (parsed_lines / lines_total) if lines_total > 0 else 0.0
 
@@ -1908,15 +2159,8 @@ def _quality_releve_bancaire(fields: dict[str, dict[str, Any]], tables: dict[str
     if not dates_ok:
         flags.append("date_out_of_range")
 
-    ready_for_ai_core = (
-        not critical_missing
-        and balance_ok
-    )
-    ready_for_ai = (
-        ready_for_ai_core
-        and parsed_ratio >= 0.7
-        and dates_ok
-    )
+    ready_for_ai_core = not critical_missing and balance_ok
+    ready_for_ai = ready_for_ai_core and parsed_ratio >= 0.7 and dates_ok
     needs_review = (not ready_for_ai) or base.get("needs_review", False)
     return {
         **base,
@@ -1933,15 +2177,29 @@ def _quality_releve_bancaire(fields: dict[str, dict[str, Any]], tables: dict[str
     }
 
 
-def _pseudonymize_2072_output(fields: dict[str, dict[str, Any]], tables: dict[str, Any]) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
+def _pseudonymize_2072_output(
+    fields: dict[str, dict[str, Any]], tables: dict[str, Any]
+) -> tuple[dict[str, dict[str, Any]], dict[str, Any]]:
     """Keep extraction quality from raw while exposing anonymized structured output."""
     out_fields = dict(fields)
     if out_fields.get("denomination_sci", {}).get("value"):
-        out_fields["denomination_sci"] = _field("SOCIETE_1", out_fields["denomination_sci"].get("confidence", 0.9), "pseudo:denomination_sci")
+        out_fields["denomination_sci"] = _field(
+            "SOCIETE_1",
+            out_fields["denomination_sci"].get("confidence", 0.9),
+            "pseudo:denomination_sci",
+        )
     if out_fields.get("adresse_sci", {}).get("value"):
-        out_fields["adresse_sci"] = _field("ADRESSE_SOCIETE_1", out_fields["adresse_sci"].get("confidence", 0.85), "pseudo:adresse_sci")
+        out_fields["adresse_sci"] = _field(
+            "ADRESSE_SOCIETE_1",
+            out_fields["adresse_sci"].get("confidence", 0.85),
+            "pseudo:adresse_sci",
+        )
     if out_fields.get("adresse_siege_ouverture", {}).get("value"):
-        out_fields["adresse_siege_ouverture"] = _field("ADRESSE_SIEGE_1", out_fields["adresse_siege_ouverture"].get("confidence", 0.8), "pseudo:adresse_siege_ouverture")
+        out_fields["adresse_siege_ouverture"] = _field(
+            "ADRESSE_SIEGE_1",
+            out_fields["adresse_siege_ouverture"].get("confidence", 0.8),
+            "pseudo:adresse_siege_ouverture",
+        )
 
     out_tables = dict(tables)
     immeubles = []
@@ -1976,7 +2234,9 @@ def _extractor_bilan(source_text: str, anonymized_text: str) -> StructuredExtrac
     )
 
 
-def _extractor_compte_resultat(source_text: str, anonymized_text: str) -> StructuredExtractionResult:
+def _extractor_compte_resultat(
+    source_text: str, anonymized_text: str
+) -> StructuredExtractionResult:
     fields = _extract_compte_resultat(source_text)
     tables = {"accounting_lines": _extract_generic_accounting_table(anonymized_text)}
     return StructuredExtractionResult(
@@ -2003,7 +2263,9 @@ def _extractor_fiscal_2072(source_text: str, _anonymized_text: str) -> Structure
     )
 
 
-def _extractor_statuts_societe(source_text: str, anonymized_text: str) -> StructuredExtractionResult:
+def _extractor_statuts_societe(
+    source_text: str, anonymized_text: str
+) -> StructuredExtractionResult:
     fields = _extract_common_fields(source_text)
     quality = _quality(fields)
     flags = set(quality.get("quality_flags") or [])
@@ -2020,7 +2282,9 @@ def _extractor_statuts_societe(source_text: str, anonymized_text: str) -> Struct
     )
 
 
-def _extractor_releve_bancaire(source_text: str, _anonymized_text: str) -> StructuredExtractionResult:
+def _extractor_releve_bancaire(
+    source_text: str, _anonymized_text: str
+) -> StructuredExtractionResult:
     fields = _extract_releve_bancaire_fields(source_text)
     tables = {"operations": _extract_releve_bancaire_operations(source_text)}
     return StructuredExtractionResult(
@@ -2161,8 +2425,8 @@ def build_structured_dataset(
     from app.services.text_segment_selector import select_extraction_segment
 
     full_text_for_routing = extraction_text if extraction_text is not None else anonymized_text
-    detected_doc_type, routing_confidence, routing_reasons, routing_runner_up = classify_doc_type_scored(
-        full_text_for_routing, original_filename
+    detected_doc_type, routing_confidence, routing_reasons, routing_runner_up = (
+        classify_doc_type_scored(full_text_for_routing, original_filename)
     )
     doc_type = detected_doc_type if requested_doc_type in ("", "auto") else requested_doc_type
 
@@ -2176,10 +2440,7 @@ def build_structured_dataset(
     extracted = _run_extractor_pipeline(doc_type, source_text, anonymized_text)
 
     # Si la fenêtre sémantique a rogné les tableaux utiles, le texte entier est souvent meilleur.
-    if (
-        text_segmentation.get("strategy") == "semantic_window"
-        and extraction_text is not None
-    ):
+    if text_segmentation.get("strategy") == "semantic_window" and extraction_text is not None:
         alt = _run_extractor_pipeline(doc_type, full_text_for_routing, anonymized_text)
         if _extraction_quality_better(alt.quality, extracted.quality):
             extracted = alt
@@ -2206,12 +2467,16 @@ def build_structured_dataset(
             "interets_emprunts",
             "revenu_net_foncier",
         ]
-        critical_present = sum(1 for k in critical6 if (fields.get(k, {}) or {}).get("value") not in (None, "", []))
+        critical_present = sum(
+            1 for k in critical6 if (fields.get(k, {}) or {}).get("value") not in (None, "", [])
+        )
         if critical_present < 3:
             routing_confidence = min(routing_confidence, 0.6)
     # Global guardrail: confidence shown to users should remain conservative when
     # critical fields are missing, even if router lexical score is high.
-    critical_missing = quality.get("critical_missing_fields", []) if isinstance(quality, dict) else []
+    critical_missing = (
+        quality.get("critical_missing_fields", []) if isinstance(quality, dict) else []
+    )
     if isinstance(critical_missing, list) and critical_missing:
         routing_confidence = min(routing_confidence, 0.85)
 
@@ -2238,25 +2503,32 @@ def build_structured_dataset(
     )
     quality = payload.get("quality") if isinstance(payload, dict) else {}
     critical_missing = (
-        quality.get("critical_missing_fields", [])
-        if isinstance(quality, dict)
-        else []
+        quality.get("critical_missing_fields", []) if isinstance(quality, dict) else []
     )
-    fallback_stats = _fallback_source_stats(payload.get("fields", {})) if isinstance(payload, dict) else {}
+    fallback_stats = (
+        _fallback_source_stats(payload.get("fields", {})) if isinstance(payload, dict) else {}
+    )
     logger.info(
         "structured_dataset_built",
         requested_doc_type=requested_doc_type,
         doc_type=payload.get("doc_type") if isinstance(payload, dict) else doc_type,
-        detected_doc_type=payload.get("detected_doc_type") if isinstance(payload, dict) else detected_doc_type,
-        extractor_name=payload.get("provenance", {}).get("extractor_name") if isinstance(payload, dict) else extracted.extractor_name,
-        routing_confidence=payload.get("routing_confidence") if isinstance(payload, dict) else routing_confidence,
+        detected_doc_type=payload.get("detected_doc_type")
+        if isinstance(payload, dict)
+        else detected_doc_type,
+        extractor_name=payload.get("provenance", {}).get("extractor_name")
+        if isinstance(payload, dict)
+        else extracted.extractor_name,
+        routing_confidence=payload.get("routing_confidence")
+        if isinstance(payload, dict)
+        else routing_confidence,
         coverage_ratio=(quality or {}).get("coverage_ratio") if isinstance(quality, dict) else None,
         ready_for_ai=(quality or {}).get("ready_for_ai") if isinstance(quality, dict) else False,
-        ready_for_ai_core=(quality or {}).get("ready_for_ai_core") if isinstance(quality, dict) else False,
+        ready_for_ai_core=(quality or {}).get("ready_for_ai_core")
+        if isinstance(quality, dict)
+        else False,
         needs_review=(quality or {}).get("needs_review") if isinstance(quality, dict) else True,
         critical_missing_count=len(critical_missing) if isinstance(critical_missing, list) else 0,
         quality_flags=(quality or {}).get("quality_flags") if isinstance(quality, dict) else [],
         fallback_source_stats=fallback_stats,
     )
     return payload
-

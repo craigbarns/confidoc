@@ -903,7 +903,14 @@ async function doUploadFile(file) {
   form.append("file", file, file.name);
   const profile = $("profileSelect").value;
   const requestedDocType = currentDocTypeRequested();
-  const auto = $("autoAnonymize").checked;
+  const autoRequested = $("autoAnonymize").checked;
+  // Sur des PDFs lourds, l'auto traitement inline peut dépasser le timeout HTTP
+  // (surtout en prod) et provoquer un "Load failed" côté navigateur.
+  const AUTO_SAFE_MAX_BYTES = 2 * 1024 * 1024;
+  const auto = autoRequested && file.size <= AUTO_SAFE_MAX_BYTES;
+  if (autoRequested && !auto) {
+    toast("Fichier volumineux: upload rapide sans auto-traitement. Clique ensuite sur « Traiter ».", "info");
+  }
   const uploadUrl = `/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`;
 
   try {

@@ -1,0 +1,18 @@
+SCI ADAMA
+Siret: 51242661000014
+Exercice du 01/01/2023 au 31/12/2023
+COMPTE DE RESULTAT
+===========================================
+PRODUITS D'EXPLOITATION (I)
+  Chiffre d'affaires (Loyers): 26 640,08 €
+  Transfert de charges: 3 353,10 €
+  TOTAL PRODUITS EXPLOITATION: 29 993,18 €
+CHARGES D'EXPLOITATION (II)
+  Achats et charges externes: 22 263,90 €
+  Charges financières: 276,22 €
+  TOTAL CHARGES: 22 540,12 €
+RESULTAT D'EXPLOITATION (I-II): 7 729,28 €
+RESULTAT FINANCIER: -276,22 €
+RESULTAT COURANT: 7 453,06 €
+RESULTAT EXCEPTIONNEL: 0,00 €
+BENEFICE OU PERTE: 7 453,06 €
