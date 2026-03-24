@@ -576,11 +576,24 @@ async function api(path, opts={}) {
 async function apiUploadMultipart(path, formData) {
   const headers = {};
   if (accessToken) headers["Authorization"] = `Bearer ${accessToken}`;
-  const res = await fetch(path, { method: "POST", body: formData, headers });
-  const raw = await res.text();
-  let data;
-  try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
-  return { res, data };
+  let lastErr = null;
+  for (let attempt = 0; attempt < 2; attempt++) {
+    try {
+      const res = await fetch(path, { method: "POST", body: formData, headers });
+      const raw = await res.text();
+      let data;
+      try { data = raw ? JSON.parse(raw) : {}; } catch { data = { raw }; }
+      return { res, data };
+    } catch (err) {
+      lastErr = err;
+      const msg = String((err && err.message) || "").toLowerCase();
+      const retriable = msg.includes("load failed") || msg.includes("networkerror") || msg.includes("failed to fetch");
+      if (!retriable || attempt === 1) break;
+      // Retry unique pour les coupures réseau transitoires (Safari/Proxy/Wi-Fi).
+      await new Promise((r) => setTimeout(r, 700));
+    }
+  }
+  throw lastErr || new Error("Upload interrompu");
 }
 
 function formatApiDetail(data) {
@@ -918,7 +931,12 @@ async function doUploadFile(file) {
     }
   } catch (e) {
     const errMsg = e && e.message ? e.message : String(e);
-    toast(`Erreur réseau: ${errMsg}`, "error");
+    const lower = String(errMsg).toLowerCase();
+    if (lower.includes("load failed") || lower.includes("failed to fetch") || lower.includes("networkerror")) {
+      toast("Erreur réseau pendant l'upload (connexion interrompue). Réessaie dans 5 secondes.", "error");
+    } else {
+      toast(`Erreur réseau: ${errMsg}`, "error");
+    }
   } finally {
     setTimeout(() => {
       prog.classList.remove("active");
