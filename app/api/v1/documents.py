@@ -287,6 +287,314 @@ def _build_structured_report_pdf_bytes(payload: dict, *, original_filename: str)
     return out
 
 
+def _field_val(fields: dict[str, object], key: str) -> object | None:
+    meta = fields.get(key) if isinstance(fields, dict) else None
+    if not isinstance(meta, dict):
+        return None
+    return meta.get("value")
+
+
+def _amount_to_float(raw: object) -> float | None:
+    if raw is None:
+        return None
+    if isinstance(raw, (int, float)):
+        return float(raw)
+    s = str(raw).strip()
+    if not s:
+        return None
+    s = s.replace("\u00a0", " ").replace(" ", "")
+    # Keep last decimal separator semantics.
+    if "," in s and "." in s:
+        if s.rfind(",") > s.rfind("."):
+            s = s.replace(".", "").replace(",", ".")
+        else:
+            s = s.replace(",", "")
+    else:
+        s = s.replace(",", ".")
+    s = re.sub(r"[^0-9.+-]", "", s)
+    try:
+        return float(s)
+    except ValueError:
+        return None
+
+
+def _records_from_anonymized_text(anonymized_text: str) -> list[dict]:
+    return _extract_accounting_records(anonymized_text or "")
+
+
+def _build_immobilisations_v2(records: list[dict], fields: dict[str, object]) -> dict:
+    """Build detailed immobilisations section from PCG records (heuristic, non-inventive)."""
+    details: list[dict] = []
+    brut_total = 0.0
+    amort_total = 0.0
+    has_brut = False
+    has_amort = False
+    total_actif = _amount_to_float(_field_val(fields, "total_actif"))
+    immob_net_field = _amount_to_float(_field_val(fields, "immobilisations"))
+    # Annex-first: prefer dedicated extractor outputs when available.
+    immob_brut_field = _amount_to_float(_field_val(fields, "total_brut_immobilisations"))
+    immob_amort_field = _amount_to_float(_field_val(fields, "total_amortissements"))
+    immob_net_annex_field = _amount_to_float(_field_val(fields, "total_net_immobilisations"))
+    seen: set[tuple[str, float, str]] = set()
+
+    for rec in records:
+        code = str(rec.get("code_comptable") or "")
+        amount = _amount_to_float(rec.get("montant_raw"))
+        if amount is None:
+            continue
+        # Strict filter: only immobilisation accounts, ignore implausibly high noisy amounts.
+        if total_actif is not None and abs(amount) > (abs(total_actif) * 1.2):
+            continue
+        if code.startswith(("21", "26", "27")):
+            key = (code, round(abs(amount), 2), "immobilisation")
+            if key in seen:
+                continue
+            seen.add(key)
+            brut_total += abs(amount)
+            has_brut = True
+            details.append(
+                {
+                    "compte": code,
+                    "libelle": rec.get("libelle"),
+                    "montant": abs(amount),
+                    "categorie": "immobilisation",
+                }
+            )
+        elif code.startswith("28"):
+            key = (code, round(abs(amount), 2), "amortissement")
+            if key in seen:
+                continue
+            seen.add(key)
+            amort_total += abs(amount)
+            has_amort = True
+            details.append(
+                {
+                    "compte": code,
+                    "libelle": rec.get("libelle"),
+                    "montant": -abs(amount),
+                    "categorie": "amortissement",
+                }
+            )
+
+    if not details:
+        return {
+            "immobilisations": {
+                "debut_exercice": None,
+                "augmentations": None,
+                "diminutions": None,
+                "fin_exercice": immob_net_annex_field if immob_net_annex_field is not None else immob_net_field,
+                "detail": [],
+            },
+            "amortissements": {
+                "debut_exercice": None,
+                "dotations": None,
+                "diminutions": None,
+                "fin_exercice": immob_amort_field,
+                "detail": [],
+            },
+        }
+
+    return {
+        "immobilisations": {
+            "debut_exercice": None,
+            "augmentations": None,
+            "diminutions": None,
+            # Prefer extractor net figure when available; fallback to record aggregation.
+            "fin_exercice": (
+                immob_net_annex_field
+                if immob_net_annex_field is not None
+                else (
+                    immob_net_field
+                    if immob_net_field is not None
+                    else (
+                        immob_brut_field
+                        if immob_brut_field is not None
+                        else (round(brut_total, 2) if has_brut else None)
+                    )
+                )
+            ),
+            "detail": [d for d in details if d["categorie"] == "immobilisation"],
+        },
+        "amortissements": {
+            "debut_exercice": None,
+            "dotations": None,
+            "diminutions": None,
+            "fin_exercice": immob_amort_field if immob_amort_field is not None else (round(amort_total, 2) if has_amort else None),
+            "detail": [d for d in details if d["categorie"] == "amortissement"],
+        },
+    }
+
+
+def _build_dettes_fiscal_social_v2(records: list[dict], fields: dict[str, object]) -> dict:
+    det_fin = []
+    det_four = []
+    det_fisc_soc = []
+    autres = []
+    for rec in records:
+        code = str(rec.get("code_comptable") or "")
+        amount = _amount_to_float(rec.get("montant_raw"))
+        if amount is None:
+            continue
+        item = {"compte": code, "libelle": rec.get("libelle"), "montant": round(amount, 2)}
+        if code.startswith(("16", "164")):
+            det_fin.append(item)
+        elif code.startswith("401"):
+            det_four.append(item)
+        elif code.startswith(("43", "44")):
+            det_fisc_soc.append(item)
+        elif code.startswith(("41", "45")):
+            autres.append(item)
+
+    return {
+        "dettes": {
+            "emprunts_etablissements_credit": {
+                "montant_2024": _field_val(fields, "dettes_financieres"),
+                "montant_2023": None,
+                "detail": det_fin,
+            },
+            "dettes_fournisseurs": {
+                "montant_2024": _field_val(fields, "dettes_fournisseurs"),
+                "montant_2023": None,
+                "detail": det_four,
+            },
+            "dettes_fiscales_sociales": {
+                "montant_2024": round(sum(abs(i["montant"]) for i in det_fisc_soc), 2) if det_fisc_soc else None,
+                "montant_2023": None,
+                "detail": det_fisc_soc,
+            },
+            "autres_dettes": {
+                "montant_2024": round(sum(abs(i["montant"]) for i in autres), 2) if autres else None,
+                "montant_2023": None,
+                "detail": autres,
+            },
+        }
+    }
+
+
+def _build_sig_v2(fields: dict[str, object]) -> dict:
+    return {
+        "soldes_intermediaires_gestion": {
+            "chiffre_affaires": {
+                "montant_2024": _field_val(fields, "chiffre_affaires"),
+                "montant_2023": None,
+                "variation_valeur": None,
+                "variation_pourcent": None,
+            },
+            "resultat_exploitation": {
+                "montant_2024": _field_val(fields, "resultat_exploitation"),
+                "montant_2023": None,
+                "variation_valeur": None,
+                "variation_pourcent": None,
+            },
+            "resultat_courant": {
+                "montant_2024": _field_val(fields, "resultat_courant"),
+                "montant_2023": None,
+                "variation_valeur": None,
+                "variation_pourcent": None,
+            },
+            "resultat_exercice": {
+                "montant_2024": _field_val(fields, "resultat_net") or _field_val(fields, "resultat_exercice"),
+                "montant_2023": None,
+                "variation_valeur": None,
+                "variation_pourcent": None,
+            },
+        }
+    }
+
+
+def _to_accounting_json_v1(
+    *,
+    structured: dict,
+    profile: str,
+    original_filename: str,
+    anonymized_text: str,
+) -> dict:
+    """Map current structured payload to a stable accounting JSON contract (v1)."""
+    fields = structured.get("fields") or {}
+    quality = structured.get("quality") or {}
+    provenance = structured.get("provenance") or {}
+
+    total_actif = _field_val(fields, "total_actif")
+    total_passif = _field_val(fields, "total_passif")
+    capitaux_propres = _field_val(fields, "capitaux_propres")
+    resultat_exercice = _field_val(fields, "resultat_exercice")
+    dettes_financieres = _field_val(fields, "dettes_financieres")
+    dettes_fournisseurs = _field_val(fields, "dettes_fournisseurs")
+    chiffre_affaires = _field_val(fields, "chiffre_affaires")
+    resultat_exploitation = _field_val(fields, "resultat_exploitation")
+    resultat_net = _field_val(fields, "resultat_net")
+    records = _records_from_anonymized_text(anonymized_text)
+
+    # Redact company metadata in AI profile (never leak PII to LLM payloads).
+    entreprise = {
+        "denomination": None if profile == "anonymized_ai" else _field_val(fields, "societe"),
+        "forme_juridique": None,
+        "adresse": None,
+        "siret": None,
+        "siren": None,
+        "comptable": {"nom": None, "adresse": None},
+        "logiciel_comptable": None,
+    }
+
+    base = {
+        "document": {
+            "type": structured.get("doc_type"),
+            "exercice": _field_val(fields, "exercice"),
+            "date_cloture": _field_val(fields, "date_cloture_exercice") or _field_val(fields, "date_cloture"),
+            "source_filename": original_filename,
+        },
+        "entreprise": entreprise,
+        "bilan": {
+            "actif": {
+                "total_general": {
+                    "net_2024": total_actif,
+                    "net_2023": None,
+                }
+            },
+            "passif": {
+                "capitaux_propres": {
+                    "situation_nette": {"montant_2024": capitaux_propres, "montant_2023": None},
+                    "resultat_exercice": {"montant_2024": resultat_exercice, "montant_2023": None},
+                },
+                "dettes": {
+                    "emprunts_etablissements_credit": {"montant_2024": dettes_financieres, "montant_2023": None},
+                    "dettes_fournisseurs": {"montant_2024": dettes_fournisseurs, "montant_2023": None},
+                },
+                "total_general_passif": {"montant_2024": total_passif, "montant_2023": None},
+            },
+        },
+        "compte_resultat": {
+            "produits_exploitation": {
+                "chiffre_affaires_net": {"montant_2024": chiffre_affaires, "montant_2023": None}
+            },
+            "resultat_exploitation": {"montant_2024": resultat_exploitation, "montant_2023": None},
+            "benefice_perte": {"montant_2024": resultat_net or resultat_exercice, "montant_2023": None},
+        },
+        "quality": {
+            "needs_review": bool(quality.get("needs_review", True)),
+            "ready_for_ai": bool(quality.get("ready_for_ai", False)),
+            "ready_for_ai_core": bool(quality.get("ready_for_ai_core", False)),
+            "coverage_ratio": quality.get("coverage_ratio"),
+            "critical_missing_fields": quality.get("critical_missing_fields", []),
+            "quality_flags": quality.get("quality_flags", []),
+        },
+        "provenance": {
+            "extractor_name": provenance.get("extractor_name"),
+            "text_segmentation": provenance.get("text_segmentation"),
+            "routing_confidence": structured.get("routing_confidence"),
+            "generated_at": structured.get("generated_at"),
+            "profile": profile,
+            "anonymized_text_included": profile == "internal",
+        },
+        "anonymized_text_excerpt": anonymized_text[:4000] if profile == "internal" else None,
+    }
+    # V2 enrichments (bilan-focused), additive and backward-compatible.
+    base["immobilisations_amortissements"] = _build_immobilisations_v2(records, fields)
+    base["bilan"]["passif"].update(_build_dettes_fiscal_social_v2(records, fields))
+    base.update(_build_sig_v2(fields))
+    return base
+
+
 # ──────────────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────────────
@@ -1158,6 +1466,61 @@ async def export_structured_dataset(
         }
     )
     return JSONResponse(structured)
+
+
+@router.get(
+    "/{document_id}/export-accounting-json",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter un JSON comptable contractuel (v1)",
+)
+async def export_accounting_json(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+    profile: str = Query(
+        default="anonymized_ai",
+        description="anonymized_ai | internal",
+    ),
+) -> JSONResponse:
+    """Stable JSON contract for accounting usage.
+
+    - `anonymized_ai`: safe payload for LLM usage (no PII).
+    - `internal`: same contract for internal controlled usage.
+    """
+    if profile not in {"anonymized_ai", "internal"}:
+        raise http_400("Paramètre profile invalide. Valeurs: anonymized_ai|internal.")
+
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_best_text_for_reporting(db, document)
+    if not original_text:
+        raise http_404("Aucune donnée textuelle disponible pour générer le JSON comptable.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _detections = anonymize_text(
+        original_text, profile="dataset_accounting", document_type=effective_type
+    )
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+    quality = structured.get("quality") or {}
+    if not bool(quality.get("ready_for_ai_core")):
+        raise http_409(
+            "Export comptable indisponible: document non prêt (ready_for_ai_core=false)."
+        )
+
+    payload = _to_accounting_json_v1(
+        structured=structured,
+        profile=profile,
+        original_filename=document.original_filename,
+        anonymized_text=anonymized_text,
+    )
+    payload["document_id"] = str(document.id)
+    return JSONResponse(payload)
 
 
 @router.get(
