@@ -1,0 +1,9 @@
+{
+  "doc_type": "fiscal_2072",
+  "difficulty": "medium",
+  "focus_fields": ["frais_charges", "revenu_net"],
+  "description": "Cas derive propre - Somme des immeubles = total",
+  "expected_failure": "Extraction prend le premier immeuble au lieu du total",
+  "ocr_quality": "high",
+  "strategy": "derive_sum"
+}

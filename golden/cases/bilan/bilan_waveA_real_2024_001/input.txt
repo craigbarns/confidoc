@@ -1,0 +1,48 @@
+Plaquette annuelle
+SASU WEMADE
+Siret 83241942800038
+Exercice clos le 31/12/2024
+
+WEMADE
+Bilan - Actif
+Du 01/01/2024 au 31/12/2024
+
+TOTAL (I) 44 948 26 106 18 841 25 757
+TOTAL (II) 588 823 588 823 524 652
+TOTAL GENERAL ACTIF (I + II + III + IV + V) 633 771 26 106 607 665 550 409
+
+WEMADE
+Bilan - Passif
+Du 01/01/2024 au 31/12/2024
+
+Capital 100
+Réserve légale 10
+Autres réserves 334 902
+Résultat de l'exercice (bénéfice ou perte) 5 365 108 567
+SITUATION NETTE 340 377 359 429
+TOTAL (I) 340 377 359 429
+
+Emprunts et dettes auprès des établissements de crédit 156 565 31 237
+Emprunts et dettes financières diverses 37
+Avances et acomptes reçus 36 451 34 451
+Dettes fournisseurs et Comptes rattachés 57 864 58 450
+Dettes fiscales et sociales 8 658 61 178
+Autres dettes 7 749 5 627
+TOTAL (III) 267 288 190 981
+TOTAL GÉNÉRAL PASSIF (I + II + III + IV) 607 665 550 409
+
+WEMADE
+Compte de Résultat
+Du 01/01/2024 au 31/12/2024
+
+Montant net du chiffre d'affaires 92 997 265 918
+TOTAL DES PRODUITS D'EXPLOITATION (I) 94 763 268 099
+TOTAL DES CHARGES D'EXPLOITATION (II) 82 162 112 797
+RESULTAT D'EXPLOITATION (I - II) 12 601 155 302
+RESULTAT FINANCIER (V - VI) -5 457 -796
+RESULTAT COURANT 7 144 154 506
+BENEFICE OU PERTE 5 365 108 567
+
+2033-A-SD
+TOTAL GENERAL (I + II) 633 771 26 106 607 665
+TOTAL GENERAL (I + II + III) 607 665

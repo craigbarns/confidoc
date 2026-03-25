@@ -1,0 +1,8 @@
+{
+  "id": "bilan_waveA_mixed_sections_003",
+  "requested_doc_type": "bilan",
+  "source_filename": "TODO_SOURCE.pdf",
+  "tags": ["waveA", "mixed_pages", "multi_section", "bilan"],
+  "notes": "Wave A bilan mixte (plaquette + sections heterogenes).",
+  "active": false
+}

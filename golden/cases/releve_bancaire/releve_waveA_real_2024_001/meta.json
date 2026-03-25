@@ -1,0 +1,8 @@
+{
+  "id": "releve_waveA_real_2024_001",
+  "requested_doc_type": "releve_bancaire",
+  "source_filename": "TODO_SOURCE.pdf",
+  "tags": ["waveA", "real", "cabinet", "releve_bancaire", "clean"],
+  "notes": "Wave A releve bancaire reel cabinet (cas propre).",
+  "active": false
+}

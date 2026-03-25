@@ -1,0 +1,13 @@
+DECLARATION DE REVENUS FONCIERS - 2072
+
+IMMEUBLE A - 15 RUE DE PARIS
+Revenus bruts locatifs     45000
+Frais charges hors interets 12500
+Interets emprunt             8000
+Revenu net foncier         24500
+
+TOTAL GENERAL
+Revenus bruts              45000
+Frais charges              20500
+Interets                   8000
+Revenu net                 24500

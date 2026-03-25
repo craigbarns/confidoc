@@ -1,0 +1,8 @@
+{
+  "doc_type": "compte_resultat",
+  "difficulty": "hard",
+  "focus_fields": ["total_produits", "total_charges"],
+  "description": "Cas multi-colonnes N/N-1 - Risque de prendre 2023 au lieu de 2024",
+  "expected_failure": "Collision colonnes - extraction N-1 au lieu de N",
+  "ocr_quality": "high"
+}

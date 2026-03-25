@@ -1,0 +1,27 @@
+COMPTE DE RESULTAT AU 31 DECEMBRE 2024
+
+PRODUITS D'EXPLOITATION
+Ventes de marchandises 1 250 000
+Production vendue 890 000
+Prestations de services 340 000
+Subventions d'exploitation 45 000
+Autres produits 25 000
+TOTAL PRODUITS D'EXPLOITATION 2 550 000
+
+CHARGES D'EXPLOITATION
+Achats consommés 680 000
+Charges de personnel 945 000
+Dotations aux amortissements 125 000
+Autres charges 580 000
+TOTAL CHARGES D'EXPLOITATION 2 330 000
+
+RESULTAT D'EXPLOITATION 220 000
+
+Produits financiers 12 000
+Charges financières 28 000
+RESULTAT FINANCIER -16 000
+
+RESULTAT AVANT IMPOT 204 000
+
+Impots sur les benefices 61 200
+RESULTAT NET DE L'EXERCICE 142 800

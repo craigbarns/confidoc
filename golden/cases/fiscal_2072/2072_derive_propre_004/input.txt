@@ -1,0 +1,18 @@
+DECLARATION 2072 - 2024
+
+IMMEUBLE 1
+Revenus bruts      45000
+Frais charges      12000
+Interets            8000
+
+IMMEUBLE 2
+Revenus bruts      38000
+Frais charges      10500
+Interets            6000
+
+CALCUL
+Revenus bruts totaux     83000
+Total frais              22500
+Total interets           14000
+
+Resultat imposable       46500

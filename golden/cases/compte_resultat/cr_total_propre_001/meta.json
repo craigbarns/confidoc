@@ -1,0 +1,8 @@
+{
+  "doc_type": "compte_resultat",
+  "difficulty": "easy",
+  "focus_fields": ["total_produits", "total_charges"],
+  "description": "Cas propre - Labels standards bien positionnés",
+  "expected_failure": null,
+  "ocr_quality": "high"
+}

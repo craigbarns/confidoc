@@ -1,0 +1,23 @@
+BILAN AU 31/12/2024 (PCG)
+
+ACTIF
+211  Terrain             15000
+213  Constructions       65000
+215  Installations       18000
+218  Autres immob        20000
+     Total immob         118000
+
+411  Clients            125000
+512  Banques            440064
+     Total actif         683064
+
+PASSIF
+101  Capital             50000
+106  Reserves           150000
+120  Report              50000
+129  Resultat            59429
+     Total capitaux      309429
+
+161  Emprunts           150000
+401  Fournisseurs        36451
+     Total passif        683064

@@ -1,0 +1,9 @@
+{
+  "doc_type": "fiscal_2072",
+  "difficulty": "hard",
+  "focus_fields": ["frais_charges", "revenu_net"],
+  "description": "Cas blocage - Donnees manquantes, doit bloquer needs_review",
+  "expected_failure": "Extraction forcee avec valeurs partielles",
+  "ocr_quality": "very_low",
+  "expected_behavior": "block_needs_review"
+}

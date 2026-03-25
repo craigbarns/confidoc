@@ -1,0 +1,20 @@
+COMPTE DE RESULTAT 2024
+
+PRODUITS
+Ventes marchandises      1250000
+Production               1450000
+Services                  740000
+Autres                    180000
+                         -------
+                          (pas de total explicite)
+
+CHARGES
+Achats                   1200000
+Personnel                 945000
+Services ext              420000
+Impots et taxes           125000
+Autres                    430000
+                         -------
+                          (pas de total explicite)
+
+Resultat calcule          145000

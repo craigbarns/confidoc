@@ -1,0 +1,9 @@
+{
+  "doc_type": "fiscal_2072",
+  "difficulty": "easy",
+  "focus_fields": ["frais_charges", "revenu_net"],
+  "description": "Cas top-level - Totaux clairement indiques sans detail",
+  "expected_failure": null,
+  "ocr_quality": "high",
+  "strategy": "top_level"
+}

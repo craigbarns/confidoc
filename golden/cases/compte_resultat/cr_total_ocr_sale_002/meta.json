@@ -1,0 +1,8 @@
+{
+  "doc_type": "compte_resultat",
+  "difficulty": "medium",
+  "focus_fields": ["total_produits", "total_charges"],
+  "description": "Cas OCR bruité - 0 au lieu de O, caractères parasites",
+  "expected_failure": "Regex trop stricte sur PRODUITS",
+  "ocr_quality": "low"
+}

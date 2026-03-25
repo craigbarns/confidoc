@@ -1,0 +1,14 @@
+B1LAN 2024
+
+ACT1F
+Immob1lisations  42 601
+Cré@nces        125 000
+Dispon1bilités  440 064
+
+T0TAL ACT1F     607 665
+
+PASS1F
+Cap1taux        359 429
+Dettes          248 236
+
+T0TAL PASS1F    607 665

@@ -1,0 +1,15 @@
+BILAN AU 31/12/2024 (en euros)
+
+                        2024        2023
+ACTIF
+Immobilisations      42601       38900
+Creances            125000      118000
+Disponibilites      440064      425000
+
+TOTAL ACTIF         607665      581900
+
+PASSIF
+Capitaux propres    359429      342000
+Dettes              248236      239900
+
+TOTAL PASSIF        607665      581900

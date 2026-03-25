@@ -1,0 +1,8 @@
+{
+  "doc_type": "bilan",
+  "difficulty": "easy",
+  "focus_fields": ["total_actif", "total_passif"],
+  "description": "Cas total general - Labels explicites bien positionnes",
+  "expected_failure": null,
+  "ocr_quality": "high"
+}

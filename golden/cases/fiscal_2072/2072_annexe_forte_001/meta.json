@@ -1,0 +1,9 @@
+{
+  "doc_type": "fiscal_2072",
+  "difficulty": "easy",
+  "focus_fields": ["frais_charges", "revenu_net"],
+  "description": "Cas annexe detaillee forte - Donnees completes par immeuble",
+  "expected_failure": null,
+  "ocr_quality": "high",
+  "strategy": "annex_first"
+}

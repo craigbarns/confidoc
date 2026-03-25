@@ -1,0 +1,8 @@
+{
+  "id": "releve_waveA_balance_edge_003",
+  "requested_doc_type": "releve_bancaire",
+  "source_filename": "TODO_SOURCE.pdf",
+  "tags": ["waveA", "edge_case", "balance_check", "releve_bancaire"],
+  "notes": "Wave A releve bancaire edge case pour balance check.",
+  "active": false
+}

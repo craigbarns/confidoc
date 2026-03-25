@@ -1,0 +1,15 @@
+BILAN AU 31 DECEMBRE 2024
+
+ACTIF
+Immobilisations          42601
+Creances                 125000
+Disponibilites           440064
+
+TOTAL GENERAL ACTIF      607665
+
+PASSIF
+Capitaux propres         359429
+Resultat                 59429
+Dettes                   188616
+
+TOTAL GENERAL PASSIF     607665

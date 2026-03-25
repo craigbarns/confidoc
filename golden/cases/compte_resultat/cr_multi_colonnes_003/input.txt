@@ -1,0 +1,17 @@
+COMPTE DE RESULTAT AU 31 DECEMBRE 2024
+
+                            2024        2023
+PRODUITS
+Ventes                    2550000     2400000
+Services                   890000      850000
+                          -------     -------
+TOTAL PRODUITS            3440000     3250000
+
+CHARGES
+Achats                    1780000     1650000
+Personnel                  945000      890000
+Autres                     215000      198000
+                          -------     -------
+TOTAL CHARGES             2940000     2738000
+
+RESULTAT NET               500000      512000

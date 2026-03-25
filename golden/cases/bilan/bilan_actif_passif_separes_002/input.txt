@@ -1,0 +1,23 @@
+BILAN SOCIETE X - 2024
+
+ACTIF
+Immobilisations      42601
+Stocks               75000
+Creances            125000
+Disponibilites      440064
+
+TOTAL ACTIF         682665
+
+PASSIF
+Capital              100000
+Reserves             200000
+Report                50000
+Resultat              59429
+
+TOTAL CAPITAUX PROPRES 409429
+
+Emprunts            150000
+Fournisseurs         36451
+Autres dettes        86785
+
+TOTAL PASSIF        682665

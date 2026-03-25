@@ -1,0 +1,8 @@
+{
+  "id": "bilan_waveA_noisy_ocr_002",
+  "requested_doc_type": "bilan",
+  "source_filename": "TODO_SOURCE.pdf",
+  "tags": ["waveA", "noisy", "ocr", "bilan"],
+  "notes": "Wave A bilan OCR bruite.",
+  "active": false
+}

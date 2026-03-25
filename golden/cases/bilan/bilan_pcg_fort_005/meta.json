@@ -1,0 +1,9 @@
+{
+  "doc_type": "bilan",
+  "difficulty": "medium",
+  "focus_fields": ["total_actif", "total_passif"],
+  "description": "Cas PCG fort - Codes comptables 211, 411, 512...",
+  "expected_failure": "Extraction ignore les codes PCG",
+  "ocr_quality": "high",
+  "strategy": "pcg_codes"
+}

@@ -1,0 +1,8 @@
+{
+  "id": "cr_waveA_mixed_sections_003",
+  "requested_doc_type": "compte_resultat",
+  "source_filename": "TODO_SOURCE.pdf",
+  "tags": ["waveA", "mixed_pages", "multi_section", "compte_resultat"],
+  "notes": "Wave A compte de resultat mixte (pages heterogenes).",
+  "active": false
+}

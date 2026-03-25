@@ -1,0 +1,9 @@
+{
+  "doc_type": "compte_resultat",
+  "difficulty": "hard",
+  "focus_fields": ["total_produits", "total_charges"],
+  "description": "Cas lignes sans total - Doit sommer les lignes comptables",
+  "expected_failure": "Pas de total explicite, extraction echoue",
+  "ocr_quality": "high",
+  "strategy": "sum_lines"
+}

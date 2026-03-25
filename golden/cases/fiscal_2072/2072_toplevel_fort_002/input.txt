@@ -1,0 +1,7 @@
+DECLARATION 2072 - REVENUS FONCIERS 2024
+
+Revenus bruts totaux                          78000
+Frais et charges deductible hors interets     18500
+Interets d'emprunt                            12000
+
+REVENU NET FONCIER (78000 - 18500 - 12000)    47500

@@ -1,0 +1,8 @@
+{
+  "id": "cr_waveA_noisy_ocr_002",
+  "requested_doc_type": "compte_resultat",
+  "source_filename": "TODO_SOURCE.pdf",
+  "tags": ["waveA", "noisy", "ocr", "compte_resultat"],
+  "notes": "Wave A compte de resultat OCR bruite.",
+  "active": false
+}

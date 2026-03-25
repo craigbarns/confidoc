@@ -1,0 +1,8 @@
+{
+  "doc_type": "compte_resultat",
+  "difficulty": "medium",
+  "focus_fields": ["total_produits", "total_charges"],
+  "description": "Cas total only - Seuls les totaux sont lisibles, pas le detail",
+  "expected_failure": "Extraction ignore les totaux si pas de detail",
+  "ocr_quality": "low"
+}
