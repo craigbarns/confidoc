@@ -1595,19 +1595,24 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             total_actif = float(total_passif)
             total_actif_src = "fallback:final_align_actif_to_passif_total_general_src"
 
-    capitaux_propres, capitaux_propres_src = _extract_first_amount_with_source(
-        passif_text,
-        [
-            ("label:capitaux_propres", r"capitaux?\s+propres"),
-            ("label:capitaux_propres_ensemble", r"total.{0,20}capitaux?\s+propres"),
-            ("label:fonds_propres", r"fonds?\s+propres"),
-            ("label:ressources_propres", r"ressources?\s+propres"),
-            ("label:capitaux_assimiles", r"capitaux?\s+propres\s+et\s+assimil"),
-            ("label:total_capitaux", r"total\s+i.{0,18}capitaux"),
-        ],
-        min_amount=100.0,
-    )
-    # Prefer line-token extraction first for N/N-1 layouts (avoid cross-line capture).
+    # PRIORITÉ 1: Pour plaquettes, utiliser TOTAL (I) du passif - extraction spécifique N/N-1
+    # Cette méthode est la plus fiable pour les plaquettes car elle prend le premier montant (N)
+    capitaux_propres = _extract_total_i_passif(text)
+    capitaux_propres_src = "label:total_i_passif_capitaux_propres" if capitaux_propres else "missing"
+    
+    # Fallbacks si la méthode plaquette n'a pas fonctionné
+    if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _extract_first_amount_with_source(
+            passif_text,
+            [
+                ("label:capitaux_propres", r"capitaux?\s+propres"),
+                ("label:capitaux_propres_ensemble", r"total.{0,20}capitaux?\s+propres"),
+                ("label:fonds_propres", r"fonds?\s+propres"),
+                ("label:ressources_propres", r"ressources?\s+propres"),
+                ("label:capitaux_assimiles", r"capitaux?\s+propres\s+et\s+assimil"),
+            ],
+            min_amount=100.0,
+        )
     if capitaux_propres is None:
         capitaux_propres, capitaux_propres_src = _extract_first_amount_token_from_keyword_line_excluding(
             passif_text,
@@ -1728,14 +1733,6 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             ],
             min_amount=100.0,
         )
-    
-    # For plaquette-style bilans: use TOTAL (I) from passif section
-    # Do this BEFORE the fallback derivation to ensure we prefer explicit labels
-    if capitaux_propres is None:
-        total_i_passif = _extract_total_i_passif(text)
-        if isinstance(total_i_passif, float):
-            capitaux_propres = total_i_passif
-            capitaux_propres_src = "label:total_i_passif_capitaux_propres"
     
     # Fallback: if capitaux_propres missing and we have total_passif + dettes, deduce it
     if capitaux_propres is None and isinstance(total_passif, (int, float)):
