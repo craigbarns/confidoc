@@ -18,8 +18,33 @@ from app.services.ollama_service import generate_summary_with_ollama, generate_a
 from app.services.kimi_service import generate_summary_with_kimi, generate_audit_with_kimi
 from app.services.structured_dataset_service import build_structured_dataset
 from app.api.v1.documents import _get_best_text_for_reporting
+from app.config import get_settings
 
 router = APIRouter()
+
+
+def _select_llm_provider(requested: str) -> str:
+    """Select best available LLM provider based on configuration."""
+    _settings = get_settings()
+    kimi_available = getattr(_settings, "KIMI_ENABLED", False) and getattr(_settings, "KIMI_API_KEY", "")
+    ollama_available = getattr(_settings, "OLLAMA_ENABLED", True)
+    
+    if requested == "kimi" and kimi_available:
+        return "kimi"
+    if requested == "ollama" and ollama_available:
+        return "ollama"
+    if requested == "auto":
+        # Prioritize Kimi if available (better quality), fallback to Ollama
+        if kimi_available:
+            return "kimi"
+        if ollama_available:
+            return "ollama"
+    # Fallback: try Kimi first, then Ollama
+    if kimi_available:
+        return "kimi"
+    if ollama_available:
+        return "ollama"
+    return "kimi"  # Default to kimi even if not configured (will fail gracefully)
 
 
 def _is_safe_placeholder_text(v: str) -> bool:
@@ -260,7 +285,7 @@ async def ai_audit(
     current_user: CurrentUser,
     db: DbSession,
     doc_type: str = Query(default="auto"),
-    llm_provider: str = Query(default="ollama"),
+    llm_provider: str = Query(default="auto"),
 ) -> JSONResponse:
     try:
         document_uuid = uuid.UUID(document_id)
@@ -303,8 +328,11 @@ async def ai_audit(
         "anonymized_excerpt": anonymized_text[:5000],
     }
 
+    # Select best available provider
+    selected_provider = _select_llm_provider(llm_provider)
+    
     try:
-        if llm_provider == "kimi":
+        if selected_provider == "kimi":
             llm = await generate_audit_with_kimi(
                 ai_payload, doc_type=structured.get("doc_type", "generic")
             )
@@ -315,7 +343,7 @@ async def ai_audit(
             )
             provider_name = "ollama (local)"
     except Exception as exc:
-        raise http_400(f"Erreur IA ({llm_provider}) AuditAgent: {exc}") from exc
+        raise http_400(f"Erreur IA ({selected_provider}) AuditAgent: {exc}") from exc
 
     parsed = llm.get("validated")
     quality = structured.get("quality") or {}
@@ -370,7 +398,7 @@ async def ai_summary(
     current_user: CurrentUser,
     db: DbSession,
     doc_type: str = Query(default="auto"),
-    llm_provider: str = Query(default="ollama"),
+    llm_provider: str = Query(default="auto"),
     kimi_mode: str = Query(default="summary"),
     question: str = Query(default=""),
 ) -> JSONResponse:
@@ -454,8 +482,11 @@ async def ai_summary(
         raise http_400("Paramètre kimi_mode invalide. Valeurs: summary|review|draft|question.")
     if kimi_mode == "question" and not question.strip():
         raise http_400("Paramètre question requis quand kimi_mode=question.")
+    # Select best available provider
+    selected_provider = _select_llm_provider(llm_provider)
+    
     try:
-        if llm_provider == "kimi":
+        if selected_provider == "kimi":
             llm = await generate_summary_with_kimi(
                 ai_payload,
                 prudent_mode=prudent_mode,
@@ -466,7 +497,7 @@ async def ai_summary(
             llm = await generate_summary_with_ollama(ai_payload)
             provider_name = "ollama"
     except Exception as exc:
-        raise http_400(f"Erreur IA ({llm_provider}): {exc}") from exc
+        raise http_400(f"Erreur IA ({selected_provider}): {exc}") from exc
 
     parsed = llm.get("validated")
     used_fallback = not isinstance(parsed, dict)
