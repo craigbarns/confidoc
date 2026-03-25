@@ -237,6 +237,7 @@ def _build_structured_report_pdf_bytes(payload: dict, *, original_filename: str)
     doc_type = str(payload.get("doc_type") or "unknown")
     coverage = float(quality.get("coverage_ratio") or 0.0)
 
+    suspicious_fields = quality.get("suspicious_fields") or []
     lines: list[str] = [
         "Rapport d'extraction ConfiDoc",
         f"Document: {original_filename}",
@@ -251,9 +252,11 @@ def _build_structured_report_pdf_bytes(payload: dict, *, original_filename: str)
         f"- Needs review: {'oui' if quality.get('needs_review') else 'non'}",
         f"- Ready for AI: {'oui' if quality.get('ready_for_ai') else 'non'}",
         f"- Ready for AI Core: {'oui' if quality.get('ready_for_ai_core') else 'non'}",
-        "",
-        "Champs extraits:",
     ]
+    if suspicious_fields:
+        lines.append(f"- Champs a verifier: {', '.join(suspicious_fields)}")
+    lines.append("")
+    lines.append("Champs extraits:")
     if rows:
         lines.extend([f"- {k}: {v}" for k, v in rows])
     else:
