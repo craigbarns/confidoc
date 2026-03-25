@@ -13,6 +13,8 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
 from app.models.document import Document
+from app.models.llm_request import LlmRequest
+from app.models.llm_suggestion import LlmSuggestion
 from app.services.anonymization_service import anonymize_text, classify_document_type
 from app.services.ollama_service import generate_summary_with_ollama, generate_audit_with_ollama
 from app.services.kimi_service import generate_summary_with_kimi, generate_audit_with_kimi
@@ -313,8 +315,42 @@ async def ai_audit(
         document_type=effective_type,
     )
 
+    # Merge accepted LLM suggestions (RGPD: replacement only) - same as document_dataset_summary
+    llm_suggestions_result = await db.execute(
+        select(LlmSuggestion)
+        .join(LlmRequest, LlmRequest.id == LlmSuggestion.llm_request_id)
+        .where(
+            LlmRequest.document_id == document.id,
+            LlmRequest.human_status == "accepted",
+        )
+    )
+    llm_suggestions = list(llm_suggestions_result.scalars().all())
+    merged = list(detections)
+    for s in llm_suggestions:
+        cand = {
+            "entity_type": s.entity_type,
+            "start_index": int(s.start_index),
+            "end_index": int(s.end_index),
+            "replacement": s.replacement_token,
+        }
+        overlap = any(
+            not (cand["end_index"] <= ex["start_index"] or cand["start_index"] >= ex["end_index"])
+            for ex in merged
+        )
+        if not overlap:
+            merged.append(cand)
+
+    # Apply replacements so quality gate matches the final dataset text.
+    dataset_text = original_text
+    for match in sorted(merged, key=lambda m: m["start_index"], reverse=True):
+        dataset_text = (
+            dataset_text[: match["start_index"]]
+            + match["replacement"]
+            + dataset_text[match["end_index"] :]
+        )
+
     structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
+        anonymized_text=dataset_text,
         original_filename=document.original_filename,
         requested_doc_type=doc_type,
         extraction_text=original_text,

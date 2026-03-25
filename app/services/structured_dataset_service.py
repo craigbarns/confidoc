@@ -1673,13 +1673,14 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     
     # OCR tolerance: try with normalized text for critical labels
     # This handles OCR degradation like "CAP1TAUX PR0PRES" → "capitaux propres"
+    # Pattern accepts "capitaux" alone OR "capitaux propres" (for OCR-degraded text)
     if capitaux_propres is None:
         capitaux_propres, capitaux_propres_src = _extract_with_ocr_tolerance(
             text,
             [
-                ("label:capitaux_propres", r"capitaux?\s+propres"),
+                ("label:capitaux_propres", r"capitaux(?:\s+propres)?"),
                 ("label:situation_nette", r"situation\s+nette"),
-                ("label:fonds_propres", r"fonds?\s+propres"),
+                ("label:fonds_propres", r"fonds(?:\s+propres)?"),
             ],
             min_amount=100.0,
         )
