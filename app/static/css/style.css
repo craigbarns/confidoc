@@ -494,6 +494,13 @@ h1, h2, h3, h4, h5, .logo span, .stat-value, .login-logo span {
   box-shadow: 0 0 20px rgba(99, 102, 241, 0.5), 0 0 40px rgba(168, 85, 247, 0.3);
   position: relative;
 }
+.progress-bar .fill.pulsing {
+  animation: shimmer 2s linear infinite, pulseBrightness 1.2s ease-in-out infinite;
+}
+@keyframes pulseBrightness {
+  0%, 100% { filter: brightness(1); }
+  50% { filter: brightness(1.35); }
+}
 .progress-bar .fill::after {
   content: "";
   position: absolute;

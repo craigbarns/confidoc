@@ -743,12 +743,23 @@ async function api(path, opts={}) {
 }
 
 /** Multipart upload : ne pas définir Content-Type (le navigateur pose le boundary). */
-async function apiUploadMultipart(path, formData) {
+async function apiUploadMultipart(path, formData, onProgress) {
   const xhrUpload = () => new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     xhr.open("POST", path, true);
-    xhr.timeout = 120000;
+    xhr.timeout = 300000; // 5 min pour Railway (OCR lourd)
     if (accessToken) xhr.setRequestHeader("Authorization", `Bearer ${accessToken}`);
+
+    // Progression réelle pendant le transfert fichier (phase 1 : 0 → 55%)
+    if (onProgress && xhr.upload) {
+      xhr.upload.onprogress = (e) => {
+        if (e.lengthComputable) {
+          onProgress("transfer", Math.round((e.loaded / e.total) * 55));
+        }
+      };
+      // Transfert terminé → serveur traite (phase 2 : 55% → attente)
+      xhr.upload.onload = () => onProgress("processing", 60);
+    }
 
     xhr.onload = () => {
       const raw = xhr.responseText || "";
@@ -1304,10 +1315,41 @@ async function doUploadFile(file) {
   const clientName = ($("clientNameInput") || {}).value || "";
   const uploadUrl = `/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}&client_name=${encodeURIComponent(clientName.trim())}`;
 
+  // Animation lente 60% → 90% pendant le traitement serveur (OCR / anonymisation)
+  let processingInterval = null;
+  let currentFakePct = 60;
+  function startProcessingAnimation() {
+    fill.classList.add("pulsing");
+    processingInterval = setInterval(() => {
+      if (currentFakePct < 90) {
+        currentFakePct += 0.5;
+        fill.style.width = currentFakePct + "%";
+      }
+    }, 600);
+  }
+  function stopProcessingAnimation() {
+    if (processingInterval) { clearInterval(processingInterval); processingInterval = null; }
+    fill.classList.remove("pulsing");
+  }
+
+  function onUploadProgress(phase, pct) {
+    if (phase === "transfer") {
+      fill.style.width = pct + "%";
+      progText.textContent = `Envoi… ${pct}%`;
+    } else if (phase === "processing") {
+      fill.style.width = "60%";
+      currentFakePct = 60;
+      progText.textContent = auto ? "Traitement en cours (OCR + anonymisation)…" : "Finalisation…";
+      startProcessingAnimation();
+    }
+  }
+
   try {
     setStage("upload", "Upload du document en cours...");
-    fill.style.width = "60%";
-    const { res, data } = await apiUploadMultipart(uploadUrl, form);
+    fill.style.width = "5%";
+    progText.textContent = `Envoi de ${file.name}…`;
+    const { res, data } = await apiUploadMultipart(uploadUrl, form, onUploadProgress);
+    stopProcessingAnimation();
     showApi(data);
     if (!res.ok) {
       const msg = formatApiDetail(data) || res.status;
@@ -1328,6 +1370,7 @@ async function doUploadFile(file) {
       await refreshDocs();
     }
   } catch (e) {
+    stopProcessingAnimation();
     const errMsg = e && e.message ? e.message : String(e);
     const lower = String(errMsg).toLowerCase();
     if (
