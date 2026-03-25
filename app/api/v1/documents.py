@@ -5,6 +5,7 @@ import uuid
 import re
 import hashlib
 import traceback
+from datetime import datetime, timedelta
 from collections import Counter
 from html import escape as html_escape
 from io import BytesIO
@@ -900,13 +901,13 @@ async def status_summary(
     V1: compteurs de statuts + répartition full/core/review + top quality flags.
     """
     try:
-        cutoff_expr = func.now() - func.make_interval(days=days)
+        cutoff_date = datetime.utcnow() - timedelta(days=days)
         result = await db.execute(
             select(Document)
             .where(
                 Document.uploaded_by_user_id == current_user.id,
                 Document.is_deleted.is_(False),
-                Document.created_at >= cutoff_expr,
+                Document.created_at >= cutoff_date,
             )
             .order_by(desc(Document.created_at))
         )
