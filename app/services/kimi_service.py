@@ -124,6 +124,12 @@ async def generate_summary_with_kimi(
         "Interdiction stricte: ne pas contredire ready_for_ai, ready_for_ai_core, needs_review,\n"
         "critical_missing_fields et quality_flags.\n"
         "Si critical_missing_fields est vide ([]), ne jamais écrire qu'il existe des champs critiques manquants.\n"
+        "INTERDICTION ABSOLUE DE CALCUL COMPTABLE:\n"
+        "- Ne jamais additionner, soustraire ou comparer des postes comptables entre eux\n"
+        "- Ne jamais vérifier si capitaux_propres + resultat_exercice = total_passif\n"
+        "- Ne jamais signaler d'incohérence arithmétique sauf si explicitement dans quality_flags\n"
+        "- Le résultat_exercice est souvent DÉJÀ inclus dans capitaux_propres : ne pas les additionner\n"
+        "- Les seules alertes comptables autorisées sont celles listées dans quality_flags backend\n"
         "Réponds avec JSON strict contenant exactement: "
         "resume_executif, points_cles, anomalies_ou_alertes, questions_de_revue, confiance_globale.\n"
     )
