@@ -209,8 +209,18 @@ def _iso_date_in_range(iso: str | None, start_iso: str | None, end_iso: str | No
 
 
 def _extract_amount_for_label(text: str, label_regex: str, max_gap: int = 200) -> float | None:
+    # Primary: non-digit gap between label and amount.
     pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
-    return _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
+    result = _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
+    if result is not None:
+        return result
+    # Fallback: tolerate isolated OCR digit noise in the gap (e.g. "déf1cit" instead
+    # of "déficit").  Allow up to max_gap+60 chars of gap that may contain single digits
+    # surrounded by non-digits, but require the captured amount to be >= 3 digits
+    # (to avoid capturing the noise digit itself).
+    relaxed_gap = max_gap + 60
+    pat_relaxed = rf"{label_regex}(?:[^0-9\-]|\d(?=[^0-9])){{0,{relaxed_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{2,30}})"
+    return _clean_amount_candidate(_to_float_fr(_extract_first(pat_relaxed, text)))
 
 
 def _extract_financial_amount_for_label(
@@ -2816,7 +2826,7 @@ def _quality_compte_resultat(fields: dict[str, dict[str, Any]]) -> dict[str, Any
 
     ready_for_ai_core = not critical_missing and progression_ok
     ready_for_ai = base["coverage_ratio"] >= 0.75 and ready_for_ai_core
-    needs_review = not ready_for_ai_core
+    needs_review = not ready_for_ai
 
     flags = list(base.get("quality_flags", []))
     if critical_missing:
@@ -3073,7 +3083,7 @@ def _quality_2072(
             )
         )
     )
-    needs_review = not ready_for_ai_core
+    needs_review = not ready_for_ai
     flags = list(base.get("quality_flags", []))
     if critical_missing:
         flags.append("critical_fields_missing")
