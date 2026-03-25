@@ -574,6 +574,7 @@ async def ai_summary(
 
 @router.post(
     "/stream/{document_id}",
+    response_class=StreamingResponse,
     summary="Synthèse IA en streaming (SSE)",
 )
 async def ai_stream(
@@ -582,7 +583,7 @@ async def ai_stream(
     db: DbSession,
     doc_type: str = Query(default="auto"),
     question: str = Query(default=""),
-) -> StreamingResponse:
+):
     try:
         document_uuid = uuid.UUID(document_id)
     except ValueError as exc:
