@@ -158,11 +158,29 @@ def _to_float_fr(num_text: str | None) -> float | None:
         return None
     raw = num_text.replace("\u00a0", " ")
     raw = raw.replace("€", "").replace("eur", "").replace("EUR", "")
-    # Anti-bruit OCR sur les chiffres (O/0).
+    # Anti-bruit OCR sur les chiffres (O/0, l/1, I/1, S/5, B/8).
     raw = raw.replace("O", "0").replace("o", "0")
+    raw = raw.replace("l", "1").replace("I", "1").replace("i", "1")
+    raw = raw.replace("S", "5").replace("s", "5")
+    raw = raw.replace("B", "8").replace("b", "6")  # b can be OCR'd as 6
     raw = raw.strip()
     raw = re.sub(r"[ ]+", "", raw)
-    raw = raw.replace(",", ".")
+    # Handle both French (1 234,56) and English (1,234.56) formats
+    # If there's a comma after digits and exactly 2 digits after, it's likely a decimal comma
+    if re.search(r"\d,\d{2}$", raw):
+        raw = raw.replace(",", ".")
+    elif "," in raw and "." in raw:
+        # Mixed format: 1,234.56 -> remove comma, keep dot
+        raw = raw.replace(",", "")
+    elif "," in raw:
+        # Could be thousand separator (French) or decimal (English)
+        # If exactly 2 digits after last comma, assume decimal
+        parts = raw.rsplit(",", 1)
+        if len(parts) == 2 and len(parts[1]) == 2 and parts[1].isdigit():
+            raw = raw.replace(",", ".")
+        else:
+            # Thousand separator, remove it
+            raw = raw.replace(",", "")
     raw = re.sub(r"[^0-9.\-]", "", raw)
     if not raw:
         return None
@@ -210,7 +228,7 @@ def _iso_date_in_range(iso: str | None, start_iso: str | None, end_iso: str | No
 
 def _extract_amount_for_label(text: str, label_regex: str, max_gap: int = 200) -> float | None:
     # Primary: non-digit gap between label and amount.
-    pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
+    pat = rf"{label_regex}[^0-9\-]{{0,{max_gap}}}([\-]?[0-9Oo][0-9Oo \t\u00a0.,]{{0,30}})"
     result = _clean_amount_candidate(_to_float_fr(_extract_first(pat, text)))
     if result is not None:
         return result
@@ -219,7 +237,7 @@ def _extract_amount_for_label(text: str, label_regex: str, max_gap: int = 200) -
     # surrounded by non-digits, but require the captured amount to be >= 3 digits
     # (to avoid capturing the noise digit itself).
     relaxed_gap = max_gap + 60
-    pat_relaxed = rf"{label_regex}(?:[^0-9\-]|\d(?=[^0-9])){{0,{relaxed_gap}}}([0-9Oo][0-9Oo \t\u00a0.,]{{2,30}})"
+    pat_relaxed = rf"{label_regex}(?:[^0-9\-]|\d(?=[^0-9])){{0,{relaxed_gap}}}([\-]?[0-9Oo][0-9Oo \t\u00a0.,]{{2,30}})"
     return _clean_amount_candidate(_to_float_fr(_extract_first(pat_relaxed, text)))
 
 
@@ -1047,6 +1065,71 @@ def _coerce_component_amount(value: float | None, total_passif: float | None) ->
     return v
 
 
+def _extract_bilan_actif_by_pcg(text: str) -> dict[str, tuple[float | None, str]]:
+    """Extract ACTIF components by PCG account class from accounting tables/lines.
+    
+    Returns a dict with:
+    - immobilisations: sum of accounts 2xx (immobilisations)
+    - creances: sum of accounts 41x, 46x, 47x (clients et autres créances)
+    - disponibilites: sum of accounts 51x, 52x, 53x (banque, caisse, ccp)
+    Each with (value, source_hint) tuple.
+    """
+    # Get all accounting lines
+    records = _extract_generic_accounting_table(text)
+    
+    immo_sum = 0.0
+    creance_sum = 0.0
+    dispo_sum = 0.0
+    
+    immo_codes = []
+    creance_codes = []
+    dispo_codes = []
+    
+    for r in records:
+        code = str(r.get("code", ""))
+        amt = r.get("amount")
+        if not code or not isinstance(amt, (int, float)):
+            continue
+        
+        # Skip totals and subtotals (single digit or two digits ending with 0 are summaries)
+        if len(code) < 3:
+            continue
+        
+        # PCG Class 2: Immobilisations (20x-28x)
+        if code.startswith("2") and not code.startswith("28"):  # Exclude amortissements (28x)
+            immo_sum += float(amt)
+            immo_codes.append(code)
+        # PCG Class 41x, 46x, 47x: Créances clients et autres créances
+        # EXCLUDE: 40x (fournisseurs), 42x (personnel), 43x (sécurité sociale), 44x (État), 45x (associés)
+        elif code.startswith("41") or code.startswith("46") or code.startswith("47"):
+            creance_sum += float(amt)
+            creance_codes.append(code)
+        # PCG Class 51x, 52x, 53x: Disponibilités (banque, caisse, ccp)
+        elif code.startswith("51") or code.startswith("52") or code.startswith("53"):
+            dispo_sum += float(amt)
+            dispo_codes.append(code)
+    
+    result: dict[str, tuple[float | None, str]] = {}
+    
+    # Build result with appropriate source hints
+    if immo_codes:
+        result["immobilisations"] = (immo_sum, f"pcg_sum:2xx[{','.join(immo_codes[:5])}]")
+    else:
+        result["immobilisations"] = (None, "missing")
+        
+    if creance_codes:
+        result["creances"] = (creance_sum, f"pcg_sum:4xx[{','.join(creance_codes[:5])}]")
+    else:
+        result["creances"] = (None, "missing")
+        
+    if dispo_codes:
+        result["disponibilites"] = (dispo_sum, f"pcg_sum:5xx[{','.join(dispo_codes[:5])}]")
+    else:
+        result["disponibilites"] = (None, "missing")
+    
+    return result
+
+
 def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     total_actif, total_actif_src = _extract_first_amount_with_source(
         text,
@@ -1232,12 +1315,12 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         for src_hint, pat in [
             ("label_wide:situation_nette", r"situation\s+nette"),
             ("label_wide:net_comptable", r"net\s+comptable"),
+            ("label_wide:capitaux_propres", r"capitaux?\s+propres"),
         ]:
             w = _extract_financial_amount_for_label_wide(text, pat, max_gap=160, min_amount=100.0)
             if w is not None:
                 capitaux_propres, capitaux_propres_src = w, src_hint
                 break
-
     # Prefer per-line token extraction to avoid N/N-1 and neighbor-line collisions.
     dettes_fin_val, _ = _extract_first_amount_token_from_keyword_line(
         text,
@@ -1257,14 +1340,28 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 r"emprunts?\s+bancaires?",
                 r"^\s*emprunts?\s*:",
                 r"dettes?\s+aupr[eè]s?\s+des?\s+[ée]tablissements?\s+de\s+cr[ée]dit",
+                # OCR-robust: O->0 variations and accent-insensitive
+                r"emprunts?\s+[eé]tablissements?\s+de\s+cr[eé]dit",
+                r"emprunts?\s+etablissements?\s+de\s+credit",
+            ],
+            min_amount=50.0,
+        )
+    # Include "comptes courants associés" as financial debt (common in SCI/plaquettes)
+    if dettes_fin_val is None:
+        dettes_fin_val = _extract_first_amount_from_patterns(
+            text,
+            [
+                r"comptes?\s+courants?\s+associ[ée]s?",
+                r"comptes?\s+courants?\s+d'associ[ée]s?",
+                r"dettes?\s+associ[ée]s?",
             ],
             min_amount=50.0,
         )
     dettes_four_val, _ = _extract_first_amount_token_from_keyword_line_excluding(
         text,
-        r"dettes?\s+fournisseurs?|fournisseurs?",
+        r"dettes?\s+fournisseurs?|fournisseurs?|dettes?\s+et\s+comptes?\s+rattach[ée]s?",
         min_amount=50.0,
-        exclude_regex=r"avances?\s+et\s+acomptes?|acomptes?\s+re[cç]us",
+        exclude_regex=r"avances?\s+et\s+acomptes?|acomptes?\s+re[cç]us|dettes\s+fiscales",
     )
     if dettes_four_val is None:
         dettes_four_val = _extract_financial_amount_for_label(
@@ -1287,6 +1384,21 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         )
     dettes_fin_val = _coerce_component_amount(dettes_fin_val, total_passif)
     dettes_four_val = _coerce_component_amount(dettes_four_val, total_passif)
+    
+    # Fallback: if capitaux_propres missing and we have total_passif + dettes, deduce it
+    if capitaux_propres is None and isinstance(total_passif, (int, float)):
+        dettes_sum = 0.0
+        dettes_count = 0
+        for dette_val in [dettes_fin_val, dettes_four_val]:
+            if isinstance(dette_val, (int, float)):
+                dettes_sum += float(dette_val)
+                dettes_count += 1
+        if dettes_count >= 1 and dettes_sum > 0:
+            cand = float(total_passif) - dettes_sum
+            if cand >= 100.0:
+                capitaux_propres = cand
+                capitaux_propres_src = "derived:passif_minus_dettes"
+    
     # Guardrail: avoid duplicated debt values when supplier line provides a distinct token.
     if (
         isinstance(dettes_fin_val, (int, float))
@@ -1345,6 +1457,9 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         [
             ("label:resultat_exercice", r"r[ée]sultat\s+de?\s+l[' ]?exercice"),
             ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
+            # Additional patterns for plaquette formats
+            ("label:resultat_total", r"r[ée]sultat\s+net|resultat\s+net"),
+            ("label:resultat_impots", r"r[ée]sultat\s+apr[èe]s\s+imp[ôo]ts?"),
         ],
         min_amount=50.0,
     )
@@ -1354,6 +1469,29 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
             min_amount=50.0,
         )
+    # Fallback: look for "resultat" with wider context if still not found
+    if resultat_exercice is None:
+        resultat_exercice = _extract_financial_amount_for_label_wide(
+            text, r"r[ée]sultat\s+de\s+l[' ]?exercice", max_gap=200, min_amount=50.0
+        )
+        if resultat_exercice is not None:
+            resultat_exercice_src = "label_wide:resultat_exercice"
+    # Fallback for SCI/small companies: deduce result from equity minus capital
+    if resultat_exercice is None and isinstance(capitaux_propres, (int, float)):
+        capital_social = _extract_financial_amount_for_label(
+            text, r"capital\s+social|capital\s*:\s*", min_amount=1.0
+        )
+        if capital_social is None:
+            # Try wider search for capital
+            capital_social = _extract_financial_amount_for_label_wide(
+                text, r"capital\s+social", max_gap=120, min_amount=1.0
+            )
+        if isinstance(capital_social, (int, float)):
+            # Result is equity minus capital (could be 0 for new companies)
+            cand = float(capitaux_propres) - float(capital_social)
+            if cand >= 0:
+                resultat_exercice = cand
+                resultat_exercice_src = "derived:capitaux_propres_minus_capital"
     # Anti-collision on noisy "100" lines when totals indicate large company amounts.
     passif_ref = float(total_passif) if isinstance(total_passif, (int, float)) else None
     if isinstance(passif_ref, float) and passif_ref >= 10_000.0:
@@ -1366,13 +1504,16 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             capitaux_propres = alt
             capitaux_propres_src = alt_src if alt is not None else "missing"
         if isinstance(resultat_exercice, (int, float)) and abs(float(resultat_exercice)) <= 150.0:
-            alt, alt_src = _extract_first_amount_token_from_keyword_line(
-                text,
-                r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
-                min_amount=200.0,
-            )
-            resultat_exercice = alt
-            resultat_exercice_src = alt_src if alt is not None else "missing"
+            # Don't override fallback-derived result unless we find a better explicit value
+            if resultat_exercice_src != "fallback:capitaux_propres_minus_capital":
+                alt, alt_src = _extract_first_amount_token_from_keyword_line(
+                    text,
+                    r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
+                    min_amount=200.0,
+                )
+                if alt is not None:
+                    resultat_exercice = alt
+                    resultat_exercice_src = alt_src
     # Guardrail: if equity and result are identical on large docs, prefer dedicated result line
     # and force equity from explicit equity labels excluding result lines.
     if (
@@ -1400,23 +1541,61 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             capitaux_propres = cp_alt
             capitaux_propres_src = cp_alt_src
 
-    immobilisations_val = _extract_amount_for_label(text, r"immobilisations")
+    # Try to extract ACTIF components from PCG accounting lines first (stronger source)
+    pcg_actif = _extract_bilan_actif_by_pcg(text)
+    
+    immobilisations_val, immobilisations_src = pcg_actif["immobilisations"]
+    creances_val, creances_src = pcg_actif["creances"]
+    disponibilites_val, disponibilites_src = pcg_actif["disponibilites"]
+    
+    # Fallback to keyword extraction if PCG method failed
     if immobilisations_val is None:
-        immobilisations_val, _ = _extract_amount_from_lines_with_keyword(
-            text, r"immobilisations?.{0,20}net", min_amount=100.0
-        )
+        immobilisations_val = _extract_amount_for_label(text, r"immobilisations")
+        immobilisations_src = "label:immobilisations"
+        if immobilisations_val is None:
+            immobilisations_val, _ = _extract_amount_from_lines_with_keyword(
+                text, r"immobilisations?.{0,20}net", min_amount=100.0
+            )
+            immobilisations_src = "fallback:immobilisations_line"
 
-    creances_val = _extract_amount_for_label(text, r"créances|creances")
     if creances_val is None:
-        creances_val, _ = _extract_amount_from_lines_with_keyword(
-            text, r"cr[ée]ances?.{0,20}clients?|clients?.{0,20}cr[ée]ances?", min_amount=100.0
-        )
+        creances_val = _extract_amount_for_label(text, r"créances|creances")
+        creances_src = "label:creances"
+        if creances_val is None:
+            creances_val, _ = _extract_amount_from_lines_with_keyword(
+                text, r"cr[ée]ances?.{0,20}clients?|clients?.{0,20}cr[ée]ances?", min_amount=100.0
+            )
+            creances_src = "fallback:creances_line"
 
-    disponibilites_val = _extract_amount_for_label(text, r"disponibilités|disponibilites")
     if disponibilites_val is None:
-        disponibilites_val, _ = _extract_amount_from_lines_with_keyword(
-            text, r"disponibilit[ée]s?|banque|caisse", min_amount=100.0
-        )
+        disponibilites_val = _extract_amount_for_label(text, r"disponibilités|disponibilites")
+        disponibilites_src = "label:disponibilites"
+        if disponibilites_val is None:
+            disponibilites_val, _ = _extract_amount_from_lines_with_keyword(
+                text, r"disponibilit[ée]s?|banque|caisse", min_amount=100.0
+            )
+            disponibilites_src = "fallback:disponibilites_line"
+    
+    # Calculate/validate total_actif from components if PCG data is strong
+    if immobilisations_src.startswith("pcg_sum:") or creances_src.startswith("pcg_sum:") or disponibilites_src.startswith("pcg_sum:"):
+        calculated_actif = 0.0
+        has_pcg_component = False
+        
+        if immobilisations_src.startswith("pcg_sum:") and immobilisations_val is not None:
+            calculated_actif += immobilisations_val
+            has_pcg_component = True
+        if creances_src.startswith("pcg_sum:") and creances_val is not None:
+            calculated_actif += creances_val
+            has_pcg_component = True
+        if disponibilites_src.startswith("pcg_sum:") and disponibilites_val is not None:
+            calculated_actif += disponibilites_val
+            has_pcg_component = True
+        
+        # Replace total_actif if calculated from PCG is coherent and current is fallback
+        if has_pcg_component and calculated_actif > 0:
+            if total_actif is None or total_actif_src.startswith("fallback:"):
+                total_actif = calculated_actif
+                total_actif_src = "calculated:pcg_actif_components"
 
     return {
         **_extract_common_fields(text),
@@ -1428,18 +1607,18 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         ),
         "immobilisations": _field(
             immobilisations_val,
-            0.78 if immobilisations_val is not None else 0.0,
-            "fallback:immobilisations",
+            0.92 if immobilisations_src.startswith("pcg_sum:") else (0.78 if immobilisations_val is not None else 0.0),
+            immobilisations_src if immobilisations_src != "missing" else "fallback:immobilisations",
         ),
         "creances": _field(
             creances_val,
-            0.78 if creances_val is not None else 0.0,
-            "fallback:creances",
+            0.92 if creances_src.startswith("pcg_sum:") else (0.78 if creances_val is not None else 0.0),
+            creances_src if creances_src != "missing" else "fallback:creances",
         ),
         "disponibilites": _field(
             disponibilites_val,
-            0.78 if disponibilites_val is not None else 0.0,
-            "fallback:disponibilites",
+            0.92 if disponibilites_src.startswith("pcg_sum:") else (0.78 if disponibilites_val is not None else 0.0),
+            disponibilites_src if disponibilites_src != "missing" else "fallback:disponibilites",
         ),
         "dettes_financieres": _field(
             dettes_fin_val, 0.76 if dettes_fin_val is not None else 0.0, "label:dettes financieres"
@@ -2479,9 +2658,16 @@ def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
             r"solde\s+initial",
             r"solde\s+au\s+d[ée]but",
             r"ancien\s+solde",
+            r"solde\s+pr[ée]c[ée]dent",
+            r"solde\s+au\s+\d{2}[\/\-.]\d{2}[\/\-.]\d{4}",
         ],
         min_amount=1.0,
     )
+    # Fallback: look for solde initial with wider gap (label far from amount)
+    if solde_initial is None:
+        solde_initial = _extract_financial_amount_for_label_wide(
+            text, r"solde\s+(?:initial|au\s+d[ée]but)", max_gap=100, min_amount=1.0
+        )
     solde_final = _extract_first_amount_from_patterns(
         text,
         [
@@ -2489,9 +2675,15 @@ def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
             r"solde\s+final",
             r"solde\s+de\s+cl[oô]ture",
             r"solde\s+au\s+[0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3}",
+            r"solde\s+en\s+date",
         ],
         min_amount=1.0,
     )
+    # Fallback: look for solde final with wider gap
+    if solde_final is None:
+        solde_final = _extract_financial_amount_for_label_wide(
+            text, r"(?:nouveau\s+)?solde\s+(?:final|de\s+cl[oô]ture)?", max_gap=100, min_amount=1.0
+        )
     titulaire_pseudo = "TITULAIRE_1" if titulaire else None
     compte_pseudo = "COMPTE_1" if account_hint else None
     return {
@@ -2602,7 +2794,14 @@ def _extract_releve_bancaire_operations(text: str) -> list[dict[str, Any]]:
         line = raw.strip()
         if not line:
             continue
+        # Skip header/footer lines that contain keywords (use word boundaries)
+        lower_line = line.lower()
+        skip_keywords = ['solde initial', 'solde final', 'nouveau solde', 'ancien solde', 
+                        'total', 'page ', 'releve bancaire', 'banque:', 'titulaire:']
+        if any(kw in lower_line for kw in skip_keywords):
+            continue
         # Typical line: "02/01/2025 VIREMENT CLIENT X 0,00 1 200,00"
+        # Also handle: "02-01-2025" or "02.01.2025"
         m = re.match(r"^([0-3]?\d[\/\-.][0-1]?\d[\/\-.][12]\d{3})\s+(.+)$", line, re.IGNORECASE)
         if not m:
             continue
@@ -2610,9 +2809,10 @@ def _extract_releve_bancaire_operations(text: str) -> list[dict[str, Any]]:
         if not op_iso:
             continue
         tail = m.group(2).strip()
+        # Enhanced amount pattern - note: OCR correction is done in _to_float_fr
         amount_matches = list(
             re.finditer(
-                r"-?(?:[0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+|[0-9Oo]+)(?:[.,][0-9Oo]{2})?",
+                r"[\(\-]?(?:[0-9]{1,3}(?:[ \u00a0][0-9]{3})+|[0-9]+)(?:[.,][0-9]{2})?[\)]?",
                 tail,
                 re.IGNORECASE,
             )
@@ -2620,15 +2820,20 @@ def _extract_releve_bancaire_operations(text: str) -> list[dict[str, Any]]:
         if not amount_matches:
             continue
         # Keep parsed numeric candidates only and use the last one(s) as amount columns.
-        candidates: list[tuple[float, tuple[int, int]]] = []
+        candidates: list[tuple[float, tuple[int, int], str]] = []
         for am in amount_matches:
-            v = _to_float_fr(am.group(0))
+            raw_match = am.group(0)
+            # Check for parentheses indicating negative/credit notation
+            is_parenthesized = raw_match.startswith('(') and raw_match.endswith(')')
+            v = _to_float_fr(raw_match)
             if isinstance(v, float):
-                candidates.append((v, am.span()))
+                # If parenthesized, it's typically a credit in some bank formats
+                candidates.append((v, am.span(), raw_match))
         if not candidates:
             continue
 
         a1 = candidates[-2][0] if len(candidates) >= 2 else candidates[-1][0]
+        a2_raw = candidates[-1][2] if len(candidates) >= 2 else ""
         a2 = candidates[-1][0] if len(candidates) >= 2 else None
         first_amount_start = candidates[-2][1][0] if len(candidates) >= 2 else candidates[-1][1][0]
         label = _norm_spaces(tail[:first_amount_start]) or "OPERATION"
@@ -2637,14 +2842,28 @@ def _extract_releve_bancaire_operations(text: str) -> list[dict[str, Any]]:
         credit = None
         if isinstance(a2, float):
             # Assume "debit credit" ordering when two amount columns are present.
-            debit = max(0.0, float(a1 or 0.0))
-            credit = max(0.0, float(a2 or 0.0))
+            # Check if a2 is parenthesized (credit notation in some formats)
+            if '(' in a2_raw and ')' in a2_raw:
+                debit = max(0.0, float(a1 or 0.0))
+                credit = max(0.0, float(a2 or 0.0))
+            else:
+                # Standard format: left column = debit, right column = credit
+                debit = max(0.0, float(a1 or 0.0))
+                credit = max(0.0, float(a2 or 0.0))
         else:
             amt = float(a1 or 0.0)
-            if amt < 0:
+            # Check if the single amount has parentheses (indicating credit)
+            a1_raw = candidates[-1][2] if candidates else ""
+            if '(' in a1_raw and ')' in a1_raw:
+                # Parenthesized amount is credit
+                debit = 0.0
+                credit = abs(amt)
+            elif amt < 0:
                 debit = abs(amt)
                 credit = 0.0
             else:
+                # Single positive amount - could be debit or credit based on label
+                # Most bank statements put debits first/alone
                 debit = 0.0
                 credit = amt
         if debit is None or credit is None:
@@ -2707,6 +2926,21 @@ def _quality(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     }
 
 
+def _detect_suspicious_fields(fields: dict[str, dict[str, Any]]) -> list[str]:
+    """Detect fields that are derived, calculated, or from weak fallbacks (not directly read from document)."""
+    suspicious: list[str] = []
+    derived_prefixes = ("derived:", "calculated:", "fallback:")
+    weak_sources = ("missing", "unknown")
+    
+    for key, field in fields.items():
+        if not isinstance(field, dict):
+            continue
+        source = field.get("source_hint", "")
+        if source.startswith(derived_prefixes) or source in weak_sources:
+            suspicious.append(key)
+    return suspicious
+
+
 def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     base = _quality(fields)
     critical = [
@@ -2756,6 +2990,8 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
         # Totaux renseignés mais non comparables numériquement → garder un signal explicite.
         flags.append("bilan_balance_mismatch")
 
+    suspicious_fields = _detect_suspicious_fields(fields)
+
     return {
         **base,
         "critical_missing_fields": critical_missing,
@@ -2763,6 +2999,7 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
         "ready_for_ai": ready_for_ai,
         "ready_for_ai_core": ready_for_ai_core,
         "quality_flags": sorted(set(flags)),
+        "suspicious_fields": suspicious_fields,
         "bilan_balance_gap": round(balance_gap, 2) if balance_gap is not None else None,
         "bilan_balance_tolerance_used": round(tol_relaxed, 2) if tol_relaxed else None,
     }

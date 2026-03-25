@@ -113,12 +113,20 @@ function showAiSummaryCard(data) {
   const resume = s.resume_executif || "Synthèse générée avec prudence à partir des données disponibles. Une revue humaine reste recommandée.";
   const q = data && data.quality_snapshot ? data.quality_snapshot : {};
   const docStatus = q.ready_for_ai ? "Prêt IA" : (q.needs_review ? "À revoir" : "En analyse");
+  const suspiciousFields = Array.isArray(q.suspicious_fields) ? q.suspicious_fields : [];
+  const suspiciousHtml = suspiciousFields.length
+    ? `<div class="ai-status" style="color:var(--amber)">⚠️ Champs calculés/fallback : <b>${suspiciousFields.join(", ")}</b></div>`
+    : `<div class="ai-status" style="color:#34d399">✓ Tous les champs sont lus directement</div>`;
   const listHtml = arr => arr.map(x => `<li>${String(x)}</li>`).join("");
+  const suspiciousText = suspiciousFields.length
+    ? `Champs calculés/fallback: ${suspiciousFields.join(", ")}`
+    : "Tous les champs sont lus directement";
   const summaryTextForCopy = [
     "Synthèse IA",
     `Mode: ${modeFallback ? "synthèse de secours" : "synthèse assistée"}`,
     `Confiance: ${confidenceLabel(conf)} (${Math.round(conf * 100)}%)`,
     `Statut du document: ${docStatus}`,
+    suspiciousText,
     "",
     `Résumé exécutif: ${resume}`,
     "",
@@ -141,6 +149,7 @@ function showAiSummaryCard(data) {
         <div class="ai-confidence">Confiance : <b>${confidenceLabel(conf)}</b> (${Math.round(conf * 100)}%)</div>
       </div>
       <div class="ai-status">Statut du document : <b>${docStatus}</b></div>
+      ${suspiciousHtml}
       <div class="ai-security">Synthèse générée à partir de données anonymisées uniquement.</div>
       <div class="ai-block">
         <div class="ai-title">Résumé exécutif</div>
@@ -325,12 +334,21 @@ async function refreshMaskedSummary(docId) {
       "critical_fields_missing": "Forcer le type de document ou vérifier la qualité du PDF.",
     };
     const rawFlags = Array.isArray(quality.quality_flags) ? quality.quality_flags : [];
+    const suspiciousFields = Array.isArray(quality.suspicious_fields) ? quality.suspicious_fields : [];
     const reviewDetails = rawFlags.length
       ? rawFlags.map(f => `- ${FLAG_LABELS[f] || f}`).join("\n")
       : "- Aucun point de revue détecté";
     const criticalDetails = criticalMissing.length
       ? criticalMissing.map(f => `- ${labelCriticalField(f)} (${f})`).join("\n")
       : "- Aucun champ critique manquant";
+    
+    // suspicious_fields display
+    const suspiciousDetails = suspiciousFields.length
+      ? suspiciousFields.map(f => `- ${labelCriticalField(f)} (${f})`).join("\n")
+      : "- Aucun champ suspect (tous les champs sont lus directement)";
+    const suspiciousBadge = suspiciousFields.length
+      ? `<span class="suspicious-badge">${suspiciousFields.length} champ${suspiciousFields.length > 1 ? 's' : ''} calculé${suspiciousFields.length > 1 ? 's' : ''}</span>`
+      : `<span class="clean-badge">✓ Tous les champs sont lus directement</span>`;
     const recommendedAction = rawFlags.length
       ? (FLAG_ACTIONS[rawFlags[0]] || "Analyser les points listés puis relancer l'extraction.")
       : (criticalMissing.length
@@ -375,13 +393,15 @@ async function refreshMaskedSummary(docId) {
           <div class="proof-card-sub">${accountingCount != null ? `${accountingCount} lignes comptables extraites` : "Prêt pour l'exploitation comptable"}</div>
         </div>
         <div class="proof-card review">
-          <div class="proof-card-title">À revoir</div>
+          <div class="proof-card-title">À revoir ${suspiciousBadge}</div>
           <div class="proof-card-value">${quality.needs_review ? "Revue recommandée" : "Aucune revue requise"}</div>
           <div class="proof-card-sub">${qualityLabel()}</div>
           ${experienceSeg ? `<div class="proof-card-sub" style="opacity:0.92;font-size:0.9em">${experienceSeg}</div>` : ""}
           <div class="proof-card-sub" style="white-space:pre-wrap">${reviewDetails}</div>
           <div class="proof-card-sub" style="margin-top:6px;font-weight:700">Champs critiques manquants</div>
           <div class="proof-card-sub" style="white-space:pre-wrap">${criticalDetails}</div>
+          <div class="proof-card-sub" style="margin-top:6px;font-weight:700;color:var(--amber)">Champs calculés / fallback</div>
+          <div class="proof-card-sub" style="white-space:pre-wrap;font-size:0.9em">${suspiciousDetails}</div>
           <div class="proof-card-sub" style="margin-top:6px"><b>Action recommandée :</b> ${recommendedAction}</div>
           <div class="proof-card-sub">Étape conseillée : vérifier cette zone puis valider le document.</div>
         </div>

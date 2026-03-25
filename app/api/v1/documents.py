@@ -577,6 +577,7 @@ def _to_accounting_json_v1(
             "coverage_ratio": quality.get("coverage_ratio"),
             "critical_missing_fields": quality.get("critical_missing_fields", []),
             "quality_flags": quality.get("quality_flags", []),
+            "suspicious_fields": quality.get("suspicious_fields", []),
         },
         "provenance": {
             "extractor_name": provenance.get("extractor_name"),

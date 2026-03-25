@@ -175,6 +175,35 @@ def _humanize_quality_flags(quality_flags: list[str]) -> list[str]:
     return out
 
 
+def _generate_quality_warning(quality: dict[str, Any]) -> str | None:
+    """Generate a user-friendly warning when suspicious fields are present."""
+    suspicious = quality.get("suspicious_fields", []) or []
+    if not suspicious:
+        return None
+    
+    count = len(suspicious)
+    if count == 1:
+        return f"Vérification recommandée sur 1 champ ({suspicious[0]})."
+    elif count <= 3:
+        return f"Vérification recommandée sur {count} champs ({', '.join(suspicious)})."
+    else:
+        return f"Certains champs sont calculés ou issus d'un fallback et doivent être vérifiés ({count} champs)."
+
+
+def _add_suspicious_fields_to_payload(payload: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
+    """Add suspicious_fields info to AI payload so LLM knows which fields are uncertain."""
+    out = dict(payload)
+    suspicious = quality.get("suspicious_fields", []) or []
+    if suspicious:
+        out["uncertain_fields"] = suspicious
+        out["data_quality_notes"] = (
+            "Attention: Les champs suivants sont calculés ou issus de fallbacks "
+            f"et doivent être interprétés avec prudence: {', '.join(suspicious)}. "
+            "Privilégier les questions sur les champs directement lus dans le document."
+        )
+    return out
+
+
 def _apply_audit_quality_guardrails(audit: dict[str, Any], quality: dict[str, Any]) -> dict[str, Any]:
     """Normalize audit output so backend quality facts remain authoritative."""
     if not isinstance(audit, dict):
@@ -308,6 +337,9 @@ async def ai_audit(
         }
     parsed = _apply_audit_quality_guardrails(parsed, quality)
 
+    # Get suspicious fields for audit response
+    suspicious = quality.get("suspicious_fields", []) or []
+    
     return JSONResponse(
         {
             "document_id": str(document.id),
@@ -317,6 +349,11 @@ async def ai_audit(
             "ollama_validation": {
                 "ok": bool(llm.get("validation_ok")),
                 "attempts": llm.get("validation_attempts"),
+            },
+            "quality_snapshot": {
+                "ready_for_ai_core": bool(quality.get("ready_for_ai_core", False)),
+                "suspicious_fields": suspicious,
+                "warning": _generate_quality_warning(quality),
             },
         }
     )
@@ -387,11 +424,13 @@ async def ai_summary(
                     "coverage_ratio": quality.get("coverage_ratio"),
                     "critical_missing_fields": quality.get("critical_missing_fields", []),
                     "quality_flags": quality.get("quality_flags", []),
+                    "suspicious_fields": quality.get("suspicious_fields", []),
+                    "warning": _generate_quality_warning(quality),
                 },
             },
         )
 
-    ai_payload = {
+    ai_payload_base = {
         "document_id": str(document.id),
         "doc_type": structured.get("doc_type"),
         "quality": structured.get("quality", {}),
@@ -405,7 +444,10 @@ async def ai_summary(
         "detections_count": len(detections),
     }
     if question.strip():
-        ai_payload["user_question"] = question.strip()
+        ai_payload_base["user_question"] = question.strip()
+    
+    # Add suspicious fields info so IA knows which fields are uncertain
+    ai_payload = _add_suspicious_fields_to_payload(ai_payload_base, quality)
 
     prudent_mode = ready_for_ai_core and (not ready_for_ai)
     if kimi_mode not in {"summary", "review", "draft", "question"}:
@@ -447,6 +489,8 @@ async def ai_summary(
                 "ready_for_ai": bool((structured.get("quality") or {}).get("ready_for_ai", False)),
                 "ready_for_ai_core": bool((structured.get("quality") or {}).get("ready_for_ai_core", False)),
                 "coverage_ratio": (structured.get("quality") or {}).get("coverage_ratio"),
+                "suspicious_fields": (structured.get("quality") or {}).get("suspicious_fields", []),
+                "warning": _generate_quality_warning(structured.get("quality") or {}),
             },
             "payload_policy": {
                 "raw_text_sent": False,
