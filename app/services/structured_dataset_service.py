@@ -1222,12 +1222,13 @@ def _split_bilan_sections(text: str) -> tuple[str, str]:
     passif_start_idx = None
     
     # Patterns that indicate start of passif section
+    # Note: removed \b (word boundary) and added #*\s* to match markdown headers like "## **Bilan - Passif**"
     passif_patterns = [
-        r'^\s*passif\b',
-        r'^\s*au passif\b',
-        r'^\s*bilan.*passif\b',
-        r'^\s*passif.*bilan\b',
-        r'^\s*liabilit',
+        r'^#*\s*\*?\*?passif\b',
+        r'^#*\s*\*?\*?au passif\b',
+        r'^#*\s*\*?\*?bilan.*passif',
+        r'^#*\s*\*?\*?passif.*bilan',
+        r'^#*\s*\*?\*?liabilit',
     ]
     
     for i, line in enumerate(lines):
@@ -1288,12 +1289,14 @@ def _extract_total_i_passif(text: str) -> float | None:
             # Extract all numbers from this line
             tokens = _extract_line_amount_tokens(line)
             if len(tokens) >= 1:
-                # For passif TOTAL (I), the first number is usually N (current year)
-                # and the second is N-1 (previous year)
-                # Return the first token that looks like capitaux propres (>= 1000)
-                for val in tokens:
-                    if val >= 1000.0:  # Capitaux propres should be at least 1000
-                        return val
+                # For passif TOTAL (I), the column order is typically: N | N-1
+                # where N is the current year (first after label) and N-1 is previous year
+                # We should take the FIRST valid token (leftmost = current year)
+                # Filter tokens >= 1000 (capitaux propres should be at least 1000)
+                valid_tokens = [v for v in tokens if v >= 1000.0]
+                if valid_tokens:
+                    # Take the first token (N - current year)
+                    return valid_tokens[0]
     return None
 
 
@@ -3479,15 +3482,27 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
         # Si les totaux manquent, on considère le bilan OK si pas d'autres champs critiques manquants
         balance_ok = True
 
+    # Détection des champs suspects
+    suspicious_fields = _detect_suspicious_fields(fields)
+    # Un champ critique dans suspicious_fields bloque ready_for_ai mais pas ready_for_ai_core
+    critical_in_suspicious = [f for f in suspicious_fields if f in critical]
+    
     ready_for_ai_core = not critical_missing and (not has_both_totals or balance_ok)
-    ready_for_ai = base["coverage_ratio"] >= 0.75 and ready_for_ai_core
+    # ready_for_ai requires: coverage OK + core OK + NO critical fields suspicious
+    ready_for_ai = (
+        base["coverage_ratio"] >= 0.75 
+        and ready_for_ai_core 
+        and not critical_in_suspicious
+    )
     # Pragmatique produit: si le noyau métier est cohérent, le document est exploitable
     # même avec une couverture secondaire incomplète.
-    needs_review = not ready_for_ai_core
+    needs_review = not ready_for_ai_core or bool(critical_in_suspicious)
 
     flags = list(base.get("quality_flags", []))
     if critical_missing:
         flags.append("critical_fields_missing")
+    if critical_in_suspicious:
+        flags.append("critical_fields_suspicious")
     if (
         isinstance(actif, (int, float))
         and isinstance(passif, (int, float))
@@ -3500,8 +3515,6 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     elif "total_actif" not in critical_missing and "total_passif" not in critical_missing:
         # Totaux renseignés mais non comparables numériquement → garder un signal explicite.
         flags.append("bilan_balance_mismatch")
-
-    suspicious_fields = _detect_suspicious_fields(fields)
 
     return {
         **base,
