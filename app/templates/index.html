@@ -65,10 +65,11 @@
 
     <div class="dash-content">
       <!-- Hero banner -->
-      <div class="value-prop">
+      <div class="value-prop" id="valueProp">
         <div class="value-prop-text">
           <strong>Bienvenue sur ConfiDoc.</strong> Déposez vos documents comptables. La plateforme les anonymise, les analyse et produit des exports exploitables par votre équipe.
         </div>
+        <button class="value-prop-dismiss" id="dismissValueProp" title="Fermer">×</button>
       </div>
 
       <!-- KPIs -->
@@ -189,6 +190,16 @@
               <button id="refreshBtn" class="btn btn-ghost btn-sm">↻ Actualiser</button>
             </div>
             <div class="panel-body">
+              <div class="doc-filter-row">
+                <input type="search" id="docSearchInput" class="doc-search-input" placeholder="🔍 Rechercher un document…" autocomplete="off" />
+                <select id="docStatusFilter" class="doc-status-filter">
+                  <option value="">Tous les statuts</option>
+                  <option value="uploaded">Reçus</option>
+                  <option value="processing">En traitement</option>
+                  <option value="ready">Prêts</option>
+                  <option value="failed">Erreur</option>
+                </select>
+              </div>
               <div id="docList" class="doc-list">
                 <div class="docs-empty">
                   <div class="empty-icon">📂</div>
@@ -208,6 +219,12 @@
 
       <!-- TAB: Analyse & IA -->
       <div class="tab-content" id="tab-analyse">
+        <!-- Bandeau document actif -->
+        <div class="active-doc-banner" id="activeDocBanner" style="display:none">
+          <span class="active-doc-label">Document actif :</span>
+          <span class="active-doc-name" id="activeDocName">—</span>
+          <button class="active-doc-go" id="activeDocGoBtn">Voir dans Dossiers →</button>
+        </div>
         <!-- Preview -->
         <div class="panel preview-panel">
           <div class="panel-header">
@@ -266,44 +283,48 @@
         </div>
       </div>
 
-      <!-- TAB: Exports (placeholder, managed by document actions) -->
+      <!-- TAB: Exports -->
       <div class="tab-content" id="tab-exports">
         <div class="panel">
-          <div class="panel-header"><h2><span class="icon">📊</span> Exports disponibles</h2></div>
+          <div class="panel-header">
+            <h2><span class="icon">📊</span> Exports disponibles</h2>
+            <button id="refreshExportsBtn" class="btn btn-ghost btn-sm">↻ Actualiser</button>
+          </div>
           <div class="panel-body">
-            <div class="exports-guide">
-              <p>Les exports sont accessibles depuis chaque document dans l'onglet <strong>Dossiers</strong>.</p>
-              <div class="export-types-grid">
-                <div class="export-type-card">
-                  <div class="export-type-icon">📄</div>
-                  <div class="export-type-name">Rapport PDF</div>
-                  <div class="export-type-desc">Rapport lisible et structuré, idéal pour partager avec l'équipe ou le client.</div>
-                </div>
-                <div class="export-type-card">
-                  <div class="export-type-icon">📝</div>
-                  <div class="export-type-name">Rapport DOC</div>
-                  <div class="export-type-desc">Format Word modifiable pour personnaliser le rendu avant diffusion.</div>
-                </div>
-                <div class="export-type-card">
-                  <div class="export-type-icon">📊</div>
-                  <div class="export-type-name">Excel / CSV</div>
-                  <div class="export-type-desc">Tableaux comptables exportables : immobilisations, dettes, bilan.</div>
-                </div>
-                <div class="export-type-card">
-                  <div class="export-type-icon">🔗</div>
-                  <div class="export-type-name">JSON structuré</div>
-                  <div class="export-type-desc">Données normalisées pour intégration logicielle ou import dans votre outil métier.</div>
-                </div>
-                <div class="export-type-card">
-                  <div class="export-type-icon">🛡️</div>
-                  <div class="export-type-name">Preuve RGPD</div>
-                  <div class="export-type-desc">Certificat d'anonymisation avec empreintes SHA-256 et détail des masquages.</div>
-                </div>
-                <div class="export-type-card">
-                  <div class="export-type-icon">🧾</div>
-                  <div class="export-type-name">Audit export</div>
-                  <div class="export-type-desc">Rapport d'audit complet : empreintes, entités détectées, requêtes IA.</div>
-                </div>
+            <!-- Liste dynamique des documents prêts -->
+            <div id="exportDocList" class="export-doc-list"></div>
+            <!-- Guide des formats -->
+            <div class="exports-divider">Formats disponibles</div>
+            <div class="export-types-grid">
+              <div class="export-type-card">
+                <div class="export-type-icon">📄</div>
+                <div class="export-type-name">Rapport PDF</div>
+                <div class="export-type-desc">Rapport lisible et structuré, idéal pour partager avec l'équipe ou le client.</div>
+              </div>
+              <div class="export-type-card">
+                <div class="export-type-icon">📝</div>
+                <div class="export-type-name">Rapport DOC</div>
+                <div class="export-type-desc">Format Word modifiable pour personnaliser le rendu avant diffusion.</div>
+              </div>
+              <div class="export-type-card">
+                <div class="export-type-icon">📊</div>
+                <div class="export-type-name">Excel / CSV</div>
+                <div class="export-type-desc">Tableaux comptables exportables : immobilisations, dettes, bilan.</div>
+              </div>
+              <div class="export-type-card">
+                <div class="export-type-icon">🔗</div>
+                <div class="export-type-name">JSON structuré</div>
+                <div class="export-type-desc">Données normalisées pour intégration logicielle ou import dans votre outil métier.</div>
+              </div>
+              <div class="export-type-card">
+                <div class="export-type-icon">🛡️</div>
+                <div class="export-type-name">Preuve RGPD</div>
+                <div class="export-type-desc">Certificat d'anonymisation avec empreintes SHA-256 et détail des masquages.</div>
+              </div>
+              <div class="export-type-card">
+                <div class="export-type-icon">🧾</div>
+                <div class="export-type-name">Audit export</div>
+                <div class="export-type-desc">Rapport d'audit complet : empreintes, entités détectées, requêtes IA.</div>
               </div>
             </div>
           </div>
@@ -315,6 +336,24 @@
         <div class="panel-header"><h2><span class="icon">⚡</span> Réponse API brute</h2></div>
         <div class="panel-body"><pre class="api-content" id="apiOutput">{}</pre></div>
       </div>
+    </div>
+  </div>
+</div>
+
+<!-- Modal suppression globale -->
+<div class="modal-overlay" id="purgeModal">
+  <div class="modal-card">
+    <div class="modal-header">
+      <h3>⚠️ Supprimer tous les documents</h3>
+    </div>
+    <div class="modal-body">
+      <p>Cette action est <strong>irréversible</strong>. Tous vos documents et leurs données associées (anonymisations, extractions, exports) seront définitivement supprimés.</p>
+      <p>Pour confirmer, tapez exactement <code>SUPPRIMER</code> ci-dessous :</p>
+      <input type="text" id="purgeConfirmInput" class="modal-confirm-input" placeholder="SUPPRIMER" autocomplete="off" />
+    </div>
+    <div class="modal-footer">
+      <button id="purgeCancelBtn" class="modal-btn-cancel">Annuler</button>
+      <button id="purgeConfirmBtn" class="modal-btn-danger" disabled>Confirmer la suppression</button>
     </div>
   </div>
 </div>

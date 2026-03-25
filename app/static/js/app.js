@@ -10,6 +10,8 @@ let previewMode = "anon"; // "anon" | "beforeafter"
 let docExtractionDetails = {};
 let statusSummaryDays = 30;
 let lastActiveDocId = null;
+let docFilterSearch = "";
+let docFilterStatus = "";
 
 const $ = id => document.getElementById(id);
 const previewOut = $("previewOutput");
@@ -944,6 +946,11 @@ function renderDocs(items) {
     setDocQualityBadge(doc.id, docQualityMap[doc.id]);
   });
   refreshDocQaOptions();
+  // Appliquer les filtres de recherche après le rendu
+  applyDocFilter();
+  // Mettre à jour l'onglet Exports si actif
+  const exportsTab = $("tab-exports");
+  if (exportsTab && exportsTab.classList.contains("active")) renderExportsList();
 }
 
 async function refreshStatusSummary() {
@@ -1332,33 +1339,7 @@ bindStatusRangeControls();
 
 const purgeAllBtn = $("purgeAllDocsBtn");
 if (purgeAllBtn) {
-  purgeAllBtn.addEventListener("click", async () => {
-    if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
-    if (!confirm("Supprimer définitivement TOUS vos documents ? Cette action est irréversible.")) return;
-    if (prompt("Pour confirmer, tapez exactement : VIDER") !== "VIDER") {
-      toast("Suppression annulée", "info");
-      return;
-    }
-    try {
-      const { res, data } = await api(`/api/v1/documents?confirm=true`, { method: "DELETE" });
-      showApi(data);
-      if (res.ok) {
-        const n = (data && typeof data.deleted === "number") ? data.deleted : 0;
-        toast(`${n} document(s) supprimé(s)`, "success");
-        showPreview("Sélectionnez un document ou uploadez un fichier.");
-        if (maskedOut) maskedOut.textContent = "Aucun document.";
-        lastAnonDocId = null;
-        lastAnonText = "";
-        lastOriginalDocId = null;
-        lastOriginalText = "";
-        await refreshDocs();
-      } else {
-        toast((data && data.detail) ? String(data.detail) : "Échec suppression", "error");
-      }
-    } catch (e) {
-      toast("Erreur réseau", "error");
-    }
-  });
+  purgeAllBtn.addEventListener("click", () => openPurgeModal());
 }
 
 function applyExpertMode(enabled) {
@@ -1457,6 +1438,7 @@ docList.addEventListener("click", async e => {
   const id = btn.dataset.id;
     lastActiveDocId = id || lastActiveDocId;
     if ($("docQaSelect") && id) $("docQaSelect").value = id;
+    updateActiveDocBanner();
   const profile = $("profileSelect").value;
   const requestedDocType = currentDocTypeRequested();
   const busyLabelByAction = {
@@ -1712,6 +1694,223 @@ docList.addEventListener("click", async e => {
     await refreshDocs();
   }
 });
+
+// ===== TAB SWITCHING =====
+function switchTab(tabName) {
+  document.querySelectorAll(".nav-tab").forEach(btn => {
+    btn.classList.toggle("active", btn.dataset.tab === tabName);
+  });
+  document.querySelectorAll(".tab-content").forEach(el => {
+    el.classList.toggle("active", el.id === `tab-${tabName}`);
+  });
+  if (tabName === "exports") renderExportsList();
+  if (tabName === "analyse") updateActiveDocBanner();
+}
+document.querySelectorAll(".nav-tab").forEach(btn => {
+  btn.addEventListener("click", () => switchTab(btn.dataset.tab));
+});
+// Init: activer le premier onglet
+switchTab("dossiers");
+
+// ===== VALUE-PROP DISMISSIBLE =====
+(function initValueProp() {
+  const banner = $("valueProp");
+  const dismissBtn = $("dismissValueProp");
+  if (!banner || !dismissBtn) return;
+  if (localStorage.getItem("confidoc_banner_dismissed") === "1") {
+    banner.style.display = "none";
+  }
+  dismissBtn.addEventListener("click", () => {
+    banner.style.display = "none";
+    localStorage.setItem("confidoc_banner_dismissed", "1");
+  });
+})();
+
+// ===== DOC SEARCH & FILTER =====
+function applyDocFilter() {
+  const search = docFilterSearch.toLowerCase().trim();
+  const status = docFilterStatus;
+  const items = docList.querySelectorAll(".doc-item");
+  let visible = 0;
+  items.forEach(el => {
+    const name = (el.querySelector(".doc-name")?.textContent || "").toLowerCase();
+    const statusEl = el.querySelector(".doc-status");
+    const itemStatus = statusEl ? Array.from(statusEl.classList).find(c => ["uploaded","processing","ready","failed"].includes(c)) || "" : "";
+    const matchSearch = !search || name.includes(search);
+    const matchStatus = !status || itemStatus === status;
+    el.style.display = (matchSearch && matchStatus) ? "" : "none";
+    if (matchSearch && matchStatus) visible++;
+  });
+  // Si aucun résultat après filtre, afficher un message
+  let noResult = docList.querySelector(".filter-empty");
+  if (visible === 0 && currentDocs.length > 0) {
+    if (!noResult) {
+      noResult = document.createElement("div");
+      noResult.className = "docs-empty filter-empty";
+      noResult.innerHTML = '<div class="empty-icon">🔍</div><p>Aucun document ne correspond aux filtres.</p>';
+      docList.appendChild(noResult);
+    }
+    noResult.style.display = "";
+  } else if (noResult) {
+    noResult.style.display = "none";
+  }
+}
+
+const docSearchInput = $("docSearchInput");
+const docStatusFilter = $("docStatusFilter");
+if (docSearchInput) {
+  docSearchInput.addEventListener("input", e => {
+    docFilterSearch = e.target.value || "";
+    applyDocFilter();
+  });
+}
+if (docStatusFilter) {
+  docStatusFilter.addEventListener("change", e => {
+    docFilterStatus = e.target.value || "";
+    applyDocFilter();
+  });
+}
+
+// ===== ACTIVE DOC BANNER (onglet Analyse) =====
+function updateActiveDocBanner() {
+  const banner = $("activeDocBanner");
+  const nameEl = $("activeDocName");
+  if (!banner || !nameEl) return;
+  if (!lastActiveDocId) { banner.style.display = "none"; return; }
+  const doc = (currentDocs || []).find(d => d.id === lastActiveDocId);
+  if (!doc) { banner.style.display = "none"; return; }
+  nameEl.textContent = doc.original_filename || lastActiveDocId;
+  banner.style.display = "flex";
+}
+const activeDocGoBtn = $("activeDocGoBtn");
+if (activeDocGoBtn) {
+  activeDocGoBtn.addEventListener("click", () => switchTab("dossiers"));
+}
+
+// ===== EXPORTS TAB — liste des docs prêts =====
+function renderExportsList() {
+  const container = $("exportDocList");
+  if (!container) return;
+  const readyDocs = (currentDocs || []).filter(d => d.status === "ready");
+  if (!readyDocs.length) {
+    container.innerHTML = `<div class="exports-empty"><span class="exports-empty-icon">📭</span><p>Aucun document prêt à exporter.<br>Traitez un document dans l'onglet <strong>Dossiers</strong>.</p></div>`;
+    return;
+  }
+  container.innerHTML = "";
+  readyDocs.forEach((doc, i) => {
+    const ic = docIcon(doc.extension);
+    const q = docQualityMap[doc.id] || {};
+    const badge = qualityBadgeFromQuality(q);
+    const item = document.createElement("div");
+    item.className = "export-doc-item";
+    item.style.animationDelay = `${i * 0.05}s`;
+    item.innerHTML = `
+      <div class="export-doc-icon ${ic.cls}">${ic.icon}</div>
+      <div class="export-doc-info">
+        <div class="export-doc-name" title="${doc.original_filename}">${doc.original_filename}</div>
+        <div class="export-doc-meta">${formatSize(doc.size_bytes)} · <span class="doc-kpi doc-quality ${badge.cls}" style="display:inline;padding:2px 8px;font-size:11px">${badge.label}</span></div>
+      </div>
+      <div class="export-doc-actions">
+        <button class="btn-act primary" data-a="exportreportpdf" data-id="${doc.id}">📄 PDF</button>
+        <button class="btn-act" data-a="exportreportdoc" data-id="${doc.id}">📝 DOC</button>
+        <button class="btn-act" data-a="exportdataset" data-id="${doc.id}">📊 CSV</button>
+        <button class="btn-act" data-a="proof" data-id="${doc.id}">🛡️ RGPD</button>
+      </div>`;
+    container.appendChild(item);
+  });
+  // Délégation d'événements pour les boutons d'export dans cet onglet
+  container.onclick = async (e) => {
+    const btn = e.target.closest("[data-a]");
+    if (!btn || !accessToken) return;
+    const action = btn.dataset.a;
+    const id = btn.dataset.id;
+    lastActiveDocId = id || lastActiveDocId;
+    const requestedDocType = currentDocTypeRequested();
+    const busyLabel = { exportreportpdf: "Export...", exportreportdoc: "Export...", exportdataset: "Export...", proof: "Preuve..." }[action] || "...";
+    setActionBusy(btn, true, busyLabel);
+    try {
+      if (action === "exportreportpdf") {
+        toast("Génération PDF…", "info");
+        const res = await fetch(`/api/v1/documents/${id}/export-report-pdf?doc_type=${encodeURIComponent(requestedDocType)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!res.ok) { const j = await res.json().catch(() => ({})); toast(j.detail || "Erreur PDF", "error"); return; }
+        triggerBlobDownload(await res.blob(), `rapport_confidoc_${id}.pdf`);
+        toast("PDF téléchargé", "success");
+      } else if (action === "exportreportdoc") {
+        toast("Génération DOC…", "info");
+        const res = await fetch(`/api/v1/documents/${id}/export-report-doc?doc_type=${encodeURIComponent(requestedDocType)}`, { headers: { Authorization: `Bearer ${accessToken}` } });
+        if (!res.ok) { const j = await res.json().catch(() => ({})); toast(j.detail || "Erreur DOC", "error"); return; }
+        triggerBlobDownload(await res.blob(), `rapport_confidoc_${id}.doc`);
+        toast("DOC téléchargé", "success");
+      } else if (action === "exportdataset") {
+        toast("Export CSV en cours…", "info");
+        const { res, data } = await api(`/api/v1/documents/${id}/export-dataset`);
+        if (res.ok) { downloadJsonFile(`dataset_${id}.json`, data); toast("Dataset exporté", "success"); }
+        else toast(data.detail || "Erreur export", "error");
+      } else if (action === "proof") {
+        const { res, data } = await api(`/api/v1/documents/${id}/proof`);
+        if (res.ok) { downloadJsonFile(`proof_${id}.json`, data); toast("Preuve RGPD exportée", "success"); }
+        else toast(data.detail || "Erreur preuve", "error");
+      }
+    } catch { toast("Erreur réseau", "error"); }
+    finally { setActionBusy(btn, false); }
+  };
+}
+
+// Refresh button in exports tab
+const refreshExportsBtn = $("refreshExportsBtn");
+if (refreshExportsBtn) {
+  refreshExportsBtn.addEventListener("click", () => { refreshDocs(); toast("Liste actualisée", "info"); });
+}
+
+// ===== MODAL SUPPRESSION GLOBALE =====
+const purgeModal = $("purgeModal");
+const purgeConfirmInput = $("purgeConfirmInput");
+const purgeConfirmBtn = $("purgeConfirmBtn");
+const purgeCancelBtn = $("purgeCancelBtn");
+
+function openPurgeModal() {
+  if (!purgeModal) return;
+  if (purgeConfirmInput) purgeConfirmInput.value = "";
+  if (purgeConfirmBtn) purgeConfirmBtn.disabled = true;
+  purgeModal.classList.add("active");
+  setTimeout(() => { if (purgeConfirmInput) purgeConfirmInput.focus(); }, 100);
+}
+function closePurgeModal() {
+  if (purgeModal) purgeModal.classList.remove("active");
+}
+if (purgeConfirmInput) {
+  purgeConfirmInput.addEventListener("input", () => {
+    if (purgeConfirmBtn) purgeConfirmBtn.disabled = purgeConfirmInput.value !== "SUPPRIMER";
+  });
+  purgeConfirmInput.addEventListener("keydown", e => {
+    if (e.key === "Escape") closePurgeModal();
+    if (e.key === "Enter" && purgeConfirmInput.value === "SUPPRIMER") purgeConfirmBtn && purgeConfirmBtn.click();
+  });
+}
+if (purgeCancelBtn) purgeCancelBtn.addEventListener("click", closePurgeModal);
+if (purgeModal) purgeModal.addEventListener("click", e => { if (e.target === purgeModal) closePurgeModal(); });
+
+if (purgeConfirmBtn) {
+  purgeConfirmBtn.addEventListener("click", async () => {
+    closePurgeModal();
+    if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
+    try {
+      const { res, data } = await api(`/api/v1/documents?confirm=true`, { method: "DELETE" });
+      showApi(data);
+      if (res.ok) {
+        const n = (data && typeof data.deleted === "number") ? data.deleted : 0;
+        toast(`${n} document(s) supprimé(s)`, "success");
+        showPreview("Sélectionnez un document ou uploadez un fichier.");
+        if (maskedOut) maskedOut.textContent = "Aucun document.";
+        lastAnonDocId = null; lastAnonText = "";
+        lastOriginalDocId = null; lastOriginalText = "";
+        await refreshDocs();
+      } else {
+        toast((data && data.detail) ? String(data.detail) : "Échec suppression", "error");
+      }
+    } catch { toast("Erreur réseau", "error"); }
+  });
+}
 
 window.addEventListener("error", (ev) => {
   const msg = (ev && ev.message) ? ev.message : "Erreur JavaScript";
