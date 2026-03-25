@@ -4,6 +4,7 @@ import asyncio
 import uuid
 import re
 import hashlib
+import traceback
 from collections import Counter
 from html import escape as html_escape
 from io import BytesIO
@@ -898,68 +899,76 @@ async def status_summary(
 
     V1: compteurs de statuts + répartition full/core/review + top quality flags.
     """
-    cutoff_expr = func.now() - func.make_interval(days=days)
-    result = await db.execute(
-        select(Document)
-        .where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-            Document.created_at >= cutoff_expr,
+    try:
+        cutoff_expr = func.now() - func.make_interval(days=days)
+        result = await db.execute(
+            select(Document)
+            .where(
+                Document.uploaded_by_user_id == current_user.id,
+                Document.is_deleted.is_(False),
+                Document.created_at >= cutoff_expr,
+            )
+            .order_by(desc(Document.created_at))
         )
-        .order_by(desc(Document.created_at))
-    )
-    docs = list(result.scalars().all())
+        docs = list(result.scalars().all())
 
-    counts_by_status = Counter(str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown") for d in docs)
-    by_extension = Counter(str((d.extension or "unknown")).lower() for d in docs)
+        counts_by_status = Counter(str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown") for d in docs)
+        by_extension = Counter(str((d.extension or "unknown")).lower() for d in docs)
 
-    ready_docs = [d for d in docs if d.status == DocumentStatus.READY]
-    avg_ready_latency_seconds = None
-    if ready_docs:
-        lags = []
-        for d in ready_docs:
-            if d.created_at and d.updated_at:
-                lag = (d.updated_at - d.created_at).total_seconds()
-                if lag >= 0:
-                    lags.append(lag)
-        if lags:
-            avg_ready_latency_seconds = round(sum(lags) / len(lags), 2)
+        ready_docs = [d for d in docs if d.status == DocumentStatus.READY]
+        avg_ready_latency_seconds = None
+        if ready_docs:
+            lags = []
+            for d in ready_docs:
+                if d.created_at and d.updated_at:
+                    lag = (d.updated_at - d.created_at).total_seconds()
+                    if lag >= 0:
+                        lags.append(lag)
+            if lags:
+                avg_ready_latency_seconds = round(sum(lags) / len(lags), 2)
 
-    # Quality distribution (sampled for cost/perf control).
-    sampled_ready = ready_docs[:max_docs_for_quality]
-    quality_dist = {"full_ready": 0, "core_ready": 0, "review": 0}
-    quality_flags_counter: Counter[str] = Counter()
-    quality_errors = 0
+        # Quality distribution (sampled for cost/perf control).
+        sampled_ready = ready_docs[:max_docs_for_quality]
+        quality_dist = {"full_ready": 0, "core_ready": 0, "review": 0}
+        quality_flags_counter: Counter[str] = Counter()
+        quality_errors = 0
 
-    for d in sampled_ready:
-        try:
-            original_text = await _get_original_text(db, d)
-            if not original_text:
+        for d in sampled_ready:
+            try:
+                original_text = await _get_original_text(db, d)
+                if not original_text:
+                    quality_errors += 1
+                    continue
+                effective_type = classify_document_type(original_text, d.original_filename)
+                anonymized_text, _ = anonymize_text(
+                    original_text,
+                    profile="dataset_accounting",
+                    document_type=effective_type,
+                )
+                structured = build_structured_dataset(
+                    anonymized_text=anonymized_text,
+                    original_filename=d.original_filename,
+                    requested_doc_type=doc_type,
+                    extraction_text=original_text,
+                )
+                q = structured.get("quality") or {}
+                if q.get("ready_for_ai") is True:
+                    quality_dist["full_ready"] += 1
+                elif q.get("ready_for_ai_core") is True:
+                    quality_dist["core_ready"] += 1
+                else:
+                    quality_dist["review"] += 1
+                quality_flags_counter.update([str(x) for x in (q.get("quality_flags") or [])])
+            except Exception as exc:
+                logger.error("status_summary_quality_error", doc_id=str(d.id), error=str(exc), exc_info=True)
                 quality_errors += 1
-                continue
-            effective_type = classify_document_type(original_text, d.original_filename)
-            anonymized_text, _ = anonymize_text(
-                original_text,
-                profile="dataset_accounting",
-                document_type=effective_type,
-            )
-            structured = build_structured_dataset(
-                anonymized_text=anonymized_text,
-                original_filename=d.original_filename,
-                requested_doc_type=doc_type,
-                extraction_text=original_text,
-            )
-            q = structured.get("quality") or {}
-            if q.get("ready_for_ai") is True:
-                quality_dist["full_ready"] += 1
-            elif q.get("ready_for_ai_core") is True:
-                quality_dist["core_ready"] += 1
-            else:
-                quality_dist["review"] += 1
-            quality_flags_counter.update([str(x) for x in (q.get("quality_flags") or [])])
-        except Exception as exc:
-            logger.error("status_summary_quality_error", doc_id=str(d.id), error=str(exc), exc_info=True)
-            quality_errors += 1
+
+    except Exception as exc:
+        logger.error("status_summary_global_error", error=str(exc), exc_info=True)
+        return JSONResponse(
+            {"error": str(exc), "traceback": str(traceback.format_exc())},
+            status_code=500
+        )
 
     return JSONResponse(
         {
