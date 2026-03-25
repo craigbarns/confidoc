@@ -140,7 +140,7 @@ async def _upload_document_body(
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
         raw_content=content,
-        tags=[client_name.strip()] if client_name.strip() else [],
+        tags=[client_name.strip()] if client_name.strip() else None,
     )
     db.add(document)
     await db.commit()
