@@ -181,6 +181,7 @@ function showAiSummaryCard(data) {
       }
     });
   }
+  switchTab("analyse");
 }
 function escapeHtml(s) {
   if (s === null || s === undefined) return "";
@@ -550,6 +551,8 @@ function setAnonymizedPreview(docId, text) {
   }
   const modeLabel = $("profileSelect") ? $("profileSelect").value : "dataset_accounting_pseudo";
   $("statDetectionsSub").textContent = `mode appliqué: ${modeLabel}`;
+  // Basculer automatiquement sur l'onglet Analyse pour afficher le résultat
+  switchTab("analyse");
 }
 
 async function loadOriginalForBeforeAfter() {
@@ -1064,6 +1067,7 @@ function renderDocQaAnswer(question, data, quality) {
       <div class="ai-block"><div class="ai-title">Points à vérifier</div><ul class="ai-list">${alerts.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
       <div class="ai-block"><div class="ai-title">Questions de revue</div><ul class="ai-list">${follow.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul></div>
     </div>`;
+  switchTab("analyse");
 }
 
 async function askDocumentQuestion() {
