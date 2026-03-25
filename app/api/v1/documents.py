@@ -1956,3 +1956,451 @@ async def list_deleted_documents(
         .limit(limit)
     )
     return list(result.scalars().all())
+
+
+# ──────────────────────────────────────────────────────────────────────
+# FULL-TEXT SEARCH
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/search",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recherche full-text dans les documents",
+)
+async def search_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+    q: str = Query(..., min_length=2, max_length=200, description="Terme de recherche"),
+    limit: int = Query(default=20, ge=1, le=100),
+    offset: int = Query(default=0, ge=0),
+    tag: str | None = Query(default=None, description="Filtrer par tag"),
+) -> JSONResponse:
+    """Full-text search across document filenames and extracted text.
+
+    Searches in original_filename and document_versions.content_text.
+    """
+    search_term = f"%{q.strip()}%"
+
+    # Search in filenames first (fast)
+    filename_query = (
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+            Document.original_filename.ilike(search_term),
+        )
+    )
+    if tag:
+        filename_query = filename_query.where(Document.tags.any(tag))
+    filename_query = filename_query.order_by(desc(Document.created_at)).limit(limit).offset(offset)
+
+    result = await db.execute(filename_query)
+    filename_matches = list(result.scalars().all())
+
+    # Search in document versions (content text)
+    content_query = (
+        select(Document)
+        .join(DocumentVersion, DocumentVersion.document_id == Document.id)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+            DocumentVersion.content_text.ilike(search_term),
+        )
+    )
+    if tag:
+        content_query = content_query.where(Document.tags.any(tag))
+    content_query = (
+        content_query
+        .group_by(Document.id)
+        .order_by(desc(Document.created_at))
+        .limit(limit)
+        .offset(offset)
+    )
+    result = await db.execute(content_query)
+    content_matches = list(result.scalars().all())
+
+    # Merge results, deduplicate by id
+    seen_ids: set[uuid.UUID] = set()
+    results: list[dict] = []
+    for doc in filename_matches + content_matches:
+        if doc.id in seen_ids:
+            continue
+        seen_ids.add(doc.id)
+        results.append({
+            "document_id": str(doc.id),
+            "original_filename": doc.original_filename,
+            "status": doc.status.value if hasattr(doc.status, "value") else str(doc.status),
+            "extension": doc.extension,
+            "tags": doc.tags or [],
+            "doc_type": doc.doc_type,
+            "created_at": doc.created_at.isoformat() if doc.created_at else None,
+            "match_source": "filename" if doc in filename_matches else "content",
+        })
+        if len(results) >= limit:
+            break
+
+    return JSONResponse({
+        "query": q,
+        "total_results": len(results),
+        "results": results,
+    })
+
+
+# ──────────────────────────────────────────────────────────────────────
+# TAGS MANAGEMENT
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.put(
+    "/{document_id}/tags",
+    status_code=status.HTTP_200_OK,
+    summary="Définir les tags d'un document",
+)
+async def set_document_tags(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    tags: list[str] = Body(..., max_length=20, description="Liste de tags"),
+) -> dict:
+    """Set tags on a document (replaces existing tags)."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    # Sanitize: lowercase, strip, deduplicate, max 100 chars each
+    clean_tags = list(dict.fromkeys(
+        t.strip().lower()[:100] for t in tags if t.strip()
+    ))
+    if len(clean_tags) > 20:
+        raise http_400("Maximum 20 tags par document.")
+
+    document.tags = clean_tags
+    await db.commit()
+
+    logger.info("tags_updated", doc_id=str(document.id), tags=clean_tags)
+    return {"document_id": str(document.id), "tags": clean_tags}
+
+
+@router.post(
+    "/{document_id}/tags/add",
+    status_code=status.HTTP_200_OK,
+    summary="Ajouter un tag à un document",
+)
+async def add_document_tag(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    tag: str = Body(..., embed=True, max_length=100),
+) -> dict:
+    """Add a single tag to a document (no-op if already present)."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    current_tags = list(document.tags or [])
+    clean_tag = tag.strip().lower()[:100]
+    if clean_tag and clean_tag not in current_tags:
+        if len(current_tags) >= 20:
+            raise http_400("Maximum 20 tags par document.")
+        current_tags.append(clean_tag)
+        document.tags = current_tags
+        await db.commit()
+
+    return {"document_id": str(document.id), "tags": document.tags or []}
+
+
+# ──────────────────────────────────────────────────────────────────────
+# BULK ANONYMIZE
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/bulk-anonymize",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Anonymiser plusieurs documents en batch",
+)
+async def bulk_anonymize(
+    current_user: CurrentUser,
+    db: DbSession,
+    document_ids: list[str] = Body(..., max_length=50, description="Liste d'IDs"),
+    profile: Literal[
+        "moderate", "strict", "dataset_strict",
+        "dataset_accounting", "dataset_accounting_pseudo",
+    ] = Body(default="dataset_accounting_pseudo"),
+    document_type: str = Body(default="auto"),
+) -> JSONResponse:
+    """Anonymize multiple documents in a single call.
+
+    Processes each document individually — failures don't block others.
+    """
+    if len(document_ids) > 50:
+        raise http_400("Maximum 50 documents par batch.")
+    if not document_ids:
+        raise http_400("Aucun document fourni.")
+
+    results: list[dict] = []
+    succeeded = 0
+    failed = 0
+
+    for doc_id_str in document_ids:
+        try:
+            document = await _get_user_document_or_404(db, doc_id_str, current_user.id)
+            file_content = _read_file_or_404(document)
+
+            preview_text, detections, effective_type = await build_anonymization_preview(
+                db=db,
+                document=document,
+                file_content=file_content,
+                profile=profile,
+                document_type=document_type,
+            )
+
+            # Store detected doc_type
+            if effective_type and effective_type != "empty":
+                document.doc_type = effective_type
+
+            await db.commit()
+            await db.refresh(document)
+
+            results.append({
+                "document_id": str(document.id),
+                "status": "ready",
+                "doc_type": effective_type,
+                "detections_count": len(detections or []),
+            })
+            succeeded += 1
+
+        except Exception as exc:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+            logger.warning("bulk_anonymize_failed", doc_id=doc_id_str, error=str(exc))
+            results.append({
+                "document_id": doc_id_str,
+                "status": "error",
+                "error": str(exc)[:300],
+            })
+            failed += 1
+
+    logger.info(
+        "bulk_anonymize_complete",
+        user_id=str(current_user.id),
+        total=len(document_ids),
+        succeeded=succeeded,
+        failed=failed,
+    )
+
+    return JSONResponse({
+        "total": len(document_ids),
+        "succeeded": succeeded,
+        "failed": failed,
+        "results": results,
+    })
+
+
+# ──────────────────────────────────────────────────────────────────────
+# EXCEL (.xlsx) EXPORT
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/{document_id}/export-xlsx",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter les données structurées en Excel (.xlsx)",
+)
+async def export_xlsx(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+    profile: str = Query(default="dataset_accounting"),
+) -> StreamingResponse:
+    """Export structured data as a formatted Excel workbook."""
+    try:
+        import openpyxl
+        from openpyxl.styles import Font, PatternFill, Border, Side
+    except ImportError:
+        raise http_400(
+            "Export Excel non disponible: le module openpyxl n'est pas installé. "
+            "Utilisez /export-csv comme alternative."
+        )
+
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    original_text = await _get_best_text_for_reporting(db, document)
+    if not original_text:
+        raise http_404("Aucune donnée textuelle disponible pour l'export Excel.")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _ = anonymize_text(
+        original_text, profile=profile, document_type=effective_type
+    )
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+
+    wb = openpyxl.Workbook()
+
+    header_font = Font(bold=True, color="FFFFFF", size=11)
+    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
+    meta_font = Font(bold=True, size=10)
+    thin_border = Border(
+        left=Side(style="thin"), right=Side(style="thin"),
+        top=Side(style="thin"), bottom=Side(style="thin"),
+    )
+
+    # Sheet 1: Summary
+    ws = wb.active
+    ws.title = "Résumé"
+    ws.column_dimensions["A"].width = 25
+    ws.column_dimensions["B"].width = 50
+
+    meta_rows = [
+        ("Document", document.original_filename),
+        ("Type", structured.get("doc_type", "unknown")),
+        ("Date export", structured.get("generated_at", "")),
+        ("Profil", profile),
+    ]
+    quality = structured.get("quality") or {}
+    if quality:
+        meta_rows.extend([
+            ("Prêt pour IA", "Oui" if quality.get("ready_for_ai") else "Non"),
+            ("Coverage", f"{round(float(quality.get('coverage_ratio', 0)) * 100)}%"),
+        ])
+    for i, (label, value) in enumerate(meta_rows, 1):
+        ws.cell(row=i, column=1, value=label).font = meta_font
+        ws.cell(row=i, column=2, value=str(value))
+
+    # Sheet 2: Fields
+    fields = structured.get("fields") or {}
+    if fields:
+        ws_f = wb.create_sheet("Champs")
+        ws_f.column_dimensions["A"].width = 30
+        ws_f.column_dimensions["B"].width = 50
+        ws_f.column_dimensions["C"].width = 15
+        for col_idx, h in enumerate(["Champ", "Valeur", "Confiance"], 1):
+            cell = ws_f.cell(row=1, column=col_idx, value=h)
+            cell.font = header_font
+            cell.fill = header_fill
+            cell.border = thin_border
+        row = 2
+        for key, meta in fields.items():
+            if not isinstance(meta, dict) or meta.get("value") is None:
+                continue
+            ws_f.cell(row=row, column=1, value=str(key)).border = thin_border
+            ws_f.cell(row=row, column=2, value=str(meta["value"])).border = thin_border
+            ws_f.cell(row=row, column=3, value=str(meta.get("confidence", ""))).border = thin_border
+            row += 1
+
+    # Sheet 3+: Tables
+    tables = structured.get("tables") or {}
+    for table_name, rows in tables.items():
+        if not isinstance(rows, list) or not rows:
+            continue
+        safe_name = re.sub(r"[^\w\s-]", "", str(table_name))[:30] or "Table"
+        ws_t = wb.create_sheet(safe_name)
+        if isinstance(rows[0], dict):
+            headers = list(rows[0].keys())
+            for col_idx, h in enumerate(headers, 1):
+                cell = ws_t.cell(row=1, column=col_idx, value=str(h))
+                cell.font = header_font
+                cell.fill = header_fill
+                cell.border = thin_border
+            for row_idx, row_data in enumerate(rows, 2):
+                for col_idx, h in enumerate(headers, 1):
+                    ws_t.cell(row=row_idx, column=col_idx, value=str(row_data.get(h, ""))).border = thin_border
+
+    excel_buf = BytesIO()
+    wb.save(excel_buf)
+    excel_buf.seek(0)
+
+    stem = _safe_doc_stem(document.original_filename)
+    return StreamingResponse(
+        excel_buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={
+            "Content-Disposition": f'attachment; filename="{stem}_export.xlsx"',
+            "Cache-Control": "no-store",
+        },
+    )
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ENRICHED DASHBOARD
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/dashboard",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Dashboard enrichi — analytics et insights",
+)
+async def dashboard(
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = Query(default=30, ge=1, le=365),
+) -> JSONResponse:
+    """Enriched dashboard with detection stats, volume trends, and tag cloud."""
+    cutoff = func.now() - func.make_interval(days=days)
+
+    result = await db.execute(
+        select(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+            Document.created_at >= cutoff,
+        ).order_by(desc(Document.created_at))
+    )
+    docs = list(result.scalars().all())
+
+    by_status = Counter(
+        str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown")
+        for d in docs
+    )
+    by_ext = Counter(str((d.extension or "unknown")).lower() for d in docs)
+    by_doc_type = Counter(str(d.doc_type or "unknown") for d in docs)
+    total_bytes = sum(d.size_bytes for d in docs if d.size_bytes)
+
+    # Tag cloud
+    tag_counter: Counter[str] = Counter()
+    for d in docs:
+        if d.tags:
+            tag_counter.update(d.tags)
+
+    # Top entity types
+    ready_ids = [d.id for d in docs if d.status == DocumentStatus.READY]
+    entity_counter: Counter[str] = Counter()
+    if ready_ids:
+        det_result = await db.execute(
+            select(EntityDetection.entity_type, func.count())
+            .where(EntityDetection.document_id.in_(ready_ids))
+            .group_by(EntityDetection.entity_type)
+        )
+        for entity_type, count in det_result.all():
+            entity_counter[str(entity_type)] = count
+
+    # Daily volume
+    daily_volume: dict[str, int] = {}
+    for d in docs:
+        if d.created_at:
+            day = d.created_at.strftime("%Y-%m-%d")
+            daily_volume[day] = daily_volume.get(day, 0) + 1
+
+    return JSONResponse({
+        "window_days": days,
+        "documents_total": len(docs),
+        "total_size_mb": round(total_bytes / (1024 * 1024), 2),
+        "counts_by_status": dict(by_status),
+        "counts_by_extension": dict(by_ext),
+        "counts_by_doc_type": dict(by_doc_type),
+        "top_entity_types": [
+            {"type": t, "count": c} for t, c in entity_counter.most_common(10)
+        ],
+        "tag_cloud": [
+            {"tag": t, "count": c} for t, c in tag_counter.most_common(20)
+        ],
+        "daily_volume": daily_volume,
+    })

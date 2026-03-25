@@ -52,6 +52,13 @@ async def init_database() -> None:
                 "timestamp with time zone;"
             )
         )
+        # Tags & doc_type columns (added in v0.4.0)
+        await conn.execute(
+            text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS tags text[];")
+        )
+        await conn.execute(
+            text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_type varchar(40);")
+        )
         # Composite indexes (idempotent — CREATE INDEX IF NOT EXISTS)
         for idx_sql in [
             "CREATE INDEX IF NOT EXISTS ix_documents_is_deleted ON documents (is_deleted);",
@@ -59,6 +66,9 @@ async def init_database() -> None:
             "CREATE INDEX IF NOT EXISTS ix_documents_org_created ON documents (org_id, created_at);",
             "CREATE INDEX IF NOT EXISTS ix_documents_user_active ON documents (uploaded_by_user_id, is_deleted);",
             "CREATE INDEX IF NOT EXISTS ix_documents_org_status ON documents (org_id, status);",
+            "CREATE INDEX IF NOT EXISTS ix_documents_doc_type ON documents (doc_type);",
+            # GIN index for array containment queries on tags
+            "CREATE INDEX IF NOT EXISTS ix_documents_tags ON documents USING GIN (tags);",
         ]:
             await conn.execute(text(idx_sql))
 

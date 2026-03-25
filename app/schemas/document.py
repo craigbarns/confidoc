@@ -18,6 +18,8 @@ class DocumentResponse(BaseModel):
     sha256: str
     storage_backend: str
     storage_key: str
+    tags: list[str] | None = None
+    doc_type: str | None = None
     created_at: datetime
     updated_at: datetime
 
