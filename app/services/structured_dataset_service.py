@@ -1656,6 +1656,10 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     disponibilites_val, disponibilites_src = pcg_actif["disponibilites"]
     
     # Fallback to keyword extraction if PCG method failed
+    # Priority: TOTAL IMMOBILISATIONS > immobilisations (to avoid capturing sub-items like "immobilisations corporelles")
+    if immobilisations_val is None:
+        immobilisations_val = _extract_amount_for_label(text, r"total\s+immobilisations")
+        immobilisations_src = "label:total_immobilisations"
     if immobilisations_val is None:
         immobilisations_val = _extract_amount_for_label(text, r"immobilisations")
         immobilisations_src = "label:immobilisations"
@@ -1684,10 +1688,14 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             disponibilites_src = "fallback:disponibilites_line"
     
     # OCR tolerance for actif components (handles OCR degradation like "1MMOB1L1SAT10NS")
+    # Priority: TOTAL IMMOBILISATIONS first (avoid sub-items like "immobilisations corporelles")
     if immobilisations_val is None:
         immobilisations_val, immobilisations_src = _extract_with_ocr_tolerance(
             text,
-            [("label:immobilisations", r"immobilisations")],
+            [
+                ("label:total_immobilisations", r"total\s+immobilisations"),
+                ("label:immobilisations", r"immobilisations"),
+            ],
             min_amount=100.0,
         )
     if creances_val is None:
