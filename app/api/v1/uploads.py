@@ -39,6 +39,7 @@ async def upload_document(
     auto_anonymize: bool = Query(default=True),
     profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"] = Query(default="dataset_accounting_pseudo"),
     document_type: str = Query(default="auto"),
+    client_name: str = Query(default=""),
 ) -> dict:
     """Upload un document, le stocke et persiste son enregistrement en base."""
     filename = file.filename or ""
@@ -71,6 +72,7 @@ async def upload_document(
             auto_anonymize=auto_anonymize,
             profile=profile,
             document_type=document_type,
+            client_name=client_name,
         )
     except HTTPException:
         raise
@@ -98,6 +100,7 @@ async def _upload_document_body(
     auto_anonymize: bool,
     profile: str,
     document_type: str,
+    client_name: str = "",
 ) -> dict:
     """Corps métier upload (isolé pour try/except global)."""
     # Store to external storage (MinIO or local /tmp)
@@ -137,6 +140,7 @@ async def _upload_document_body(
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
         raw_content=content,
+        tags=[client_name.strip()] if client_name.strip() else [],
     )
     db.add(document)
     await db.commit()
@@ -197,6 +201,7 @@ async def _upload_document_body(
         "content_type": file.content_type,
         "size_bytes": len(content),
         "uploaded_by": uploaded_by_snapshot,
+        "client_name": client_name.strip() or None,
         "processing": processing,
     }
 

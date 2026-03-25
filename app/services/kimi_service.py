@@ -207,6 +207,64 @@ async def generate_summary_with_kimi(
     }
 
 
+async def stream_kimi_response(
+    user_content: str,
+    *,
+    system_prompt: str | None = None,
+    temperature: float = 0.3,
+):
+    """Async generator that yields text chunks from a streaming Kimi completion."""
+    settings = get_settings()
+    if not settings.KIMI_ENABLED or not settings.KIMI_API_KEY:
+        yield "Mode streaming non disponible."
+        return
+    headers = {
+        "Authorization": f"Bearer {settings.KIMI_API_KEY}",
+        "Content-Type": "application/json",
+    }
+    model_name = settings.KIMI_MODEL
+    effective_temperature = 1.0 if "k2.5" in model_name.lower() else temperature
+    messages = [
+        {
+            "role": "system",
+            "content": system_prompt or "Tu es un assistant comptable expert.",
+        },
+        {"role": "user", "content": user_content},
+    ]
+    body = {
+        "model": model_name,
+        "messages": messages,
+        "temperature": effective_temperature,
+        "stream": True,
+    }
+    async with httpx.AsyncClient(timeout=float(settings.KIMI_TIMEOUT_SECONDS)) as client:
+        async with client.stream(
+            "POST",
+            f"{settings.KIMI_BASE_URL.rstrip('/')}/chat/completions",
+            headers=headers,
+            json=body,
+        ) as resp:
+            resp.raise_for_status()
+            async for line in resp.aiter_lines():
+                if not line.startswith("data: "):
+                    continue
+                data = line[6:].strip()
+                if data == "[DONE]":
+                    return
+                try:
+                    chunk = json.loads(data)
+                    content = (
+                        ((chunk.get("choices") or [{}])[0])
+                        .get("delta", {})
+                        .get("content")
+                        or ""
+                    )
+                    if content:
+                        yield content
+                except Exception:
+                    continue
+
+
 async def generate_audit_with_kimi(payload: dict[str, Any], doc_type: str) -> dict[str, Any]:
     quality = payload.get("quality", {}) or {}
     quality_facts = {

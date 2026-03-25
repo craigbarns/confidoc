@@ -896,11 +896,34 @@ function renderDocs(items) {
     return;
   }
   docList.innerHTML = "";
-  currentDocs.forEach((doc, i) => {
-    const ic = docIcon(doc.extension);
-    const el = document.createElement("div");
-    el.className = "doc-item";
-    el.style.animationDelay = `${i*0.05}s`;
+  // Group by client name (first tag)
+  const groups = new Map();
+  currentDocs.forEach(doc => {
+    const client = (Array.isArray(doc.tags) && doc.tags.length && doc.tags[0]) ? doc.tags[0] : "";
+    if (!groups.has(client)) groups.set(client, []);
+    groups.get(client).push(doc);
+  });
+  // Sort: named clients first (alpha), then unnamed
+  const sortedKeys = Array.from(groups.keys()).sort((a, b) => {
+    if (!a && b) return 1;
+    if (a && !b) return -1;
+    return a.localeCompare(b, "fr");
+  });
+  let globalIdx = 0;
+  sortedKeys.forEach(clientKey => {
+    const groupDocs = groups.get(clientKey);
+    if (clientKey) {
+      const header = document.createElement("div");
+      header.className = "doc-client-group";
+      header.innerHTML = `<span class="doc-client-icon">👤</span><span class="doc-client-name">${clientKey}</span><span class="doc-client-count">${groupDocs.length} doc${groupDocs.length > 1 ? "s" : ""}</span>`;
+      docList.appendChild(header);
+    }
+    groupDocs.forEach((doc) => {
+      const i = globalIdx++;
+      const ic = docIcon(doc.extension);
+      const el = document.createElement("div");
+      el.className = "doc-item";
+      el.style.animationDelay = `${i*0.05}s`;
     el.innerHTML = `
       <div class="doc-icon ${ic.cls}">${ic.icon}</div>
       <div class="doc-info">
@@ -945,8 +968,9 @@ function renderDocs(items) {
           <button class="btn-act danger" data-a="delete" data-id="${doc.id}">🗑️</button>
         </div>
       </div>`;
-    docList.appendChild(el);
-    setDocQualityBadge(doc.id, docQualityMap[doc.id]);
+      docList.appendChild(el);
+      setDocQualityBadge(doc.id, docQualityMap[doc.id]);
+    });
   });
   refreshDocQaOptions();
   // Appliquer les filtres de recherche après le rendu
@@ -1277,7 +1301,8 @@ async function doUploadFile(file) {
   if (autoRequested && !auto) {
     toast("Fichier volumineux: upload rapide sans auto-traitement. Clique ensuite sur « Traiter ».", "info");
   }
-  const uploadUrl = `/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}`;
+  const clientName = ($("clientNameInput") || {}).value || "";
+  const uploadUrl = `/api/v1/uploads?auto_anonymize=${auto}&profile=${encodeURIComponent(profile)}&document_type=${encodeURIComponent(requestedDocType)}&client_name=${encodeURIComponent(clientName.trim())}`;
 
   try {
     setStage("upload", "Upload du document en cours...");
@@ -1915,6 +1940,119 @@ if (purgeConfirmBtn) {
     } catch { toast("Erreur réseau", "error"); }
   });
 }
+
+// ===== STREAMING IA =====
+let activeStreamReader = null;
+
+async function startAiStream() {
+  const docId = lastActiveDocId;
+  if (!docId) { toast("Sélectionnez d'abord un document dans Dossiers", "error"); return; }
+  if (!accessToken) { toast("Connectez-vous d'abord", "error"); return; }
+
+  const question = ($("streamQuestion") || {}).value || "";
+  const output = $("streamOutput");
+  const startBtn = $("startStreamBtn");
+  const stopBtn = $("stopStreamBtn");
+
+  if (output) { output.style.display = "block"; output.innerHTML = '<span class="ai-cursor"></span>'; }
+  if (startBtn) startBtn.disabled = true;
+  if (stopBtn) stopBtn.style.display = "";
+
+  let accumulated = "";
+  try {
+    const url = `/api/v1/ai/stream/${docId}${question ? "?question=" + encodeURIComponent(question) : ""}`;
+    const resp = await fetch(url, {
+      method: "POST",
+      headers: { Authorization: `Bearer ${accessToken}` },
+    });
+    if (!resp.ok) {
+      const err = await resp.json().catch(() => ({}));
+      toast(err.detail || "Erreur streaming IA", "error");
+      return;
+    }
+    const reader = resp.body.getReader();
+    activeStreamReader = reader;
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { value, done } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+      for (const line of lines) {
+        if (!line.startsWith("data: ")) continue;
+        const raw = line.slice(6).trim();
+        if (raw === "[DONE]") break;
+        try {
+          const parsed = JSON.parse(raw);
+          if (parsed.error) { toast(parsed.error, "error"); break; }
+          if (parsed.chunk) {
+            accumulated += parsed.chunk;
+            if (output) output.innerHTML = accumulated.replace(/\n/g, "<br>") + '<span class="ai-cursor"></span>';
+          }
+        } catch {}
+      }
+    }
+    if (output) output.innerHTML = accumulated.replace(/\n/g, "<br>");
+    toast("Synthèse générée", "success");
+  } catch (e) {
+    if (e.name !== "AbortError") toast("Erreur streaming: " + e.message, "error");
+  } finally {
+    activeStreamReader = null;
+    if (startBtn) startBtn.disabled = false;
+    if (stopBtn) stopBtn.style.display = "none";
+  }
+}
+
+function stopAiStream() {
+  if (activeStreamReader) {
+    activeStreamReader.cancel();
+    activeStreamReader = null;
+  }
+  const stopBtn = $("stopStreamBtn");
+  const startBtn = $("startStreamBtn");
+  if (stopBtn) stopBtn.style.display = "none";
+  if (startBtn) startBtn.disabled = false;
+}
+
+const startStreamBtn = $("startStreamBtn");
+const stopStreamBtn = $("stopStreamBtn");
+if (startStreamBtn) startStreamBtn.addEventListener("click", startAiStream);
+if (stopStreamBtn) stopStreamBtn.addEventListener("click", stopAiStream);
+const streamQuestionInput = $("streamQuestion");
+if (streamQuestionInput) {
+  streamQuestionInput.addEventListener("keydown", e => { if (e.key === "Enter") startAiStream(); });
+}
+
+// ===== KEYBOARD SHORTCUTS =====
+const shortcutsModal = $("shortcutsModal");
+const closeShortcutsBtn = $("closeShortcutsBtn");
+if (closeShortcutsBtn) closeShortcutsBtn.addEventListener("click", () => shortcutsModal && shortcutsModal.classList.remove("active"));
+if (shortcutsModal) shortcutsModal.addEventListener("click", e => { if (e.target === shortcutsModal) shortcutsModal.classList.remove("active"); });
+
+document.addEventListener("keydown", (e) => {
+  // Ignore when typing in inputs
+  const tag = (e.target || {}).tagName || "";
+  if (["INPUT", "TEXTAREA", "SELECT"].includes(tag)) return;
+  // Ignore when a modal is open (except Escape)
+  const modalOpen = document.querySelector(".modal-overlay.active");
+
+  if (e.key === "Escape") {
+    if (shortcutsModal && shortcutsModal.classList.contains("active")) { shortcutsModal.classList.remove("active"); return; }
+    closePurgeModal();
+    stopAiStream();
+    return;
+  }
+  if (modalOpen) return;
+
+  if (e.key === "1") { e.preventDefault(); switchTab("dossiers"); }
+  else if (e.key === "2") { e.preventDefault(); switchTab("analyse"); }
+  else if (e.key === "3") { e.preventDefault(); switchTab("exports"); }
+  else if (e.key === "r" || e.key === "R") { e.preventDefault(); refreshDocs(); toast("Actualisé", "info"); }
+  else if (e.key === "?") { e.preventDefault(); if (shortcutsModal) shortcutsModal.classList.add("active"); }
+});
 
 window.addEventListener("error", (ev) => {
   const msg = (ev && ev.message) ? ev.message : "Erreur JavaScript";

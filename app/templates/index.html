@@ -6,6 +6,10 @@
   <title>ConfiDoc — Plateforme comptable confidentielle</title>
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
   <link rel="stylesheet" href="/static/css/style.css">
+  <link rel="manifest" href="/static/manifest.json">
+  <meta name="theme-color" content="#0f172a">
+  <meta name="mobile-web-app-capable" content="yes">
+  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
 </head>
 <body>
 
@@ -156,6 +160,10 @@
                     </optgroup>
                   </select>
                 </div>
+                <div>
+                  <label class="config-label">Dossier client (optionnel)</label>
+                  <input type="text" id="clientNameInput" class="form-input" placeholder="Ex : SCI Martin, Cabinet Dupont…" autocomplete="off" />
+                </div>
                 <div class="checkbox-row">
                   <input type="checkbox" id="autoAnonymize" checked />
                   <label for="autoAnonymize">Traiter automatiquement après dépôt</label>
@@ -262,6 +270,21 @@
           </div>
         </div>
 
+        <!-- Streaming IA -->
+        <div class="panel" id="streamPanel">
+          <div class="panel-header">
+            <h2><span class="icon">⚡</span> Synthèse IA en direct</h2>
+            <button id="stopStreamBtn" class="btn btn-ghost btn-sm" style="display:none">⏹ Arrêter</button>
+          </div>
+          <div class="panel-body">
+            <div class="stream-input-row">
+              <input id="streamQuestion" class="qa-input" type="text" placeholder="Question libre ou laisser vide pour une synthèse automatique…" />
+              <button id="startStreamBtn" class="btn btn-primary btn-sm">▶ Générer</button>
+            </div>
+            <div id="streamOutput" class="stream-output" style="display:none"></div>
+          </div>
+        </div>
+
         <!-- Masked summary (expert) -->
         <div class="panel expert-only">
           <div class="panel-header"><h2><span class="icon">🔍</span> Détail de l'anonymisation</h2></div>
@@ -354,6 +377,26 @@
     <div class="modal-footer">
       <button id="purgeCancelBtn" class="modal-btn-cancel">Annuler</button>
       <button id="purgeConfirmBtn" class="modal-btn-danger" disabled>Confirmer la suppression</button>
+    </div>
+  </div>
+</div>
+
+<!-- Keyboard shortcuts help modal -->
+<div class="modal-overlay" id="shortcutsModal">
+  <div class="modal-card">
+    <div class="modal-header"><h3>⌨️ Raccourcis clavier</h3></div>
+    <div class="modal-body">
+      <table class="shortcuts-table">
+        <tr><td><kbd>1</kbd></td><td>Onglet Dossiers</td></tr>
+        <tr><td><kbd>2</kbd></td><td>Onglet Analyse & IA</td></tr>
+        <tr><td><kbd>3</kbd></td><td>Onglet Exports</td></tr>
+        <tr><td><kbd>R</kbd></td><td>Actualiser les documents</td></tr>
+        <tr><td><kbd>Esc</kbd></td><td>Fermer modal / arrêter stream</td></tr>
+        <tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>
+      </table>
+    </div>
+    <div class="modal-footer">
+      <button id="closeShortcutsBtn" class="modal-btn-cancel">Fermer</button>
     </div>
   </div>
 </div>

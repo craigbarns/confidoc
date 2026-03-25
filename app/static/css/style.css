@@ -1498,3 +1498,89 @@ details > summary::-webkit-details-marker { display: none; }
   .modal-card { padding: 28px 20px; }
   .active-doc-banner { flex-wrap: wrap; }
 }
+
+/* ===== STREAMING IA ===== */
+.stream-input-row {
+  display: flex;
+  gap: 8px;
+  margin-bottom: 12px;
+}
+.stream-input-row .qa-input {
+  flex: 1;
+}
+.stream-output {
+  background: rgba(255,255,255,0.03);
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: 12px;
+  padding: 16px;
+  font-size: 14px;
+  line-height: 1.7;
+  color: var(--text-primary);
+  min-height: 80px;
+  white-space: pre-wrap;
+  word-break: break-word;
+  animation: fadeIn 0.2s ease;
+}
+@keyframes cursorBlink {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0; }
+}
+.ai-cursor {
+  display: inline-block;
+  width: 2px;
+  height: 1em;
+  background: var(--violet);
+  margin-left: 2px;
+  vertical-align: text-bottom;
+  animation: cursorBlink 0.8s step-end infinite;
+  border-radius: 1px;
+}
+
+/* ===== DOSSIERS CLIENTS ===== */
+.doc-client-group {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px 6px;
+  margin-top: 8px;
+  border-top: 1px solid rgba(255,255,255,0.06);
+  font-size: 12px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+  color: var(--text-muted);
+}
+.doc-client-group:first-child { border-top: none; margin-top: 0; }
+.doc-client-icon { font-size: 14px; }
+.doc-client-name { color: var(--text-secondary); }
+.doc-client-count {
+  margin-left: auto;
+  background: rgba(255,255,255,0.06);
+  border-radius: 20px;
+  padding: 1px 8px;
+  font-weight: 500;
+  font-size: 11px;
+}
+
+/* ===== KEYBOARD SHORTCUTS TABLE ===== */
+.shortcuts-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-size: 14px;
+}
+.shortcuts-table tr { border-bottom: 1px solid rgba(255,255,255,0.06); }
+.shortcuts-table tr:last-child { border-bottom: none; }
+.shortcuts-table td { padding: 10px 8px; }
+.shortcuts-table td:first-child { width: 80px; }
+kbd {
+  display: inline-block;
+  background: rgba(255,255,255,0.08);
+  border: 1px solid rgba(255,255,255,0.15);
+  border-radius: 6px;
+  padding: 2px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-primary);
+  box-shadow: 0 2px 0 rgba(0,0,0,0.3);
+}

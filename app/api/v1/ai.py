@@ -7,7 +7,7 @@ import uuid
 from typing import Any
 
 from fastapi import APIRouter, Query, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -17,7 +17,7 @@ from app.models.llm_request import LlmRequest
 from app.models.llm_suggestion import LlmSuggestion
 from app.services.anonymization_service import anonymize_text, classify_document_type
 from app.services.ollama_service import generate_summary_with_ollama, generate_audit_with_ollama
-from app.services.kimi_service import generate_summary_with_kimi, generate_audit_with_kimi
+from app.services.kimi_service import generate_summary_with_kimi, generate_audit_with_kimi, stream_kimi_response
 from app.services.structured_dataset_service import build_structured_dataset
 from app.api.v1.documents import _get_best_text_for_reporting
 from app.config import get_settings
@@ -569,5 +569,84 @@ async def ai_summary(
             "prudent_mode": prudent_mode,
             "kimi_mode": kimi_mode if llm_provider == "kimi" else None,
         }
+    )
+
+
+@router.post(
+    "/stream/{document_id}",
+    summary="Synthèse IA en streaming (SSE)",
+)
+async def ai_stream(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    doc_type: str = Query(default="auto"),
+    question: str = Query(default=""),
+) -> StreamingResponse:
+    try:
+        document_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == document_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404("Document introuvable")
+
+    original_text = await _get_best_text_for_reporting(db, document)
+    if not original_text:
+        raise http_400("Aucune donnée textuelle disponible pour l'analyse IA")
+
+    effective_type = classify_document_type(original_text, document.original_filename)
+    anonymized_text, _ = anonymize_text(
+        original_text,
+        profile="dataset_accounting",
+        document_type=effective_type,
+    )
+
+    structured = build_structured_dataset(
+        anonymized_text=anonymized_text,
+        original_filename=document.original_filename,
+        requested_doc_type=doc_type,
+        extraction_text=original_text,
+    )
+    quality = structured.get("quality") or {}
+    ready_for_ai = bool(quality.get("ready_for_ai"))
+    ready_for_ai_core = bool(quality.get("ready_for_ai_core"))
+
+    if not ready_for_ai and not ready_for_ai_core:
+        async def _blocked():
+            yield "data: " + json.dumps({"error": "Document non prêt pour l'IA."}) + "\n\n"
+        return StreamingResponse(_blocked(), media_type="text/event-stream")
+
+    fields_summary = _sanitize_fields_for_ai(structured.get("fields", {}))
+    prompt_question = question.strip() or "Fais une synthèse comptable courte et actionnable."
+    user_content = (
+        f"Document type: {structured.get('doc_type', 'inconnu')}\n"
+        f"Qualité: ready_for_ai={ready_for_ai}, ready_for_ai_core={ready_for_ai_core}\n"
+        f"Champs extraits: {json.dumps(fields_summary, ensure_ascii=False)[:3000]}\n"
+        f"Extrait anonymisé: {anonymized_text[:2000]}\n\n"
+        f"Question: {prompt_question}"
+    )
+
+    async def _event_stream():
+        try:
+            async for chunk in stream_kimi_response(user_content, temperature=0.3):
+                payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
+                yield f"data: {payload}\n\n"
+            yield "data: [DONE]\n\n"
+        except Exception as exc:
+            err = json.dumps({"error": str(exc)}, ensure_ascii=False)
+            yield f"data: {err}\n\n"
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
 
