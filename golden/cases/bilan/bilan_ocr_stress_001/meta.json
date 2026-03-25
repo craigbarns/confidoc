@@ -1,0 +1,10 @@
+{
+  "doc_type": "bilan",
+  "difficulty": "hard",
+  "focus_fields": ["total_actif", "total_passif", "immobilisations", "creances", "disponibilites"],
+  "description": "Bilan avec erreurs OCR severes - O/0, 1/l, @/a, i/l confondus",
+  "expected_failure": "Regex trop strictes ne matchent pas les labels OCR degrades",
+  "ocr_quality": "very_low",
+  "error_types": ["O_to_0", "1_to_l", "a_to_@", "i_to_l"],
+  "strategy": "ocr_fuzzy_matching"
+}

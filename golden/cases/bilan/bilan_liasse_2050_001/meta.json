@@ -1,0 +1,10 @@
+{
+  "doc_type": "bilan",
+  "difficulty": "easy",
+  "focus_fields": ["total_actif", "total_passif", "immobilisations", "capitaux_propres", "resultat_exercice"],
+  "description": "Bilan simplifie type liasse 2050 - SCI ou petite entreprise, format standard DGFIP",
+  "expected_failure": null,
+  "ocr_quality": "high",
+  "document_source": "liasse_fiscale_2050",
+  "balance_check": "actif_472230_eq_passif_472230"
+}

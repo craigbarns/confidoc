@@ -1,0 +1,27 @@
+B1LAN 2O24
+SARL C0NSTRUCT10N
+
+ACT1F
+Imm0bilisations c0rp0relles 245 OOO
+Imm0bilisations financiaeres 15 OOO
+T0TAL 1MMOB1L1SAT10NS 26O OOO
+
+Cré@nces c1ients 45 6OO
+Dispon1b1lités banca1res 28 45O
+T0TAL ACT1F C1RCULANT 74 O5O
+
+T0TAL ACT1F 334 O5O
+
+PASS1F
+Capital s0cial 50 OOO
+Reserves legales 5 OOO
+Autres reserves 89 5OO
+Resultat exerc1ce 12 340
+T0TAL CAP1TAUX PR0PRES 156 84O
+
+Emprunts 125 OOO
+Dettes f0urnisseurs 42 6OO
+Dettes fiscales 9 6l0
+T0TAL DETTES 177 2lO
+
+T0TAL PASS1F 334 O5O

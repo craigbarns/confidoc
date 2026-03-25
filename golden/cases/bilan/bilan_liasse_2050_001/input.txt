@@ -1,0 +1,41 @@
+LIASSE FISCALE 2050
+Société civile immobilière
+Exercice du 01/01/2024 au 31/12/2024
+
+ACTIF
+
+Immobilisations incorporelles 0
+Immobilisations corporelles 456 000
+Immobilisations financières 0
+TOTAL IMMOBILISATIONS 456 000
+
+Stocks et en-cours 0
+Créances clients 0
+Autres créances 2 450
+Trésorerie actif 12 580
+TOTAL ACTIF CIRCULANT 15 030
+
+Charges constatées d'avance 1 200
+TOTAL ACTIF 472 230
+
+PASSIF
+
+Capital social 1 000
+Réserves 245 000
+Report à nouveau 8 500
+Résultat de l'exercice 18 670
+TOTAL CAPITAUX PROPRES 273 170
+
+Emprunts et dettes 185 000
+Avances et acomptes reçus 0
+Dettes fournisseurs 8 560
+Dettes fiscales et sociales 2 800
+Autres dettes 2 700
+TOTAL DETTES 199 060
+
+TOTAL PASSIF 472 230
+
+Compte de résultat simplifié
+Produits 85 400
+Charges 66 730
+Résultat 18 670
