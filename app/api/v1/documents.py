@@ -957,7 +957,8 @@ async def status_summary(
             else:
                 quality_dist["review"] += 1
             quality_flags_counter.update([str(x) for x in (q.get("quality_flags") or [])])
-        except Exception:
+        except Exception as exc:
+            logger.error("status_summary_quality_error", doc_id=str(d.id), error=str(exc), exc_info=True)
             quality_errors += 1
 
     return JSONResponse(
