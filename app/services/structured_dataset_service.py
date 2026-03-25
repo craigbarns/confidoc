@@ -15,6 +15,99 @@ from app.services.quality_experience import build_quality_experience
 logger = get_logger(__name__)
 
 
+def _ocr_normalize_label(text: str) -> str:
+    """
+    Normalise le texte pour le matching OCR-dégradé des labels.
+    
+    Transforme les caractères OCR-problématiques dans les labels:
+    - 0 → o (mais pas dans les nombres purs)
+    - 1 → i (mais pas dans les nombres purs)
+    - @ → a
+    
+    ATTENTION: Ne pas utiliser pour les montants, uniquement les labels.
+    """
+    import re
+    
+    def normalize_token(token: str) -> str:
+        # Si c'est un nombre (avec espaces ou pas), ne pas toucher
+        if re.match(r'^[\d\s\.\,]+$', token.strip()):
+            return token
+        # Sinon, normaliser les lettres
+        result = token.lower()
+        result = result.replace('0', 'o')  # 0 → o dans les mots
+        result = result.replace('1', 'i')  # 1 → i dans les mots
+        result = result.replace('@', 'a')  # @ → a
+        return result
+    
+    # Tokeniser et normaliser mot par mot
+    tokens = re.split(r'(\s+)', text)
+    return ''.join(normalize_token(t) for t in tokens)
+
+
+def _ocr_normalize_amount(text: str) -> str:
+    """
+    Normalise les montants OCR-dégradés.
+    
+    Transforme les caractères OCR-problématiques dans les montants:
+    - o → 0
+    - O → 0
+    - l → 1 (dans un contexte numérique)
+    - i → 1 (dans un contexte numérique)
+    - s → 5 (optionnel)
+    """
+    # Mapping lettre → chiffre (pour les montants)
+    ocr_map = {
+        'o': '0',
+        'O': '0',
+        'l': '1',
+        'i': '1',
+        'I': '1',
+        's': '5',
+        'S': '5',
+    }
+    
+    result = text
+    for ocr_char, real_char in ocr_map.items():
+        result = result.replace(ocr_char, real_char)
+    
+    return result
+
+
+def _extract_with_ocr_tolerance(
+    text: str,
+    label_patterns: list[tuple[str, str]],
+    min_amount: float = 50.0,
+) -> tuple[float | None, str]:
+    """
+    Extraction avec tolérance OCR sur les labels.
+    
+    Essaie d'abord sur texte original, puis sur texte normalisé OCR.
+    """
+    # Premier essai: texte original
+    result, source = _extract_first_amount_with_source(
+        text, label_patterns, min_amount=min_amount
+    )
+    if result is not None:
+        return result, source
+    
+    # Second essai: texte OCR-normalisé pour les labels
+    normalized_text = _ocr_normalize_label(text)
+    
+    # Adapter les patterns pour le texte normalisé
+    normalized_patterns = []
+    for src, pattern in label_patterns:
+        # Normaliser aussi le pattern pour matcher
+        norm_pattern = _ocr_normalize_label(pattern)
+        # Mais garder le pattern original dans la source
+        normalized_patterns.append((f"{src}:ocr_norm", norm_pattern))
+    
+    result, source = _extract_first_amount_with_source(
+        normalized_text, normalized_patterns, min_amount=min_amount
+    )
+    
+    return result, source
+
+
 def _contains_any(source: str, keywords: tuple[str, ...]) -> bool:
     return any(k in source for k in keywords)
 
@@ -1385,6 +1478,19 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     dettes_fin_val = _coerce_component_amount(dettes_fin_val, total_passif)
     dettes_four_val = _coerce_component_amount(dettes_four_val, total_passif)
     
+    # OCR tolerance: try with normalized text for critical labels
+    # This handles OCR degradation like "CAP1TAUX PR0PRES" → "capitaux propres"
+    if capitaux_propres is None:
+        capitaux_propres, capitaux_propres_src = _extract_with_ocr_tolerance(
+            text,
+            [
+                ("label:capitaux_propres", r"capitaux?\s+propres"),
+                ("label:situation_nette", r"situation\s+nette"),
+                ("label:fonds_propres", r"fonds?\s+propres"),
+            ],
+            min_amount=100.0,
+        )
+    
     # Fallback: if capitaux_propres missing and we have total_passif + dettes, deduce it
     if capitaux_propres is None and isinstance(total_passif, (int, float)):
         dettes_sum = 0.0
@@ -1455,7 +1561,8 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     resultat_exercice, resultat_exercice_src = _extract_first_amount_with_source(
         text,
         [
-            ("label:resultat_exercice", r"r[ée]sultat\s+de?\s+l[' ]?exercice"),
+            # Support both "résultat de l'exercice" and "résultat exercice" (plaquette format)
+            ("label:resultat_exercice", r"r[ée]sultat\s+(?:de\s+l[' ]?)?exercice"),
             ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
             # Additional patterns for plaquette formats
             ("label:resultat_total", r"r[ée]sultat\s+net|resultat\s+net"),
@@ -1466,7 +1573,7 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     if resultat_exercice is None:
         resultat_exercice, resultat_exercice_src = _extract_first_amount_token_from_keyword_line(
             text,
-            r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
+            r"r[ée]sultat\s+(?:de\s+l[' ]?)?exercice|b[ée]n[ée]fice\s+ou\s+perte|perte\s+de\s+l[' ]?exercice",
             min_amount=50.0,
         )
     # Fallback: look for "resultat" with wider context if still not found
@@ -1575,6 +1682,32 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 text, r"disponibilit[ée]s?|banque|caisse", min_amount=100.0
             )
             disponibilites_src = "fallback:disponibilites_line"
+    
+    # OCR tolerance for actif components (handles OCR degradation like "1MMOB1L1SAT10NS")
+    if immobilisations_val is None:
+        immobilisations_val, immobilisations_src = _extract_with_ocr_tolerance(
+            text,
+            [("label:immobilisations", r"immobilisations")],
+            min_amount=100.0,
+        )
+    if creances_val is None:
+        creances_val, creances_src = _extract_with_ocr_tolerance(
+            text,
+            [
+                ("label:creances", r"cr[ée]ances"),
+                ("label:creances_clients", r"cr[ée]ances\s+clients"),
+            ],
+            min_amount=50.0,
+        )
+    if disponibilites_val is None:
+        disponibilites_val, disponibilites_src = _extract_with_ocr_tolerance(
+            text,
+            [
+                ("label:disponibilites", r"disponibilit[ée]s"),
+                ("label:banques", r"banques?|caisse"),
+            ],
+            min_amount=50.0,
+        )
     
     # Calculate/validate total_actif from components if PCG data is strong
     if immobilisations_src.startswith("pcg_sum:") or creances_src.startswith("pcg_sum:") or disponibilites_src.startswith("pcg_sum:"):
