@@ -273,10 +273,43 @@ async function refreshMaskedSummary(docId) {
     const maskedCats = fusedEntries.filter(([cat,_]) => cat !== "Montants").slice(0, 8);
 
     function qualityLabel() {
-      if (experienceHeadline) return experienceHeadline;
-      if (!quality.needs_review) return "Aucun point qualité bloquant détecté.";
-      if (qualityFlagsCount > 0) return `${qualityFlagsCount} point(s) qualité à revoir avant validation.`;
-      return "Revue manuelle ciblée recommandée.";
+      // Headline amélioré avec compteurs détaillés
+      const fields = sData.fields || {};
+      const totalFields = Object.keys(fields).length;
+      const extractedFields = Object.values(fields).filter(f => f?.value !== null && f?.value !== undefined).length;
+      const suspiciousCount = (quality.suspicious_fields || []).length;
+      const missingCritical = (quality.critical_missing_fields || []).length;
+      
+      // Déterminer le statut du bilan
+      let balanceStatus = "";
+      if (extractionDetails.doc_type === "bilan" || extractionDetails.routing_selected === "bilan") {
+        const hasActif = fields.total_actif?.value != null;
+        const hasPassif = fields.total_passif?.value != null;
+        if (hasActif && hasPassif) {
+          const actif = Number(fields.total_actif.value);
+          const passif = Number(fields.total_passif.value);
+          const gap = Math.abs(actif - passif);
+          const tol = Math.max(500, passif * 0.03);
+          if (gap <= tol) balanceStatus = "✓ Bilan équilibré";
+          else balanceStatus = "⚠️ Bilan déséquilibré";
+        } else {
+          balanceStatus = "○ Bilan incomplet";
+        }
+      }
+      
+      // Construction du headline
+      const parts = [];
+      if (balanceStatus) parts.push(balanceStatus);
+      parts.push(`${extractedFields}/${totalFields} champs extraits`);
+      if (suspiciousCount > 0) parts.push(`${suspiciousCount} champ${suspiciousCount > 1 ? 's' : ''} à vérifier`);
+      if (missingCritical > 0) parts.push(`${missingCritical} critique${missingCritical > 1 ? 's' : ''} manquant${missingCritical > 1 ? 's' : ''}`);
+      
+      const headline = parts.join(" · ");
+      
+      if (experienceHeadline) return experienceHeadline + "\n" + headline;
+      if (!quality.needs_review) return headline + " · ✓ Prêt pour l'IA";
+      if (qualityFlagsCount > 0) return headline;
+      return headline + " · Revue manuelle recommandée";
     }
 
     const CRITICAL_FIELD_LABELS_FR = {
@@ -294,6 +327,8 @@ async function refreshMaskedSummary(docId) {
       resultat_exploitation: "Résultat d'exploitation",
       resultat_courant: "Résultat courant",
       resultat_net: "Résultat net",
+      total_produits: "Total produits",
+      total_charges: "Total charges",
       denomination_sci: "Dénomination SCI",
       date_cloture_exercice: "Date de clôture (exercice)",
       nombre_associes: "Nombre d'associés",
@@ -307,6 +342,78 @@ async function refreshMaskedSummary(docId) {
     };
     function labelCriticalField(k) {
       return CRITICAL_FIELD_LABELS_FR[k] || String(k).replace(/_/g, " ");
+    }
+
+    // Mapping des sources en français lisible
+    const SOURCE_LABELS = {
+      "label:": "Lu directement",
+      "fallback:": "Calculé/estimé",
+      "derived:": "Déduit d'autres champs",
+      "pcg_sum:": "Sommé depuis le plan comptable",
+      "calculated:": "Calculé",
+      "ocr_norm:": "OCR corrigé",
+      "missing": "Non trouvé",
+      "golden:": "Référence",
+    };
+    function translateSource(source) {
+      if (!source) return "Source inconnue";
+      for (const [prefix, label] of Object.entries(SOURCE_LABELS)) {
+        if (source.startsWith(prefix)) return label;
+      }
+      return source;
+    }
+
+    // Badge de confiance pour un champ
+    function confidenceBadge(confidence, source) {
+      const n = Number(confidence || 0);
+      let icon = "⚠️";
+      let cls = "confidence-low";
+      if (n >= 0.85) { icon = "✓"; cls = "confidence-high"; }
+      else if (n >= 0.70) { icon = "~"; cls = "confidence-medium"; }
+      const srcLabel = translateSource(source);
+      return `<span class="confidence-badge ${cls}" title="Confiance: ${Math.round(n*100)}% | Source: ${srcLabel}">${icon} ${Math.round(n*100)}%</span>`;
+    }
+
+    // Formatage d'un montant
+    function formatAmount(val) {
+      if (val === null || val === undefined) return "—";
+      if (typeof val === "number") {
+        return val.toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 2 });
+      }
+      return String(val);
+    }
+
+    // Rendu des champs extraits avec badges
+    function renderExtractedFields(fields) {
+      if (!fields || Object.keys(fields).length === 0) return "<p>Aucun champ extrait</p>";
+      
+      const criticalFields = Object.keys(CRITICAL_FIELD_LABELS_FR);
+      const entries = Object.entries(fields).sort((a, b) => {
+        // Champs critiques d'abord
+        const aCrit = criticalFields.indexOf(a[0]);
+        const bCrit = criticalFields.indexOf(b[0]);
+        if (aCrit !== -1 && bCrit === -1) return -1;
+        if (aCrit === -1 && bCrit !== -1) return 1;
+        return a[0].localeCompare(b[0]);
+      });
+
+      const rows = entries.map(([key, field]) => {
+        const label = labelCriticalField(key);
+        const val = formatAmount(field?.value);
+        const conf = field?.confidence || 0;
+        const source = field?.source_hint || "";
+        const isCalc = source && (source.startsWith("fallback:") || source.startsWith("derived:") || source.startsWith("calculated:"));
+        const calcWarning = isCalc ? `<span class="calc-warning" title="Ce champ est calculé ou estimé — à vérifier">⚠️</span>` : "";
+        const rowClass = isCalc ? "field-row calculated" : "field-row";
+        
+        return `<div class="${rowClass}">
+          <span class="field-label">${label}</span>
+          <span class="field-value">${val} ${calcWarning}</span>
+          <span class="field-confidence">${confidenceBadge(conf, source)}</span>
+        </div>`;
+      }).join("");
+
+      return `<div class="extracted-fields-table">${rows}</div>`;
     }
 
     const FLAG_LABELS = {
@@ -418,6 +525,11 @@ async function refreshMaskedSummary(docId) {
             ? `${extractionDetails.text_segmentation.strategy} — ${extractionDetails.text_segmentation.segment_chars}/${extractionDetails.text_segmentation.full_chars} car. (score ${extractionDetails.text_segmentation.window_score ?? "—"})${extractionDetails.text_segmentation.fallback_to_full_text ? " → repli texte intégral (meilleure qualité)" : ""}`
             : "—"
         }</b></div>
+      </div>
+      <div class="extracted-fields-section">
+        <div class="extracted-fields-title">📊 Champs extraits (${Object.keys(sData.fields || {}).length} champs)</div>
+        <div class="extracted-fields-subtitle">✓ = confiance élevée | ~ = confiance moyenne | ⚠️ = champ calculé/à vérifier</div>
+        ${renderExtractedFields(sData.fields)}
       </div>`;
   } catch (e) {
     // no-op

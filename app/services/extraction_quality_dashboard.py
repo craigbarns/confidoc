@@ -47,7 +47,7 @@ EXTRACTORS = {
 CRITICAL_FIELDS = {
     "bilan": ["total_actif", "total_passif", "capitaux_propres", "dettes_financieres", "dettes_fournisseurs", "resultat_exercice"],
     "compte_resultat": ["total_produits", "total_charges", "resultat_net", "resultat_exploitation"],
-    "fiscal_2072": ["revenus_bruts", "frais_charges", "interets_emprunts", "revenu_net"],
+    "fiscal_2072": ["revenus_bruts", "frais_charges_hors_interets", "interets_emprunts", "revenu_net_foncier"],
     "releve_bancaire": ["solde_initial", "solde_final", "total_credits", "total_debits"],
     "immobilisations": ["total_brut", "total_amortissements", "total_net"],
 }

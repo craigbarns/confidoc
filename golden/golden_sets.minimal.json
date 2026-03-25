@@ -50,6 +50,8 @@
           "exercice": { "value": 2024 },
           "chiffre_affaires": { "value": 50000.0 },
           "charges_externes": { "value": 20000.0 },
+          "total_produits": { "value": 50000.0 },
+          "total_charges": { "value": 43000.0 },
           "resultat_exploitation": { "value": 8000.0 },
           "resultat_courant": { "value": 7500.0 },
           "resultat_net": { "value": 7000.0 }
@@ -66,9 +68,84 @@
           "exercice": { "value": 2024, "confidence": 0.95, "source": "golden:compare_value_only" },
           "chiffre_affaires": { "value": 50000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
           "charges_externes": { "value": 20000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "total_produits": { "value": 50000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
+          "total_charges": { "value": 43000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
           "resultat_exploitation": { "value": 8000.0, "confidence": 0.95, "source": "golden:compare_value_only" },
           "resultat_courant": { "value": 7500.0, "confidence": 0.95, "source": "golden:compare_value_only" },
           "resultat_net": { "value": 7000.0, "confidence": 0.95, "source": "golden:compare_value_only" }
+        }
+      }
+    },
+    {
+      "doc_type": "fiscal_2072",
+      "source_filename": "2072_clean_01.pdf",
+      "golden_reference": {
+        "fields": {
+          "denomination_sci": { "value": "SCI TEST 2072" },
+          "date_cloture_exercice": { "value": "31/12/2024" },
+          "nombre_associes": { "value": 2 },
+          "revenus_bruts": { "value": 120000.0 },
+          "frais_charges_hors_interets": { "value": 30000.0 },
+          "interets_emprunts": { "value": 10000.0 },
+          "revenu_net_foncier": { "value": 80000.0 }
+        },
+        "metadata": {
+          "generated_by": "real_case_clean",
+          "review_required": false,
+          "quality_flags": [],
+          "arithmetic_consistency_ok": true
+        }
+      },
+      "expected_api_subset": {
+        "fields": {
+          "denomination_sci": { "value": "SCI TEST 2072", "confidence": 0.92, "source": "golden:compare_value_only" },
+          "date_cloture_exercice": { "value": "31/12/2024", "confidence": 0.92, "source": "golden:compare_value_only" },
+          "nombre_associes": { "value": 2, "confidence": 0.90, "source": "golden:compare_value_only" },
+          "revenus_bruts": { "value": 120000.0, "confidence": 0.90, "source": "golden:compare_value_only" },
+          "frais_charges_hors_interets": { "value": 30000.0, "confidence": 0.88, "source": "golden:compare_value_only" },
+          "interets_emprunts": { "value": 10000.0, "confidence": 0.88, "source": "golden:compare_value_only" },
+          "revenu_net_foncier": { "value": 80000.0, "confidence": 0.90, "source": "golden:compare_value_only" }
+        }
+      }
+    },
+    {
+      "doc_type": "bilan",
+      "source_filename": "bilan_liasse_standard_01.pdf",
+      "golden_reference": {
+        "fields": {
+          "societe": { "value": "SCI ADAMA" },
+          "exercice": { "value": 2023 },
+          "date_cloture": { "value": "31/12/2023" },
+          "total_actif": { "value": 607665.0 },
+          "total_passif": { "value": 607665.0 },
+          "immobilisations": { "value": 588823.0 },
+          "creances": { "value": 5887.0 },
+          "disponibilites": { "value": 12955.0 },
+          "dettes_financieres": { "value": 242542.0 },
+          "dettes_fournisseurs": { "value": 24680.0 },
+          "capitaux_propres": { "value": 340377.0 },
+          "resultat_exercice": { "value": 5365.0 }
+        },
+        "metadata": {
+          "generated_by": "real_case_adama_2023",
+          "review_required": false,
+          "quality_flags": [],
+          "bilan_balance_ok": true
+        }
+      },
+      "expected_api_subset": {
+        "fields": {
+          "societe": { "value": "SCI ADAMA", "confidence": 0.92, "source": "golden:compare_value_only" },
+          "exercice": { "value": 2023, "confidence": 0.92, "source": "golden:compare_value_only" },
+          "date_cloture": { "value": "31/12/2023", "confidence": 0.92, "source": "golden:compare_value_only" },
+          "total_actif": { "value": 607665.0, "confidence": 0.87, "source": "golden:compare_value_only" },
+          "total_passif": { "value": 607665.0, "confidence": 0.87, "source": "golden:compare_value_only" },
+          "immobilisations": { "value": 588823.0, "confidence": 0.92, "source": "golden:compare_value_only" },
+          "creances": { "value": 5887.0, "confidence": 0.78, "source": "golden:compare_value_only" },
+          "disponibilites": { "value": 12955.0, "confidence": 0.78, "source": "golden:compare_value_only" },
+          "dettes_financieres": { "value": 242542.0, "confidence": 0.76, "source": "golden:compare_value_only" },
+          "capitaux_propres": { "value": 340377.0, "confidence": 0.80, "source": "golden:compare_value_only" },
+          "resultat_exercice": { "value": 5365.0, "confidence": 0.80, "source": "golden:compare_value_only" }
         }
       }
     }
