@@ -89,9 +89,10 @@ class TestQualityCompteResultat:
         assert "result_chain_minor_gap" not in q["quality_flags"]
 
     def test_chain_minor_gap_rex_rc_band(self):
-        # Ancre |REX| = 500k → tol_strict 750k, tol_relaxed 1M ; delta RC−REX = 900k
+        # Ancre |REX| = 500k → avec CA=5M, tol_strict 500k, tol_relaxed 750k
+        # delta RC−REX = 600k (entre strict et relaxed)
         rex = 500_000.0
-        rc = rex + 900_000.0
+        rc = rex + 600_000.0
         rn = rc
         q = _quality_compte_resultat(self._minimal_cr(rex, rc, rn))
         assert q["ready_for_ai"] is True
@@ -114,8 +115,9 @@ class TestQualityCompteResultat:
         q = _quality_compte_resultat(self._minimal_cr(500_000.0, 520_000.0, 510_000.0))
         assert q["cr_chain_delta_rex_rc"] == 20_000.0
         assert q["cr_chain_delta_rc_rn"] == 10_000.0
-        assert q["cr_chain_tol_relaxed_rex_rc"] == 1_000_000.0  # max(500k, 2×500k)
-        assert q["cr_chain_tol_relaxed_rc_rn"] == 1_040_000.0  # max(500k, 2×520k)
+        # Avec CA=5M (1-10M€), tol_relaxed = max(500k, 1.5×ancre)
+        assert q["cr_chain_tol_relaxed_rex_rc"] == 750_000.0  # max(500k, 1.5×500k)
+        assert q["cr_chain_tol_relaxed_rc_rn"] == 780_000.0  # max(500k, 1.5×520k)
 
 
 class TestQualityLiasseSimplifiee:

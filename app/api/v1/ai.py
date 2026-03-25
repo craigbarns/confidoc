@@ -353,7 +353,7 @@ async def ai_audit(
         anonymized_text=dataset_text,
         original_filename=document.original_filename,
         requested_doc_type=doc_type,
-        extraction_text=original_text,
+        extraction_text=dataset_text,  # RGPD: use anonymized text, not original
     )
 
     ai_payload = {
