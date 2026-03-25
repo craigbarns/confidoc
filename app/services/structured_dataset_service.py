@@ -2160,6 +2160,68 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
         if resultat_net is not None:
             resultat_net_src = "label:benefice_ou_perte"
 
+    # Extraction des totaux produits et charges (critiques pour ready_for_ai)
+    total_produits, total_produits_src = _extract_first_amount_with_source(
+        scan_cr,
+        [
+            ("label:total_produits", r"total\s+produits"),
+            ("label:total_produits_exploitation", r"total\s+produits\s+d[' ]exploitation"),
+        ],
+        min_amount=100.0,
+    )
+    if total_produits is None:
+        total_produits, total_produits_src = _extract_amount_from_lines_with_keyword(
+            scan_cr, r"total\s+produits", min_amount=100.0
+        )
+    # OCR tolerance for total_produits (handles 0→O degradation)
+    # Use line-token extraction to get the full number (e.g., "2 550 000")
+    if total_produits is None:
+        ocr_text = _ocr_normalize_label(scan_cr)
+        for line in ocr_text.splitlines():
+            if re.search(r"total\s+produits", line, re.IGNORECASE):
+                tokens = _extract_line_amount_tokens(line)
+                if tokens:
+                    # Take the largest token (most likely the total)
+                    total_produits = max(tokens)
+                    total_produits_src = "label:total_produits:ocr_norm"
+                    break
+    
+    # Extraction total_charges - prioritize line-token method for better number handling
+    total_charges, total_charges_src = _extract_amount_from_lines_with_keyword(
+        scan_cr, r"total\s+charges", min_amount=100.0
+    )
+    if total_charges is None:
+        total_charges, total_charges_src = _extract_first_amount_with_source(
+            scan_cr,
+            [
+                ("label:total_charges", r"total\s+charges"),
+                ("label:total_charges_exploitation", r"total\s+charges\s+d[' ]exploitation"),
+            ],
+            min_amount=100.0,
+        )
+    # OCR tolerance for total_charges (handles 0→O degradation like EXPLOITATI0N)
+    if total_charges is None:
+        ocr_text = _ocr_normalize_label(scan_cr)
+        for line in ocr_text.splitlines():
+            if re.search(r"total\s+charges", line, re.IGNORECASE):
+                tokens = _extract_line_amount_tokens(line)
+                if tokens:
+                    # Take the largest token (most likely the total)
+                    total_charges = max(tokens)
+                    total_charges_src = "label:total_charges:ocr_norm"
+                    break
+    # Second OCR attempt: look for "charges" in original text with OCR degradation
+    if total_charges is None:
+        for line in scan_cr.splitlines():
+            # Match "CHARGES" with possible OCR degradation (0→O, etc.)
+            if re.search(r"charg[3e]s", line, re.IGNORECASE) and "total" in line.lower():
+                ocr_line = _ocr_normalize_label(line)
+                tokens = _extract_line_amount_tokens(ocr_line)
+                if tokens:
+                    total_charges = max(tokens)
+                    total_charges_src = "label:total_charges:ocr_fallback"
+                    break
+
     return {
         **_extract_common_fields(text),
         "chiffre_affaires": _field(
@@ -2191,6 +2253,12 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
         ),
         "resultat_net": _field(
             resultat_net, 0.84 if resultat_net is not None else 0.0, resultat_net_src
+        ),
+        "total_produits": _field(
+            total_produits, 0.84 if total_produits is not None else 0.0, total_produits_src
+        ),
+        "total_charges": _field(
+            total_charges, 0.84 if total_charges is not None else 0.0, total_charges_src
         ),
     }
 
