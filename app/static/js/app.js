@@ -989,15 +989,33 @@ async function askDocumentQuestion() {
 }
 
 async function runKimiDocAction(docId, kimiMode) {
-  const quality = await loadDocQualitySnapshot(docId);
+  // Use fresh quality from API, but also check cached version for consistency warning
+  const freshQuality = await loadDocQualitySnapshot(docId);
+  const cachedQuality = docQualityMap[docId] || {};
+  
+  // Debug: log if inconsistent
+  if (cachedQuality.ready_for_ai && !freshQuality.ready_for_ai_core) {
+    console.warn("Quality inconsistency detected:", {
+      cached: cachedQuality,
+      fresh: freshQuality
+    });
+  }
+  
+  const quality = freshQuality; // Always use fresh for decision
+  
   if (!quality.ready_for_ai_core) {
     previewOut.innerHTML = `
       <div class="ai-summary">
         <div class="ai-head"><div class="ai-tools"><div class="ai-mode fallback">Action IA limitée</div></div></div>
         <div class="ai-status">Document non prêt pour analyse assistée (<b>ready_for_ai_core=false</b>).</div>
         <div class="ai-block"><div class="ai-title">Points bloquants</div><div>${escapeHtml((quality.quality_flags || []).join(", ") || "Aucun détail disponible.")}</div></div>
+        <div class="ai-block" style="font-size:12px;color:var(--text-dim);margin-top:8px">
+          Le document a peut-être changé de statut. Rafraîchissez la page.
+        </div>
       </div>`;
     toast("Action IA bloquée: document à revoir", "error");
+    // Refresh the badge to show correct status
+    setDocQualityBadge(docId, quality);
     return;
   }
   const requestedDocType = currentDocTypeRequested();
