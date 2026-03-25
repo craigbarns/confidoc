@@ -1,0 +1,48 @@
+## **Plaquette annuelle** 
+
+SOCIETE_1
+
+SOCIETE_2
+
+**Siret COMPTE_1** 
+
+**Exercice clos le DATE_1** 
+
+SOCIETE_3
+
+SOCIETE_4
+
+## **Bilan - Actif** 
+
+## **Du DATE_2 au DATE_1** 
+
+|**Actif**||Valeurs<br>au DATE_1|||Valeurs<br>au DATE_3|
+|---|---|---|---|---|---|
+||Brut|Amort. et dépréc.|Net|||
+|**Capital souscrit non appelé**<br>**Immobilisations incorporelles**<br>Frais d'établissement<br>Frais de recherche et de développement<br>Concessions, brevets, licences et logiciels<br>Fonds commercial<br>PERSONNE_1 incorporelles<br>Immobilisations incorporelles en cours<br>Immobilisations incorporelles avances et acomptes<br>**Immobilisations corporelles**<br>Terrains<br>Constructions<br>Installations techniques<br>Autres immobilisations corporelles<br>Immobilisations corporelles en cours<br>Immobilisations corporelles avances<br>**Immobilisations financières**<br>Participations<br>Créances rattachées à des participations<br>TIAP<br>Autres titres immobilisés<br>Prêts<br>Autres immobilisations financières|42 601<br>997<br>1 350|26 106|16 494<br>997<br>1 350||23 608<br>799<br>1 350|
+|**TOTAL (I)**|**44 948**|**26 106**|**18 841**||**25 757**|
+|**ACTIF CIRCULANT**<br>**Stocks et en-cours**<br>Matières premières et autres approvisionnements<br>En cours de production<br>Produits intermédiaires et finis<br>Marchandises<br>**Avances et acomptes versés sur commande**<br>**Créances**<br>Créances clients et comptes rattachés<br>Autres créances<br>Capital souscrit - appelé, non versé<br>**Valeurs mobilières de placement**<br>PERSONNE_2<br>Autres titres<br>**Instruments financiers à terme**<br>**Disponibilités**<br>**Charges constatées d'avance**|588 823||588 823||516 894<br>7 758|
+|**TOTAL (II)**|**588 823**||**588 823**||**524 652**|
+|**Charges à répartir sur plusieurs exercices (III)**<br>**Prime de remboursement des emprunts (IV)**<br>**Ecart de conversion et différences d'évaluation - Actif**<br>**(V)**||||||
+|**TOTAL GÉNÉRAL ACTIF (I + II + III + IV + V)**|**633 771**|**26 106**|**607 665**||**550 409**|
+
+
+
+**WEMADE** 
+
+## **Bilan - Passif** 
+
+## **Du DATE_2 au DATE_1** 
+
+|**Passif**|Valeurs nettes<br>au DATE_1||Valeurs nettes<br>au DATE_3|
+|---|---|---|---|
+|**PERSONNE_3**<br>**Capital**<br>_( dont versé: 0 )_<br>**Primes d'émission, de fusion, d'apport**<br>**Ecarts de réévaluation**<br>**Ecart d'équivalence**<br>**Réserves**<br>Réserve légale<br>Réserve statutaire<br>Réserves réglementées<br>Autres réserves<br>**Report à nouveau**<br>**Résultat de l'exercice (bénéfice ou perte)**<br>PERSONNE_4<br>**Subvention d'investissement**<br>**Provisions réglementées**|100<br>10<br>334 902<br>**5 365**<br>340 377||100<br>10<br>250 752<br>**108 567**<br>359 429|
+|**TOTAL (I)**|**340 377**||**359 429**|
+SOCIETE_5
+|**TOTAL (I) BIS**||||
+|**PROVISIONS**<br>**Provisions pour risques**<br>**Provisions pour charges**||||
+|**TOTAL (II)**||||
+|**DETTES**<br>**Emprunts obligataires convertibles**<br>**Autres emprunts obligataires**<br>**Emprunts et dettes auprès des établissements de crédit**<br>**Emprunts et dettes financières diverses**<br>**Avances et acomptes reçus**<br>**Dettes fournisseurs et Comptes rattachés**<br>**Dettes fiscales et sociales**<br>**Dettes sur immobilisations et Comptes rattachés**<br>**Autres dettes**<br>**Produits constatés d'avance**|156 565<br>36 451<br>57 864<br>8 658<br>7 749||31 237<br>37<br>34 451<br>58 450<br>61 178<br>5 627|
+|**TOTAL (III)**|**267 288**||**190 981**|
+|**Ecart de conversion et différences d'évaluation - Passif (IV)**||||
+|**TOTAL GÉNÉRAL PASSIF (I + II + III + IV)**|**607 665**||**550 409**|

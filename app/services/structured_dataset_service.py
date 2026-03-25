@@ -1158,6 +1158,199 @@ def _coerce_component_amount(value: float | None, total_passif: float | None) ->
     return v
 
 
+def _extract_small_resultat_exercice(text: str) -> float | None:
+    """Extract a small "résultat de l'exercice" value (to avoid confusion with reserves).
+    
+    In plaquette bilans, "résultat de l'exercice" is often a small value (few thousand)
+    while "autres réserves" can be hundreds of thousands.
+    
+    Handles OCR degradation: r3sultat, exerc1ce, etc.
+    """
+    # Normalize text: replace <br> with newlines for easier parsing
+    normalized_text = text.replace('<br>', '\n').replace('|**', '\n**').replace('**|', '**\n')
+    
+    # OCR-normalize for pattern matching (1->i, 0->o, @->a, 3->e, etc.)
+    ocr_normalized = _ocr_normalize_label(normalized_text)
+    
+    # Look for explicit "résultat de l'exercice" lines with amounts < 200k
+    # Pattern for markdown tables: |**Résultat de l'exercice**|**5 365**|
+    patterns = [
+        r"r[ée3]sultat\s+(?:de\s+l[' ]?)?exerc[1i]ce\s*\*?\*?\s*\|+\s*\*?\*?([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+        r"r[ée3]sultat\s+(?:de\s+l[' ]?)?exerc[1i]ce.*?([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+        # Simple "Resultat" followed by number (plain text format)
+        r"r[ée3]sultat\s+([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+        r"r[ée3]sultat\s+([0-9]{2,6})",  # Plain text format (2-6 digits contiguous)
+    ]
+    for pat in patterns:
+        for m in re.finditer(pat, ocr_normalized, re.IGNORECASE):
+            val = _to_float_fr(m.group(1))
+            if isinstance(val, float) and 100.0 < val < 200_000.0:  # Min 100 to exclude capital, max 200k
+                return val
+    
+    # Fallback: look for the pattern in individual lines and next few lines
+    # In plaquette format, the amount might be on the same row as the label in a different column
+    # Pattern: look for ALL numbers after "Résultat de l'exercice" and before "TOTAL (I)" or similar
+    lines = normalized_text.splitlines()
+    ocr_lines = ocr_normalized.splitlines()
+    for i, (line, ocr_line) in enumerate(zip(lines, ocr_lines)):
+        if re.search(r"r[ée3]sultat\s+(?:de\s+l[' ]?)?exerc[1i]ce", ocr_line, re.IGNORECASE):
+            # Collect all tokens in the next 15 lines
+            all_tokens = []
+            for j in range(i, min(i+15, len(lines))):
+                # Stop if we hit total (I) on passif side (end of equity section)
+                if re.search(r"^\s*\*?\*?total\s*\(?i\)?\s*\*?\*?\s*\|", lines[j], re.IGNORECASE):
+                    break
+                tokens = _extract_line_amount_tokens(lines[j])
+                all_tokens.extend(tokens)
+            # Return the smallest token between 100 and 200000
+            valid_tokens = [v for v in all_tokens if 100.0 < v < 200_000.0]
+            if valid_tokens:
+                return min(valid_tokens)
+    return None
+
+
+def _extract_total_i_passif(text: str) -> float | None:
+    """Extract capitaux propres from TOTAL (I) in plaquette-style bilans (passif side).
+    
+    In plaquette bilans, the passif section has:
+    - TOTAL (I) = capitaux propres
+    - TOTAL (II) = provisions
+    - TOTAL (III) = dettes
+    
+    We look for the passif TOTAL (I) which comes after the actif section.
+    Only applies to plaquette-style bilans with markdown table format.
+    """
+    # Only apply to plaquette-style bilans with markdown tables
+    # Check for markdown table markers and section headers
+    if '|' not in text or '**' not in text:
+        return None
+    
+    # Check for plaquette-specific patterns (sections I/II/III)
+    has_plaquette_sections = (
+        re.search(r'total\s*\(?\s*i\s*\)?', text, re.IGNORECASE) and
+        re.search(r'total\s*\(?\s*ii\s*\)?', text, re.IGNORECASE) and
+        re.search(r'total\s*\(?\s*iii\s*\)?', text, re.IGNORECASE)
+    )
+    if not has_plaquette_sections:
+        return None
+    
+    # Split text into actif and passif sections
+    # Look for "Bilan - Passif" or similar marker
+    passif_match = re.search(r'(bilan.*passif|passif.*bilan)', text, re.IGNORECASE)
+    if not passif_match:
+        # No clear passif section, try the whole text but be careful
+        passif_text = text
+    else:
+        passif_text = text[passif_match.start():]
+    
+    # Look for TOTAL (I) in passif section
+    # The capitaux propres is typically the first number after "TOTAL (I)" in the passif
+    for line in passif_text.splitlines():
+        if re.search(r"total\s*\(?i\)?\s*\*?", line, re.IGNORECASE) and not re.search(r"total\s*\(?i\)?\s*bis", line, re.IGNORECASE):
+            # Extract all numbers from this line
+            tokens = _extract_line_amount_tokens(line)
+            if len(tokens) >= 1:
+                # For passif TOTAL (I), the first number is usually N (current year)
+                # and the second is N-1 (previous year)
+                # Return the first token that looks like capitaux propres (>= 1000)
+                for val in tokens:
+                    if val >= 1000.0:  # Capitaux propres should be at least 1000
+                        return val
+    return None
+
+
+def _extract_total_i_immobilisations(text: str) -> float | None:
+    """Extract immobilisations from TOTAL (I) in plaquette-style bilans.
+    
+    Returns the NET value (not brut or amortissements).
+    """
+    return _extract_total_i_value(text)
+
+
+def _extract_total_i_value(text: str) -> float | None:
+    """Extract TOTAL (I) net value from plaquette-style bilan (actif section).
+    
+    In plaquette bilans, TOTAL (I) represents immobilisations.
+    We need the NET value (colonne 3), not the BRUT or amortissements.
+    Pattern: "TOTAL (I)" or "TOTAL I" with brut/amort/net columns.
+    """
+    # Look for lines with TOTAL (I) and extract the NET value (3rd number)
+    for line in text.splitlines():
+        if re.search(r"total\s*\(?i\)?\s*\*?", line, re.IGNORECASE) and not re.search(r"total\s*\(?i\)?\s*bis", line, re.IGNORECASE):
+            # Extract all numbers from this line
+            tokens = _extract_line_amount_tokens(line)
+            if len(tokens) >= 3:
+                # For format: | TOTAL (I) | brut | amort | net | ...
+                # The NET value is typically the 3rd number (index 2)
+                # Return the smallest non-zero value (net is usually smallest)
+                non_zero = [t for t in tokens if t > 0]
+                if non_zero:
+                    return min(non_zero)
+            elif len(tokens) == 1:
+                return tokens[0]
+    
+    # Fallback: search with regex for TOTAL (I) with value
+    patterns = [
+        r"\*?\*?total\s*\(?i\)?\*?\*?(?!\s*bis)\s*\|+\s*\*?\*?([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)\*?\*?",
+        r"total\s*\(?i\)?(?!\s*bis)\s*\|+\s*([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            val = _to_float_fr(m.group(1))
+            if isinstance(val, float) and val >= 1000.0:
+                return val
+    return None
+
+
+def _extract_total_ii_value(text: str) -> float | None:
+    """Extract TOTAL (II) value from plaquette-style bilan (actif section).
+    
+    In plaquette bilans, TOTAL (II) represents créances + actif circulant.
+    Pattern: "TOTAL (II)" or "TOTAL II" followed by amount.
+    """
+    # Pattern for "TOTAL (II)" or "TOTAL II" with amount
+    # Handles markdown tables: "| TOTAL (II) | 588 823 |" or "|**TOTAL (II)**|**588 823**|"
+    patterns = [
+        # Markdown table with ** bold markers: |**TOTAL (II)**|**588 823**|
+        r"\*?\*?total\s*\(?ii\)?\*?\*?\s*\|+\s*\*?\*?([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)\*?\*?",
+        # Standard markdown table: | TOTAL (II) | 588 823 |
+        r"total\s*\(?ii\)?\s*\|+\s*([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+        # Plain text with colon or dash
+        r"total\s*\(?ii\)?\s*[|:\-]?\s*([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+        # Multi-word with spaces
+        r"total\s+\(?\s*ii\s*\)?\s*\|*\s*\*?\*?([0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3})+)",
+    ]
+    for pat in patterns:
+        m = re.search(pat, text, re.IGNORECASE)
+        if m:
+            val = _to_float_fr(m.group(1))
+            if isinstance(val, float) and val >= 1000.0:
+                return val
+    
+    # Fallback: line-by-line search for TOTAL (II) followed by number
+    for line in text.splitlines():
+        if re.search(r"total\s*\(?ii\)?", line, re.IGNORECASE):
+            # Find the largest number on this line (should be the total)
+            tokens = _extract_line_amount_tokens(line)
+            if tokens:
+                # Return the largest token (most likely the total)
+                return max(tokens)
+    return None
+
+
+def _extract_total_ii_creances(text: str) -> tuple[float | None, str]:
+    """Extract créances value from TOTAL (II) in plaquette-style bilans.
+    
+    In many plaquette bilans (like WEMADE), créances are grouped under TOTAL II
+    which represents the total of "Actif circulant" section.
+    """
+    val = _extract_total_ii_value(text)
+    if isinstance(val, float):
+        return val, "label:total_ii_creances"
+    return None, "missing"
+
+
 def _extract_bilan_actif_by_pcg(text: str) -> dict[str, tuple[float | None, str]]:
     """Extract ACTIF components by PCG account class from accounting tables/lines.
     
@@ -1491,6 +1684,14 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             min_amount=100.0,
         )
     
+    # For plaquette-style bilans: use TOTAL (I) from passif section
+    # Do this BEFORE the fallback derivation to ensure we prefer explicit labels
+    if capitaux_propres is None:
+        total_i_passif = _extract_total_i_passif(text)
+        if isinstance(total_i_passif, float):
+            capitaux_propres = total_i_passif
+            capitaux_propres_src = "label:total_i_passif_capitaux_propres"
+    
     # Fallback: if capitaux_propres missing and we have total_passif + dettes, deduce it
     if capitaux_propres is None and isinstance(total_passif, (int, float)):
         dettes_sum = 0.0
@@ -1558,18 +1759,29 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 capitaux_propres = cand
                 capitaux_propres_src = "label:block_total_capitaux_propres_i"
 
-    resultat_exercice, resultat_exercice_src = _extract_first_amount_with_source(
-        text,
-        [
-            # Support both "résultat de l'exercice" and "résultat exercice" (plaquette format)
-            ("label:resultat_exercice", r"r[ée]sultat\s+(?:de\s+l[' ]?)?exercice"),
-            ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
-            # Additional patterns for plaquette formats
-            ("label:resultat_total", r"r[ée]sultat\s+net|resultat\s+net"),
-            ("label:resultat_impots", r"r[ée]sultat\s+apr[èe]s\s+imp[ôo]ts?"),
-        ],
-        min_amount=50.0,
-    )
+    # Initialize resultat_exercice
+    resultat_exercice = None
+    resultat_exercice_src = "missing"
+    
+    # Try to extract small resultat first (to avoid confusion with large reserves)
+    small_result = _extract_small_resultat_exercice(text)
+    if isinstance(small_result, float):
+        resultat_exercice = small_result
+        resultat_exercice_src = "label:resultat_exercice_small"
+    
+    if resultat_exercice is None:
+        resultat_exercice, resultat_exercice_src = _extract_first_amount_with_source(
+            text,
+            [
+                # Support both "résultat de l'exercice" and "résultat exercice" (plaquette format)
+                ("label:resultat_exercice", r"r[ée]sultat\s+(?:de\s+l[' ]?)?exercice"),
+                ("label:benefice_perte", r"b[ée]n[ée]fice|perte\s+de\s+l[' ]?exercice"),
+                # Additional patterns for plaquette formats
+                ("label:resultat_total", r"r[ée]sultat\s+net|resultat\s+net"),
+                ("label:resultat_impots", r"r[ée]sultat\s+apr[èe]s\s+imp[ôo]ts?"),
+            ],
+            min_amount=50.0,
+        )
     if resultat_exercice is None:
         resultat_exercice, resultat_exercice_src = _extract_first_amount_token_from_keyword_line(
             text,
@@ -1621,6 +1833,17 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 if alt is not None:
                     resultat_exercice = alt
                     resultat_exercice_src = alt_src
+    # Guardrail: detect if resultat_exercice was confused with "autres réserves"
+    # In plaquette bilans, "autres réserves" is often much larger than actual result
+    # If resultat is very large (>100k) and we have a "résultat de l'exercice" line with small value,
+    # prefer the small value (it's the real result)
+    if isinstance(resultat_exercice, (int, float)) and float(resultat_exercice) > 100_000.0:
+        # Look for an explicit small "résultat de l'exercice" value
+        small_result = _extract_small_resultat_exercice(text)
+        if isinstance(small_result, float) and small_result < 50_000.0:
+            resultat_exercice = small_result
+            resultat_exercice_src = "label:resultat_exercice_small_value"
+    
     # Guardrail: if equity and result are identical on large docs, prefer dedicated result line
     # and force equity from explicit equity labels excluding result lines.
     if (
@@ -1656,7 +1879,13 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     disponibilites_val, disponibilites_src = pcg_actif["disponibilites"]
     
     # Fallback to keyword extraction if PCG method failed
-    # Priority: TOTAL IMMOBILISATIONS > immobilisations (to avoid capturing sub-items like "immobilisations corporelles")
+    # Priority: TOTAL (I) > TOTAL IMMOBILISATIONS > immobilisations
+    # This avoids capturing sub-items like "Autres immobilisations corporelles"
+    if immobilisations_val is None:
+        immobilisations_val = _extract_total_i_immobilisations(text)
+        if isinstance(immobilisations_val, float):
+            immobilisations_src = "label:total_i_immobilisations"
+    
     if immobilisations_val is None:
         immobilisations_val = _extract_amount_for_label(text, r"total\s+immobilisations")
         immobilisations_src = "label:total_immobilisations"
@@ -1669,6 +1898,11 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             )
             immobilisations_src = "fallback:immobilisations_line"
 
+    # For plaquette-style bilans with sections I/II/III: use TOTAL (II) for créances
+    # This avoids confusion with sub-items like "Autres immobilisations corporelles"
+    if creances_val is None:
+        creances_val, creances_src = _extract_total_ii_creances(text)
+    
     if creances_val is None:
         creances_val = _extract_amount_for_label(text, r"créances|creances")
         creances_src = "label:creances"
@@ -1716,6 +1950,28 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             ],
             min_amount=50.0,
         )
+    
+    # Final validation: créances should NOT equal disponibilites
+    # If they do, one is probably wrong - prefer the one from TOTAL (II) section
+    # This is run AFTER all extractions (including OCR tolerance) to catch any confusion
+    if (isinstance(creances_val, (int, float)) and isinstance(disponibilites_val, (int, float)) and
+        abs(float(creances_val) - float(disponibilites_val)) < 1e-6):
+        # Both are equal - this is suspicious. Check if we have TOTAL (II) evidence
+        total_ii_val = _extract_total_ii_value(text)
+        if isinstance(total_ii_val, float):
+            # Prefer TOTAL II for créances, clear disponibilites if same value
+            creances_val = total_ii_val
+            creances_src = "label:total_ii_creances_validated"
+            disponibilites_val = None
+            disponibilites_src = "missing:cleared_after_total_ii_validation"
+    
+    # Additional validation: if disponibilites equals creances and creances is from TOTAL II,
+    # clear disponibilites (common OCR confusion in plaquette bilans)
+    if (isinstance(creances_val, (int, float)) and isinstance(disponibilites_val, (int, float)) and
+        "total_ii" in creances_src and
+        abs(float(creances_val) - float(disponibilites_val)) < 1e-6):
+        disponibilites_val = None
+        disponibilites_src = "missing:likely_confused_with_creances"
     
     # Calculate/validate total_actif from components if PCG data is strong
     if immobilisations_src.startswith("pcg_sum:") or creances_src.startswith("pcg_sum:") or disponibilites_src.startswith("pcg_sum:"):

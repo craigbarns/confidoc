@@ -1,0 +1,28 @@
+{
+  "name": "wemade_real_001",
+  "description": "Cas réel WEMADE 2033 - Plaquette annuelle complète avec Bilan détaillé. Teste la discrimination correcte entre créances/disponibilités et réserves/résultat.",
+  "priority": "critical",
+  "tags": ["bilan", "real_world", "2033", "wemade", "confusion_creances_dispo", "confusion_reserves_resultat"],
+  "source_hints": {
+    "total_actif": "TOTAL GÉNÉRAL ACTIF (I + II + III + IV + V) = 607 665",
+    "total_passif": "TOTAL GÉNÉRAL PASSIF (I + II + III + IV) = 607 665",
+    "immobilisations": "TOTAL (I) net = 18 841 (brut 44 948 - amort 26 106)",
+    "creances": "Créances / TOTAL II = 588 823",
+    "disponibilites": "Non présent explicitement dans ce bilan",
+    "capitaux_propres": "TOTAL I passif = 340 377",
+    "resultat_exercice": "Résultat de l'exercice = 5 365 (PAS 334 902 qui sont les autres réserves)",
+    "dettes": "TOTAL III = 267 288"
+  },
+  "known_traps": [
+    "Les créances (588 823) ne doivent PAS être confondues avec les disponibilités",
+    "Le résultat d'exercice (5 365) ne doit PAS être confondu avec les autres réserves (334 902)",
+    "Les immobilisations nettes (18 841) doivent être extraites, pas le brut (44 948)",
+    "TOTAL II (588 823) est 'Créances', PAS 'Disponibilités'"
+  ],
+  "validation_rules": [
+    "creances MUST BE 588823",
+    "resultat_exercice MUST BE 5365",
+    "capitaux_propres MUST BE 340377",
+    "disponibilites MUST BE null or very small"
+  ]
+}
