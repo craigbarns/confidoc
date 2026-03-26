@@ -997,9 +997,9 @@ function renderDocs(items) {
         <div class="doc-next" data-doc-action="${doc.id}">${qualityActionText(doc, docQualityMap[doc.id])}</div>
         <div class="doc-actions ai-actions">
           <span class="doc-actions-title">Actions IA</span>
-          <button class="btn-act" data-a="kimisummary" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">✨ Résumer</button>
-          <button class="btn-act" data-a="kimireview" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">🔎 Points à vérifier</button>
-          <button class="btn-act" data-a="kimidraft" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">📝 Rédiger une note</button>
+          <button class="btn-act" data-a="aisummary" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">✨ Résumer</button>
+          <button class="btn-act" data-a="aireview" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">🔎 Points à vérifier</button>
+          <button class="btn-act" data-a="aidraft" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">📝 Rédiger une note</button>
           <button class="btn-act" data-a="askdoc" data-id="${doc.id}" data-ai-btn-doc="${doc.id}">💬 Poser une question</button>
           <span class="doc-ai-hint" data-ai-hint="${doc.id}">Vérification qualité en cours…</span>
         </div>
@@ -1192,7 +1192,7 @@ async function askDocumentQuestion() {
   }
 }
 
-async function runKimiDocAction(docId, kimiMode) {
+async function runAiDocAction(docId, kimiMode) {
   // Use fresh quality from API, but also check cached version for consistency warning
   const freshQuality = await loadDocQualitySnapshot(docId);
   const cachedQuality = docQualityMap[docId] || {};
@@ -1570,9 +1570,9 @@ docList.addEventListener("click", async e => {
     exportreportpdf: "Export...",
     exportdataset: "Export...",
     aisummary: "Synthèse...",
-    kimisummary: "Résumé...",
-    kimireview: "Revue...",
-    kimidraft: "Rédaction...",
+    aisummary: "Résumé...",
+    aireview: "Revue...",
+    aidraft: "Rédaction...",
     proof: "Preuve...",
     auditexport: "Audit...",
     delete: "Suppression...",
@@ -1768,15 +1768,15 @@ docList.addEventListener("click", async e => {
         summary: parsed || data.summary_json_text || "",
       });
       toast("Synthèse IA prête (.json)", "success");
-    } else if (action === "kimisummary") {
-      toast("Résumé Kimi en cours…", "info");
-      await runKimiDocAction(id, "summary");
-    } else if (action === "kimireview") {
+    } else if (action === "aisummary") {
+      toast("Synthèse IA en cours…", "info");
+      await runAiDocAction(id, "summary");
+    } else if (action === "aireview") {
       toast("Analyse des points à vérifier en cours…", "info");
-      await runKimiDocAction(id, "review");
-    } else if (action === "kimidraft") {
+      await runAiDocAction(id, "review");
+    } else if (action === "aidraft") {
       toast("Rédaction assistée en cours…", "info");
-      await runKimiDocAction(id, "draft");
+      await runAiDocAction(id, "draft");
     } else if (action === "askdoc") {
       if ($("docQaSelect")) $("docQaSelect").value = id;
       if ($("docQaQuestion")) $("docQaQuestion").focus();
