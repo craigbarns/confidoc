@@ -9,7 +9,10 @@ import httpx
 from pydantic import ValidationError
 
 from app.config import get_settings
+from app.core.logging import get_logger
 from app.services.ollama_schemas import AuditResult, SummaryResult
+
+logger = get_logger(__name__)
 
 _MAX_VALIDATION_ATTEMPTS = 3
 
@@ -153,7 +156,8 @@ async def generate_summary_with_mistral(
         try:
             last_raw = await _chat_completion(prompt, temperature=0.1)
         except Exception as exc:
-            last_failure = f"erreur_appel_mistral: {type(exc).__name__}"
+            last_failure = f"erreur_appel_mistral: {type(exc).__name__}: {exc}"
+            logger.error("mistral_api_error", error=last_failure, attempt=attempt, model=settings.MISTRAL_MODEL)
             repair_suffix = ""
             if attempt < _MAX_VALIDATION_ATTEMPTS:
                 continue
@@ -167,7 +171,7 @@ async def generate_summary_with_mistral(
             }
         parsed = _extract_json_object(last_raw)
         if parsed is None:
-            last_failure = "Réponse non JSON."
+            last_failure = f"Réponse non JSON: {last_raw[:200]}"
             repair_suffix = (
                 "\n\nJSON invalide. Renvoie uniquement un objet JSON avec les clés exactes demandées."
             )

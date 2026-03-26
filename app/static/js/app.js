@@ -105,8 +105,11 @@ function confidenceLabel(v) {
 
 function showAiSummaryCard(data) {
   const s = data && data.summary ? data.summary : {};
-  const modeFallback = (data && data.summary_source) === "fallback_local";
-  const modeText = modeFallback ? "Mode : synthèse de secours" : "Mode : synthèse assistée";
+  const summarySource = (data && data.summary_source) || "";
+  const modeFallback = summarySource.startsWith("fallback_");
+  const fallbackError = modeFallback && data.ollama_validation && data.ollama_validation.error
+    ? data.ollama_validation.error : null;
+  const modeText = modeFallback ? "Mode : synthèse de secours" : `Mode : synthèse assistée (${data.provider || "IA"})`;
   const modeClass = modeFallback ? "fallback" : "ok";
   const conf = Number(s.confiance_globale || 0);
   const points = Array.isArray(s.points_cles) ? s.points_cles : [];
@@ -152,6 +155,7 @@ function showAiSummaryCard(data) {
       </div>
       <div class="ai-status">Statut du document : <b>${docStatus}</b></div>
       ${suspiciousHtml}
+      ${fallbackError ? `<div class="ai-status" style="color:var(--amber);font-size:12px">⚠️ Erreur LLM : ${escapeHtml(fallbackError)}</div>` : ""}
       <div class="ai-security">Synthèse générée à partir de données anonymisées uniquement.</div>
       <div class="ai-block">
         <div class="ai-title">Résumé exécutif</div>

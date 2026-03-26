@@ -549,6 +549,7 @@ async def ai_summary(
 
     parsed = llm.get("validated")
     used_fallback = not isinstance(parsed, dict)
+    fallback_reason = (llm.get("last_validation_error") or "").strip() if used_fallback else None
     if used_fallback:
         parsed = _build_fallback_summary(ai_payload)
     parsed = _apply_quality_facts_guardrails(parsed, quality)
@@ -562,6 +563,7 @@ async def ai_summary(
             "ollama_validation": {
                 "ok": bool(llm.get("validation_ok")),
                 "attempts": llm.get("validation_attempts"),
+                "error": fallback_reason,
             },
             "quality_snapshot": {
                 "needs_review": bool((structured.get("quality") or {}).get("needs_review", True)),
@@ -577,7 +579,7 @@ async def ai_summary(
                 "non_placeholder_text_fields_redacted": True,
             },
             "summary_json_text": summary_json_text,
-            "summary_source": "fallback_local" if used_fallback else provider_name,
+            "summary_source": f"fallback_{provider_name}_error" if used_fallback else provider_name,
             "prudent_mode": prudent_mode,
             "kimi_mode": kimi_mode if llm_provider == "kimi" else None,
         }
