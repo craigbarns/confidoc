@@ -48,6 +48,9 @@ async def _chat_completion(prompt: str, *, temperature: float) -> str:
         raise RuntimeError("MISTRAL_ENABLED=false")
     if not settings.MISTRAL_API_KEY:
         raise RuntimeError("MISTRAL_API_KEY manquant")
+    
+    logger.info("mistral_chat_request", model=settings.MISTRAL_MODEL, prompt_length=len(prompt))
+    
     headers = {
         "Authorization": f"Bearer {settings.MISTRAL_API_KEY}",
         "Content-Type": "application/json",
@@ -64,19 +67,26 @@ async def _chat_completion(prompt: str, *, temperature: float) -> str:
         "temperature": temperature,
     }
     timeout = float(settings.MISTRAL_TIMEOUT_SECONDS)
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            f"{settings.MISTRAL_BASE_URL.rstrip('/')}/v1/chat/completions",
-            headers=headers,
-            json=body,
-        )
-    resp.raise_for_status()
-    payload = resp.json() or {}
-    choices = payload.get("choices") or []
-    if not choices:
-        return ""
-    msg = (choices[0] or {}).get("message") or {}
-    return str(msg.get("content") or "")
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{settings.MISTRAL_BASE_URL.rstrip('/')}/v1/chat/completions",
+                headers=headers,
+                json=body,
+            )
+        resp.raise_for_status()
+        payload = resp.json() or {}
+        choices = payload.get("choices") or []
+        if not choices:
+            logger.warning("mistral_chat_empty_choices")
+            return ""
+        msg = (choices[0] or {}).get("message") or {}
+        content = str(msg.get("content") or "")
+        logger.info("mistral_chat_response", response_length=len(content), has_content=bool(content))
+        return content
+    except Exception as exc:
+        logger.error("mistral_chat_error", error=str(exc), error_type=type(exc).__name__)
+        raise
 
 
 async def generate_summary_with_mistral(
