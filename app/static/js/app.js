@@ -1176,7 +1176,7 @@ async function askDocumentQuestion() {
       return;
     }
     const requestedDocType = currentDocTypeRequested();
-    const path = `/api/v1/ai/summary/${docId}?doc_type=${encodeURIComponent(requestedDocType)}&llm_provider=kimi&kimi_mode=question&question=${encodeURIComponent(question)}`;
+    const path = `/api/v1/ai/summary/${docId}?doc_type=${encodeURIComponent(requestedDocType)}&llm_provider=auto&kimi_mode=question&question=${encodeURIComponent(question)}`;
     const { res, data } = await api(path, { method: "POST" });
     showApi(data);
     if (!res.ok) {
@@ -1223,7 +1223,7 @@ async function runKimiDocAction(docId, kimiMode) {
     return;
   }
   const requestedDocType = currentDocTypeRequested();
-  const path = `/api/v1/ai/summary/${docId}?doc_type=${encodeURIComponent(requestedDocType)}&llm_provider=kimi&kimi_mode=${encodeURIComponent(kimiMode)}`;
+  const path = `/api/v1/ai/summary/${docId}?doc_type=${encodeURIComponent(requestedDocType)}&llm_provider=auto&kimi_mode=${encodeURIComponent(kimiMode)}`;
   const { res, data } = await api(path, { method: "POST" });
   showApi(data);
   if (!res.ok) {
