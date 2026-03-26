@@ -127,14 +127,11 @@ def _iter_windows(full: str) -> list[tuple[int, int, str]]:
 
 
 def _find_first_anchor_pos(text: str, patterns: list[re.Pattern[str]]) -> int | None:
-    best: int | None = None
     for pat in patterns:
         m = pat.search(text)
         if m:
-            p = int(m.start())
-            if best is None or p < best:
-                best = p
-    return best
+            return int(m.start())
+    return None
 
 
 def _find_end_anchor_after(text: str, patterns: list[re.Pattern[str]], start: int) -> int | None:

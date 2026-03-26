@@ -14,6 +14,9 @@ from app.services.quality_experience import build_quality_experience
 
 logger = get_logger(__name__)
 
+_PDF_PAGE_MARKER_RE = re.compile(r"^---PAGE \d+---\s*$", re.MULTILINE)
+_DATE_TOKEN_RE = re.compile(r"\b\d{2}[/-]\d{2}[/-]\d{2,4}\b")
+
 
 def _ocr_normalize_label(text: str) -> str:
     """
@@ -174,12 +177,14 @@ def classify_doc_type_scored(
         (
             "etat_immobilisations",
             (
+                "état des immobilisations",
                 "etat des immobilisations",
                 "tableau des immobilisations",
                 "immobilisations",
                 "amortissements",
                 "valeur nette comptable",
                 "vnc",
+                "total tous comptes",
             ),
             3,
         ),
@@ -414,6 +419,35 @@ def _extract_line_amount_tokens(line: str) -> list[float]:
     return vals
 
 
+def _extract_large_line_amount_tokens(line: str, *, hard_cap: float = 1_000_000_000_000.0) -> list[float]:
+    """Like _extract_line_amount_tokens, but keeps large bilan totals (tens/hundreds of millions)."""
+    vals: list[float] = []
+    for m in re.finditer(
+        (
+            r"(-?[0-9Oo]{1,3}(?:[ \u00a0][0-9Oo]{3}){2}(?![ \u00a0][0-9Oo]{3})(?:[.,][0-9Oo]{2})?"
+            r"|-?[0-9Oo]{1,3}[ \u00a0][0-9Oo]{3}(?:[.,][0-9Oo]{2})?"
+            r"|-?[0-9Oo]{3,}(?:[.,][0-9Oo]{2})?)"
+        ),
+        line,
+        flags=re.IGNORECASE,
+    ):
+        v = _to_float_fr(m.group(1))
+        if not isinstance(v, float):
+            continue
+        if abs(v) > hard_cap:
+            continue
+        iv = int(v)
+        if abs(v - iv) < 1e-6:
+            if 0 <= iv <= 50:
+                continue
+            if 1900 <= iv <= 2100:
+                continue
+            if iv == 2072:
+                continue
+        vals.append(v)
+    return vals
+
+
 def _extract_first_amount_token_from_keyword_line(
     text: str,
     keyword_regex: str,
@@ -508,11 +542,136 @@ def _extract_total_general_from_line(
         line = raw.strip()
         if not line or not pat_kw.search(line):
             continue
-        tokens = [v for v in _extract_line_amount_tokens(line) if abs(v) >= min_amount]
+        tokens = [v for v in _extract_large_line_amount_tokens(line) if abs(v) >= min_amount]
         picked = _pick_total_value_from_tokens(tokens)
         if isinstance(picked, float):
             return picked, "fallback:total_general_line_token_heuristic"
     return None, "missing"
+
+
+def _split_text_pages(text: str) -> list[str]:
+    """Split PDF-like extracted text on ---PAGE N--- markers when present."""
+    if not text:
+        return []
+    if not _PDF_PAGE_MARKER_RE.search(text):
+        return [text]
+    pages: list[str] = []
+    current: list[str] = []
+    for raw in text.splitlines():
+        if _PDF_PAGE_MARKER_RE.match(raw.strip()):
+            if current:
+                page = "\n".join(current).strip()
+                if page:
+                    pages.append(page)
+            current = []
+            continue
+        current.append(raw)
+    if current:
+        page = "\n".join(current).strip()
+        if page:
+            pages.append(page)
+    return pages or [text]
+
+
+def _extract_flattened_multicolumn_actif_total(
+    text: str, *, min_amount: float = 100.0
+) -> tuple[float | None, float | None, str]:
+    """Recover NET N / NET N-1 totals from flattened plaquette actif pages.
+
+    Native PDF extraction may output pages column-by-column:
+    labels -> brut column -> amort column -> net N column -> net N-1 column.
+    In that case, the current-year actif total is the LAST value before the second
+    date header, not the first/maximum token found near "TOTAL GENERAL".
+    """
+    for page in _split_text_pages(text):
+        page_lower = page.lower()
+        if "montant brut" not in page_lower or "total general" not in page_lower:
+            continue
+        if "actif" not in page_lower and "immobilise" not in page_lower:
+            continue
+        start = page_lower.find("montant brut")
+        if start < 0:
+            continue
+        block = page[start:]
+        dates = list(_DATE_TOKEN_RE.finditer(block))
+        if len(dates) < 2:
+            continue
+        if "amort" not in block[: dates[0].start()].lower():
+            continue
+        net_n1_block = block[dates[1].end() :]
+        tail_cut_positions = [
+            m.start()
+            for pat in (
+                r"\bbilan\s*-\s*actif\b",
+                r"\bbilan\s*-\s*passif\b",
+                r"\bcompte\s+de\s+r[ée]sultat\b",
+                r"\bdocusign\b",
+                r"\bcertifi[ée]\b",
+                r"---page\s+\d+---",
+            )
+            if (m := re.search(pat, net_n1_block, re.IGNORECASE))
+        ]
+        if tail_cut_positions:
+            net_n1_block = net_n1_block[: min(tail_cut_positions)]
+        net_n_tokens: list[float] = []
+        for raw in block[dates[0].end() : dates[1].start()].splitlines():
+            net_n_tokens.extend(
+                [v for v in _extract_large_line_amount_tokens(raw.strip()) if abs(v) >= min_amount]
+            )
+        net_n1_tokens: list[float] = []
+        for raw in net_n1_block.splitlines():
+            net_n1_tokens.extend(
+                [v for v in _extract_large_line_amount_tokens(raw.strip()) if abs(v) >= min_amount]
+            )
+        if net_n_tokens:
+            return (
+                float(net_n_tokens[-1]),
+                float(net_n1_tokens[-1]) if net_n1_tokens else None,
+                "fallback:flattened_multicolumn_actif_net_column",
+            )
+    return None, None, "missing"
+
+
+def _extract_flattened_multicolumn_passif_total(
+    text: str, *, min_amount: float = 100.0
+) -> tuple[float | None, float | None, str]:
+    """Recover N / N-1 totals from flattened plaquette passif pages."""
+    for page in _split_text_pages(text):
+        page_lower = page.lower()
+        if "total general" not in page_lower:
+            continue
+        if not any(k in page_lower for k in ("passif", "capitaux propres", "dettes")):
+            continue
+        dates = list(_DATE_TOKEN_RE.finditer(page))
+        if len(dates) < 2:
+            continue
+        n1_block = page[dates[1].end() :]
+        tail_cut_positions = [
+            m.start()
+            for pat in (
+                r"\bbilan\s*-\s*passif\b",
+                r"\bcompte\s+de\s+r[ée]sultat\b",
+                r"\bdocusign\b",
+                r"\bcertifi[ée]\b",
+                r"---page\s+\d+---",
+            )
+            if (m := re.search(pat, n1_block, re.IGNORECASE))
+        ]
+        if tail_cut_positions:
+            n1_block = n1_block[: min(tail_cut_positions)]
+        n_tokens: list[float] = []
+        for raw in page[dates[0].end() : dates[1].start()].splitlines():
+            n_tokens.extend([v for v in _extract_large_line_amount_tokens(raw.strip()) if abs(v) >= min_amount])
+        n1_tokens: list[float] = []
+        for raw in n1_block.splitlines():
+            n1_tokens.extend([v for v in _extract_large_line_amount_tokens(raw.strip()) if abs(v) >= min_amount])
+        if n_tokens:
+            return (
+                float(n_tokens[-1]),
+                float(n1_tokens[-1]) if n1_tokens else None,
+                "fallback:flattened_multicolumn_passif_n_column",
+            )
+    return None, None, "missing"
 
 
 def _extract_financial_amount_for_label_wide(
@@ -1248,7 +1407,7 @@ def _split_bilan_sections(text: str) -> tuple[str, str]:
     """
     # Normalize line endings and find passif marker
     lines = text.splitlines()
-    passif_start_idx = None
+    passif_line_idx = None
     
     # Patterns that indicate start of passif section
     # Note: removed \b (word boundary) and added #*\s* to match markdown headers like "## **Bilan - Passif**"
@@ -1264,19 +1423,31 @@ def _split_bilan_sections(text: str) -> tuple[str, str]:
         line_lower = line.lower()
         for pattern in passif_patterns:
             if re.search(pattern, line_lower, re.IGNORECASE):
-                passif_start_idx = i
+                passif_line_idx = i
                 break
-        if passif_start_idx is not None:
+        if passif_line_idx is not None:
             break
     
-    if passif_start_idx is None:
+    if passif_line_idx is None:
         # No clear passif marker - return whole text for both
         # Let extraction functions handle context
         return text, text
+
+    passif_start_idx = passif_line_idx
+    for j in range(passif_line_idx, -1, -1):
+        if _PDF_PAGE_MARKER_RE.match(lines[j].strip()):
+            passif_start_idx = j
+            break
+    else:
+        # No page markers: keep a generous context window before the marker line.
+        passif_start_idx = max(0, passif_line_idx - 120)
     
-    # Actif is everything before passif (with some context overlap)
-    # Give actif extraction a bit of overlap (3 lines) for context
-    actif_end = max(0, passif_start_idx - 3)
+    # Actif is everything before passif. When a page marker is available, keep the
+    # previous page intact; otherwise retain a small overlap for context.
+    if passif_start_idx < passif_line_idx and _PDF_PAGE_MARKER_RE.match(lines[passif_start_idx].strip()):
+        actif_end = passif_start_idx
+    else:
+        actif_end = max(0, passif_start_idx - 3)
     actif_text = "\n".join(lines[:actif_end])
     passif_text = "\n".join(lines[passif_start_idx:])
     
@@ -1489,6 +1660,12 @@ def _extract_bilan_actif_by_pcg(text: str) -> dict[str, tuple[float | None, str]
 def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     # Split into actif/passif sections for cleaner extraction
     actif_text, passif_text = _split_bilan_sections(text)
+    flat_actif_total, flat_actif_total_n1, flat_actif_src = _extract_flattened_multicolumn_actif_total(
+        actif_text, min_amount=100.0
+    )
+    flat_passif_total, _flat_passif_total_n1, flat_passif_src = _extract_flattened_multicolumn_passif_total(
+        passif_text, min_amount=100.0
+    )
     
     total_actif, total_actif_src = _extract_first_amount_with_source(
         actif_text,
@@ -1521,15 +1698,33 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
     tg_actif, tg_actif_src = _extract_total_general_from_line(
         actif_text, r"total\s+g[ée]n[ée]ral.{0,16}actif", min_amount=100.0
     )
+    if tg_actif is None:
+        tg_actif, tg_actif_src = _extract_total_general_from_line(
+            actif_text, r"total\s+g[ée]n[ée]ral", min_amount=100.0
+        )
+        if isinstance(tg_actif, float):
+            tg_actif_src = "fallback:total_general_line_token_heuristic_section_actif"
     tg_passif, tg_passif_src = _extract_total_general_from_line(
         passif_text, r"total\s+g[ée]n[ée]ral.{0,16}passif", min_amount=100.0
     )
+    if tg_passif is None:
+        tg_passif, tg_passif_src = _extract_total_general_from_line(
+            passif_text, r"total\s+g[ée]n[ée]ral", min_amount=100.0
+        )
+        if isinstance(tg_passif, float):
+            tg_passif_src = "fallback:total_general_line_token_heuristic_section_passif"
     if isinstance(tg_passif, float):
         total_passif = tg_passif
         total_passif_src = tg_passif_src
     if isinstance(tg_actif, float):
         total_actif = tg_actif
         total_actif_src = tg_actif_src
+    if isinstance(flat_passif_total, float):
+        total_passif = flat_passif_total
+        total_passif_src = flat_passif_src
+    if isinstance(flat_actif_total, float):
+        total_actif = flat_actif_total
+        total_actif_src = flat_actif_src
     # On mixed-column plaquettes, ACTIF total-general line may expose brut/amort/net.
     # PASSIF total-general token is usually the most stable year-N target.
     if isinstance(total_actif, (int, float)) and isinstance(total_passif, (int, float)):
@@ -2043,6 +2238,25 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         abs(float(creances_val) - float(disponibilites_val)) < 1e-6):
         disponibilites_val = None
         disponibilites_src = "missing:likely_confused_with_creances"
+
+    for field_name, current_val, current_src in (
+        ("immobilisations", immobilisations_val, immobilisations_src),
+        ("creances", creances_val, creances_src),
+        ("disponibilites", disponibilites_val, disponibilites_src),
+    ):
+        coerced = _coerce_component_amount(current_val, total_passif)
+        if field_name == "immobilisations":
+            if coerced is None and current_val is not None:
+                immobilisations_src = "missing:component_exceeds_passif_cap"
+            immobilisations_val = coerced
+        elif field_name == "creances":
+            if coerced is None and current_val is not None:
+                creances_src = "missing:component_exceeds_passif_cap"
+            creances_val = coerced
+        else:
+            if coerced is None and current_val is not None:
+                disponibilites_src = "missing:component_exceeds_passif_cap"
+            disponibilites_val = coerced
     
     # Calculate/validate total_actif from components if PCG data is strong
     if immobilisations_src.startswith("pcg_sum:") or creances_src.startswith("pcg_sum:") or disponibilites_src.startswith("pcg_sum:"):
@@ -2061,19 +2275,33 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         
         # Replace total_actif if calculated from PCG is coherent and current is fallback
         if has_pcg_component and calculated_actif > 0:
-            if total_actif is None or total_actif_src.startswith("fallback:"):
+            pcg_reference = total_actif if isinstance(total_actif, (int, float)) else total_passif
+            pcg_is_coherent = True
+            if isinstance(pcg_reference, (int, float)):
+                pcg_is_coherent = abs(calculated_actif - float(pcg_reference)) <= max(
+                    500.0, abs(float(pcg_reference)) * 0.08
+                )
+            if pcg_is_coherent and (total_actif is None or total_actif_src.startswith("fallback:")):
                 total_actif = calculated_actif
                 total_actif_src = "calculated:pcg_actif_components"
 
     # Last resort: infer disponibilites as residual (total_actif - immo - créances)
     # If residual ≈ 0, disponibilites is effectively absent on this bilan
-    if disponibilites_val is None and isinstance(total_actif, (int, float)):
+    known_actif_components = sum(
+        1 for v in (immobilisations_val, creances_val) if isinstance(v, (int, float))
+    )
+    if (
+        disponibilites_val is None
+        and isinstance(total_actif, (int, float))
+        and known_actif_components >= 1
+    ):
         immo = float(immobilisations_val) if isinstance(immobilisations_val, (int, float)) else 0.0
         crea = float(creances_val) if isinstance(creances_val, (int, float)) else 0.0
         residual = float(total_actif) - immo - crea
         tolerance = max(50.0, float(total_actif) * 0.005)
         if -tolerance <= residual <= tolerance:
-            disponibilites_val = max(0.0, round(residual, 2))
+            # Treat near-zero residuals (< 10€) as 0 — rounding artifact from document totals
+            disponibilites_val = 0.0 if abs(residual) < 10.0 else max(0.0, round(residual, 2))
             disponibilites_src = "calculated:residual_actif"
 
     # --- Passif détail ---
@@ -2159,9 +2387,11 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         )
 
     # --- N-1 (année précédente) ---
-    total_actif_n1 = _extract_n1_value(
-        actif_text, r"total\s+g[ée]n[ée]ral.{0,16}actif|total\s+actif\b"
-    )
+    total_actif_n1 = flat_actif_total_n1
+    if total_actif_n1 is None:
+        total_actif_n1 = _extract_n1_value(
+            actif_text, r"total\s+g[ée]n[ée]ral.{0,16}actif|total\s+actif\b"
+        )
     if total_actif_n1 is None:
         total_actif_n1 = _extract_n1_value(text, r"total\s+actif")
     capitaux_propres_n1 = _extract_n1_value(
@@ -2759,7 +2989,12 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
         for k, v in quote_part_block_totals.items():
             if associes_totals.get(k, 0.0) <= 0.0 and v > 0.0:
                 associes_totals[k] = v
-    associes_blocks_are_coherent = _is_2072_arithmetically_coherent(
+    # Require at least one non-zero total: all-zero totals (null associé data) are
+    # arithmetically coherent (0-0-0=0) but semantically meaningless — must not be
+    # used to rescue IE=0 after a FC/IE collision.
+    associes_blocks_are_coherent = any(
+        v > 0.01 for v in associes_totals.values()
+    ) and _is_2072_arithmetically_coherent(
         associes_totals.get("revenus_bruts"),
         associes_totals.get("frais_charges_hors_interets"),
         associes_totals.get("interets_emprunts"),
@@ -3120,6 +3355,25 @@ def _extract_2072(text: str) -> dict[str, dict[str, Any]]:
     ):
         interets = None
         interets_source = "missing"
+    # Post-collision rescue: scan ligne 20 for small interest amounts (e.g. 39 €) that were
+    # shadowed by the false FC duplicate before collision was detected.
+    if interets is None:
+        rb_for_ie_pc = float(revenus_bruts) if isinstance(revenus_bruts, (int, float)) else None
+        for raw in scan_text.splitlines():
+            ln = raw.strip()
+            if not re.search(
+                r"\bligne\s*20\b|int[eé]r[eê]ts?\s+d[' ]emprun",
+                ln,
+                re.IGNORECASE,
+            ):
+                continue
+            for tok in _extract_line_amount_tokens(ln):
+                if 1.0 <= tok <= 500.0 and _plausible_2072_interets_candidate(tok, rb_for_ie_pc):
+                    interets = tok
+                    interets_source = "fallback:ligne_20_post_collision"
+                    break
+            if interets is not None:
+                break
     # Re-préparation avant résolveur (qui exige 4 flottants) : annexe d'abord, sinon dérivation.
     rb_ok_after = isinstance(revenus_bruts, (int, float))
     rn_ok_after = isinstance(revenu_net, (int, float))
@@ -3566,29 +3820,36 @@ def _extract_releve_bancaire_fields(text: str) -> dict[str, dict[str, Any]]:
 
 
 def _extract_etat_immobilisations(text: str) -> dict[str, dict[str, Any]]:
-    total_brut, total_brut_src = _extract_first_amount_with_source(
-        text,
-        [
-            ("label:total_brut", r"total.{0,12}brut"),
-            ("label:valeur_brute", r"valeur.{0,12}brute"),
-            ("label:immobilisations_brutes", r"immobilisations?.{0,12}brutes?"),
-        ],
-        min_amount=100.0,
-    )
-    total_amort, total_amort_src = _extract_first_amount_with_source(
-        text,
-        [
-            ("label:total_amortissements", r"total.{0,12}amortissements?"),
-            ("label:amortissements_cumules", r"amortissements?.{0,15}cumul"),
-            ("label:depreciations", r"d[ée]pr[ée]ciations?"),
-        ],
-        min_amount=100.0,
-    )
+    total_brut: float | None = None
+    total_brut_src: str = "missing"
+    total_amort: float | None = None
+    total_amort_src: str = "missing"
+    total_net: float | None = None
+    total_net_src: str = "missing"
+
+    # Priority 1: "Total tous comptes" — valeurs sur la MÊME ligne (format export comptable)
+    # Ordre colonnes: Valeur Acquisition | Val. Amortissable | VNC Début | Amort. Début | Amort. | Amort. Cumulé | VNC Fin
+    for raw in text.splitlines():
+        if "total tous comptes" not in raw.lower():
+            continue
+        nums = [n for n in _extract_line_amount_tokens(raw) if abs(n) >= 1.0]
+        if len(nums) >= 2:
+            total_brut = float(nums[0])       # Valeur Acquisition = brut
+            total_brut_src = "ttc:col_acquisition"
+            total_net = float(nums[-1])        # VNC Fin = net
+            total_net_src = "ttc:col_vnc_fin"
+            if len(nums) >= 3:
+                total_amort = float(nums[-2])  # Amort. Cumulé = avant-dernier
+                total_amort_src = "ttc:col_amort_cumule"
+            break
+
+    # Priority 2: "Total Amortissement linéaire" — MAX de toutes les occurrences = total global
+    # (les sous-totaux par compte apparaissent en premier, le total global est le dernier/le plus grand)
     if total_amort is None:
         amort_candidates: list[float] = []
         for raw in text.splitlines():
             line = raw.strip()
-            if not re.search(r"total\s+amortissement", line, re.IGNORECASE):
+            if not re.search(r"total\s+amortissement\s+lin", line, re.IGNORECASE):
                 continue
             nums = _extract_line_amount_tokens(line)
             for n in nums:
@@ -3596,40 +3857,45 @@ def _extract_etat_immobilisations(text: str) -> dict[str, dict[str, Any]]:
                     amort_candidates.append(float(n))
         if amort_candidates:
             total_amort = max(amort_candidates)
-            total_amort_src = "fallback:max_total_amortissement_line"
-    total_net, total_net_src = _extract_first_amount_with_source(
-        text,
-        [
-            ("label:total_net", r"total.{0,12}net"),
-            ("label:valeur_nette_comptable", r"valeur.{0,12}nette.{0,12}comptable"),
-            ("label:vnc", r"\bvnc\b"),
-        ],
-        min_amount=100.0,
-    )
-    if total_brut is None or total_net is None:
-        lines = text.splitlines()
-        for i, raw in enumerate(lines):
-            if "total tous comptes" not in raw.lower():
-                continue
-            vals: list[float] = []
-            for j in range(i + 1, min(len(lines), i + 9)):
-                v = _to_float_fr(lines[j].strip())
-                if isinstance(v, float) and abs(v) >= 1.0:
-                    vals.append(float(v))
-            if vals:
-                if total_brut is None:
-                    total_brut = vals[0]
-                    total_brut_src = "fallback:total_tous_comptes_first_value"
-                if total_net is None:
-                    # Last numeric value is often the closing VNC on these exports.
-                    total_net = vals[-1]
-                    total_net_src = "fallback:total_tous_comptes_last_value"
-                break
+            total_amort_src = "fallback:max_total_amortissement_lineaire"
+
+    # Priority 3: patterns génériques (brut, net) si "Total tous comptes" n'a pas tout résolu
+    if total_brut is None:
+        total_brut, total_brut_src = _extract_first_amount_with_source(
+            text,
+            [
+                ("label:total_brut", r"total.{0,12}brut"),
+                ("label:valeur_brute", r"valeur.{0,12}brute"),
+                ("label:immobilisations_brutes", r"immobilisations?.{0,12}brutes?"),
+            ],
+            min_amount=100.0,
+        )
+    if total_amort is None:
+        total_amort, total_amort_src = _extract_first_amount_with_source(
+            text,
+            [
+                ("label:amortissements_cumules", r"amortissements?.{0,15}cumul"),
+                ("label:depreciations", r"d[ée]pr[ée]ciations?"),
+            ],
+            min_amount=100.0,
+        )
+    if total_net is None:
+        total_net, total_net_src = _extract_first_amount_with_source(
+            text,
+            [
+                ("label:valeur_nette_comptable", r"valeur.{0,12}nette.{0,12}comptable"),
+                ("label:total_net", r"total.{0,12}net"),
+            ],
+            min_amount=100.0,
+        )
+
+    # Dernier recours: net = brut - amort
     if total_net is None and isinstance(total_brut, (int, float)) and isinstance(total_amort, (int, float)):
         cand = float(total_brut) - float(total_amort)
         if cand >= 0:
             total_net = cand
             total_net_src = "fallback:brut_minus_amortissements"
+
     return {
         **_extract_common_fields(text),
         "total_brut_immobilisations": _field(

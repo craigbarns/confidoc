@@ -48,3 +48,49 @@ def test_common_fields_rejects_non_company_phrase():
     fields = _extract_common_fields(text)
     assert fields["societe"]["value"] is None
     assert fields["societe"]["review_required"] is True
+
+
+def test_bilan_flattened_multicolumn_prefers_net_total_column() -> None:
+    text = """
+    ---PAGE 4---
+    Exprimé en €
+    Rubriques
+    ACTIF IMMOBILISE
+    ACTIF CIRCULANT
+    TOTAL GENERAL
+    Montant Brut
+    262 433 156
+    77 754 903
+    340 188 058
+    Amort. Prov.
+    179 127 950
+    21 613 465
+    200 741 415
+    31/12/2024
+    83 305 206
+    56 141 438
+    139 446 644
+    31/12/2023
+    89 453 790
+    95 438 152
+    184 891 942
+    Bilan - Actif
+    ---PAGE 5---
+    CAPITAUX PROPRES
+    DETTES
+    TOTAL GENERAL
+    31/12/2024
+    141 656
+    136 972 264
+    139 446 644
+    31/12/2023
+    22 960 871
+    154 639 149
+    184 891 942
+    Bilan - Passif
+    """
+    fields = _extract_bilan(text)
+    assert fields["total_actif"]["value"] == 139_446_644.0
+    assert fields["total_passif"]["value"] == 139_446_644.0
+    assert fields["total_actif_n1"]["value"] == 184_891_942.0
+    assert fields["total_actif"]["source_hint"] == "fallback:flattened_multicolumn_actif_net_column"

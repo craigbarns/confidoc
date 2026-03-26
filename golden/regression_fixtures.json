@@ -50,6 +50,55 @@
         "interets_emprunts": 10000.0,
         "revenu_net_foncier": 80000.0
       }
+    },
+    {
+      "id": "bilan_disponibilites_residual_zero",
+      "doc_type": "bilan",
+      "source_filename": "bilan_residual_test.pdf",
+      "text": "Dénomination : SCI RESIDUALTEST\nExercice 2024\ndate de clôture 31/12/2024\nTotal actif 607 665\nTotal passif 607 665\nImmobilisations 588 823\ncreances 18 841\nDettes financières 500 000\nCapitaux propres 107 665\n",
+      "expected_field_values": {
+        "total_actif": 607665.0,
+        "immobilisations": 588823.0,
+        "creances": 18841.0,
+        "disponibilites": 0.0
+      }
+    },
+    {
+      "id": "bilan_flattened_multicolumn_net_total",
+      "doc_type": "bilan",
+      "source_filename": "bilan_multicolonnes_aplati.pdf",
+      "text": "---PAGE 4---\nExprimé en €\nRubriques\nACTIF IMMOBILISE\nACTIF CIRCULANT\nTOTAL GENERAL\nMontant Brut\n262 433 156\n77 754 903\n340 188 058\nAmort. Prov.\n179 127 950\n21 613 465\n200 741 415\n31/12/2024\n83 305 206\n56 141 438\n139 446 644\n31/12/2023\n89 453 790\n95 438 152\n184 891 942\nBilan - Actif\n---PAGE 5---\nCAPITAUX PROPRES\nDETTES\nTOTAL GENERAL\n31/12/2024\n141 656\n136 972 264\n139 446 644\n31/12/2023\n22 960 871\n154 639 149\n184 891 942\nBilan - Passif\n",
+      "expected_field_values": {
+        "total_actif": 139446644.0,
+        "total_passif": 139446644.0,
+        "total_actif_n1": 184891942.0
+      }
+    },
+    {
+      "id": "fiscal_2072_fc_ie_collision",
+      "doc_type": "fiscal_2072",
+      "source_filename": "synthetic_2072_collision.pdf",
+      "text": "Dénomination de la société SCI COLLISION INTERETS\nDate de clôture de l'exercice 31/12/2024\nSOC18 2\nANNEXE 1\nRevenus bruts 30 371\nFrais et charges autres qu'intérêts (ligne 17+18) 28 493\nTotal des charges hors intérêts d'emprunts 28 493\nligne 20 Intérêts d'emprunts 39\nRevenu net foncier à répartir (ligne 26) 1 839\nANNEXE 2\n",
+      "expected_field_values": {
+        "date_cloture_exercice": "31/12/2024",
+        "nombre_associes": 2,
+        "revenus_bruts": 30371.0,
+        "frais_charges_hors_interets": 28493.0,
+        "interets_emprunts": 39.0,
+        "revenu_net_foncier": 1839.0
+      }
+    },
+    {
+      "id": "etat_immobilisations_routing_accented",
+      "doc_type": "etat_immobilisations",
+      "requested_doc_type": "auto",
+      "source_filename": "etat_immobilisations_test.pdf",
+      "text": "État des immobilisations au 31/12/2024\nExercice 2024\nImmobilisations corporelles\nAmortissements\nVNC\n2131 Constructions 500 000 125 000 375 000\nTotal tous comptes 500 000 125 000 375 000\n",
+      "expected_field_values": {
+        "total_brut_immobilisations": 500000.0,
+        "total_amortissements": 125000.0,
+        "total_net_immobilisations": 375000.0
+      }
     }
   ]
 }

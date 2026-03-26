@@ -5,6 +5,7 @@ from __future__ import annotations
 from app.services.text_segment_selector import (
     MIN_CHARS_FOR_SEMANTIC_WINDOW,
     count_pdf_page_markers,
+    select_section_block,
     select_extraction_segment,
 )
 from app.services.structured_dataset_service import build_structured_dataset
@@ -73,6 +74,26 @@ def test_long_plaquette_prefers_cr_window() -> None:
     assert meta["strategy"] == "semantic_window"
     assert "compte de résultat" in seg.lower()
     assert "chiffre d'affaires" in seg.lower()
+
+
+def test_section_block_prefers_specific_bilan_anchor_over_incidental_mentions() -> None:
+    filler = ("procès-verbal société " * 200) + "\n"
+    text = (
+        "Connaissance prise des documents suivants : bilan, compte de résultat et annexe.\n"
+        + filler
+        + "---PAGE 4---\n"
+        + "Bilan - Actif\n"
+        + "TOTAL GENERAL 139 446 644\n"
+        + "---PAGE 5---\n"
+        + "Bilan - Passif\n"
+        + "TOTAL GENERAL 139 446 644\n"
+        + "Compte de résultat\n"
+    )
+    seg, meta = select_section_block(text, "bilan")
+    assert meta is not None
+    assert meta["strategy"] == "section_block"
+    assert "bilan - actif" in seg.lower()
+    assert "connaissance prise des documents suivants" not in seg.lower()
 
 
 def test_build_structured_dataset_includes_segmentation_provenance() -> None:
