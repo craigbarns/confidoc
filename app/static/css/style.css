@@ -601,22 +601,22 @@ h1, h2, h3, h4, h5, .logo span, .stat-value, .login-logo span {
 .docs-empty .empty-icon { font-size: 48px; margin-bottom: 16px; opacity: 0.5; filter: grayscale(1); }
 .docs-empty p { color: var(--text-dim); font-size: 14px; line-height: 1.6; }
 
-.doc-list { display: flex; flex-direction: column; gap: 12px; max-height: 600px; overflow-y: auto; padding-right: 8px; }
+.doc-list { display: flex; flex-direction: column; gap: 12px; max-height: calc(100vh - 260px); overflow-y: auto; padding-right: 8px; }
 .doc-list::-webkit-scrollbar { width: 6px; }
 .doc-list::-webkit-scrollbar-track { background: transparent; }
 .doc-list::-webkit-scrollbar-thumb { background: rgba(255,255,255,0.1); border-radius: 6px; }
 .doc-list::-webkit-scrollbar-thumb:hover { background: rgba(255,255,255,0.2); }
 
-.doc-item { 
-  display: flex; align-items: flex-start; gap: 16px; 
-  padding: 20px; 
-  background: linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(14, 18, 34, 0.4) 100%); 
-  border: 1px solid var(--glass-border); 
-  border-radius: var(--radius-sm); 
-  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1); 
-  animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both; 
+.doc-item {
+  display: flex; align-items: flex-start; gap: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(0,0,0,0.3) 0%, rgba(14, 18, 34, 0.4) 100%);
+  border: 1px solid var(--glass-border);
+  border-radius: var(--radius-sm);
+  transition: all 0.4s cubic-bezier(0.16, 1, 0.3, 1);
+  animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) both;
   position: relative;
-  overflow: hidden;
+  overflow: visible;
 }
 .doc-item::before {
   content: "";
