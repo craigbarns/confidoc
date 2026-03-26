@@ -644,6 +644,19 @@ def _normalize_2072_closure_date(value: str | None) -> str | None:
     return f"31/12/{year_match.group(1)}"
 
 
+def _extract_n1_value(text: str, pattern: str, min_amount: float = 100.0) -> float | None:
+    """Extrait la valeur N-1 (année précédente): dernier token numérique sur une ligne correspondant
+    au pattern. Dans les bilans français le format standard est LABEL | N | N-1, donc last token = N-1.
+    Retourne None si une seule colonne (pas de N-1) ou aucune ligne ne correspond.
+    """
+    for line in text.splitlines():
+        if re.search(pattern, line, re.IGNORECASE):
+            tokens = [t for t in _extract_line_amount_tokens(line) if abs(t) >= min_amount]
+            if len(tokens) >= 2:
+                return float(tokens[-1])
+    return None
+
+
 def _extract_2072_amount_from_ligne_17_18_line(text: str) -> float | None:
     """Same-line hint for frais (17+18) — avoids grabbing neighbor lines in shifted forms."""
     for raw in text.splitlines():
@@ -2063,6 +2076,101 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             disponibilites_val = max(0.0, round(residual, 2))
             disponibilites_src = "calculated:residual_actif"
 
+    # --- Passif détail ---
+    capital_social, capital_social_src = _extract_first_amount_with_source(
+        passif_text,
+        [
+            ("label:capital_social", r"capital\s+social"),
+            ("label:capital", r"(?:^|\|)\s*capital\b"),
+        ],
+        min_amount=100.0,
+    )
+    if capital_social is None:
+        capital_social, capital_social_src = _sum_accounting_lines_single_prefix(
+            passif_text, "101", min_total=100.0, min_lines=1
+        )
+
+    reserves_val, reserves_src = _extract_first_amount_with_source(
+        passif_text,
+        [
+            ("label:total_reserves", r"total\s+r[ée]serves?"),
+            ("label:reserves_legale", r"r[ée]serve\s+l[ée]gale"),
+            ("label:autres_reserves", r"autres?\s+r[ée]serves?"),
+        ],
+        min_amount=0.0,
+    )
+    if reserves_val is None:
+        reserves_val, reserves_src = _sum_accounting_lines_by_prefixes(
+            passif_text, ("106",), min_total=10.0
+        )
+
+    report_a_nouveau, report_a_nouveau_src = _extract_first_amount_with_source(
+        passif_text,
+        [
+            ("label:report_a_nouveau", r"report\s+[àa]\s+nouveau"),
+            ("label:ran", r"\bran\b"),
+        ],
+        min_amount=0.0,
+    )
+
+    provisions_risques, provisions_risques_src = _extract_first_amount_with_source(
+        text,
+        [
+            ("label:provisions_risques_charges", r"provisions?\s+(?:pour\s+)?risques?\s+et\s+charges"),
+            ("label:provisions_risques", r"provisions?\s+pour\s+risques?"),
+        ],
+        min_amount=0.0,
+    )
+
+    dettes_fiscales_val, dettes_fiscales_src = _extract_first_amount_with_source(
+        passif_text,
+        [
+            ("label:dettes_fiscales_sociales", r"dettes?\s+fiscales?\s+et\s+sociales"),
+            ("label:dettes_fiscales", r"dettes?\s+fiscales?"),
+            ("label:dettes_sociales", r"dettes?\s+sociales"),
+        ],
+        min_amount=100.0,
+    )
+    if dettes_fiscales_val is None:
+        dettes_fiscales_val, dettes_fiscales_src = _sum_accounting_lines_by_prefixes(
+            passif_text, ("43", "44"), min_total=100.0
+        )
+
+    autres_dettes_val, autres_dettes_src = _extract_first_amount_with_source(
+        passif_text,
+        [("label:autres_dettes", r"autres?\s+dettes")],
+        min_amount=100.0,
+    )
+
+    # --- Actif détail : stocks ---
+    stocks_val, stocks_src = _extract_first_amount_with_source(
+        actif_text,
+        [
+            ("label:stocks_en_cours", r"stocks?\s+et\s+en.?cours"),
+            ("label:total_stocks", r"total\s+stocks?"),
+            ("label:stocks", r"(?:^|\|)\s*stocks?\b"),
+            ("label:marchandises_stock", r"marchandises?\b.{0,30}(?:brut|net|stock)"),
+        ],
+        min_amount=0.0,
+    )
+    if stocks_val is None:
+        stocks_val, stocks_src = _sum_accounting_lines_by_prefixes(
+            actif_text, ("31", "32", "33", "34", "35", "36", "37"), min_total=100.0
+        )
+
+    # --- N-1 (année précédente) ---
+    total_actif_n1 = _extract_n1_value(
+        actif_text, r"total\s+g[ée]n[ée]ral.{0,16}actif|total\s+actif\b"
+    )
+    if total_actif_n1 is None:
+        total_actif_n1 = _extract_n1_value(text, r"total\s+actif")
+    capitaux_propres_n1 = _extract_n1_value(
+        passif_text, r"capitaux?\s+propres|situation\s+nette|fonds?\s+propres"
+    )
+    resultat_n1 = _extract_n1_value(
+        passif_text, r"r[ée]sultat\s+de?\s+l[' ]?exercice|b[ée]n[ée]fice\s+ou\s+perte"
+    )
+
     return {
         **_extract_common_fields(text),
         "total_actif": _field(
@@ -2075,6 +2183,11 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             immobilisations_val,
             0.92 if immobilisations_src.startswith("pcg_sum:") else (0.78 if immobilisations_val is not None else 0.0),
             immobilisations_src if immobilisations_src != "missing" else "fallback:immobilisations",
+        ),
+        "stocks": _field(
+            stocks_val,
+            0.85 if stocks_src.startswith("fallback:accounting") else (0.72 if stocks_val is not None else 0.0),
+            stocks_src if stocks_src != "missing" else "fallback:stocks",
         ),
         "creances": _field(
             creances_val,
@@ -2090,6 +2203,18 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             ),
             disponibilites_src if disponibilites_src != "missing" else "fallback:disponibilites",
         ),
+        "capital_social": _field(
+            capital_social, 0.82 if capital_social is not None else 0.0, capital_social_src
+        ),
+        "reserves": _field(
+            reserves_val, 0.75 if reserves_val is not None else 0.0, reserves_src
+        ),
+        "report_a_nouveau": _field(
+            report_a_nouveau, 0.72 if report_a_nouveau is not None else 0.0, report_a_nouveau_src
+        ),
+        "provisions_risques": _field(
+            provisions_risques, 0.72 if provisions_risques is not None else 0.0, provisions_risques_src
+        ),
         "dettes_financieres": _field(
             dettes_fin_val, 0.76 if dettes_fin_val is not None else 0.0, "label:dettes financieres"
         ),
@@ -2098,11 +2223,27 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
             0.76 if dettes_four_val is not None else 0.0,
             "label:dettes fournisseurs",
         ),
+        "dettes_fiscales_sociales": _field(
+            dettes_fiscales_val, 0.74 if dettes_fiscales_val is not None else 0.0, dettes_fiscales_src
+        ),
+        "autres_dettes": _field(
+            autres_dettes_val, 0.70 if autres_dettes_val is not None else 0.0, autres_dettes_src
+        ),
         "capitaux_propres": _field(
             capitaux_propres, 0.8 if capitaux_propres is not None else 0.0, capitaux_propres_src
         ),
         "resultat_exercice": _field(
             resultat_exercice, 0.8 if resultat_exercice is not None else 0.0, resultat_exercice_src
+        ),
+        # N-1
+        "total_actif_n1": _field(
+            total_actif_n1, 0.65 if total_actif_n1 is not None else 0.0, "derived:n1_column"
+        ),
+        "capitaux_propres_n1": _field(
+            capitaux_propres_n1, 0.65 if capitaux_propres_n1 is not None else 0.0, "derived:n1_column"
+        ),
+        "resultat_exercice_n1": _field(
+            resultat_n1, 0.65 if resultat_n1 is not None else 0.0, "derived:n1_column"
         ),
     }
 
@@ -2294,6 +2435,85 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
                     total_charges_src = "label:total_charges:ocr_fallback"
                     break
 
+    # --- Charges de personnel ---
+    charges_personnel, charges_personnel_src = _extract_first_amount_with_source(
+        scan_cr,
+        [
+            ("label:charges_personnel", r"charges?\s+de\s+personnel"),
+            ("label:salaires_traitements", r"salaires?\s+et\s+traitements?"),
+        ],
+        min_amount=100.0,
+    )
+    if charges_personnel is None:
+        charges_personnel, charges_personnel_src = _sum_accounting_lines_by_prefixes(
+            scan_cr, ("64",), min_total=100.0
+        )
+
+    # --- Dotations aux amortissements (DAP) ---
+    dotations_amortissements, dotations_amortissements_src = _extract_first_amount_with_source(
+        scan_cr,
+        [
+            ("label:dap", r"dotations?\s+aux?\s+amortissements?"),
+            ("label:dap_alt", r"dotations?\s+amortissements?"),
+        ],
+        min_amount=100.0,
+    )
+    if dotations_amortissements is None:
+        dotations_amortissements, dotations_amortissements_src = _sum_accounting_lines_by_prefixes(
+            scan_cr, ("681",), min_total=100.0
+        )
+    if dotations_amortissements is None:
+        dotations_amortissements, dotations_amortissements_src = _sum_accounting_lines_single_prefix(
+            scan_cr, "68", min_total=100.0, min_lines=1
+        )
+
+    # --- Résultat exceptionnel ---
+    resultat_exceptionnel, resultat_exceptionnel_src = _extract_first_amount_with_source(
+        scan_cr,
+        [("label:resultat_exceptionnel", r"r[ée]sultat\s+exceptionnel")],
+        min_amount=0.0,
+    )
+
+    # --- Impôts sur les bénéfices (IS) ---
+    impots_benefices, impots_benefices_src = _extract_first_amount_with_source(
+        scan_cr,
+        [
+            ("label:impots_benefices", r"imp[oô]ts?\s+sur\s+les?\s+b[ée]n[ée]fices"),
+            ("label:impots_societes", r"imp[oô]ts?\s+sur\s+les?\s+soci[ée]t[ée]s"),
+            ("label:is_court", r"\bI\.S\.\b"),
+        ],
+        min_amount=0.0,
+    )
+    if impots_benefices is None:
+        impots_benefices, impots_benefices_src = _sum_accounting_lines_single_prefix(
+            scan_cr, "695", min_total=100.0, min_lines=1
+        )
+
+    # --- Achats de marchandises / consommés ---
+    achats_marchandises, achats_marchandises_src = _extract_first_amount_with_source(
+        scan_cr,
+        [
+            ("label:achats_marchandises", r"achats?\s+de\s+marchandises?"),
+            ("label:achats_consommes", r"achats?\s+consomm[ée]s"),
+            ("label:achats_matieres", r"achats?\s+de\s+mati[eè]res"),
+        ],
+        min_amount=100.0,
+    )
+    if achats_marchandises is None:
+        achats_marchandises, achats_marchandises_src = _sum_accounting_lines_by_prefixes(
+            scan_cr, ("607",), min_total=100.0
+        )
+    if achats_marchandises is None:
+        achats_marchandises, achats_marchandises_src = _sum_accounting_lines_single_prefix(
+            scan_cr, "60", min_total=100.0, min_lines=2
+        )
+
+    # --- N-1 Compte de Résultat ---
+    ca_n1 = _extract_n1_value(scan_cr, r"chiffre\s+d[' ]affaires")
+    resultat_net_n1 = _extract_n1_value(
+        scan_cr, r"r[ée]sultat\s+net|r[ée]sultat\s+de\s+l[' ]?exercice"
+    )
+
     return {
         **_extract_common_fields(text),
         "chiffre_affaires": _field(
@@ -2332,7 +2552,105 @@ def _extract_compte_resultat(text: str) -> dict[str, dict[str, Any]]:
         "total_charges": _field(
             total_charges, 0.84 if total_charges is not None else 0.0, total_charges_src
         ),
+        "achats_marchandises": _field(
+            achats_marchandises,
+            0.80 if achats_marchandises is not None else 0.0,
+            achats_marchandises_src,
+        ),
+        "charges_personnel": _field(
+            charges_personnel,
+            0.82 if charges_personnel is not None else 0.0,
+            charges_personnel_src,
+        ),
+        "dotations_amortissements": _field(
+            dotations_amortissements,
+            0.80 if dotations_amortissements is not None else 0.0,
+            dotations_amortissements_src,
+        ),
+        "resultat_exceptionnel": _field(
+            resultat_exceptionnel,
+            0.78 if resultat_exceptionnel is not None else 0.0,
+            resultat_exceptionnel_src,
+        ),
+        "impots_benefices": _field(
+            impots_benefices,
+            0.80 if impots_benefices is not None else 0.0,
+            impots_benefices_src,
+        ),
+        # N-1
+        "chiffre_affaires_n1": _field(
+            ca_n1, 0.65 if ca_n1 is not None else 0.0, "derived:n1_column"
+        ),
+        "resultat_net_n1": _field(
+            resultat_net_n1, 0.65 if resultat_net_n1 is not None else 0.0, "derived:n1_column"
+        ),
     }
+
+
+def _calculate_financial_ratios(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
+    """Calcule les ratios financiers clés à partir des champs extraits.
+    Retourne un dict plat {ratio_name: value} — uniquement si les composantes sont disponibles.
+    """
+    def val(k: str) -> float | None:
+        v = (fields.get(k) or {}).get("value")
+        return float(v) if isinstance(v, (int, float)) else None
+
+    ca = val("chiffre_affaires")
+    achats = val("achats_marchandises")
+    cp = val("capitaux_propres")
+    tp = val("total_passif")
+    df = val("dettes_financieres")
+    stocks = val("stocks") or 0.0
+    creances = val("creances")
+    dettes_four = val("dettes_fournisseurs")
+    dispo = val("disponibilites")
+    res_exploit = val("resultat_exploitation")
+    dap = val("dotations_amortissements")
+    charges_pers = val("charges_personnel")
+    total_actif = val("total_actif")
+
+    ratios: dict[str, Any] = {}
+
+    # BFR = Stocks + Créances - Dettes fournisseurs
+    if creances is not None and dettes_four is not None:
+        ratios["bfr"] = round(stocks + creances - dettes_four, 2)
+
+    # Trésorerie nette = Disponibilités
+    if dispo is not None:
+        ratios["tresorerie_nette"] = round(dispo, 2)
+
+    # Ratio solvabilité = Capitaux propres / Total passif (autonomie financière)
+    if cp is not None and tp is not None and tp > 0:
+        ratios["ratio_solvabilite"] = round(cp / tp, 4)
+
+    # Ratio endettement = Dettes financières / Capitaux propres (levier)
+    if df is not None and cp is not None and abs(cp) > 0:
+        ratios["ratio_endettement"] = round(df / cp, 4)
+
+    # Taux de marge brute = (CA - Achats consommés) / CA
+    if ca is not None and achats is not None and ca > 0:
+        ratios["taux_marge_brute"] = round((ca - achats) / ca, 4)
+
+    # EBE ≈ Résultat d'exploitation + DAP (EBITDA approximatif)
+    if res_exploit is not None and dap is not None:
+        ratios["ebe"] = round(res_exploit + dap, 2)
+    elif res_exploit is not None:
+        ratios["ebe"] = round(res_exploit, 2)
+
+    # Ratio liquidité générale = (Créances + Stocks + Dispo) / Dettes fournisseurs
+    if creances is not None and dispo is not None and dettes_four is not None and dettes_four > 0:
+        actif_circ = creances + stocks + dispo
+        ratios["ratio_liquidite"] = round(actif_circ / dettes_four, 4)
+
+    # Poids charges personnel / CA
+    if charges_pers is not None and ca is not None and ca > 0:
+        ratios["poids_charges_personnel"] = round(charges_pers / ca, 4)
+
+    # Rendement actif = Résultat exploitation / Total actif
+    if res_exploit is not None and total_actif is not None and total_actif > 0:
+        ratios["rendement_actif"] = round(res_exploit / total_actif, 4)
+
+    return ratios
 
 
 def _extract_liasse_is_simplifiee(text: str) -> dict[str, dict[str, Any]]:
@@ -4236,6 +4554,8 @@ def _build_contract_payload(
         provenance=provenance,
     )
 
+    ratios = _calculate_financial_ratios(fields) if fields else {}
+
     return {
         "doc_type": doc_type,
         "detected_doc_type": detected_doc_type,
@@ -4247,6 +4567,7 @@ def _build_contract_payload(
         "generated_at": datetime.now(UTC).isoformat(),
         "fields": fields,
         "tables": tables,
+        "ratios": ratios,
         "quality": quality_out,
         "provenance": provenance,
         "experience": experience,

@@ -2115,6 +2115,8 @@ async def document_dataset_summary(
             },
             "experience": experience,
             "accounting_records_count": len(accounting_records),
+            "fields": structured.get("fields") if isinstance(structured, dict) else {},
+            "ratios": structured.get("ratios") if isinstance(structured, dict) else {},
         }
     )
 

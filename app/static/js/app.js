@@ -320,22 +320,45 @@ async function refreshMaskedSummary(docId) {
     }
 
     const CRITICAL_FIELD_LABELS_FR = {
+      // Bilan actif
       total_actif: "Total actif",
-      total_passif: "Total passif",
-      capitaux_propres: "Capitaux propres",
-      resultat_exercice: "Résultat de l'exercice",
-      immobilisations: "Immobilisations",
-      creances: "Créances",
+      immobilisations: "Immobilisations nettes",
+      stocks: "Stocks et en-cours",
+      creances: "Créances clients",
       disponibilites: "Disponibilités",
+      total_actif_n1: "Total actif N-1",
+      // Bilan passif
+      total_passif: "Total passif",
+      capital_social: "Capital social",
+      reserves: "Réserves",
+      report_a_nouveau: "Report à nouveau",
+      capitaux_propres: "Capitaux propres",
+      capitaux_propres_n1: "Capitaux propres N-1",
+      provisions_risques: "Provisions risques et charges",
       dettes_financieres: "Dettes financières",
       dettes_fournisseurs: "Dettes fournisseurs",
+      dettes_fiscales_sociales: "Dettes fiscales et sociales",
+      autres_dettes: "Autres dettes",
+      resultat_exercice: "Résultat de l'exercice",
+      resultat_exercice_n1: "Résultat exercice N-1",
+      // Compte de résultat
       chiffre_affaires: "Chiffre d'affaires",
+      chiffre_affaires_n1: "CA N-1",
+      achats_marchandises: "Achats de marchandises",
       charges_externes: "Charges externes",
+      charges_personnel: "Charges de personnel",
+      dotations_amortissements: "Dotations aux amortissements",
+      impots_taxes: "Impôts et taxes",
+      charges_financieres: "Charges financières",
       resultat_exploitation: "Résultat d'exploitation",
       resultat_courant: "Résultat courant",
+      resultat_exceptionnel: "Résultat exceptionnel",
+      impots_benefices: "Impôts sur les bénéfices",
       resultat_net: "Résultat net",
+      resultat_net_n1: "Résultat net N-1",
       total_produits: "Total produits",
       total_charges: "Total charges",
+      // 2072
       denomination_sci: "Dénomination SCI",
       date_cloture_exercice: "Date de clôture (exercice)",
       nombre_associes: "Nombre d'associés",
@@ -343,10 +366,39 @@ async function refreshMaskedSummary(docId) {
       frais_charges_hors_interets: "Frais et charges hors intérêts",
       interets_emprunts: "Intérêts d'emprunts",
       revenu_net_foncier: "Revenu net foncier",
+      // Commun
       societe: "Raison sociale",
       exercice: "Exercice",
       date_cloture: "Date de clôture",
     };
+
+    const RATIO_LABELS = {
+      bfr: "BFR (Besoin en fonds de roulement)",
+      tresorerie_nette: "Trésorerie nette",
+      ratio_solvabilite: "Ratio solvabilité (CP / Passif)",
+      ratio_endettement: "Ratio endettement (Dettes / CP)",
+      taux_marge_brute: "Taux de marge brute",
+      ebe: "EBE (Excédent brut d'exploitation)",
+      ratio_liquidite: "Ratio liquidité générale",
+      poids_charges_personnel: "Poids charges personnel / CA",
+      rendement_actif: "Rendement de l'actif",
+    };
+
+    function renderRatios(ratios) {
+      if (!ratios || Object.keys(ratios).length === 0) return "";
+      const rows = Object.entries(ratios).map(([k, v]) => {
+        const label = RATIO_LABELS[k] || k.replace(/_/g, " ");
+        let display = v;
+        // Format as percentage for ratios 0-1
+        if (["ratio_solvabilite","ratio_endettement","taux_marge_brute","poids_charges_personnel","rendement_actif"].includes(k)) {
+          display = `${(v * 100).toFixed(1)} %`;
+        } else {
+          display = Number(v).toLocaleString("fr-FR", { minimumFractionDigits: 0, maximumFractionDigits: 0 }) + " €";
+        }
+        return `<div class="field-row"><span class="field-label">${escapeHtml(label)}</span><span class="field-value">${escapeHtml(String(display))}</span></div>`;
+      }).join("");
+      return `<div class="ratios-section"><div class="ratios-title">📐 Ratios financiers (calculés automatiquement)</div>${rows}</div>`;
+    }
     function labelCriticalField(k) {
       return CRITICAL_FIELD_LABELS_FR[k] || String(k).replace(/_/g, " ");
     }
@@ -579,7 +631,8 @@ async function refreshMaskedSummary(docId) {
         <div class="extracted-fields-title">📊 Champs extraits (${Object.keys(sData.fields || {}).length} champs)</div>
         <div class="extracted-fields-subtitle">✓ = confiance élevée | ~ = confiance moyenne | ⚠️ = calculé/à vérifier | ℹ️ = note contextuelle</div>
         ${renderExtractedFields(sData.fields)}
-      </div>`;
+      </div>
+      ${renderRatios(sData.ratios)}`;
   } catch (e) {
     // no-op
   }

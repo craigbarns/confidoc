@@ -1378,6 +1378,22 @@ details > summary::-webkit-details-marker { display: none; }
   display: block;
 }
 
+.ratios-section {
+  margin-top: 20px;
+  padding: 16px 20px;
+  background: linear-gradient(135deg, rgba(14, 34, 18, 0.5), rgba(22, 51, 28, 0.3));
+  border: 1px solid rgba(52, 199, 89, 0.2);
+  border-radius: var(--radius-sm);
+}
+
+.ratios-title {
+  font-size: 14px;
+  font-weight: 700;
+  color: #34c759;
+  margin-bottom: 12px;
+  font-family: var(--font-display);
+}
+
 .field-row.field-missing {
   opacity: 0.5;
   background: transparent;
