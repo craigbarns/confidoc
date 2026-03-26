@@ -278,8 +278,9 @@ async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    auto_extract: bool = Query(default=True, description="Lance l'OCR automatiquement si texte non extrait"),
 ) -> dict:
-    """Anonymisation LLM du texte déjà extrait."""
+    """Anonymisation LLM du texte. Si auto_extract=True et pas de texte, lance l'OCR d'abord."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     
     # Récupère le texte OCR précédemment extrait
@@ -291,12 +292,25 @@ async def anonymize_document(
     )
     original_version = result.scalar_one_or_none()
     
-    if not original_version or not original_version.content_text:
-        raise http_400("Texte non extrait. Lancez /extract d'abord.")
+    original_text = None
+    extracted_on_demand = False
+    
+    if original_version and original_version.content_text:
+        original_text = original_version.content_text
+    elif auto_extract:
+        # 🔥 AUTO-EXTRACT: Pas de texte ? On lance l'OCR automatiquement !
+        logger.info("auto_extract_triggered", doc_id=document_id)
+        file_content = _read_file_or_404(document)
+        original_text, _ = await build_extraction_ocr(db, document, file_content)
+        extracted_on_demand = True
+        await db.commit()  # Commit important ici
+    
+    if not original_text:
+        raise http_400("Texte non extrait. Lancez /extract d'abord ou utilisez auto_extract=true.")
     
     # Anonymisation LLM (peut prendre 5-15s)
     preview_text, detections, meta = await build_anonymization_llm(
-        db, document, original_version.content_text
+        db, document, original_text
     )
     await db.commit()
     
@@ -306,6 +320,7 @@ async def anonymize_document(
         "preview_text": preview_text[:2000] if len(preview_text) > 2000 else preview_text,
         "detections_count": len(detections),
         "method": meta.get("method", "llm"),
+        "auto_extracted": extracted_on_demand,
     }
 
 
@@ -331,6 +346,61 @@ async def process_document_legacy(
         _run_anonymize_background(str(document.id), file_content, profile, document_type)
     )
     return {"document_id": str(document.id), "status": "processing"}
+
+
+@router.get(
+    "/{document_id}/status",
+    status_code=status.HTTP_200_OK,
+    summary="Vérifier le statut OCR + Anonymisation",
+)
+async def document_status(
+    document_id: str, current_user: CurrentUser, db: DbSession
+) -> dict:
+    """Retourne l'état complet: uploadé, extrait, anonymisé."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    
+    # Check extraction
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original = result.scalar_one_or_none()
+    
+    # Check anonymisation
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview = result.scalar_one_or_none()
+    
+    # Count detections
+    count_result = await db.execute(
+        select(func.count()).select_from(EntityDetection).where(
+            EntityDetection.document_id == document.id
+        )
+    )
+    detections_count = count_result.scalar() or 0
+    
+    return {
+        "document_id": str(document.id),
+        "status": document.status.value,
+        "extraction": {
+            "done": original is not None and bool(original.content_text),
+            "text_length": len(original.content_text) if original and original.content_text else 0,
+        },
+        "anonymization": {
+            "done": preview is not None and bool(preview.content_text),
+            "preview_length": len(preview.content_text) if preview and preview.content_text else 0,
+            "detections_count": detections_count,
+        },
+        "next_steps": [] if (preview and preview.content_text) else (
+            ["anonymize"] if (original and original.content_text) else ["extract", "anonymize"]
+        ),
+    }
 
 
 @router.get(
