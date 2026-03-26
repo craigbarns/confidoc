@@ -86,6 +86,16 @@ async def extract_text_with_mistral_ocr(
             resp.raise_for_status()
             result = resp.json()
             logger.info("mistral_ocr_response", status=resp.status_code, keys=list(result.keys()))
+    except httpx.HTTPStatusError as exc:
+        error_body = exc.response.text if exc.response else "no response"
+        logger.error("mistral_ocr_http_error", status=exc.response.status_code if exc.response else 0, error=error_body)
+        return {
+            "text": "",
+            "pages": [],
+            "model": ocr_model,
+            "confidence": "low",
+            "error": f"HTTP {exc.response.status_code if exc.response else '?'}: {error_body[:500]}"
+        }
     except Exception as exc:
         logger.error("mistral_ocr_api_error", error=str(exc), error_type=type(exc).__name__)
         return {
