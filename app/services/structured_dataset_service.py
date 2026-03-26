@@ -3465,31 +3465,52 @@ def _quality(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
 
 
 def _detect_suspicious_fields(fields: dict[str, dict[str, Any]]) -> list[str]:
-    """Detect fields that are derived, calculated, or from weak fallbacks (not directly read from document)."""
+    """Detect fields whose values are genuinely unreliable.
+
+    High-confidence fallbacks (e.g. total_actif inferred from total_passif at 0.87)
+    are NOT suspicious — they represent legitimate accounting derivations.
+    Only flag fields with value present AND low-confidence/weak sourcing.
+    """
     suspicious: list[str] = []
-    derived_prefixes = ("derived:", "calculated:", "fallback:")
-    weak_sources = ("missing", "unknown")
-    
     for key, field in fields.items():
         if not isinstance(field, dict):
             continue
+        value = field.get("value")
+        # Skip fields with no value — already captured as missing
+        if value is None or value == "" or value == []:
+            continue
         source = field.get("source_hint", "")
-        if source.startswith(derived_prefixes) or source in weak_sources:
+        conf = float(field.get("confidence") or 0)
+        # Explicit weak/unknown — always suspicious
+        if source in ("missing", "unknown"):
+            suspicious.append(key)
+        # Low-confidence fallback: heuristic that is unreliable
+        elif source.startswith("fallback:") and conf < 0.65:
+            suspicious.append(key)
+        # Calculated/derived values not read directly (e.g. exercice from date_cloture)
+        elif source.startswith(("derived:", "calculated:")) and conf < 0.72:
             suspicious.append(key)
     return suspicious
 
 
 def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     base = _quality(fields)
-    critical = [
+    # Noyau dur : 3 champs absolument nécessaires pour ready_for_ai_core
+    core_critical = [
         "total_actif",
         "total_passif",
         "capitaux_propres",
+    ]
+    # Champs importants pour ready_for_ai (full) mais pas bloquants pour core
+    # Les plaquettes simplifiées n'ont souvent pas les dettes séparées
+    secondary_critical = [
         "dettes_financieres",
         "dettes_fournisseurs",
         "resultat_exercice",
     ]
+    critical = core_critical + secondary_critical
     critical_missing = [k for k in critical if fields.get(k, {}).get("value") in (None, "", [])]
+    core_missing = [k for k in core_critical if fields.get(k, {}).get("value") in (None, "", [])]
 
     actif = fields.get("total_actif", {}).get("value")
     passif = fields.get("total_passif", {}).get("value")
@@ -3515,11 +3536,13 @@ def _quality_bilan(fields: dict[str, dict[str, Any]]) -> dict[str, Any]:
     # Un champ critique dans suspicious_fields bloque ready_for_ai mais pas ready_for_ai_core
     critical_in_suspicious = [f for f in suspicious_fields if f in critical]
     
-    ready_for_ai_core = not critical_missing and (not has_both_totals or balance_ok)
-    # ready_for_ai requires: coverage OK + core OK + NO critical fields suspicious
+    # core_missing: noyau dur (total_actif, total_passif, capitaux_propres)
+    ready_for_ai_core = not core_missing and (not has_both_totals or balance_ok)
+    # ready_for_ai requires: coverage OK + core OK + all 6 critical present + no suspicious
     ready_for_ai = (
-        base["coverage_ratio"] >= 0.75 
-        and ready_for_ai_core 
+        base["coverage_ratio"] >= 0.75
+        and ready_for_ai_core
+        and not critical_missing
         and not critical_in_suspicious
     )
     # Pragmatique produit: si le noyau métier est cohérent, le document est exploitable
