@@ -1092,19 +1092,35 @@ def _value(field_dict: dict[str, Any]) -> Any:
 
 def _extract_common_fields(text: str) -> dict[str, dict[str, Any]]:
     exercice = _extract_first(r"(?:exercice|exercice clos le)\s*[:\-]?\s*([0-9]{4})", text)
+    # Extended patterns for exercice (e.g. "du 01/01/2024 au 31/12/2024")
+    if not exercice:
+        exercice = _extract_first(
+            r"(?:du\s+\d{1,2}[\/\-]\d{1,2}[\/\-][12]\d{3}\s+au\s+\d{1,2}[\/\-]\d{1,2}[\/\-])([12]\d{3})",
+            text,
+        )
     date_cloture = _extract_first(
         r"(?:clos le|clôture|date de clôture)\s*[:\-]?\s*([0-3]?\d[\/\-][0-1]?\d[\/\-][12]\d{3})",
         text,
     )
+    # Fallback: derive exercice year from date_cloture (e.g. 31/12/2024 → "2024")
+    exercice_derived = False
+    if not exercice and date_cloture:
+        import re as _re2
+        m = _re2.search(r"([12]\d{3})", str(date_cloture))
+        if m:
+            exercice = m.group(1)
+            exercice_derived = True
     societe_raw = _extract_first(
         r"(?:dénomination|denomination|raison sociale|société|societe)\s*[:\-]?"
         r"\s*([A-Z0-9 _.\-]{3,80})",
         text,
     )
     societe = _clean_company_label(societe_raw)
+    exercice_conf = 0.60 if exercice_derived else (0.8 if exercice else 0.0)
+    exercice_src = "derived:from_date_cloture" if exercice_derived else "header:exercice"
     return {
         "societe": _field(societe, 0.75 if societe else 0.0, "header:societe"),
-        "exercice": _field(exercice, 0.8 if exercice else 0.0, "header:exercice"),
+        "exercice": _field(exercice, exercice_conf, exercice_src),
         "date_cloture": _field(date_cloture, 0.82 if date_cloture else 0.0, "header:date_cloture"),
     }
 
@@ -2036,6 +2052,17 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
                 total_actif = calculated_actif
                 total_actif_src = "calculated:pcg_actif_components"
 
+    # Last resort: infer disponibilites as residual (total_actif - immo - créances)
+    # If residual ≈ 0, disponibilites is effectively absent on this bilan
+    if disponibilites_val is None and isinstance(total_actif, (int, float)):
+        immo = float(immobilisations_val) if isinstance(immobilisations_val, (int, float)) else 0.0
+        crea = float(creances_val) if isinstance(creances_val, (int, float)) else 0.0
+        residual = float(total_actif) - immo - crea
+        tolerance = max(50.0, float(total_actif) * 0.005)
+        if -tolerance <= residual <= tolerance:
+            disponibilites_val = max(0.0, round(residual, 2))
+            disponibilites_src = "calculated:residual_actif"
+
     return {
         **_extract_common_fields(text),
         "total_actif": _field(
@@ -2056,7 +2083,11 @@ def _extract_bilan(text: str) -> dict[str, dict[str, Any]]:
         ),
         "disponibilites": _field(
             disponibilites_val,
-            0.92 if disponibilites_src.startswith("pcg_sum:") else (0.78 if disponibilites_val is not None else 0.0),
+            0.92 if disponibilites_src.startswith("pcg_sum:") else (
+                0.55 if disponibilites_src.startswith("calculated:") else (
+                    0.78 if disponibilites_val is not None else 0.0
+                )
+            ),
             disponibilites_src if disponibilites_src != "missing" else "fallback:disponibilites",
         ),
         "dettes_financieres": _field(

@@ -389,10 +389,9 @@ async function refreshMaskedSummary(docId) {
     // Rendu des champs extraits avec badges
     function renderExtractedFields(fields) {
       if (!fields || Object.keys(fields).length === 0) return "<p>Aucun champ extrait</p>";
-      
+
       const criticalFields = Object.keys(CRITICAL_FIELD_LABELS_FR);
-      const entries = Object.entries(fields).sort((a, b) => {
-        // Champs critiques d'abord
+      const sortEntries = (entries) => entries.sort((a, b) => {
         const aCrit = criticalFields.indexOf(a[0]);
         const bCrit = criticalFields.indexOf(b[0]);
         if (aCrit !== -1 && bCrit === -1) return -1;
@@ -400,23 +399,66 @@ async function refreshMaskedSummary(docId) {
         return a[0].localeCompare(b[0]);
       });
 
-      const rows = entries.map(([key, field]) => {
+      const allEntries = Object.entries(fields);
+      const foundEntries = sortEntries(allEntries.filter(([, f]) => (f?.confidence || 0) > 0));
+      const missingEntries = sortEntries(allEntries.filter(([, f]) => (f?.confidence || 0) === 0));
+
+      function makeRow([key, field], isMissing) {
         const label = labelCriticalField(key);
-        const val = formatAmount(field?.value);
+        const val = isMissing ? "—" : formatAmount(field?.value);
         const conf = field?.confidence || 0;
         const source = field?.source_hint || "";
         const isCalc = source && (source.startsWith("fallback:") || source.startsWith("derived:") || source.startsWith("calculated:"));
         const calcWarning = isCalc ? `<span class="calc-warning" title="Ce champ est calculé ou estimé — à vérifier">⚠️</span>` : "";
-        const rowClass = isCalc ? "field-row calculated" : "field-row";
-        
+        const rowClass = isMissing ? "field-row field-missing" : (isCalc ? "field-row calculated" : "field-row");
+
+        // Contextual note for specific missing/low-confidence fields
+        const note = getFieldNote(key, source, conf);
+        const noteHtml = note ? `<span class="field-note" title="${note}">ℹ️</span>` : "";
+
         return `<div class="${rowClass}">
-          <span class="field-label">${label}</span>
+          <span class="field-label">${label}${noteHtml}</span>
           <span class="field-value">${val} ${calcWarning}</span>
           <span class="field-confidence">${confidenceBadge(conf, source)}</span>
         </div>`;
-      }).join("");
+      }
 
-      return `<div class="extracted-fields-table">${rows}</div>`;
+      const foundRows = foundEntries.map(e => makeRow(e, false)).join("");
+
+      let missingSection = "";
+      if (missingEntries.length > 0) {
+        const missingRows = missingEntries.map(e => makeRow(e, true)).join("");
+        missingSection = `
+          <div class="missing-fields-section">
+            <div class="missing-fields-toggle" onclick="this.parentElement.classList.toggle('open')">
+              ▸ ${missingEntries.length} champ${missingEntries.length > 1 ? "s" : ""} non extrait${missingEntries.length > 1 ? "s" : ""}
+            </div>
+            <div class="missing-fields-body">
+              ${missingRows}
+            </div>
+          </div>`;
+      }
+
+      return `<div class="extracted-fields-table">${foundRows}${missingSection}</div>`;
+    }
+
+    function getFieldNote(key, source, conf) {
+      if (key === "raison_sociale") {
+        return "La raison sociale est toujours anonymisée (remplacée par SOCIETE_X) — c'est normal.";
+      }
+      if (key === "disponibilites" && source && source.startsWith("calculated:")) {
+        return "Disponibilités calculées par différence (total actif − immobilisations − créances). Valeur à 0 = bilan sans trésorerie distincte.";
+      }
+      if (key === "disponibilites" && conf === 0) {
+        return "Disponibilités absentes du document ou confondues avec les créances — présence confirmée à 0.";
+      }
+      if (key === "exercice" && source && source.startsWith("derived:")) {
+        return "Exercice déduit de la date de clôture (non lu directement dans l'en-tête).";
+      }
+      if (source && (source.startsWith("fallback:") || source.startsWith("calculated:"))) {
+        return "Valeur estimée ou calculée — non lue directement dans le document.";
+      }
+      return null;
     }
 
     const FLAG_LABELS = {
@@ -531,7 +573,7 @@ async function refreshMaskedSummary(docId) {
       </div>
       <div class="extracted-fields-section">
         <div class="extracted-fields-title">📊 Champs extraits (${Object.keys(sData.fields || {}).length} champs)</div>
-        <div class="extracted-fields-subtitle">✓ = confiance élevée | ~ = confiance moyenne | ⚠️ = champ calculé/à vérifier</div>
+        <div class="extracted-fields-subtitle">✓ = confiance élevée | ~ = confiance moyenne | ⚠️ = calculé/à vérifier | ℹ️ = note contextuelle</div>
         ${renderExtractedFields(sData.fields)}
       </div>`;
   } catch (e) {
