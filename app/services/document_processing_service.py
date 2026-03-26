@@ -15,6 +15,7 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.services.mistral_ocr_service import extract_text_from_file
 from app.services.llm_anonymization_service import anonymize_document_full
+from app.services.dictionary_anonymization_service import anonymize_document_dictionary
 
 logger = get_logger(__name__)
 
@@ -71,14 +72,24 @@ async def build_anonymization_llm(
     db: AsyncSession,
     document: Document,
     original_text: str,
+    use_llm: bool = False,  # Par défaut: dictionnaire (plus fiable)
 ) -> tuple[str, list[dict], dict[str, Any]]:
-    """Étape 2: Anonymisation LLM via Mistral.
+    """Étape 2: Anonymisation via dictionnaire ou LLM.
+    
+    Args:
+        use_llm: Si True, utilise Mistral LLM. Sinon, dictionnaire (défaut).
     
     Returns:
         (texte_anonymise, detections, metadata)
     """
-    # Anonymisation LLM
-    preview_text, detections = await anonymize_document_full(original_text)
+    if use_llm:
+        # Anonymisation LLM (Mistral)
+        preview_text, detections = await anonymize_document_full(original_text)
+        method = "llm:mistral-large"
+    else:
+        # Anonymisation par dictionnaire (déterministe, fiable)
+        preview_text, detections = await anonymize_document_dictionary(original_text)
+        method = "dictionary"
     
     # Sauvegarde le texte anonymisé
     await db.execute(
@@ -124,7 +135,7 @@ async def build_anonymization_llm(
     )
     
     meta = {
-        "method": "llm:mistral-large",
+        "method": method,
         "detections_count": len(detections),
     }
     

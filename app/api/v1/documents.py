@@ -304,15 +304,16 @@ async def get_extracted_text(
 @router.post(
     "/{document_id}/anonymize",
     status_code=status.HTTP_200_OK,
-    summary="Étape 2: Anonymiser le texte extrait via Mistral LLM",
+    summary="Étape 2: Anonymiser le texte extrait",
 )
 async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
     auto_extract: bool = Query(default=True, description="Lance l'OCR automatiquement si texte non extrait"),
+    use_llm: bool = Query(default=False, description="Utilise Mistral LLM (sinon dictionnaire)"),
 ) -> dict:
-    """Anonymisation LLM du texte. Si auto_extract=True et pas de texte, lance l'OCR d'abord."""
+    """Anonymisation du texte par dictionnaire (défaut) ou LLM."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     
     # Récupère le texte OCR précédemment extrait
@@ -343,9 +344,9 @@ async def anonymize_document(
     if len(original_text.strip()) == 0:
         raise http_400("Document vide ou illisible. Vérifiez que le fichier contient du texte extractible.")
     
-    # Anonymisation LLM (peut prendre 5-15s)
+    # Anonymisation (dictionnaire par défaut, LLM si demandé)
     preview_text, detections, meta = await build_anonymization_llm(
-        db, document, original_text
+        db, document, original_text, use_llm=use_llm
     )
     await db.commit()
     
