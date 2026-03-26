@@ -85,7 +85,8 @@ async def _chat_completion(prompt: str, *, temperature: float) -> str:
         logger.info("mistral_chat_response", response_length=len(content), has_content=bool(content))
         return content
     except Exception as exc:
-        logger.error("mistral_chat_error", error=str(exc), error_type=type(exc).__name__)
+        error_msg = str(exc) or repr(exc) or "unknown error"
+        logger.error("mistral_chat_error", error=error_msg, error_type=type(exc).__name__, error_attrs=dir(exc) if hasattr(exc, 'response') else None)
         raise
 
 
