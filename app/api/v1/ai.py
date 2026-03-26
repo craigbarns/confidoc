@@ -17,6 +17,7 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.services.ollama_service import generate_summary_with_ollama
 from app.services.mistral_service import generate_summary_with_mistral, stream_mistral_response
 from app.services.kimi_service import generate_summary_with_kimi, stream_kimi_response
+from app.services.llm_extraction_service import extract_with_llm
 from app.config import get_settings
 
 router = APIRouter()
@@ -220,3 +221,36 @@ async def ai_stream(
         media_type="text/event-stream",
         headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
     )
+
+
+@router.post(
+    "/extract/{document_id}",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Extraction structurée 100% LLM (Mistral Large)",
+)
+async def ai_extract(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    """Extrait les données structurées (type, montants, totaux) via Mistral Large.
+    
+    Pas de regex, pas de règles métier — uniquement un LLM sur le texte anonymisé.
+    """
+    document = await _get_document_or_404(db, document_id, current_user.id)
+    anonymized_text = await _get_anonymized_text(db, document)
+
+    if not anonymized_text:
+        raise http_400("Aucun texte anonymisé disponible. Lancez d'abord l'anonymisation.")
+
+    extraction = await extract_with_llm(anonymized_text)
+
+    return JSONResponse({
+        "document_id": str(document.id),
+        "extraction": extraction,
+        "payload_policy": {
+            "method": "llm:mistral-large",
+            "anonymized_only": True,
+        },
+    })
