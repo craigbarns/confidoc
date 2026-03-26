@@ -276,6 +276,29 @@ def _apply_audit_quality_guardrails(audit: dict[str, Any], quality: dict[str, An
     return out
 
 
+@router.get(
+    "/providers",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Statut des providers LLM configurés",
+)
+async def ai_providers(current_user: CurrentUser) -> JSONResponse:
+    """Diagnostic: montre quels providers LLM sont actifs selon les variables d'env."""
+    s = get_settings()
+    mistral_enabled = bool(getattr(s, "MISTRAL_ENABLED", False))
+    mistral_key = bool(getattr(s, "MISTRAL_API_KEY", ""))
+    kimi_enabled = bool(getattr(s, "KIMI_ENABLED", False))
+    kimi_key = bool(getattr(s, "KIMI_API_KEY", ""))
+    ollama_enabled = bool(getattr(s, "OLLAMA_ENABLED", True))
+    selected = _select_llm_provider("auto")
+    return JSONResponse({
+        "selected_provider": selected,
+        "mistral": {"enabled": mistral_enabled, "key_set": mistral_key, "model": getattr(s, "MISTRAL_MODEL", "")},
+        "kimi":    {"enabled": kimi_enabled,    "key_set": kimi_key},
+        "ollama":  {"enabled": ollama_enabled},
+    })
+
+
 @router.post(
     "/audit/{document_id}",
     response_class=JSONResponse,
