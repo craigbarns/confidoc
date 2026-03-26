@@ -39,14 +39,14 @@ RÈGLES STRICTES:
    - Postes comptables standards → CONSERVER
 
 3. Format de réponse UNIQUEMENT JSON:
-{
+{{
   "texte_anonymise": "texte complet avec tokens de remplacement",
   "entites_detectees": [
-    {"type": "PERSONNE", "valeur_originale": "Jean Dupont", "position_debut": 123, "position_fin": 134, "token": "[PERSONNE]"}
+    {{"type": "PERSONNE", "valeur_originale": "Jean Dupont", "position_debut": 123, "position_fin": 134, "token": "[PERSONNE]"}}
   ],
   "confiance": "high|medium|low",
   "nb_remplacements": 5
-}
+}}
 
 Document à anonymiser:
 ---
