@@ -2110,6 +2110,8 @@ async def document_dataset_summary(
                 "coverage_ratio": structured_quality.get("coverage_ratio"),
                 "critical_missing_fields": structured_quality.get("critical_missing_fields", []),
                 "ready_for_ai": bool(structured_quality.get("ready_for_ai", False)),
+                "ready_for_ai_core": bool(structured_quality.get("ready_for_ai_core", False)),
+                "suspicious_fields": structured_quality.get("suspicious_fields", []),
             },
             "experience": experience,
             "accounting_records_count": len(accounting_records),
