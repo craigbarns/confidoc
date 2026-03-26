@@ -1,34 +1,24 @@
-"""ConfiDoc Backend — Documents endpoints (v2)."""
+"""ConfiDoc Backend — Documents endpoints."""
 
 import asyncio
 import uuid
-import re
 import hashlib
-import traceback
-from datetime import datetime, timedelta
-from collections import Counter
-from html import escape as html_escape
+from datetime import datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
-import fitz
-
-from typing import Literal
 
 from fastapi import APIRouter, BackgroundTasks, Body, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import delete, desc, func, select, update
+from sqlalchemy import delete, desc, func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.exceptions import http_400, http_403, http_404, http_500
+from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
-from app.models.membership import Membership
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
-from app.models.llm_suggestion import LlmSuggestion
-from app.models.human_feedback import HumanFeedback
 from app.schemas.document import (
     AnonymizeResponse,
     DetectionResponse,
@@ -43,577 +33,33 @@ from app.services.anonymization_service import (
     extract_text_from_file,
 )
 from app.config import get_settings
-from app.services.structured_dataset_service import build_structured_dataset
-from app.services.llm_extraction_fallback import enrich_with_llm_fallback
 from app.services.webhook_notify import notify_document_validated
 from app.services.pdf_redaction_service import redact_pdf_bytes
-from app.services.storage_service import delete_bytes, read_bytes
+from app.services.storage_service import read_bytes
 
 router = APIRouter()
 logger = get_logger(__name__)
-
-_UPPERCASE_TOKEN_BLACKLIST = {
-    "SCI",
-    "SAS",
-    "SARL",
-    "SA",
-    "EURL",
-    "EI",
-    "SIREN",
-    "SIRET",
-    "TVA",
-    "RCS",
-    "BIC",
-    "BNC",
-    "HT",
-    "TTC",
-    "EUR",
-    "EUROS",
-    "EURO",
-    "ANNEE",
-    "EXERCICE",
-    "COMPTE",
-    "COMPTES",
-    "ACTIF",
-    "PASSIF",
-    "TOTAL",
-    "CHARGES",
-    "PRODUITS",
-    "FISCAL",
-    "LIASSE",
-    "ANNEXE",
-    "IMMEUBLE",
-    "IMMEUBLES",
-    "ASSOCIE",
-    "ASSOCIES",
-    "SOCIETE",
-    "ADRESSE",
-}
-
-
-def _has_uppercase_person_leftovers(text: str) -> bool:
-    """Detect likely person-name leftovers while avoiding accounting/form labels."""
-    if not text:
-        return False
-    # 2 to 4 fully upper-case words with accents/hyphens/apostrophes.
-    candidates = re.findall(
-        r"\b([A-ZÀ-ÖØ-Ý]{3,}(?:[-'][A-ZÀ-ÖØ-Ý]{2,})?(?:\s+[A-ZÀ-ÖØ-Ý]{3,}(?:[-'][A-ZÀ-ÖØ-Ý]{2,})?){1,3})\b",
-        text,
-    )
-    for cand in candidates:
-        words = [w for w in re.split(r"\s+", cand.strip()) if w]
-        if len(words) < 2:
-            continue
-        if any(any(ch.isdigit() for ch in w) for w in words):
-            continue
-        if any(w in _UPPERCASE_TOKEN_BLACKLIST for w in words):
-            continue
-        # If every token is a short acronym-like word, ignore.
-        if all(len(w) <= 4 for w in words):
-            continue
-        return True
-    return False
-
-
-def _sha256_text(text: str | None) -> str | None:
-    """Compute sha256 of a text (used for audit/integrity only; never expose raw text)."""
-    if text is None:
-        return None
-    if not isinstance(text, str):
-        text = str(text)
-    return hashlib.sha256(text.encode("utf-8")).hexdigest()
-
-
-def _safe_doc_stem(filename: str) -> str:
-    stem = (filename or "document").rsplit(".", 1)[0]
-    stem = re.sub(r"[^A-Za-z0-9._-]+", "_", stem).strip("._-")
-    return stem or "document"
-
-
-def _flatten_fields_for_report(fields: dict) -> list[tuple[str, str]]:
-    out: list[tuple[str, str]] = []
-    for key, meta in (fields or {}).items():
-        if not isinstance(meta, dict):
-            continue
-        value = meta.get("value")
-        if value in (None, "", []):
-            continue
-        if isinstance(value, (dict, list)):
-            rendered = str(value)
-        else:
-            rendered = str(value)
-        out.append((str(key), rendered))
-    return out
-
-
-def _build_structured_report_doc_html(payload: dict, *, original_filename: str) -> str:
-    quality = payload.get("quality") or {}
-    experience = payload.get("experience") or {}
-    fields = payload.get("fields") or {}
-    tables = payload.get("tables") or {}
-    rows = _flatten_fields_for_report(fields)
-    quality_flags = quality.get("quality_flags") or []
-    status_label = (
-        "Full Ready" if quality.get("ready_for_ai") is True
-        else "Core Ready" if quality.get("ready_for_ai_core") is True
-        else "Review"
-    )
-    headline = str(experience.get("headline_fr") or "Rapport d'extraction ConfiDoc")
-    generated_at = str(payload.get("generated_at") or "")
-    doc_type = str(payload.get("doc_type") or "unknown")
-    coverage = float(quality.get("coverage_ratio") or 0.0)
-
-    rows_html = "".join(
-        f"<tr><td>{html_escape(str(k))}</td><td>{html_escape(str(v))}</td></tr>"
-        for k, v in rows
-    ) or "<tr><td colspan='2'>Aucune donnée structurée disponible.</td></tr>"
-    flags_html = "".join(
-        f"<li>{html_escape(str(flag))}</li>" for flag in quality_flags
-    ) or "<li>Aucun</li>"
-    tables_summary = "".join(
-        f"<li>{html_escape(str(name))}: {len(value) if isinstance(value, list) else 1} élément(s)</li>"
-        for name, value in tables.items()
-    ) or "<li>Aucun tableau</li>"
-
-    return f"""<!doctype html>
-<html lang="fr">
-<head>
-  <meta charset="utf-8" />
-  <title>ConfiDoc - Rapport extraction</title>
-  <style>
-    body {{ font-family: Arial, sans-serif; color: #111; margin: 24px; line-height: 1.4; }}
-    h1 {{ margin: 0 0 8px 0; font-size: 22px; }}
-    h2 {{ margin: 24px 0 8px 0; font-size: 16px; }}
-    .meta {{ font-size: 12px; color: #444; }}
-    .badge {{ display: inline-block; padding: 4px 10px; border-radius: 999px; border: 1px solid #ccc; font-size: 12px; }}
-    table {{ width: 100%; border-collapse: collapse; margin-top: 8px; }}
-    td, th {{ border: 1px solid #ddd; padding: 6px 8px; vertical-align: top; font-size: 12px; }}
-    th {{ background: #f7f7f7; text-align: left; }}
-    ul {{ margin: 6px 0 0 18px; }}
-  </style>
-</head>
-<body>
-  <h1>Rapport d'extraction ConfiDoc</h1>
-  <div class="meta">Document: {html_escape(original_filename)}</div>
-  <div class="meta">Type: {html_escape(doc_type)} | Généré le: {html_escape(generated_at)}</div>
-  <div style="margin-top:8px"><span class="badge">Statut: {status_label}</span></div>
-  <p>{headline}</p>
-
-  <h2>Résumé qualité</h2>
-  <ul>
-    <li>Coverage ratio: {round(coverage * 100)}%</li>
-    <li>Needs review: {"oui" if quality.get("needs_review") else "non"}</li>
-    <li>Ready for AI: {"oui" if quality.get("ready_for_ai") else "non"}</li>
-    <li>Ready for AI Core: {"oui" if quality.get("ready_for_ai_core") else "non"}</li>
-  </ul>
-
-  <h2>Champs extraits</h2>
-  <table>
-    <thead><tr><th>Champ</th><th>Valeur</th></tr></thead>
-    <tbody>{rows_html}</tbody>
-  </table>
-
-  <h2>Drapeaux qualité</h2>
-  <ul>{flags_html}</ul>
-
-  <h2>Tableaux détectés</h2>
-  <ul>{tables_summary}</ul>
-</body>
-</html>
-"""
-
-
-def _build_structured_report_pdf_bytes(payload: dict, *, original_filename: str) -> bytes:
-    quality = payload.get("quality") or {}
-    experience = payload.get("experience") or {}
-    fields = payload.get("fields") or {}
-    tables = payload.get("tables") or {}
-    rows = _flatten_fields_for_report(fields)
-    quality_flags = quality.get("quality_flags") or []
-    status_label = (
-        "Full Ready" if quality.get("ready_for_ai") is True
-        else "Core Ready" if quality.get("ready_for_ai_core") is True
-        else "Review"
-    )
-    headline = str(experience.get("headline_fr") or "Rapport d'extraction ConfiDoc")
-    generated_at = str(payload.get("generated_at") or "")
-    doc_type = str(payload.get("doc_type") or "unknown")
-    coverage = float(quality.get("coverage_ratio") or 0.0)
-
-    suspicious_fields = quality.get("suspicious_fields") or []
-    lines: list[str] = [
-        "Rapport d'extraction ConfiDoc",
-        f"Document: {original_filename}",
-        f"Type: {doc_type}",
-        f"Genere le: {generated_at}",
-        f"Statut: {status_label}",
-        "",
-        f"Resume: {headline}",
-        "",
-        "Qualite:",
-        f"- Coverage ratio: {round(coverage * 100)}%",
-        f"- Needs review: {'oui' if quality.get('needs_review') else 'non'}",
-        f"- Ready for AI: {'oui' if quality.get('ready_for_ai') else 'non'}",
-        f"- Ready for AI Core: {'oui' if quality.get('ready_for_ai_core') else 'non'}",
-    ]
-    if suspicious_fields:
-        lines.append(f"- Champs a verifier: {', '.join(suspicious_fields)}")
-    lines.append("")
-    lines.append("Champs extraits:")
-    if rows:
-        lines.extend([f"- {k}: {v}" for k, v in rows])
-    else:
-        lines.append("- Aucune donnee structuree disponible.")
-    lines.append("")
-    lines.append("Drapeaux qualite:")
-    if quality_flags:
-        lines.extend([f"- {str(flag)}" for flag in quality_flags])
-    else:
-        lines.append("- Aucun")
-    lines.append("")
-    lines.append("Tableaux detectes:")
-    if isinstance(tables, dict) and tables:
-        for name, value in tables.items():
-            n = len(value) if isinstance(value, list) else 1
-            lines.append(f"- {name}: {n} element(s)")
-    else:
-        lines.append("- Aucun tableau")
-
-    doc = fitz.open()
-    page = doc.new_page()
-    y = 48.0
-    for line in lines:
-        if y > 790:
-            page = doc.new_page()
-            y = 48.0
-        page.insert_text((42, y), line, fontsize=10)
-        y += 14.0
-    out = doc.tobytes()
-    doc.close()
-    return out
-
-
-def _field_val(fields: dict[str, object], key: str) -> object | None:
-    meta = fields.get(key) if isinstance(fields, dict) else None
-    if not isinstance(meta, dict):
-        return None
-    return meta.get("value")
-
-
-def _amount_to_float(raw: object) -> float | None:
-    if raw is None:
-        return None
-    if isinstance(raw, (int, float)):
-        return float(raw)
-    s = str(raw).strip()
-    if not s:
-        return None
-    s = s.replace("\u00a0", " ").replace(" ", "")
-    # Keep last decimal separator semantics.
-    if "," in s and "." in s:
-        if s.rfind(",") > s.rfind("."):
-            s = s.replace(".", "").replace(",", ".")
-        else:
-            s = s.replace(",", "")
-    else:
-        s = s.replace(",", ".")
-    s = re.sub(r"[^0-9.+-]", "", s)
-    try:
-        return float(s)
-    except ValueError:
-        return None
-
-
-def _records_from_anonymized_text(anonymized_text: str) -> list[dict]:
-    return _extract_accounting_records(anonymized_text or "")
-
-
-def _build_immobilisations_v2(records: list[dict], fields: dict[str, object]) -> dict:
-    """Build detailed immobilisations section from PCG records (heuristic, non-inventive)."""
-    details: list[dict] = []
-    brut_total = 0.0
-    amort_total = 0.0
-    has_brut = False
-    has_amort = False
-    total_actif = _amount_to_float(_field_val(fields, "total_actif"))
-    immob_net_field = _amount_to_float(_field_val(fields, "immobilisations"))
-    # Annex-first: prefer dedicated extractor outputs when available.
-    immob_brut_field = _amount_to_float(_field_val(fields, "total_brut_immobilisations"))
-    immob_amort_field = _amount_to_float(_field_val(fields, "total_amortissements"))
-    immob_net_annex_field = _amount_to_float(_field_val(fields, "total_net_immobilisations"))
-    seen: set[tuple[str, float, str]] = set()
-
-    for rec in records:
-        code = str(rec.get("code_comptable") or "")
-        amount = _amount_to_float(rec.get("montant_raw"))
-        if amount is None:
-            continue
-        # Strict filter: only immobilisation accounts, ignore implausibly high noisy amounts.
-        if total_actif is not None and abs(amount) > (abs(total_actif) * 1.2):
-            continue
-        if code.startswith(("21", "26", "27")):
-            key = (code, round(abs(amount), 2), "immobilisation")
-            if key in seen:
-                continue
-            seen.add(key)
-            brut_total += abs(amount)
-            has_brut = True
-            details.append(
-                {
-                    "compte": code,
-                    "libelle": rec.get("libelle"),
-                    "montant": abs(amount),
-                    "categorie": "immobilisation",
-                }
-            )
-        elif code.startswith("28"):
-            key = (code, round(abs(amount), 2), "amortissement")
-            if key in seen:
-                continue
-            seen.add(key)
-            amort_total += abs(amount)
-            has_amort = True
-            details.append(
-                {
-                    "compte": code,
-                    "libelle": rec.get("libelle"),
-                    "montant": -abs(amount),
-                    "categorie": "amortissement",
-                }
-            )
-
-    if not details:
-        return {
-            "immobilisations": {
-                "debut_exercice": None,
-                "augmentations": None,
-                "diminutions": None,
-                "fin_exercice": immob_net_annex_field if immob_net_annex_field is not None else immob_net_field,
-                "detail": [],
-            },
-            "amortissements": {
-                "debut_exercice": None,
-                "dotations": None,
-                "diminutions": None,
-                "fin_exercice": immob_amort_field,
-                "detail": [],
-            },
-        }
-
-    return {
-        "immobilisations": {
-            "debut_exercice": None,
-            "augmentations": None,
-            "diminutions": None,
-            # Prefer extractor net figure when available; fallback to record aggregation.
-            "fin_exercice": (
-                immob_net_annex_field
-                if immob_net_annex_field is not None
-                else (
-                    immob_net_field
-                    if immob_net_field is not None
-                    else (
-                        immob_brut_field
-                        if immob_brut_field is not None
-                        else (round(brut_total, 2) if has_brut else None)
-                    )
-                )
-            ),
-            "detail": [d for d in details if d["categorie"] == "immobilisation"],
-        },
-        "amortissements": {
-            "debut_exercice": None,
-            "dotations": None,
-            "diminutions": None,
-            "fin_exercice": immob_amort_field if immob_amort_field is not None else (round(amort_total, 2) if has_amort else None),
-            "detail": [d for d in details if d["categorie"] == "amortissement"],
-        },
-    }
-
-
-def _build_dettes_fiscal_social_v2(records: list[dict], fields: dict[str, object]) -> dict:
-    det_fin = []
-    det_four = []
-    det_fisc_soc = []
-    autres = []
-    for rec in records:
-        code = str(rec.get("code_comptable") or "")
-        amount = _amount_to_float(rec.get("montant_raw"))
-        if amount is None:
-            continue
-        item = {"compte": code, "libelle": rec.get("libelle"), "montant": round(amount, 2)}
-        if code.startswith(("16", "164")):
-            det_fin.append(item)
-        elif code.startswith("401"):
-            det_four.append(item)
-        elif code.startswith(("43", "44")):
-            det_fisc_soc.append(item)
-        elif code.startswith(("41", "45")):
-            autres.append(item)
-
-    return {
-        "dettes": {
-            "emprunts_etablissements_credit": {
-                "montant_2024": _field_val(fields, "dettes_financieres"),
-                "montant_2023": None,
-                "detail": det_fin,
-            },
-            "dettes_fournisseurs": {
-                "montant_2024": _field_val(fields, "dettes_fournisseurs"),
-                "montant_2023": None,
-                "detail": det_four,
-            },
-            "dettes_fiscales_sociales": {
-                "montant_2024": round(sum(abs(i["montant"]) for i in det_fisc_soc), 2) if det_fisc_soc else None,
-                "montant_2023": None,
-                "detail": det_fisc_soc,
-            },
-            "autres_dettes": {
-                "montant_2024": round(sum(abs(i["montant"]) for i in autres), 2) if autres else None,
-                "montant_2023": None,
-                "detail": autres,
-            },
-        }
-    }
-
-
-def _build_sig_v2(fields: dict[str, object]) -> dict:
-    return {
-        "soldes_intermediaires_gestion": {
-            "chiffre_affaires": {
-                "montant_2024": _field_val(fields, "chiffre_affaires"),
-                "montant_2023": None,
-                "variation_valeur": None,
-                "variation_pourcent": None,
-            },
-            "resultat_exploitation": {
-                "montant_2024": _field_val(fields, "resultat_exploitation"),
-                "montant_2023": None,
-                "variation_valeur": None,
-                "variation_pourcent": None,
-            },
-            "resultat_courant": {
-                "montant_2024": _field_val(fields, "resultat_courant"),
-                "montant_2023": None,
-                "variation_valeur": None,
-                "variation_pourcent": None,
-            },
-            "resultat_exercice": {
-                "montant_2024": _field_val(fields, "resultat_net") or _field_val(fields, "resultat_exercice"),
-                "montant_2023": None,
-                "variation_valeur": None,
-                "variation_pourcent": None,
-            },
-        }
-    }
-
-
-def _to_accounting_json_v1(
-    *,
-    structured: dict,
-    profile: str,
-    original_filename: str,
-    anonymized_text: str,
-) -> dict:
-    """Map current structured payload to a stable accounting JSON contract (v1)."""
-    fields = structured.get("fields") or {}
-    quality = structured.get("quality") or {}
-    provenance = structured.get("provenance") or {}
-
-    total_actif = _field_val(fields, "total_actif")
-    total_passif = _field_val(fields, "total_passif")
-    capitaux_propres = _field_val(fields, "capitaux_propres")
-    resultat_exercice = _field_val(fields, "resultat_exercice")
-    dettes_financieres = _field_val(fields, "dettes_financieres")
-    dettes_fournisseurs = _field_val(fields, "dettes_fournisseurs")
-    chiffre_affaires = _field_val(fields, "chiffre_affaires")
-    resultat_exploitation = _field_val(fields, "resultat_exploitation")
-    resultat_net = _field_val(fields, "resultat_net")
-    records = _records_from_anonymized_text(anonymized_text)
-
-    # Redact company metadata in AI profile (never leak PII to LLM payloads).
-    entreprise = {
-        "denomination": None if profile == "anonymized_ai" else _field_val(fields, "societe"),
-        "forme_juridique": None,
-        "adresse": None,
-        "siret": None,
-        "siren": None,
-        "comptable": {"nom": None, "adresse": None},
-        "logiciel_comptable": None,
-    }
-
-    base = {
-        "document": {
-            "type": structured.get("doc_type"),
-            "exercice": _field_val(fields, "exercice"),
-            "date_cloture": _field_val(fields, "date_cloture_exercice") or _field_val(fields, "date_cloture"),
-            "source_filename": original_filename,
-        },
-        "entreprise": entreprise,
-        "bilan": {
-            "actif": {
-                "total_general": {
-                    "net_2024": total_actif,
-                    "net_2023": None,
-                }
-            },
-            "passif": {
-                "capitaux_propres": {
-                    "situation_nette": {"montant_2024": capitaux_propres, "montant_2023": None},
-                    "resultat_exercice": {"montant_2024": resultat_exercice, "montant_2023": None},
-                },
-                "dettes": {
-                    "emprunts_etablissements_credit": {"montant_2024": dettes_financieres, "montant_2023": None},
-                    "dettes_fournisseurs": {"montant_2024": dettes_fournisseurs, "montant_2023": None},
-                },
-                "total_general_passif": {"montant_2024": total_passif, "montant_2023": None},
-            },
-        },
-        "compte_resultat": {
-            "produits_exploitation": {
-                "chiffre_affaires_net": {"montant_2024": chiffre_affaires, "montant_2023": None}
-            },
-            "resultat_exploitation": {"montant_2024": resultat_exploitation, "montant_2023": None},
-            "benefice_perte": {"montant_2024": resultat_net or resultat_exercice, "montant_2023": None},
-        },
-        "quality": {
-            "needs_review": bool(quality.get("needs_review", True)),
-            "ready_for_ai": bool(quality.get("ready_for_ai", False)),
-            "ready_for_ai_core": bool(quality.get("ready_for_ai_core", False)),
-            "coverage_ratio": quality.get("coverage_ratio"),
-            "critical_missing_fields": quality.get("critical_missing_fields", []),
-            "quality_flags": quality.get("quality_flags", []),
-            "suspicious_fields": quality.get("suspicious_fields", []),
-        },
-        "provenance": {
-            "extractor_name": provenance.get("extractor_name"),
-            "text_segmentation": provenance.get("text_segmentation"),
-            "routing_confidence": structured.get("routing_confidence"),
-            "generated_at": structured.get("generated_at"),
-            "profile": profile,
-            "anonymized_text_included": profile == "internal",
-        },
-        "anonymized_text_excerpt": anonymized_text[:4000] if profile == "internal" else None,
-    }
-    # V2 enrichments (bilan-focused), additive and backward-compatible.
-    base["immobilisations_amortissements"] = _build_immobilisations_v2(records, fields)
-    base["bilan"]["passif"].update(_build_dettes_fiscal_social_v2(records, fields))
-    base.update(_build_sig_v2(fields))
-    return base
 
 
 # ──────────────────────────────────────────────────────────────────────
 # HELPERS
 # ──────────────────────────────────────────────────────────────────────
 
+
+def _sha256_text(text: str | None) -> str | None:
+    if not text:
+        return None
+    return hashlib.sha256(text.encode()).hexdigest()
+
+
 def _detection_item_to_response(item: dict) -> DetectionResponse:
-    """Assainit les dicts de détection pour le contrat API (évite 500 si types souples)."""
     return DetectionResponse(
-        entity_type=str(item.get("entity_type", "unknown")),
-        start_index=int(item.get("start_index", 0)),
-        end_index=int(item.get("end_index", 0)),
-        value_excerpt=str(item.get("value_excerpt", "")),
-        replacement=str(item.get("replacement", "[REDACTED]")),
+        entity_type=item.get("entity_type", "UNKNOWN"),
+        start_index=item.get("start_index", 0),
+        end_index=item.get("end_index", 0),
+        replacement=item.get("replacement", ""),
+        confidence=item.get("confidence", 0.0),
+        value_excerpt=item.get("value_excerpt", ""),
     )
 
 
@@ -639,29 +85,22 @@ async def _get_user_document_or_404(
 
 
 def _read_file_or_404(document: Document) -> bytes:
-    """Read file from storage, with fallback to raw_content in DB."""
-    # Try external storage first
     try:
         return read_bytes(document.storage_backend, document.storage_key)
-    except (FileNotFoundError, Exception) as exc:
+    except Exception as exc:
         logger.warning("storage_read_fallback", doc_id=str(document.id), error=str(exc))
 
-    # Fallback: raw bytes stored in PostgreSQL
     if document.raw_content:
-        logger.info("using_db_raw_content", doc_id=str(document.id))
         return document.raw_content
 
     raise http_404(
-        "Fichier source introuvable. Le fichier a été supprimé du stockage "
-        "et aucune copie n'est disponible en base. Ré-uploadez le document."
+        "Fichier source introuvable. Ré-uploadez le document."
     )
 
 
 async def _get_or_create_final_version(
     db: DbSession, document: Document
 ) -> DocumentVersion:
-    """Get the final anonymized version, auto-creating it from preview if needed."""
-    # Try FINAL first
     result = await db.execute(
         select(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
@@ -672,7 +111,6 @@ async def _get_or_create_final_version(
     if final:
         return final
 
-    # Fallback: auto-validate from preview
     preview_result = await db.execute(
         select(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
@@ -685,7 +123,6 @@ async def _get_or_create_final_version(
             "Aucune version anonymisée disponible. Lancez d'abord l'anonymisation."
         )
 
-    # Auto-create final from preview
     final = DocumentVersion(
         document_id=document.id,
         version_type=DocumentVersionType.FINAL_ANONYMIZED,
@@ -693,14 +130,10 @@ async def _get_or_create_final_version(
     )
     db.add(final)
     await db.flush()
-    logger.info("auto_validated_from_preview", doc_id=str(document.id))
     return final
 
 
-async def _get_original_text(
-    db: DbSession, document: Document
-) -> str:
-    """Get original text from DB version, or re-extract from file."""
+async def _get_original_text(db: DbSession, document: Document) -> str:
     result = await db.execute(
         select(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
@@ -711,49 +144,25 @@ async def _get_original_text(
     if version and version.content_text:
         return version.content_text
 
-    # Re-extract from file
     file_content = _read_file_or_404(document)
     return extract_text_from_file(file_content, document.extension) or ""
 
 
-async def _get_best_text_for_reporting(
-    db: DbSession, document: Document
-) -> str:
-    """Best-effort text source for report exports.
-
-    Priority:
-    1) original text (DB or file re-extraction)
-    2) final anonymized version
-    3) preview anonymized version
-    """
-    try:
-        original = await _get_original_text(db, document)
-        if original:
-            return original
-    except Exception:
-        # Fallbacks below are intentionally silent to keep export resilient.
-        pass
-
-    final_result = await db.execute(
-        select(DocumentVersion).where(
-            DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
+async def _get_anonymized_text(db: DbSession, document: Document) -> str:
+    """Get best anonymized text (final > preview)."""
+    for version_type in (
+        DocumentVersionType.FINAL_ANONYMIZED,
+        DocumentVersionType.PREVIEW_ANONYMIZED,
+    ):
+        result = await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == version_type,
+            )
         )
-    )
-    final_version = final_result.scalar_one_or_none()
-    if final_version and final_version.content_text:
-        return final_version.content_text
-
-    preview_result = await db.execute(
-        select(DocumentVersion).where(
-            DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
-        )
-    )
-    preview_version = preview_result.scalar_one_or_none()
-    if preview_version and preview_version.content_text:
-        return preview_version.content_text
-
+        version = result.scalar_one_or_none()
+        if version and version.content_text:
+            return version.content_text
     return ""
 
 
@@ -787,255 +196,11 @@ async def list_documents(
     return list(result.scalars().all())
 
 
-async def _get_user_org_id(db: DbSession, user_id: uuid.UUID) -> uuid.UUID | None:
-    """Get the active org_id for a user from their membership."""
-    result = await db.execute(
-        select(Membership.org_id).where(
-            Membership.user_id == user_id,
-            Membership.is_active.is_(True),
-        )
-    )
-    return result.scalar_one_or_none()
-
-
-@router.get(
-    "/org",
-    response_model=list[DocumentResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Lister tous les documents de l'organisation",
-)
-async def list_org_documents(
-    current_user: CurrentUser,
-    db: DbSession,
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-    status_filter: DocumentStatus | None = Query(default=None, alias="status"),
-) -> list[Document]:
-    """List all documents belonging to the user's organization.
-
-    Requires an active membership. Allows managers/admins to see
-    all documents uploaded by any member of the org.
-    """
-    org_id = await _get_user_org_id(db, current_user.id)
-    if not org_id:
-        raise http_403("Aucune organisation active. Rejoignez une organisation d'abord.")
-
-    query = (
-        select(Document)
-        .where(
-            Document.org_id == org_id,
-            Document.is_deleted.is_(False),
-        )
-    )
-    if status_filter is not None:
-        query = query.where(Document.status == status_filter)
-
-    query = query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
-    result = await db.execute(query)
-    return list(result.scalars().all())
-
-
-@router.get(
-    "/org/stats",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Statistiques de l'organisation",
-)
-async def org_stats(
-    current_user: CurrentUser,
-    db: DbSession,
-    days: int = Query(default=30, ge=1, le=365),
-) -> JSONResponse:
-    """Organization-level analytics: document counts, status breakdown, volume."""
-    org_id = await _get_user_org_id(db, current_user.id)
-    if not org_id:
-        raise http_403("Aucune organisation active.")
-
-    cutoff = func.now() - func.make_interval(days=days)
-    result = await db.execute(
-        select(Document).where(
-            Document.org_id == org_id,
-            Document.is_deleted.is_(False),
-            Document.created_at >= cutoff,
-        )
-    )
-    docs = list(result.scalars().all())
-
-    by_status = Counter(
-        str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown")
-        for d in docs
-    )
-    by_ext = Counter(str((d.extension or "unknown")).lower() for d in docs)
-    by_user: dict[str, int] = Counter()
-    for d in docs:
-        by_user[str(d.uploaded_by_user_id)] += 1
-
-    total_bytes = sum(d.size_bytes for d in docs if d.size_bytes)
-
-    return JSONResponse({
-        "org_id": str(org_id),
-        "window_days": days,
-        "documents_total": len(docs),
-        "counts_by_status": dict(by_status),
-        "counts_by_extension": dict(by_ext),
-        "documents_by_user": dict(by_user),
-        "total_size_bytes": total_bytes,
-        "total_size_mb": round(total_bytes / (1024 * 1024), 2),
-    })
-
-
-@router.get(
-    "/status-summary",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Synthèse analytics des statuts documents",
-)
-async def status_summary(
-    current_user: CurrentUser,
-    db: DbSession,
-    days: int = Query(default=30, ge=1, le=365),
-    doc_type: str = Query(default="auto"),
-    max_docs_for_quality: int = Query(default=30, ge=1, le=100),
-) -> JSONResponse:
-    """Retourne une vue synthétique pour pilotage produit/ops.
-
-    V1: compteurs de statuts + répartition full/core/review + top quality flags.
-    """
-    try:
-        cutoff_date = datetime.utcnow() - timedelta(days=days)
-        result = await db.execute(
-            select(Document)
-            .where(
-                Document.uploaded_by_user_id == current_user.id,
-                Document.is_deleted.is_(False),
-                Document.created_at >= cutoff_date,
-            )
-            .order_by(desc(Document.created_at))
-        )
-        docs = list(result.scalars().all())
-
-        counts_by_status = Counter(str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown") for d in docs)
-        by_extension = Counter(str((d.extension or "unknown")).lower() for d in docs)
-
-        ready_docs = [d for d in docs if d.status == DocumentStatus.READY]
-        avg_ready_latency_seconds = None
-        if ready_docs:
-            lags = []
-            for d in ready_docs:
-                if d.created_at and d.updated_at:
-                    lag = (d.updated_at - d.created_at).total_seconds()
-                    if lag >= 0:
-                        lags.append(lag)
-            if lags:
-                avg_ready_latency_seconds = round(sum(lags) / len(lags), 2)
-
-        # Quality distribution (sampled for cost/perf control).
-        sampled_ready = ready_docs[:max_docs_for_quality]
-        quality_dist = {"full_ready": 0, "core_ready": 0, "review": 0}
-        quality_flags_counter: Counter[str] = Counter()
-        quality_errors = 0
-
-        for d in sampled_ready:
-            try:
-                original_text = await _get_original_text(db, d)
-                if not original_text:
-                    quality_errors += 1
-                    continue
-                effective_type = classify_document_type(original_text, d.original_filename)
-                anonymized_text, _ = anonymize_text(
-                    original_text,
-                    profile="dataset_accounting",
-                    document_type=effective_type,
-                )
-                structured = build_structured_dataset(
-                    anonymized_text=anonymized_text,
-                    original_filename=d.original_filename,
-                    requested_doc_type=doc_type,
-                    extraction_text=original_text,
-                )
-                q = structured.get("quality") or {}
-                if q.get("ready_for_ai") is True:
-                    quality_dist["full_ready"] += 1
-                elif q.get("ready_for_ai_core") is True:
-                    quality_dist["core_ready"] += 1
-                else:
-                    quality_dist["review"] += 1
-                quality_flags_counter.update([str(x) for x in (q.get("quality_flags") or [])])
-            except Exception as exc:
-                logger.error("status_summary_quality_error", doc_id=str(d.id), error=str(exc), exc_info=True)
-                quality_errors += 1
-
-    except Exception as exc:
-        logger.error("status_summary_global_error", error=str(exc), exc_info=True)
-        return JSONResponse(
-            {"error": str(exc), "traceback": str(traceback.format_exc())},
-            status_code=500
-        )
-
-    return JSONResponse(
-        {
-            "window_days": days,
-            "documents_total": len(docs),
-            "counts_by_status": dict(counts_by_status),
-            "counts_by_extension": dict(by_extension),
-            "ready_docs_count": len(ready_docs),
-            "avg_ready_latency_seconds": avg_ready_latency_seconds,
-            "quality_distribution": quality_dist,
-            "top_quality_flags": [
-                {"flag": flag, "count": cnt}
-                for flag, cnt in quality_flags_counter.most_common(7)
-            ],
-            "quality_sampled_docs": len(sampled_ready),
-            "quality_errors": quality_errors,
-        }
-    )
-
-
-@router.delete(
-    "",
-    status_code=status.HTTP_200_OK,
-    summary="Supprimer tous les documents de l'utilisateur connecté",
-)
-async def delete_all_my_documents(
-    current_user: CurrentUser,
-    db: DbSession,
-    confirm: bool = Query(
-        False,
-        description="Doit être true pour exécuter (protection anti-clic accidentel).",
-    ),
-) -> dict[str, int]:
-    """Supprime tous les documents uploadés par l'utilisateur (fichiers + lignes BDD, cascades)."""
-    if not confirm:
-        raise http_400(
-            "Suppression groupée : ajoutez le paramètre de requête ?confirm=true"
-        )
-
-    from datetime import datetime, timezone
-
-    result = await db.execute(
-        select(Document).where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-        )
-    )
-    docs = list(result.scalars().all())
-    deleted = 0
-    now = datetime.now(timezone.utc)
-    for document in docs:
-        # Soft delete: mark as deleted instead of removing from DB
-        document.is_deleted = True
-        document.deleted_at = now
-        deleted += 1
-    await db.commit()
-    logger.info("documents_all_soft_deleted", user_id=str(current_user.id), count=deleted)
-    return {"deleted": deleted}
-
-
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,
     status_code=status.HTTP_200_OK,
-    summary="Détail d'un document",
+    summary="Récupérer un document",
 )
 async def get_document(
     document_id: str, current_user: CurrentUser, db: DbSession
@@ -1047,15 +212,13 @@ async def get_document(
     "/{document_id}/anonymize",
     response_model=AnonymizeResponse,
     status_code=status.HTTP_200_OK,
-    summary="Anonymiser un document (preview)",
+    summary="Anonymiser un document",
 )
 async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
-    profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"] = Query(
-        default="dataset_accounting_pseudo"
-    ),
+    profile: str = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> AnonymizeResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
@@ -1072,25 +235,15 @@ async def anonymize_document(
         await db.commit()
     except Exception as exc:
         await db.rollback()
-        logger.exception(
-            "anonymize_build_failed",
-            doc_id=str(document.id),
-            error=str(exc),
-        )
-        raise http_500(
-            f"Anonymisation impossible: {str(exc)[:500]}"
-        ) from exc
+        logger.exception("anonymize_failed", doc_id=str(document.id), error=str(exc))
+        raise http_500(f"Anonymisation impossible: {str(exc)[:500]}") from exc
 
     return AnonymizeResponse(
         document_id=document.id,
         status=document.status.value,
         detections_count=len(detections),
         detections=[_detection_item_to_response(item) for item in detections],
-        preview_text=(
-            f"[type={effective_type}|profile={profile}"
-            f"|extract={extraction_meta.get('method','unknown')}"
-            f"|ocr={extraction_meta.get('ocr_engine') or 'none'}]\n\n{preview_text}"
-        ),
+        preview_text=preview_text,
     )
 
 
@@ -1098,7 +251,7 @@ async def anonymize_document(
     "/{document_id}/preview",
     response_model=DocumentPreviewResponse,
     status_code=status.HTTP_200_OK,
-    summary="Prévisualiser l'anonymisation",
+    summary="Prévisualiser le document anonymisé",
 )
 async def preview_document(
     document_id: str, current_user: CurrentUser, db: DbSession
@@ -1130,36 +283,10 @@ async def preview_document(
     )
 
 
-@router.get(
-    "/{document_id}/original",
-    response_class=PlainTextResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Retourne le texte original (avec garde-fou RGPD)",
-)
-async def original_text_document(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    allow_original: bool = Query(default=False, description="Doit etre a true pour autoriser l'affichage du texte original."),
-    max_chars: int = Query(default=8000, ge=100, le=50000, description="Limite de caracteres pour eviter les charges trop lourdes."),
-) -> PlainTextResponse:
-    """Expose le texte original uniquement si allow_original=true.
-
-    Utilite pour la vue 'avant/apres' en console UI (beta/demo). Le texte original contient des donnees sensibles.
-    """
-    if not allow_original:
-        raise http_400("Acces au texte original desactive. Utilisez allow_original=true.")
-
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_original_text(db, document)
-    sliced = original_text[:max_chars] if original_text else ""
-    return PlainTextResponse(sliced)
-
-
 @router.post(
     "/{document_id}/validate",
     status_code=status.HTTP_200_OK,
-    summary="Valider la preview et figer la version finale (avec capture de feedbacks)",
+    summary="Valider et figer la version anonymisée finale",
 )
 async def validate_document(
     document_id: str,
@@ -1180,10 +307,9 @@ async def validate_document(
     if not preview_version:
         raise http_404("Aucune preview disponible")
 
-    final_text_content = args.final_text if args.final_text is not None else preview_version.content_text
-    final_text_content = postgres_safe_text(final_text_content)
+    final_text = args.final_text if args.final_text is not None else preview_version.content_text
+    final_text = postgres_safe_text(final_text)
 
-    # Remove old final version
     await db.execute(
         delete(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
@@ -1194,51 +320,10 @@ async def validate_document(
         DocumentVersion(
             document_id=document.id,
             version_type=DocumentVersionType.FINAL_ANONYMIZED,
-            content_text=final_text_content,
+            content_text=final_text,
         )
-    )
-
-    # Enregistrer les corrections humaines
-    feedback_count = 0
-    if args.feedbacks:
-        for f_item in args.feedbacks:
-            hf = HumanFeedback(
-                document_id=document.id,
-                user_id=current_user.id,
-                org_id_placeholder=None, # if we had memberships, they would be added here
-                doc_type=args.doc_type,
-                profile_used=args.profile_used,
-                feedback_type=f_item.feedback_type,
-                entity_type=f_item.entity_type,
-                original_value_hash=f_item.original_value_hash,
-                corrected_value_hash=f_item.corrected_value_hash,
-                original_label=f_item.original_label,
-                corrected_label=f_item.corrected_label,
-                action_taken=f_item.action_taken,
-                source_page=f_item.source_page,
-                source_span_start=f_item.source_span_start,
-                source_span_end=f_item.source_span_end,
-                review_comment=f_item.review_comment,
-            )
-            # Remove the placeholder prop above, simply rely on mapped_columns
-            hf.organization_id = None
-            delattr(hf, 'org_id_placeholder')
-
-            db.add(hf)
-            feedback_count += 1
-
-    # Mark LLM suggestions as accepted
-    await db.execute(
-        update(LlmRequest)
-        .where(
-            LlmRequest.document_id == document.id,
-            LlmRequest.preview_version_id == preview_version.id,
-        )
-        .values(human_status="accepted")
     )
     await db.commit()
-
-    logger.info("document_validated", doc_id=str(document.id), human_feedbacks_saved=feedback_count)
 
     settings = get_settings()
     wh_url = (settings.WEBHOOK_ON_VALIDATE_URL or "").strip()
@@ -1250,24 +335,19 @@ async def validate_document(
             secret=settings.WEBHOOK_ON_VALIDATE_SECRET or "",
         )
 
-    return {
-        "status": "validated",
-        "document_id": str(document.id),
-        "human_feedbacks_saved": feedback_count
-    }
+    return {"status": "validated", "document_id": str(document.id)}
 
 
 @router.get(
     "/{document_id}/export",
     response_class=PlainTextResponse,
     status_code=status.HTTP_200_OK,
-    summary="Exporter la version anonymisée (texte)",
+    summary="Exporter le texte anonymisé",
 )
 async def export_document(
     document_id: str, current_user: CurrentUser, db: DbSession
 ) -> PlainTextResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    # Auto-validates from preview if no explicit validation
     final = await _get_or_create_final_version(db, document)
     await db.commit()
     return PlainTextResponse(final.content_text)
@@ -1277,7 +357,7 @@ async def export_document(
     "/{document_id}/export-pdf",
     response_class=StreamingResponse,
     status_code=status.HTTP_200_OK,
-    summary="Exporter un PDF visuellement redacted",
+    summary="Exporter le PDF avec données visuellement masquées",
 )
 async def export_redacted_pdf(
     document_id: str, current_user: CurrentUser, db: DbSession
@@ -1285,16 +365,15 @@ async def export_redacted_pdf(
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
     if document.extension.lower() != "pdf":
-        raise http_400("Export PDF redacted disponible uniquement pour les fichiers PDF")
+        raise http_400("Export PDF redacté disponible uniquement pour les fichiers PDF")
 
-    # Get detections
     detections_result = await db.execute(
         select(EntityDetection).where(EntityDetection.document_id == document.id)
     )
     detections = list(detections_result.scalars().all())
+
     if not detections:
-        # Fallback: if detections were not persisted, regenerate from available text.
-        source_text = await _get_best_text_for_reporting(db, document)
+        source_text = await _get_anonymized_text(db, document)
         if source_text:
             effective_type = classify_document_type(source_text, document.original_filename)
             _anon_text, regenerated = anonymize_text(
@@ -1308,1492 +387,57 @@ async def export_redacted_pdf(
         if not detections:
             raise http_404("Aucune détection disponible. Lancez /anonymize d'abord.")
 
-    # Read original PDF
     original_bytes = _read_file_or_404(document)
-
-    # Collect sensitive values and apply redaction
     sensitive_values = [item.value_excerpt for item in detections if item.value_excerpt]
+
     try:
-        # Run CPU-bound PDF redaction in a thread pool to avoid blocking the event loop
         loop = asyncio.get_running_loop()
         redacted_bytes = await loop.run_in_executor(
             None, redact_pdf_bytes, original_bytes, sensitive_values
         )
     except Exception as exc:
         logger.error("pdf_redaction_failed", doc_id=str(document.id), error=str(exc))
-        raise http_400(
-            "Impossible de générer le PDF redacté. Le fichier PDF est peut-être corrompu."
-        )
+        raise http_400("Impossible de générer le PDF redacté.")
 
-    download_name = f"redacted_{document.original_filename}"
-    headers = {"Content-Disposition": f'attachment; filename="{download_name}"'}
-    return StreamingResponse(
-        BytesIO(redacted_bytes), media_type="application/pdf", headers=headers
-    )
+    headers = {"Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'}
+    return StreamingResponse(BytesIO(redacted_bytes), media_type="application/pdf", headers=headers)
 
 
-@router.get(
-    "/{document_id}/export-dataset",
-    response_class=JSONResponse,
+@router.delete(
+    "/all",
     status_code=status.HTTP_200_OK,
-    summary="Exporter un enregistrement dataset (texte anonymisé + spans)",
+    summary="Supprimer tous mes documents",
 )
-async def export_dataset(
-    document_id: str,
+async def delete_all_my_documents(
     current_user: CurrentUser,
     db: DbSession,
-) -> JSONResponse:
-    """Export RGPD-friendly pour dataset:
-    - applies 'dataset_accounting' profile (keeps amounts)
-    - never sends original values (no value_excerpt)
-    - returns spans consistent with the anonymized text.
-    """
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    # Get original text (from DB, or re-extract)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if original_text is None:
-        original_text = ""
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    _, detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type,
-    )
-
-    # Merge accepted LLM suggestions
-    llm_suggestions_result = await db.execute(
-        select(LlmSuggestion)
-        .join(LlmRequest, LlmRequest.id == LlmSuggestion.llm_request_id)
-        .where(
-            LlmRequest.document_id == document.id,
-            LlmRequest.human_status == "accepted",
+) -> dict:
+    result = await db.execute(
+        select(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
         )
     )
-    llm_suggestions = list(llm_suggestions_result.scalars().all())
-
-    merged = list(detections)
-    for s in llm_suggestions:
-        cand = {
-            "entity_type": s.entity_type,
-            "start_index": int(s.start_index),
-            "end_index": int(s.end_index),
-            "replacement": s.replacement_token,
-            "value_excerpt": "",
-        }
-        if not any(
-            not (cand["end_index"] <= ex["start_index"] or cand["start_index"] >= ex["end_index"])
-            for ex in merged
-        ):
-            merged.append(cand)
-
-    # Apply all replacements
-    dataset_text = original_text
-    for match in sorted(merged, key=lambda m: m["start_index"], reverse=True):
-        dataset_text = (
-            dataset_text[: match["start_index"]]
-            + match["replacement"]
-            + dataset_text[match["end_index"] :]
-        )
-
-    entities = [
-        {
-            "entity_type": item["entity_type"],
-            "start": item["start_index"],
-            "end": item["end_index"],
-            "replacement_token": item["replacement"],
-        }
-        for item in merged
-    ]
-
-    # ── Quality gate ──
-    quality_flags: list[str] = []
-    critical_patterns: dict[str, str] = {
-        "emails_found": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
-        "iban_found": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
-        "siret_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b",
-        "siren_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b",
-    }
-    for flag, pat in critical_patterns.items():
-        if re.search(pat, dataset_text):
-            quality_flags.append(flag)
-    needs_review = len(quality_flags) > 0 or len(entities) == 0
-
-    # ── Accounting records extraction ──
-    accounting_records = _extract_accounting_records(dataset_text)
-
-    payload = {
-        "document_id": str(document.id),
-        "doc_type": effective_type,
-        "profile": "dataset_accounting",
-        "anonymized_text": dataset_text,
-        "entities": entities,
-        "quality": {
-            "detections_count": len(entities),
-            "needs_review": needs_review,
-            "quality_flags": quality_flags,
-        },
-        "accounting_records": accounting_records,
-    }
-    return JSONResponse(payload)
-
-
-@router.get(
-    "/{document_id}/export-structured-dataset",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exporter un dataset structure metier (par type documentaire)",
-)
-async def export_structured_dataset(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(
-        default="auto",
-        description="auto | bilan | compte_resultat | fiscal_2072 | fiscal_2044 | releve_bancaire | facture",
-    ),
-) -> JSONResponse:
-    """Export dataset structure:
-    - applique d'abord l'anonymisation dataset_accounting
-    - extrait des champs metier specialises par type de document
-    - renvoie un JSON normalise pret pour analytics/RAG/QA
-    """
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if original_text is None:
-        original_text = ""
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    anonymized_text, _detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type
-    )
-
-    structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-    structured.update(
-        {
-            "document_id": str(document.id),
-            "base_profile": "dataset_accounting",
-            "base_doc_type": structured.get("detected_doc_type"),
-            "base_doc_type_legacy": effective_type,
-        }
-    )
-    return JSONResponse(structured)
-
-
-@router.get(
-    "/{document_id}/export-accounting-json",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exporter un JSON comptable contractuel (v1)",
-)
-async def export_accounting_json(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(default="auto"),
-    profile: str = Query(
-        default="anonymized_ai",
-        description="anonymized_ai | internal",
-    ),
-) -> JSONResponse:
-    """Stable JSON contract for accounting usage.
-
-    - `anonymized_ai`: safe payload for LLM usage (no PII).
-    - `internal`: same contract for internal controlled usage.
-    """
-    if profile not in {"anonymized_ai", "internal"}:
-        raise http_400("Paramètre profile invalide. Valeurs: anonymized_ai|internal.")
-
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour générer le JSON comptable.")
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    anonymized_text, _detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type
-    )
-    structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-    quality = structured.get("quality") or {}
-    if not bool(quality.get("ready_for_ai_core")):
-        raise http_409(
-            "Export comptable indisponible: document non prêt (ready_for_ai_core=false)."
-        )
-
-    payload = _to_accounting_json_v1(
-        structured=structured,
-        profile=profile,
-        original_filename=document.original_filename,
-        anonymized_text=anonymized_text,
-    )
-    payload["document_id"] = str(document.id)
-    return JSONResponse(payload)
-
-
-@router.get(
-    "/{document_id}/export-report-doc",
-    response_class=StreamingResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exporter un rapport lisible (.doc) après traitement",
-)
-async def export_structured_report_doc(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(default="auto"),
-) -> StreamingResponse:
-    """Rapport lisible pour utilisateurs non techniques (format .doc HTML-compatible)."""
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour générer le rapport.")
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    anonymized_text, _detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type
-    )
-    structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-    html = _build_structured_report_doc_html(
-        structured,
-        original_filename=document.original_filename or f"document_{document.id}",
-    )
-    filename = f"rapport_confidoc_{_safe_doc_stem(document.original_filename)}.doc"
-    headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
-        "Cache-Control": "no-store",
-    }
-    return StreamingResponse(
-        BytesIO(html.encode("utf-8")),
-        media_type="application/msword; charset=utf-8",
-        headers=headers,
-    )
-
-
-@router.get(
-    "/{document_id}/export-report-pdf",
-    response_class=StreamingResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exporter un rapport lisible (.pdf) après traitement",
-)
-async def export_structured_report_pdf(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(default="auto"),
-) -> StreamingResponse:
-    """Rapport PDF lisible pour partage interne (non technique)."""
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour générer le rapport.")
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    anonymized_text, _detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type
-    )
-    structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-    pdf_bytes = _build_structured_report_pdf_bytes(
-        structured,
-        original_filename=document.original_filename or f"document_{document.id}",
-    )
-    filename = f"rapport_confidoc_{_safe_doc_stem(document.original_filename)}.pdf"
-    headers = {
-        "Content-Disposition": f'attachment; filename="{filename}"',
-        "Cache-Control": "no-store",
-    }
-    return StreamingResponse(
-        BytesIO(pdf_bytes),
-        media_type="application/pdf",
-        headers=headers,
-    )
+    docs = list(result.scalars().all())
+    now = datetime.now(timezone.utc)
+    for doc in docs:
+        doc.is_deleted = True
+        doc.deleted_at = now
+    await db.commit()
+    return {"deleted_count": len(docs)}
 
 
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Supprimer un document (et son fichier)",
+    summary="Supprimer un document",
 )
 async def delete_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
 ) -> None:
-    from datetime import datetime, timezone
-
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    # Soft delete: mark as deleted instead of removing from DB
     document.is_deleted = True
     document.deleted_at = datetime.now(timezone.utc)
     await db.commit()
-    logger.info("document_soft_deleted", doc_id=str(document.id))
-
-
-@router.get(
-    "/{document_id}/proof",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Preuve d'integrite RGPD (hashes + compteurs)",
-)
-async def document_proof(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> JSONResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    preview_version_obj = (
-        await db.execute(
-            select(DocumentVersion).where(
-                DocumentVersion.document_id == document.id,
-                DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
-            )
-        )
-    ).scalar_one_or_none()
-    final_version_obj = (
-        await db.execute(
-            select(DocumentVersion).where(
-                DocumentVersion.document_id == document.id,
-                DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
-            )
-        )
-    ).scalar_one_or_none()
-
-    detections_n = (
-        await db.execute(
-            select(func.count()).select_from(EntityDetection).where(
-                EntityDetection.document_id == document.id
-            )
-        )
-    ).scalar() or 0
-
-    llm_req_n = (
-        await db.execute(
-            select(func.count()).select_from(LlmRequest).where(
-                LlmRequest.document_id == document.id
-            )
-        )
-    ).scalar() or 0
-
-    entity_type_rows = (
-        await db.execute(
-            select(EntityDetection.entity_type, func.count()).where(
-                EntityDetection.document_id == document.id
-            ).group_by(EntityDetection.entity_type)
-        )
-    ).all()
-    detections_entity_types_count = {
-        str(entity_type): int(cnt) for entity_type, cnt in entity_type_rows
-    }
-
-    return JSONResponse(
-        {
-            "document_id": str(document.id),
-            "document_sha256": document.sha256,
-            "preview_version_present": preview_version_obj is not None,
-            "preview_version_sha256": _sha256_text(
-                preview_version_obj.content_text if preview_version_obj else None
-            ),
-            "final_version_present": final_version_obj is not None,
-            "final_version_sha256": _sha256_text(
-                final_version_obj.content_text if final_version_obj else None
-            ),
-            "detections_count": int(detections_n),
-            "llm_requests_count": int(llm_req_n),
-            "detections_entity_types_count": detections_entity_types_count,
-        }
-    )
-
-
-@router.get(
-    "/{document_id}/deletion-preview",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Apercu de l'effacement RGPD (compteurs, sans donnees)",
-)
-async def document_deletion_preview(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> JSONResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    versions_n = (
-        await db.execute(
-            select(func.count()).select_from(DocumentVersion).where(
-                DocumentVersion.document_id == document.id
-            )
-        )
-    ).scalar() or 0
-
-    detections_n = (
-        await db.execute(
-            select(func.count()).select_from(EntityDetection).where(
-                EntityDetection.document_id == document.id
-            )
-        )
-    ).scalar() or 0
-
-    llm_req_n = (
-        await db.execute(
-            select(func.count()).select_from(LlmRequest).where(
-                LlmRequest.document_id == document.id
-            )
-        )
-    ).scalar() or 0
-
-    llm_suggestions_n = (
-        await db.execute(
-            select(func.count()).select_from(LlmSuggestion).join(
-                LlmRequest,
-                LlmRequest.id == LlmSuggestion.llm_request_id,
-            ).where(LlmRequest.document_id == document.id)
-        )
-    ).scalar() or 0
-
-    return JSONResponse(
-        {
-            "document_id": str(document.id),
-            # On ne renvoie pas storage_key (chemin interne) : RGPD-friendly (meta seulement).
-            "storage": {"backend": document.storage_backend},
-            "will_delete": {
-                "document": True,
-                "document_versions_count": int(versions_n),
-                "entity_detections_count": int(detections_n),
-                "llm_requests_count": int(llm_req_n),
-                "llm_suggestions_count": int(llm_suggestions_n),
-            },
-        }
-    )
-
-
-@router.get(
-    "/{document_id}/audit-export",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Export audit RGPD (hashes + resume, sans donnees brutes)",
-)
-async def document_audit_export(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> JSONResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    original_version_obj = (
-        await db.execute(
-            select(DocumentVersion).where(
-                DocumentVersion.document_id == document.id,
-                DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
-            )
-        )
-    ).scalar_one_or_none()
-    preview_version_obj = (
-        await db.execute(
-            select(DocumentVersion).where(
-                DocumentVersion.document_id == document.id,
-                DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
-            )
-        )
-    ).scalar_one_or_none()
-    final_version_obj = (
-        await db.execute(
-            select(DocumentVersion).where(
-                DocumentVersion.document_id == document.id,
-                DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
-            )
-        )
-    ).scalar_one_or_none()
-
-    entity_type_rows = (
-        await db.execute(
-            select(EntityDetection.entity_type, func.count()).where(
-                EntityDetection.document_id == document.id
-            ).group_by(EntityDetection.entity_type)
-        )
-    ).all()
-    entity_types_count = {
-        str(entity_type): int(cnt) for entity_type, cnt in entity_type_rows
-    }
-
-    llm_request_rows = (
-        await db.execute(
-            select(
-                LlmRequest.id,
-                LlmRequest.provider,
-                LlmRequest.model,
-                LlmRequest.profile,
-                LlmRequest.status,
-                LlmRequest.human_status,
-                LlmRequest.snippets_meta,
-            ).where(LlmRequest.document_id == document.id)
-        )
-    ).all()
-
-    llm_requests: dict[str, dict] = {}
-    llm_request_ids: list[uuid.UUID] = []
-    for (
-        req_id,
-        provider,
-        model,
-        profile,
-        status_str,
-        human_status,
-        snippets_meta,
-    ) in llm_request_rows:
-        llm_request_ids.append(req_id)
-        req_key = str(req_id)
-        snippets = []
-        try:
-            if (
-                isinstance(snippets_meta, dict)
-                and isinstance(snippets_meta.get("snippets"), list)
-            ):
-                snippets = snippets_meta.get("snippets", [])
-        except Exception:
-            snippets = []
-
-        snippet_count = len(snippets)
-        snippet_hashes = [
-            s.get("sha256")
-            for s in snippets
-            if isinstance(s, dict) and s.get("sha256")
-        ][:10]
-
-        llm_requests[req_key] = {
-            "llm_request_id": req_key,
-            "provider": provider,
-            "model": model,
-            "profile": profile,
-            "status": status_str,
-            "human_status": human_status,
-            "snippets_count": int(snippet_count),
-            "snippets_hashes_sample": snippet_hashes,
-            "suggestions": {},
-        }
-
-    suggestions_rows = []
-    if llm_request_ids:
-        suggestions_rows = (
-            await db.execute(
-                select(
-                    LlmSuggestion.llm_request_id,
-                    LlmSuggestion.entity_type,
-                    LlmSuggestion.replacement_token,
-                    func.count(),
-                    func.avg(LlmSuggestion.confidence),
-                )
-                .where(LlmSuggestion.llm_request_id.in_(llm_request_ids))
-                .group_by(
-                    LlmSuggestion.llm_request_id,
-                    LlmSuggestion.entity_type,
-                    LlmSuggestion.replacement_token,
-                )
-            )
-        ).all()
-
-    for req_id, entity_type, replacement_token, cnt, avg_conf in suggestions_rows:
-        req_key = str(req_id)
-        req_obj = llm_requests.get(req_key)
-        if not req_obj:
-            continue
-        et_key = f"{entity_type}::{replacement_token}"
-        req_obj["suggestions"][et_key] = {
-            "count": int(cnt),
-            "avg_confidence": float(avg_conf or 0.0),
-        }
-
-    return JSONResponse(
-        {
-            "document_id": str(document.id),
-            "document_sha256": document.sha256,
-            "security_policy": {
-                "raw_access_scope": "internal_engine_only",
-                "raw_exposed_to_copilot": False,
-                "raw_exposed_to_kb_search": False,
-                "raw_exposed_in_audit_export": False,
-                "dataset_for_ai": "anonymized_only",
-                "enforcement": "active",
-            },
-            "exposure_proof": {
-                "llm_snippets_stored_as_hashes_only": True,
-                "llm_raw_snippets_exported": False,
-                "audit_contains_raw_text": False,
-                "original_endpoint_requires_explicit_opt_in": True,
-                "original_endpoint_opt_in_param": "allow_original=true",
-            },
-            "versions_sha256": {
-                "original": _sha256_text(
-                    original_version_obj.content_text if original_version_obj else None
-                ),
-                "preview_anonymized": _sha256_text(
-                    preview_version_obj.content_text if preview_version_obj else None
-                ),
-                "final_anonymized": _sha256_text(
-                    final_version_obj.content_text if final_version_obj else None
-                ),
-            },
-            "detections_entity_types_count": entity_types_count,
-            "llm_requests": list(llm_requests.values()),
-        }
-    )
-
-
-@router.get(
-    "/{document_id}/audit-quality-bundle",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Bundle audit qualité (hash + experience + qualité, sans texte brut)",
-)
-async def document_audit_quality_bundle(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(
-        default="auto",
-        description="auto | bilan | compte_resultat | fiscal_2072 | fiscal_2044 | releve_bancaire | facture",
-    ),
-) -> JSONResponse:
-    """Export JSON pour archivage cabinet : preuve + synthèse qualité (pas de PDF)."""
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if original_text is None:
-        original_text = ""
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    dataset_text, _detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type
-    )
-    structured = build_structured_dataset(
-        anonymized_text=dataset_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-    prov = structured.get("provenance") if isinstance(structured.get("provenance"), dict) else {}
-    return JSONResponse(
-        {
-            "document_id": str(document.id),
-            "document_sha256": document.sha256,
-            "original_filename": document.original_filename,
-            "generated_at": structured.get("generated_at"),
-            "doc_type": structured.get("doc_type"),
-            "detected_doc_type": structured.get("detected_doc_type"),
-            "routing_confidence": structured.get("routing_confidence"),
-            "experience": structured.get("experience"),
-            "quality": structured.get("quality"),
-            "provenance": prov,
-            "has_raw_text_in_bundle": False,
-        }
-    )
-
-
-@router.get(
-    "/{document_id}/dataset-summary",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Resume dataset comptable (sans texte brut)",
-)
-async def document_dataset_summary(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(
-        default="auto",
-        description="auto | bilan | compte_resultat | fiscal_2072 | fiscal_2044 | releve_bancaire | facture",
-    ),
-) -> JSONResponse:
-    """Petit resume pour l'UI : qualite, besoin de revue, nombre de lignes comptables.
-
-    Inclut `experience` (phrase cle + details) aligne sur export-structured-dataset.
-
-    RGPD-friendly : ne renvoie pas l'anonymized_text.
-    """
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    original_text = await _get_best_text_for_reporting(db, document)
-    if original_text is None:
-        original_text = ""
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    dataset_text, detections = anonymize_text(
-        original_text, profile="dataset_accounting", document_type=effective_type
-    )
-
-    # Merge accepted LLM suggestions (RGPD: replacement only)
-    llm_suggestions_result = await db.execute(
-        select(LlmSuggestion)
-        .join(LlmRequest, LlmRequest.id == LlmSuggestion.llm_request_id)
-        .where(
-            LlmRequest.document_id == document.id,
-            LlmRequest.human_status == "accepted",
-        )
-    )
-    llm_suggestions = list(llm_suggestions_result.scalars().all())
-    merged = list(detections)
-    for s in llm_suggestions:
-        cand = {
-            "entity_type": s.entity_type,
-            "start_index": int(s.start_index),
-            "end_index": int(s.end_index),
-            "replacement": s.replacement_token,
-        }
-        overlap = any(
-            not (cand["end_index"] <= ex["start_index"] or cand["start_index"] >= ex["end_index"])
-            for ex in merged
-        )
-        if not overlap:
-            merged.append(cand)
-
-    # Apply replacements so quality gate matches the final dataset text.
-    dataset_text = original_text
-    for match in sorted(merged, key=lambda m: m["start_index"], reverse=True):
-        dataset_text = (
-            dataset_text[: match["start_index"]]
-            + match["replacement"]
-            + dataset_text[match["end_index"] :]
-        )
-
-    # Quality gate (same patterns as export_dataset)
-    critical_patterns: dict[str, str] = {
-        "emails_found": r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b",
-        "iban_found": r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b",
-        "siret_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}[ .-]?\d{5}\b",
-        "siren_found": r"\b\d{3}[ .-]?\d{3}[ .-]?\d{3}\b",
-    }
-    quality_flags: list[str] = []
-    for flag, pat in critical_patterns.items():
-        if re.search(pat, dataset_text):
-            quality_flags.append(flag)
-    structured = build_structured_dataset(
-        anonymized_text=dataset_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-    structured_quality = structured.get("quality", {}) if isinstance(structured, dict) else {}
-    entities_count = len(merged)
-    needs_review = bool(structured_quality.get("needs_review", False)) or len(quality_flags) > 0 or entities_count == 0
-
-    merged_quality_flags = list(dict.fromkeys([*quality_flags, *list(structured_quality.get("quality_flags", []))]))
-    accounting_records = _extract_accounting_records(dataset_text)
-
-    experience = structured.get("experience") if isinstance(structured, dict) else None
-
-    return JSONResponse(
-        {
-            "document_id": str(document.id),
-            "doc_type": effective_type,
-            "profile": "dataset_accounting",
-            "quality": {
-                "needs_review": needs_review,
-                "quality_flags": merged_quality_flags,
-                "detections_count": entities_count,
-                "coverage_ratio": structured_quality.get("coverage_ratio"),
-                "critical_missing_fields": structured_quality.get("critical_missing_fields", []),
-                "ready_for_ai": bool(structured_quality.get("ready_for_ai", False)),
-                "ready_for_ai_core": bool(structured_quality.get("ready_for_ai_core", False)),
-                "suspicious_fields": structured_quality.get("suspicious_fields", []),
-            },
-            "experience": experience,
-            "accounting_records_count": len(accounting_records),
-            "fields": structured.get("fields") if isinstance(structured, dict) else {},
-            "ratios": structured.get("ratios") if isinstance(structured, dict) else {},
-        }
-    )
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ACCOUNTING RECORDS HELPER
-# ──────────────────────────────────────────────────────────────────────
-
-_AMOUNT_PAT = re.compile(
-    r"\b\d{1,3}(?:[\s\u00a0]?\d{3})*(?:[.,]\d{2})?\b\s*(?:€|EUR)?", re.IGNORECASE
-)
-_CODE_LINE_PAT = re.compile(r"^\s*(\d{3,6})\b")
-
-
-def _pcg_category(code: str) -> str:
-    """Map a PCG account code to a human-readable category."""
-    if not code:
-        return "inconnu"
-    code = code.strip()
-    mapping = [
-        ("401", "fournisseur"), ("411", "client"), ("455", "associe_compte_courant"),
-        ("467", "creance_diverse"), ("512", "banque_caisse"), ("53", "banque_caisse"),
-        ("62", "honoraires"), ("63", "impots"), ("64", "personnel_charge"),
-        ("66", "charges_financieres"), ("16", "emprunt"), ("26", "participation"),
-        ("21", "immobilisation"),
-    ]
-    for prefix, category in mapping:
-        if code.startswith(prefix):
-            return category
-
-    classes = {"1": "capitaux", "2": "immobilisation", "3": "stock", "4": "tiers",
-               "5": "tresorerie", "6": "charge", "7": "produit", "8": "autre"}
-    return classes.get(code[0], "autre") if code else "inconnu"
-
-
-def _extract_accounting_records(text: str) -> list[dict]:
-    """Extract structured accounting records from anonymized text."""
-    records: list[dict] = []
-    for raw_line in text.splitlines():
-        line = raw_line.strip()
-        if not line:
-            continue
-        m_code = _CODE_LINE_PAT.search(line)
-        if not m_code:
-            continue
-        code = m_code.group(1)
-        amounts = list(_AMOUNT_PAT.finditer(line))
-        amount_raw = amounts[-1].group(0) if amounts else None
-        records.append({
-            "code_comptable": code,
-            "categorie_pcg": _pcg_category(code),
-            "montant_raw": amount_raw,
-            "libelle": line,
-        })
-    return records
-
-
-# ──────────────────────────────────────────────────────────────────────
-# CSV EXPORT
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/{document_id}/export-csv",
-    response_class=StreamingResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exporter les données structurées en CSV",
-)
-async def export_csv(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(default="auto"),
-    profile: str = Query(default="dataset_accounting"),
-) -> StreamingResponse:
-    """Export structured data as CSV — ideal for Excel/Sheets import."""
-    import csv
-    import io
-
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour l'export CSV.")
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    anonymized_text, _ = anonymize_text(
-        original_text, profile=profile, document_type=effective_type
-    )
-
-    structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-
-    # Build CSV from fields + tables
-    output = io.StringIO()
-    writer = csv.writer(output, dialect="excel")
-
-    # Section 1: Metadata
-    writer.writerow(["ConfiDoc Export", document.original_filename])
-    writer.writerow(["Type", structured.get("doc_type", "unknown")])
-    writer.writerow(["Date export", structured.get("generated_at", "")])
-    writer.writerow([])
-
-    # Section 2: Fields
-    fields = structured.get("fields") or {}
-    if fields:
-        writer.writerow(["Champ", "Valeur", "Confiance"])
-        for key, meta in fields.items():
-            if not isinstance(meta, dict):
-                continue
-            value = meta.get("value")
-            if value is None:
-                continue
-            confidence = meta.get("confidence", "")
-            writer.writerow([key, str(value), str(confidence)])
-        writer.writerow([])
-
-    # Section 3: Tables
-    tables = structured.get("tables") or {}
-    for table_name, rows in tables.items():
-        if not isinstance(rows, list) or not rows:
-            continue
-        writer.writerow([f"--- {table_name} ---"])
-        if isinstance(rows[0], dict):
-            headers = list(rows[0].keys())
-            writer.writerow(headers)
-            for row in rows:
-                writer.writerow([str(row.get(h, "")) for h in headers])
-        else:
-            for row in rows:
-                writer.writerow([str(row)])
-        writer.writerow([])
-
-    csv_content = output.getvalue().encode("utf-8-sig")  # BOM for Excel compat
-    stem = _safe_doc_stem(document.original_filename)
-    filename = f"{stem}_export.csv"
-
-    return StreamingResponse(
-        BytesIO(csv_content),
-        media_type="text/csv; charset=utf-8",
-        headers={
-            "Content-Disposition": f'attachment; filename="{filename}"',
-            "Cache-Control": "no-store",
-        },
-    )
-
-
-# ──────────────────────────────────────────────────────────────────────
-# RESTORE (undelete) SOFT-DELETED DOCUMENTS
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.post(
-    "/{document_id}/restore",
-    status_code=status.HTTP_200_OK,
-    summary="Restaurer un document supprimé",
-)
-async def restore_document(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-) -> dict:
-    """Restore a soft-deleted document, making it active again."""
-    try:
-        document_uuid = uuid.UUID(document_id)
-    except ValueError as exc:
-        raise http_404("Document introuvable") from exc
-
-    # Look up including soft-deleted documents
-    result = await db.execute(
-        select(Document).where(
-            Document.id == document_uuid,
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(True),
-        )
-    )
-    document = result.scalar_one_or_none()
-    if not document:
-        raise http_404(
-            "Document introuvable ou non supprimé. "
-            "Seuls les documents supprimés peuvent être restaurés."
-        )
-
-    document.is_deleted = False
-    document.deleted_at = None
-    await db.commit()
-
-    logger.info("document_restored", doc_id=str(document.id))
-    return {
-        "status": "restored",
-        "document_id": str(document.id),
-        "original_filename": document.original_filename,
-    }
-
-
-@router.get(
-    "/trash",
-    response_model=list[DocumentResponse],
-    status_code=status.HTTP_200_OK,
-    summary="Lister les documents supprimés (corbeille)",
-)
-async def list_deleted_documents(
-    current_user: CurrentUser,
-    db: DbSession,
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-) -> list[Document]:
-    """List soft-deleted documents for the current user (trash view)."""
-    result = await db.execute(
-        select(Document)
-        .where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(True),
-        )
-        .order_by(desc(Document.deleted_at))
-        .offset(offset)
-        .limit(limit)
-    )
-    return list(result.scalars().all())
-
-
-# ──────────────────────────────────────────────────────────────────────
-# FULL-TEXT SEARCH
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/search",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Recherche full-text dans les documents",
-)
-async def search_documents(
-    current_user: CurrentUser,
-    db: DbSession,
-    q: str = Query(..., min_length=2, max_length=200, description="Terme de recherche"),
-    limit: int = Query(default=20, ge=1, le=100),
-    offset: int = Query(default=0, ge=0),
-    tag: str | None = Query(default=None, description="Filtrer par tag"),
-) -> JSONResponse:
-    """Full-text search across document filenames and extracted text.
-
-    Searches in original_filename and document_versions.content_text.
-    """
-    search_term = f"%{q.strip()}%"
-
-    # Search in filenames first (fast)
-    filename_query = (
-        select(Document)
-        .where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-            Document.original_filename.ilike(search_term),
-        )
-    )
-    if tag:
-        filename_query = filename_query.where(Document.tags.any(tag))
-    filename_query = filename_query.order_by(desc(Document.created_at)).limit(limit).offset(offset)
-
-    result = await db.execute(filename_query)
-    filename_matches = list(result.scalars().all())
-
-    # Search in document versions (content text)
-    content_query = (
-        select(Document)
-        .join(DocumentVersion, DocumentVersion.document_id == Document.id)
-        .where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-            DocumentVersion.content_text.ilike(search_term),
-        )
-    )
-    if tag:
-        content_query = content_query.where(Document.tags.any(tag))
-    content_query = (
-        content_query
-        .group_by(Document.id)
-        .order_by(desc(Document.created_at))
-        .limit(limit)
-        .offset(offset)
-    )
-    result = await db.execute(content_query)
-    content_matches = list(result.scalars().all())
-
-    # Merge results, deduplicate by id
-    seen_ids: set[uuid.UUID] = set()
-    results: list[dict] = []
-    for doc in filename_matches + content_matches:
-        if doc.id in seen_ids:
-            continue
-        seen_ids.add(doc.id)
-        results.append({
-            "document_id": str(doc.id),
-            "original_filename": doc.original_filename,
-            "status": doc.status.value if hasattr(doc.status, "value") else str(doc.status),
-            "extension": doc.extension,
-            "tags": doc.tags or [],
-            "doc_type": doc.doc_type,
-            "created_at": doc.created_at.isoformat() if doc.created_at else None,
-            "match_source": "filename" if doc in filename_matches else "content",
-        })
-        if len(results) >= limit:
-            break
-
-    return JSONResponse({
-        "query": q,
-        "total_results": len(results),
-        "results": results,
-    })
-
-
-# ──────────────────────────────────────────────────────────────────────
-# TAGS MANAGEMENT
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.put(
-    "/{document_id}/tags",
-    status_code=status.HTTP_200_OK,
-    summary="Définir les tags d'un document",
-)
-async def set_document_tags(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    tags: list[str] = Body(..., max_length=20, description="Liste de tags"),
-) -> dict:
-    """Set tags on a document (replaces existing tags)."""
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    # Sanitize: lowercase, strip, deduplicate, max 100 chars each
-    clean_tags = list(dict.fromkeys(
-        t.strip().lower()[:100] for t in tags if t.strip()
-    ))
-    if len(clean_tags) > 20:
-        raise http_400("Maximum 20 tags par document.")
-
-    document.tags = clean_tags
-    await db.commit()
-
-    logger.info("tags_updated", doc_id=str(document.id), tags=clean_tags)
-    return {"document_id": str(document.id), "tags": clean_tags}
-
-
-@router.post(
-    "/{document_id}/tags/add",
-    status_code=status.HTTP_200_OK,
-    summary="Ajouter un tag à un document",
-)
-async def add_document_tag(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    tag: str = Body(..., embed=True, max_length=100),
-) -> dict:
-    """Add a single tag to a document (no-op if already present)."""
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-
-    current_tags = list(document.tags or [])
-    clean_tag = tag.strip().lower()[:100]
-    if clean_tag and clean_tag not in current_tags:
-        if len(current_tags) >= 20:
-            raise http_400("Maximum 20 tags par document.")
-        current_tags.append(clean_tag)
-        document.tags = current_tags
-        await db.commit()
-
-    return {"document_id": str(document.id), "tags": document.tags or []}
-
-
-# ──────────────────────────────────────────────────────────────────────
-# BULK ANONYMIZE
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.post(
-    "/bulk-anonymize",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Anonymiser plusieurs documents en batch",
-)
-async def bulk_anonymize(
-    current_user: CurrentUser,
-    db: DbSession,
-    document_ids: list[str] = Body(..., max_length=50, description="Liste d'IDs"),
-    profile: Literal[
-        "moderate", "strict", "dataset_strict",
-        "dataset_accounting", "dataset_accounting_pseudo",
-    ] = Body(default="dataset_accounting_pseudo"),
-    document_type: str = Body(default="auto"),
-) -> JSONResponse:
-    """Anonymize multiple documents in a single call.
-
-    Processes each document individually — failures don't block others.
-    """
-    if len(document_ids) > 50:
-        raise http_400("Maximum 50 documents par batch.")
-    if not document_ids:
-        raise http_400("Aucun document fourni.")
-
-    results: list[dict] = []
-    succeeded = 0
-    failed = 0
-
-    for doc_id_str in document_ids:
-        try:
-            document = await _get_user_document_or_404(db, doc_id_str, current_user.id)
-            file_content = _read_file_or_404(document)
-
-            preview_text, detections, effective_type = await build_anonymization_preview(
-                db=db,
-                document=document,
-                file_content=file_content,
-                profile=profile,
-                document_type=document_type,
-            )
-
-            # Store detected doc_type
-            if effective_type and effective_type != "empty":
-                document.doc_type = effective_type
-
-            await db.commit()
-            await db.refresh(document)
-
-            results.append({
-                "document_id": str(document.id),
-                "status": "ready",
-                "doc_type": effective_type,
-                "detections_count": len(detections or []),
-            })
-            succeeded += 1
-
-        except Exception as exc:
-            try:
-                await db.rollback()
-            except Exception:
-                pass
-            logger.warning("bulk_anonymize_failed", doc_id=doc_id_str, error=str(exc))
-            results.append({
-                "document_id": doc_id_str,
-                "status": "error",
-                "error": str(exc)[:300],
-            })
-            failed += 1
-
-    logger.info(
-        "bulk_anonymize_complete",
-        user_id=str(current_user.id),
-        total=len(document_ids),
-        succeeded=succeeded,
-        failed=failed,
-    )
-
-    return JSONResponse({
-        "total": len(document_ids),
-        "succeeded": succeeded,
-        "failed": failed,
-        "results": results,
-    })
-
-
-# ──────────────────────────────────────────────────────────────────────
-# EXCEL (.xlsx) EXPORT
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/{document_id}/export-xlsx",
-    response_class=StreamingResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Exporter les données structurées en Excel (.xlsx)",
-)
-async def export_xlsx(
-    document_id: str,
-    current_user: CurrentUser,
-    db: DbSession,
-    doc_type: str = Query(default="auto"),
-    profile: str = Query(default="dataset_accounting"),
-) -> StreamingResponse:
-    """Export structured data as a formatted Excel workbook."""
-    try:
-        import openpyxl
-        from openpyxl.styles import Font, PatternFill, Border, Side
-    except ImportError:
-        raise http_400(
-            "Export Excel non disponible: le module openpyxl n'est pas installé. "
-            "Utilisez /export-csv comme alternative."
-        )
-
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    original_text = await _get_best_text_for_reporting(db, document)
-    if not original_text:
-        raise http_404("Aucune donnée textuelle disponible pour l'export Excel.")
-
-    effective_type = classify_document_type(original_text, document.original_filename)
-    anonymized_text, _ = anonymize_text(
-        original_text, profile=profile, document_type=effective_type
-    )
-    structured = build_structured_dataset(
-        anonymized_text=anonymized_text,
-        original_filename=document.original_filename,
-        requested_doc_type=doc_type,
-        extraction_text=original_text,
-    )
-    structured = await enrich_with_llm_fallback(structured, original_text)
-
-    wb = openpyxl.Workbook()
-
-    header_font = Font(bold=True, color="FFFFFF", size=11)
-    header_fill = PatternFill(start_color="2563EB", end_color="2563EB", fill_type="solid")
-    meta_font = Font(bold=True, size=10)
-    thin_border = Border(
-        left=Side(style="thin"), right=Side(style="thin"),
-        top=Side(style="thin"), bottom=Side(style="thin"),
-    )
-
-    # Sheet 1: Summary
-    ws = wb.active
-    ws.title = "Résumé"
-    ws.column_dimensions["A"].width = 25
-    ws.column_dimensions["B"].width = 50
-
-    meta_rows = [
-        ("Document", document.original_filename),
-        ("Type", structured.get("doc_type", "unknown")),
-        ("Date export", structured.get("generated_at", "")),
-        ("Profil", profile),
-    ]
-    quality = structured.get("quality") or {}
-    if quality:
-        meta_rows.extend([
-            ("Prêt pour IA", "Oui" if quality.get("ready_for_ai") else "Non"),
-            ("Coverage", f"{round(float(quality.get('coverage_ratio', 0)) * 100)}%"),
-        ])
-    for i, (label, value) in enumerate(meta_rows, 1):
-        ws.cell(row=i, column=1, value=label).font = meta_font
-        ws.cell(row=i, column=2, value=str(value))
-
-    # Sheet 2: Fields
-    fields = structured.get("fields") or {}
-    if fields:
-        ws_f = wb.create_sheet("Champs")
-        ws_f.column_dimensions["A"].width = 30
-        ws_f.column_dimensions["B"].width = 50
-        ws_f.column_dimensions["C"].width = 15
-        for col_idx, h in enumerate(["Champ", "Valeur", "Confiance"], 1):
-            cell = ws_f.cell(row=1, column=col_idx, value=h)
-            cell.font = header_font
-            cell.fill = header_fill
-            cell.border = thin_border
-        row = 2
-        for key, meta in fields.items():
-            if not isinstance(meta, dict) or meta.get("value") is None:
-                continue
-            ws_f.cell(row=row, column=1, value=str(key)).border = thin_border
-            ws_f.cell(row=row, column=2, value=str(meta["value"])).border = thin_border
-            ws_f.cell(row=row, column=3, value=str(meta.get("confidence", ""))).border = thin_border
-            row += 1
-
-    # Sheet 3+: Tables
-    tables = structured.get("tables") or {}
-    for table_name, rows in tables.items():
-        if not isinstance(rows, list) or not rows:
-            continue
-        safe_name = re.sub(r"[^\w\s-]", "", str(table_name))[:30] or "Table"
-        ws_t = wb.create_sheet(safe_name)
-        if isinstance(rows[0], dict):
-            headers = list(rows[0].keys())
-            for col_idx, h in enumerate(headers, 1):
-                cell = ws_t.cell(row=1, column=col_idx, value=str(h))
-                cell.font = header_font
-                cell.fill = header_fill
-                cell.border = thin_border
-            for row_idx, row_data in enumerate(rows, 2):
-                for col_idx, h in enumerate(headers, 1):
-                    ws_t.cell(row=row_idx, column=col_idx, value=str(row_data.get(h, ""))).border = thin_border
-
-    excel_buf = BytesIO()
-    wb.save(excel_buf)
-    excel_buf.seek(0)
-
-    stem = _safe_doc_stem(document.original_filename)
-    return StreamingResponse(
-        excel_buf,
-        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
-        headers={
-            "Content-Disposition": f'attachment; filename="{stem}_export.xlsx"',
-            "Cache-Control": "no-store",
-        },
-    )
-
-
-# ──────────────────────────────────────────────────────────────────────
-# ENRICHED DASHBOARD
-# ──────────────────────────────────────────────────────────────────────
-
-
-@router.get(
-    "/dashboard",
-    response_class=JSONResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Dashboard enrichi — analytics et insights",
-)
-async def dashboard(
-    current_user: CurrentUser,
-    db: DbSession,
-    days: int = Query(default=30, ge=1, le=365),
-) -> JSONResponse:
-    """Enriched dashboard with detection stats, volume trends, and tag cloud."""
-    cutoff = func.now() - func.make_interval(days=days)
-
-    result = await db.execute(
-        select(Document).where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-            Document.created_at >= cutoff,
-        ).order_by(desc(Document.created_at))
-    )
-    docs = list(result.scalars().all())
-
-    by_status = Counter(
-        str((d.status.value if hasattr(d.status, "value") else d.status) or "unknown")
-        for d in docs
-    )
-    by_ext = Counter(str((d.extension or "unknown")).lower() for d in docs)
-    by_doc_type = Counter(str(d.doc_type or "unknown") for d in docs)
-    total_bytes = sum(d.size_bytes for d in docs if d.size_bytes)
-
-    # Tag cloud
-    tag_counter: Counter[str] = Counter()
-    for d in docs:
-        if d.tags:
-            tag_counter.update(d.tags)
-
-    # Top entity types
-    ready_ids = [d.id for d in docs if d.status == DocumentStatus.READY]
-    entity_counter: Counter[str] = Counter()
-    if ready_ids:
-        det_result = await db.execute(
-            select(EntityDetection.entity_type, func.count())
-            .where(EntityDetection.document_id.in_(ready_ids))
-            .group_by(EntityDetection.entity_type)
-        )
-        for entity_type, count in det_result.all():
-            entity_counter[str(entity_type)] = count
-
-    # Daily volume
-    daily_volume: dict[str, int] = {}
-    for d in docs:
-        if d.created_at:
-            day = d.created_at.strftime("%Y-%m-%d")
-            daily_volume[day] = daily_volume.get(day, 0) + 1
-
-    return JSONResponse({
-        "window_days": days,
-        "documents_total": len(docs),
-        "total_size_mb": round(total_bytes / (1024 * 1024), 2),
-        "counts_by_status": dict(by_status),
-        "counts_by_extension": dict(by_ext),
-        "counts_by_doc_type": dict(by_doc_type),
-        "top_entity_types": [
-            {"type": t, "count": c} for t, c in entity_counter.most_common(10)
-        ],
-        "tag_cloud": [
-            {"tag": t, "count": c} for t, c in tag_counter.most_common(20)
-        ],
-        "daily_volume": daily_volume,
-    })

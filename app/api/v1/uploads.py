@@ -1,13 +1,16 @@
 """ConfiDoc Backend — Upload Endpoints (v2)."""
 
+import asyncio
 import hashlib
 from typing import Literal
+from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
-from sqlalchemy import select
+from sqlalchemy import select, update
 
 from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
+from app.core.database import async_session_factory
 from app.core.exceptions import http_400, http_413
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
@@ -25,6 +28,44 @@ logger = get_logger(__name__)
 MAX_BATCH_SIZE = 20
 
 
+async def _anonymize_document_background(
+    doc_id: str,
+    content: bytes,
+    profile: str,
+    document_type: str,
+) -> None:
+    """Run OCR + anonymization in background with its own DB session."""
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(select(Document).where(Document.id == UUID(doc_id)))
+            document = result.scalar_one_or_none()
+            if not document:
+                logger.warning("background_anon_doc_not_found", doc_id=doc_id)
+                return
+            await build_anonymization_preview(
+                db=db,
+                document=document,
+                file_content=content,
+                profile=profile,
+                document_type=document_type,
+            )
+            await db.commit()
+            logger.info("background_anonymization_complete", doc_id=doc_id)
+    except Exception as exc:
+        logger.error("background_anonymization_failed", doc_id=doc_id, error=str(exc))
+        # Reset status to UPLOADED so user can retry manually
+        try:
+            async with async_session_factory() as db:
+                await db.execute(
+                    update(Document)
+                    .where(Document.id == UUID(doc_id))
+                    .values(status=DocumentStatus.UPLOADED)
+                )
+                await db.commit()
+        except Exception:
+            pass
+
+
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
@@ -37,7 +78,7 @@ async def upload_document(
     db: DbSession,
     file: UploadFile = File(...),
     auto_anonymize: bool = Query(default=True),
-    profile: Literal["moderate", "strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"] = Query(default="dataset_accounting_pseudo"),
+    profile: Literal["moderate", "strict"] = Query(default="moderate"),
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
 ) -> dict:
@@ -162,35 +203,17 @@ async def _upload_document_body(
     }
 
     if auto_anonymize:
-        try:
-            preview_text, detections, effective_type, extraction_meta = (
-                await build_anonymization_preview(
-                db=db,
-                document=document,
-                file_content=content,
+        # Run OCR + anonymization in background — returns immediately to avoid HTTP timeout
+        # on large/complex PDFs. Client polls document status (PROCESSING → READY).
+        asyncio.create_task(
+            _anonymize_document_background(
+                doc_id=str(document.id),
+                content=content,
                 profile=profile,
                 document_type=document_type,
             )
-            )
-            await db.commit()
-            # Après commit, Document peut être expiré : recharger avant lecture des attributs.
-            await db.refresh(document)
-            excerpt = (preview_text if isinstance(preview_text, str) else "")[:300]
-            processing.update({
-                "status": "ready",
-                "effective_type": effective_type,
-                "detections_count": len(detections or []),
-                "preview_excerpt": excerpt,
-                "extraction_meta": extraction_meta,
-            })
-        except Exception as exc:
-            await db.rollback()
-            try:
-                await db.refresh(document)
-            except Exception:
-                pass
-            logger.error("auto_anonymize_failed", doc_id=str(document.id), error=str(exc))
-            processing.update({"status": "error", "error": str(exc)[:500]})
+        )
+        processing.update({"status": "processing"})
 
     return {
         "status": document.status.value,
@@ -218,10 +241,7 @@ async def upload_batch(
     db: DbSession,
     files: list[UploadFile] = File(...),
     auto_anonymize: bool = Query(default=True),
-    profile: Literal[
-        "moderate", "strict", "dataset_strict",
-        "dataset_accounting", "dataset_accounting_pseudo",
-    ] = Query(default="dataset_accounting_pseudo"),
+    profile: Literal["moderate", "strict"] = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> dict:
     """Upload multiple documents at once (up to 20).

@@ -14,7 +14,6 @@ from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
-from app.models.llm_suggestion import LlmSuggestion
 from app.services.anonymization_service import (
     anonymize_text,
     classify_document_type,
@@ -122,16 +121,6 @@ async def _call_llm_provider(
                     continue
 
                 llm_detections.append(cand)
-                db.add(
-                    LlmSuggestion(
-                        llm_request_id=llm_req.id,
-                        entity_type=cand["entity_type"],
-                        start_index=cand["start_index"],
-                        end_index=cand["end_index"],
-                        replacement_token=cand["replacement"],
-                        confidence=conf,
-                    )
-                )
     except Exception as exc:
         logger.error("llm_provider_failed", error=str(exc), provider=settings.LLM_PROVIDER)
         llm_req.status = "failed"

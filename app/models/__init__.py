@@ -10,10 +10,6 @@ from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
-from app.models.llm_suggestion import LlmSuggestion
-from app.models.kb_accounting_record import KbAccountingRecord
-from app.models.kb_text_chunk import KbTextChunk
-from app.models.human_feedback import HumanFeedback
 from app.models.audit_log import AuditLog
 
 __all__ = [
@@ -24,9 +20,5 @@ __all__ = [
     "DocumentVersion", "DocumentVersionType",
     "EntityDetection",
     "LlmRequest",
-    "LlmSuggestion",
-    "KbAccountingRecord",
-    "KbTextChunk",
-    "HumanFeedback",
     "AuditLog",
 ]

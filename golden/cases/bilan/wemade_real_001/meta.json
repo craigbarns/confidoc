@@ -1,5 +1,6 @@
 {
   "name": "wemade_real_001",
+  "requested_doc_type": "bilan",
   "description": "Cas réel WEMADE 2033 - Plaquette annuelle complète avec Bilan détaillé. Teste la discrimination correcte entre créances/disponibilités et réserves/résultat.",
   "priority": "critical",
   "tags": ["bilan", "real_world", "2033", "wemade", "confusion_creances_dispo", "confusion_reserves_resultat"],

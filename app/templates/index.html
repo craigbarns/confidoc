@@ -1,407 +1,181 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="fr">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
-  <title>ConfiDoc — Plateforme comptable confidentielle</title>
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🛡️</text></svg>">
-  <link rel="stylesheet" href="/static/css/style.css">
-  <link rel="manifest" href="/static/manifest.json">
-  <meta name="theme-color" content="#0f172a">
-  <meta name="mobile-web-app-capable" content="yes">
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ConfiDoc — Documents confidentiels anonymisés</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
 </head>
 <body>
 
-<div id="loginScreen" class="screen active">
-  <div class="login-bg">
-    <div class="orb orb-1"></div>
-    <div class="orb orb-2"></div>
-    <div class="orb orb-3"></div>
-  </div>
-  <div class="login-wrap">
-    <div class="login-card">
-      <div class="login-logo">
-        <div class="shield">🛡️</div>
-        <span>ConfiDoc</span>
-      </div>
-      <p class="login-tagline">Plateforme de traitement documentaire<br>pour cabinets comptables</p>
-      <div class="form-group">
-        <label>Adresse email</label>
-        <input id="email" class="form-input" type="email" placeholder="collaborateur@cabinet.fr" autocomplete="email" />
-      </div>
-      <div class="form-group">
-        <label>Mot de passe</label>
-        <input id="password" class="form-input" type="password" placeholder="••••••••••" autocomplete="current-password" />
-      </div>
-      <button id="loginBtn" class="btn btn-primary">
-        <span class="btn-text">Se connecter</span>
-      </button>
-      <p class="login-footer">Vos documents restent confidentiels.<br>Aucune donnée personnelle n'est transmise sans anonymisation.</p>
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">🔒</span>
+      <span class="logo-text">ConfiDoc</span>
+    </div>
+    <div class="header-tagline">Anonymisez. Discutez. En sécurité.</div>
+    <div class="header-actions">
+      <span id="user-info" class="user-info"></span>
+      <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">Déconnexion</button>
     </div>
   </div>
-</div>
+</header>
 
-<div id="dashScreen" class="screen">
-  <div class="dash">
-    <nav class="topnav">
-      <div class="logo">
-        <div class="shield-sm">🛡️</div>
-        <span>ConfiDoc</span>
+<!-- AUTH -->
+<div id="screen-auth" class="screen">
+  <div class="auth-card">
+    <h1>ConfiDoc</h1>
+    <p class="auth-subtitle">Anonymisez vos documents avant toute utilisation IA</p>
+    <form id="form-login" autocomplete="off">
+      <div class="field">
+        <label for="email">Email</label>
+        <input id="email" type="email" placeholder="vous@exemple.com" required />
       </div>
-      <div class="nav-tabs">
-        <button class="nav-tab active" data-tab="dossiers">Dossiers</button>
-        <button class="nav-tab" data-tab="analyse">Analyse & IA</button>
-        <button class="nav-tab" data-tab="exports">Exports</button>
+      <div class="field">
+        <label for="password">Mot de passe</label>
+        <input id="password" type="password" placeholder="••••••••" required />
       </div>
-      <div class="user-area">
-        <label class="expert-toggle" title="Afficher les détails techniques et API">
-          <input type="checkbox" id="expertModeToggle" />
-          <span>Expert</span>
-        </label>
-        <div class="user-pill">
-          <div class="avatar" id="userAvatar">A</div>
-          <span id="userEmail">admin</span>
-        </div>
-        <button id="logoutBtn" class="btn btn-ghost btn-sm">Quitter</button>
-      </div>
-    </nav>
-
-    <div class="dash-content">
-      <!-- Hero banner -->
-      <div class="value-prop" id="valueProp">
-        <div class="value-prop-text">
-          <strong>Bienvenue sur ConfiDoc.</strong> Déposez vos documents comptables. La plateforme les anonymise, les analyse et produit des exports exploitables par votre équipe.
-        </div>
-        <button class="value-prop-dismiss" id="dismissValueProp" title="Fermer">×</button>
-      </div>
-
-      <!-- KPIs -->
-      <div class="stats-row">
-        <div class="stat-card blue">
-          <div class="stat-label">Dossiers</div>
-          <div class="stat-value" id="statTotal">0</div>
-          <div class="stat-sub">documents déposés</div>
-        </div>
-        <div class="stat-card emerald">
-          <div class="stat-label">Exploitables</div>
-          <div class="stat-value" id="statReady">0</div>
-          <div class="stat-sub">prêts pour export</div>
-        </div>
-        <div class="stat-card violet">
-          <div class="stat-label">En traitement</div>
-          <div class="stat-value" id="statProcessing">0</div>
-          <div class="stat-sub">en cours d'analyse</div>
-        </div>
-        <div class="stat-card amber">
-          <div class="stat-label">Entités masquées</div>
-          <div class="stat-value" id="statDetections">—</div>
-          <div class="stat-sub" id="statDetectionsSub">dernier document traité</div>
-        </div>
-      </div>
-
-      <!-- Quality summary -->
-      <div class="quality-bar">
-        <div class="status-range-row" id="statusRangeRow">
-          <span class="status-range-label">Qualité sur</span>
-          <button type="button" class="status-range-btn" id="sumRange7" data-days="7">7 jours</button>
-          <button type="button" class="status-range-btn active" id="sumRange30" data-days="30">30 jours</button>
-          <button type="button" class="status-range-btn" id="sumRange90" data-days="90">90 jours</button>
-        </div>
-        <div class="status-summary-row">
-          <div class="status-chip full"><span class="chip-dot"></span> Complet <b id="sumFullReady">0</b></div>
-          <div class="status-chip core"><span class="chip-dot"></span> Essentiel validé <b id="sumCoreReady">0</b></div>
-          <div class="status-chip review"><span class="chip-dot"></span> À revoir <b id="sumReview">0</b></div>
-          <div class="status-chip neutral">Temps moyen <b id="sumAvgReady">—</b></div>
-          <div class="status-chip neutral">Alertes fréquentes <b id="sumTopFlags">—</b></div>
-        </div>
-      </div>
-
-      <!-- TAB: Dossiers -->
-      <div class="tab-content active" id="tab-dossiers">
-        <div class="main-grid">
-          <!-- Upload panel -->
-          <div class="panel">
-            <div class="panel-header"><h2><span class="icon">📤</span> Déposer un document</h2></div>
-            <div class="panel-body">
-              <div class="upload-zone" id="dropZone">
-                <div class="upload-icon">📄</div>
-                <h3>Glissez un fichier ici</h3>
-                <p>PDF, PNG, JPG, TIFF — maximum 50 Mo</p>
-                <input type="file" id="fileInput" accept=".pdf,.png,.jpg,.jpeg,.tiff" />
-              </div>
-              <div class="upload-config">
-                <div>
-                  <label class="config-label">Profil d'anonymisation</label>
-                  <select id="profileSelect">
-                    <option value="dataset_accounting_pseudo" selected>Pseudonymisation métier (recommandé)</option>
-                    <option value="dataset_accounting">Dataset comptable strict</option>
-                  </select>
-                </div>
-                <div>
-                  <label class="config-label">Type de document</label>
-                  <select id="docTypeSelect">
-                    <option value="auto" selected>Détection automatique</option>
-                    <optgroup label="Documents comptables">
-                      <option value="bilan">Bilan</option>
-                      <option value="compte_resultat">Compte de résultat</option>
-                      <option value="etat_immobilisations">État des immobilisations</option>
-                      <option value="releve_bancaire">Relevé bancaire</option>
-                    </optgroup>
-                    <optgroup label="Déclarations fiscales">
-                      <option value="fiscal_2072">Déclaration 2072 (SCI)</option>
-                      <option value="fiscal_2044">Déclaration 2044</option>
-                      <option value="fiscal_2033B">Déclaration 2033-B</option>
-                      <option value="fiscal_2065">Déclaration 2065</option>
-                    </optgroup>
-                    <optgroup label="Autres">
-                      <option value="facture_fournisseur">Facture fournisseur</option>
-                      <option value="statuts_societe">Statuts de société</option>
-                    </optgroup>
-                  </select>
-                </div>
-                <div>
-                  <label class="config-label">Dossier client (optionnel)</label>
-                  <input type="text" id="clientNameInput" class="form-input" placeholder="Ex : SCI Martin, Cabinet Dupont…" autocomplete="off" />
-                </div>
-                <div class="checkbox-row">
-                  <input type="checkbox" id="autoAnonymize" checked />
-                  <label for="autoAnonymize">Traiter automatiquement après dépôt</label>
-                </div>
-              </div>
-              <div class="upload-progress" id="uploadProgress">
-                <div class="progress-bar"><div class="fill" id="progressFill"></div></div>
-                <div class="prog-text" id="progText">Envoi en cours…</div>
-              </div>
-              <div class="stage-strip" id="stageStrip">
-                <div class="stage-title">Étapes de traitement</div>
-                <div class="stage-flow">
-                  <span class="stage-chip" data-stage="upload">Réception</span>
-                  <span class="stage-arrow">→</span>
-                  <span class="stage-chip" data-stage="ocr">Lecture OCR</span>
-                  <span class="stage-arrow">→</span>
-                  <span class="stage-chip" data-stage="anonymize">Anonymisation</span>
-                  <span class="stage-arrow">→</span>
-                  <span class="stage-chip" data-stage="extract">Extraction</span>
-                  <span class="stage-arrow">→</span>
-                  <span class="stage-chip" data-stage="ready">Prêt</span>
-                </div>
-                <div id="stageText" class="stage-text">En attente d'un document.</div>
-              </div>
-            </div>
-          </div>
-
-          <!-- Documents list -->
-          <div class="panel">
-            <div class="panel-header">
-              <h2><span class="icon">📁</span> Mes documents</h2>
-              <button id="refreshBtn" class="btn btn-ghost btn-sm">↻ Actualiser</button>
-            </div>
-            <div class="panel-body">
-              <div class="doc-filter-row">
-                <input type="search" id="docSearchInput" class="doc-search-input" placeholder="🔍 Rechercher un document…" autocomplete="off" />
-                <select id="docStatusFilter" class="doc-status-filter">
-                  <option value="">Tous les statuts</option>
-                  <option value="uploaded">Reçus</option>
-                  <option value="processing">En traitement</option>
-                  <option value="ready">Prêts</option>
-                  <option value="failed">Erreur</option>
-                </select>
-              </div>
-              <div id="docList" class="doc-list">
-                <div class="docs-empty">
-                  <div class="empty-icon">📂</div>
-                  <p>Aucun document déposé.<br>Commencez par glisser un fichier ci-contre.</p>
-                </div>
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Danger zone -->
-        <div class="purge-all-row">
-          <button type="button" id="purgeAllDocsBtn" class="btn-act danger">Supprimer tous mes documents</button>
-          <span class="purge-all-hint">Action irréversible — supprime définitivement tous vos fichiers et leurs données associées.</span>
-        </div>
-      </div>
-
-      <!-- TAB: Analyse & IA -->
-      <div class="tab-content" id="tab-analyse">
-        <!-- Bandeau document actif -->
-        <div class="active-doc-banner" id="activeDocBanner" style="display:none">
-          <span class="active-doc-label">Document actif :</span>
-          <span class="active-doc-name" id="activeDocName">—</span>
-          <button class="active-doc-go" id="activeDocGoBtn">Voir dans Dossiers →</button>
-        </div>
-        <!-- Preview -->
-        <div class="panel preview-panel">
-          <div class="panel-header">
-            <h2><span class="icon">👁️</span> Aperçu du document</h2>
-            <div class="preview-mode-row">
-              <button id="modeAnonOnly" class="preview-mode-btn active" type="button">Anonymisé</button>
-              <button id="modeBeforeAfter" class="preview-mode-btn" type="button">Avant / Après</button>
-            </div>
-          </div>
-          <div class="panel-body">
-            <div class="preview-content" id="previewOutput">Sélectionnez un document et lancez une action pour voir l'aperçu ici.</div>
-          </div>
-        </div>
-
-        <!-- Q&A -->
-        <div class="panel">
-          <div class="panel-header"><h2><span class="icon">💬</span> Questions sur un document</h2></div>
-          <div class="panel-body">
-            <div class="qa-layout">
-              <select id="docQaSelect" class="qa-select" aria-label="Document pour Q&A">
-                <option value="">Choisir un document…</option>
-              </select>
-              <div class="qa-input-row">
-                <input id="docQaQuestion" class="qa-input" type="text" placeholder="Ex : Quel est le résultat net de l'exercice ?" />
-                <button id="askDocBtn" class="btn btn-primary btn-sm">Envoyer</button>
-              </div>
-              <div class="qa-suggestions">
-                <button class="qa-chip" type="button" data-qa-suggest="Quel est le résultat de l'exercice ?">Résultat exercice</button>
-                <button class="qa-chip" type="button" data-qa-suggest="Quels montants dois-je vérifier en priorité ?">Montants à vérifier</button>
-                <button class="qa-chip" type="button" data-qa-suggest="Quels sont les points d'attention sur ce document ?">Points d'attention</button>
-                <button class="qa-chip" type="button" data-qa-suggest="Résume les données clés de ce document.">Synthèse rapide</button>
-              </div>
-              <div class="qa-hint">L'IA ne répond que si le document a passé le contrôle qualité. Les réponses s'appuient uniquement sur les données extraites, jamais sur les données brutes.</div>
-            </div>
-          </div>
-        </div>
-
-        <!-- Streaming IA -->
-        <div class="panel" id="streamPanel">
-          <div class="panel-header">
-            <h2><span class="icon">⚡</span> Synthèse IA en direct</h2>
-            <button id="stopStreamBtn" class="btn btn-ghost btn-sm" style="display:none">⏹ Arrêter</button>
-          </div>
-          <div class="panel-body">
-            <div class="stream-input-row">
-              <input id="streamQuestion" class="qa-input" type="text" placeholder="Question libre ou laisser vide pour une synthèse automatique…" />
-              <button id="startStreamBtn" class="btn btn-primary btn-sm">▶ Générer</button>
-            </div>
-            <div id="streamOutput" class="stream-output" style="display:none"></div>
-          </div>
-        </div>
-
-        <!-- Masked summary (expert) -->
-        <div class="panel expert-only">
-          <div class="panel-header"><h2><span class="icon">🔍</span> Détail de l'anonymisation</h2></div>
-          <div class="panel-body">
-            <div class="masked-content" id="maskedOutput">Lancez le traitement d'un document pour voir le résumé ici.</div>
-          </div>
-        </div>
-
-        <!-- KB search (expert) -->
-        <div class="panel kb-ask-panel expert-only">
-          <div class="panel-header"><h2><span class="icon">🗂️</span> Recherche dans la base anonyme</h2></div>
-          <div class="panel-body">
-            <div class="kb-ask-row">
-              <input id="kbQuestion" class="kb-ask-input" type="text" placeholder="Ex : charges locatives T1, compte 613, facture fournisseur…" />
-              <button id="askKbBtn" class="btn btn-ghost btn-sm">Rechercher</button>
-            </div>
-            <div class="kb-ask-hint">Vos documents prêts sont automatiquement indexés avant chaque recherche.</div>
-          </div>
-        </div>
-      </div>
-
-      <!-- TAB: Exports -->
-      <div class="tab-content" id="tab-exports">
-        <div class="panel">
-          <div class="panel-header">
-            <h2><span class="icon">📊</span> Exports disponibles</h2>
-            <button id="refreshExportsBtn" class="btn btn-ghost btn-sm">↻ Actualiser</button>
-          </div>
-          <div class="panel-body">
-            <!-- Liste dynamique des documents prêts -->
-            <div id="exportDocList" class="export-doc-list"></div>
-            <!-- Guide des formats -->
-            <div class="exports-divider">Formats disponibles</div>
-            <div class="export-types-grid">
-              <div class="export-type-card">
-                <div class="export-type-icon">📄</div>
-                <div class="export-type-name">Rapport PDF</div>
-                <div class="export-type-desc">Rapport lisible et structuré, idéal pour partager avec l'équipe ou le client.</div>
-              </div>
-              <div class="export-type-card">
-                <div class="export-type-icon">📝</div>
-                <div class="export-type-name">Rapport DOC</div>
-                <div class="export-type-desc">Format Word modifiable pour personnaliser le rendu avant diffusion.</div>
-              </div>
-              <div class="export-type-card">
-                <div class="export-type-icon">📊</div>
-                <div class="export-type-name">Excel / CSV</div>
-                <div class="export-type-desc">Tableaux comptables exportables : immobilisations, dettes, bilan.</div>
-              </div>
-              <div class="export-type-card">
-                <div class="export-type-icon">🔗</div>
-                <div class="export-type-name">JSON structuré</div>
-                <div class="export-type-desc">Données normalisées pour intégration logicielle ou import dans votre outil métier.</div>
-              </div>
-              <div class="export-type-card">
-                <div class="export-type-icon">🛡️</div>
-                <div class="export-type-name">Preuve RGPD</div>
-                <div class="export-type-desc">Certificat d'anonymisation avec empreintes SHA-256 et détail des masquages.</div>
-              </div>
-              <div class="export-type-card">
-                <div class="export-type-icon">🧾</div>
-                <div class="export-type-name">Audit export</div>
-                <div class="export-type-desc">Rapport d'audit complet : empreintes, entités détectées, requêtes IA.</div>
-              </div>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <!-- API Response (expert) -->
-      <div class="panel api-panel expert-only">
-        <div class="panel-header"><h2><span class="icon">⚡</span> Réponse API brute</h2></div>
-        <div class="panel-body"><pre class="api-content" id="apiOutput">{}</pre></div>
-      </div>
-    </div>
+      <button type="submit" class="btn btn-primary btn-full">Se connecter</button>
+      <p id="auth-error" class="error-msg" style="display:none"></p>
+    </form>
   </div>
 </div>
 
-<!-- Modal suppression globale -->
-<div class="modal-overlay" id="purgeModal">
-  <div class="modal-card">
-    <div class="modal-header">
-      <h3>⚠️ Supprimer tous les documents</h3>
+<!-- APP -->
+<div id="screen-app" class="screen" style="display:none">
+
+  <!-- STEPS -->
+  <div class="pipeline">
+    <div class="step active" id="step-1">
+      <div class="step-num">1</div>
+      <div class="step-label">Upload</div>
     </div>
-    <div class="modal-body">
-      <p>Cette action est <strong>irréversible</strong>. Tous vos documents et leurs données associées (anonymisations, extractions, exports) seront définitivement supprimés.</p>
-      <p>Pour confirmer, tapez exactement <code>SUPPRIMER</code> ci-dessous :</p>
-      <input type="text" id="purgeConfirmInput" class="modal-confirm-input" placeholder="SUPPRIMER" autocomplete="off" />
+    <div class="step-arrow">→</div>
+    <div class="step" id="step-2">
+      <div class="step-num">2</div>
+      <div class="step-label">Anonymisation</div>
     </div>
-    <div class="modal-footer">
-      <button id="purgeCancelBtn" class="modal-btn-cancel">Annuler</button>
-      <button id="purgeConfirmBtn" class="modal-btn-danger" disabled>Confirmer la suppression</button>
+    <div class="step-arrow">→</div>
+    <div class="step" id="step-3">
+      <div class="step-num">3</div>
+      <div class="step-label">Discussion IA</div>
     </div>
+  </div>
+
+  <div class="app-body">
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+      <div class="sidebar-header">
+        <h2>Documents</h2>
+        <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
+      </div>
+      <div id="doc-list" class="doc-list">
+        <div class="empty-state">Aucun document.<br>Uploadez-en un.</div>
+      </div>
+    </aside>
+
+    <!-- MAIN -->
+    <main class="main-panel">
+
+      <!-- PANEL 1: UPLOAD -->
+      <div id="panel-upload" class="panel active">
+        <h2>Uploader un document</h2>
+        <div class="upload-zone" id="upload-zone">
+          <div class="upload-icon">📄</div>
+          <p>Glissez votre fichier ici ou</p>
+          <label class="btn btn-secondary" for="file-input">Choisir un fichier</label>
+          <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
+          <p class="upload-hint">PDF, PNG, JPG, TIFF — max 50 MB</p>
+        </div>
+        <div id="upload-progress" style="display:none">
+          <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
+          <p id="upload-status">Envoi en cours…</p>
+        </div>
+      </div>
+
+      <!-- PANEL 2: ANONYMISATION -->
+      <div id="panel-anon" class="panel">
+        <div class="panel-header">
+          <h2>Anonymisation</h2>
+          <div class="panel-actions">
+            <select id="anon-profile" class="select-sm">
+              <option value="moderate">Modéré</option>
+              <option value="strict">Strict</option>
+            </select>
+            <button id="btn-anonymize" class="btn btn-primary">Anonymiser</button>
+          </div>
+        </div>
+
+        <div id="anon-loading" class="loading-state" style="display:none">
+          <div class="spinner"></div>
+          <p>Anonymisation en cours…</p>
+        </div>
+
+        <div id="anon-results" style="display:none">
+          <div class="anon-stats">
+            <div class="stat-badge">
+              <span id="stat-count" class="stat-num">0</span>
+              <span class="stat-label">entités masquées</span>
+            </div>
+            <button id="btn-validate" class="btn btn-success">Valider et continuer →</button>
+          </div>
+          <div class="text-preview">
+            <div class="preview-tabs">
+              <button class="tab active" data-tab="anonymized">Texte anonymisé</button>
+              <button class="tab" data-tab="original">Original ⚠️</button>
+            </div>
+            <div id="tab-anonymized" class="tab-content">
+              <pre id="preview-anon-text" class="preview-text"></pre>
+            </div>
+            <div id="tab-original" class="tab-content" style="display:none">
+              <div class="warning-banner">⚠️ Ce texte contient des données personnelles non anonymisées.</div>
+              <pre id="preview-original-text" class="preview-text"></pre>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- PANEL 3: DISCUSSION IA -->
+      <div id="panel-ai" class="panel">
+        <div class="panel-header">
+          <h2>Discussion IA</h2>
+          <div class="panel-actions">
+            <button id="btn-export-txt" class="btn btn-ghost btn-sm">⬇ Texte</button>
+            <button id="btn-export-pdf" class="btn btn-ghost btn-sm">⬇ PDF redacté</button>
+          </div>
+        </div>
+
+        <div class="quick-actions">
+          <button class="quick-btn" data-q="Fais un résumé de ce document.">Résumé</button>
+          <button class="quick-btn" data-q="Quels sont les points clés ?">Points clés</button>
+          <button class="quick-btn" data-q="Y a-t-il des anomalies ou alertes ?">Anomalies</button>
+          <button class="quick-btn" data-q="Donne-moi les chiffres principaux.">Chiffres</button>
+        </div>
+
+        <div id="chat-messages" class="chat-messages">
+          <div class="chat-intro">
+            <div class="chat-intro-icon">🔒</div>
+            <p>Document anonymisé. Posez vos questions en toute sécurité.</p>
+          </div>
+        </div>
+
+        <div class="chat-input-zone">
+          <textarea id="chat-input" class="chat-input" placeholder="Posez une question sur le document…" rows="2"></textarea>
+          <div class="chat-controls">
+            <button id="btn-stop-stream" class="btn btn-ghost btn-sm" style="display:none">⏹ Stop</button>
+            <button id="btn-send" class="btn btn-primary">Envoyer</button>
+          </div>
+        </div>
+      </div>
+
+    </main>
   </div>
 </div>
 
-<!-- Keyboard shortcuts help modal -->
-<div class="modal-overlay" id="shortcutsModal">
-  <div class="modal-card">
-    <div class="modal-header"><h3>⌨️ Raccourcis clavier</h3></div>
-    <div class="modal-body">
-      <table class="shortcuts-table">
-        <tr><td><kbd>1</kbd></td><td>Onglet Dossiers</td></tr>
-        <tr><td><kbd>2</kbd></td><td>Onglet Analyse & IA</td></tr>
-        <tr><td><kbd>3</kbd></td><td>Onglet Exports</td></tr>
-        <tr><td><kbd>R</kbd></td><td>Actualiser les documents</td></tr>
-        <tr><td><kbd>Esc</kbd></td><td>Fermer modal / arrêter stream</td></tr>
-        <tr><td><kbd>?</kbd></td><td>Afficher cette aide</td></tr>
-      </table>
-    </div>
-    <div class="modal-footer">
-      <button id="closeShortcutsBtn" class="modal-btn-cancel">Fermer</button>
-    </div>
-  </div>
-</div>
-
-<div class="toast-container" id="toastContainer"></div>
+<!-- TOAST -->
+<div id="toast" class="toast" style="display:none"></div>
 
 <script src="/static/js/app.js"></script>
 </body>
