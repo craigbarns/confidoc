@@ -251,7 +251,7 @@ async def extract_document(
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    """Extraction OCR du document. Retourne le texte brut."""
+    """Extraction OCR du document. Retourne le texte brut COMPLET."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     file_content = _read_file_or_404(document)
     
@@ -262,10 +262,42 @@ async def extract_document(
     return {
         "document_id": str(document.id),
         "status": "extracted",
-        "text": original_text[:2000] if len(original_text) > 2000 else original_text,
+        "text": original_text,  # ← TOUT le texte, pas tronqué
         "text_length": len(original_text),
         "pages": meta.get("pages", 0),
         "model": meta.get("model", "unknown"),
+    }
+
+
+@router.get(
+    "/{document_id}/extracted-text",
+    status_code=status.HTTP_200_OK,
+    summary="Récupérer le texte OCR extrait (sans le relancer)",
+)
+async def get_extracted_text(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Retourne le texte OCR déjà extrait."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original_version = result.scalar_one_or_none()
+    
+    if not original_version or original_version.content_text is None:
+        raise http_400("Texte non extrait. Lancez POST /extract d'abord.")
+    
+    return {
+        "document_id": str(document.id),
+        "text": original_version.content_text,  # ← TOUT le texte
+        "text_length": len(original_version.content_text),
+        "extraction_date": original_version.created_at.isoformat() if original_version.created_at else None,
     }
 
 
@@ -320,7 +352,7 @@ async def anonymize_document(
     return {
         "document_id": str(document.id),
         "status": "anonymized",
-        "preview_text": preview_text[:2000] if len(preview_text) > 2000 else preview_text,
+        "preview_text": preview_text,  # ← TOUT le texte anonymisé
         "detections_count": len(detections),
         "method": meta.get("method", "llm"),
         "auto_extracted": extracted_on_demand,
