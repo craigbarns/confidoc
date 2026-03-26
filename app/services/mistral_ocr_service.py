@@ -65,9 +65,10 @@ async def extract_text_with_mistral_ocr(
         "Content-Type": "application/json",
     }
     
-    # Appel API OCR Mistral
+    # Appel API OCR Mistral - FORCE le modèle OCR (pas le chat!)
+    ocr_model = "mistral-ocr-latest"  # HARDCODÉ: ne pas utiliser settings.MISTRAL_MODEL
     body = {
-        "model": settings.MISTRAL_MODEL,  # mistral-ocr-latest
+        "model": ocr_model,
         "document": {
             "type": "document_url",
             "document_url": document_url,
@@ -75,6 +76,7 @@ async def extract_text_with_mistral_ocr(
     }
     
     try:
+        logger.info("mistral_ocr_request", model=ocr_model, file_size=len(file_content))
         async with httpx.AsyncClient(timeout=120.0) as client:
             resp = await client.post(
                 f"{settings.MISTRAL_BASE_URL.rstrip('/')}/v1/ocr",
@@ -83,25 +85,32 @@ async def extract_text_with_mistral_ocr(
             )
             resp.raise_for_status()
             result = resp.json()
+            logger.info("mistral_ocr_response", status=resp.status_code, keys=list(result.keys()))
     except Exception as exc:
-        logger.error("mistral_ocr_api_error", error=str(exc))
+        logger.error("mistral_ocr_api_error", error=str(exc), error_type=type(exc).__name__)
         return {
             "text": "",
             "pages": [],
-            "model": settings.MISTRAL_MODEL,
+            "model": ocr_model,
             "confidence": "low",
             "error": str(exc)
         }
     
-    # Parse le résultat
+    # Parse le résultat - Mistral OCR retourne 'pages' avec 'markdown' dans chaque page
     pages = result.get("pages", [])
+    logger.info("mistral_ocr_pages", page_count=len(pages))
+    
+    # Debug: log first page structure
+    if pages:
+        logger.info("mistral_ocr_first_page", keys=list(pages[0].keys()) if isinstance(pages[0], dict) else "not_dict")
+    
     all_text = "\n\n".join([p.get("markdown", p.get("text", "")) for p in pages])
     
     logger.info(
         "mistral_ocr_complete",
         pages=len(pages),
         chars=len(all_text),
-        model=settings.MISTRAL_MODEL,
+        model=ocr_model,
     )
     
     return {
@@ -114,7 +123,7 @@ async def extract_text_with_mistral_ocr(
             }
             for i, p in enumerate(pages)
         ],
-        "model": settings.MISTRAL_MODEL,
+        "model": ocr_model,
         "confidence": "high" if pages else "low",
     }
 
