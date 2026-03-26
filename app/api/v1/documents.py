@@ -430,7 +430,7 @@ async def delete_all_my_documents(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
-    summary="Supprimer un document",
+    summary="Supprimer un document (soft delete - met à la corbeille)",
 )
 async def delete_document(
     document_id: str,
@@ -440,4 +440,135 @@ async def delete_document(
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     document.is_deleted = True
     document.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+# ═══════════════════════════════════════════════════════════════════════════════
+# CORBEILLE (TRASH) - Gestion des documents supprimés
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@router.get(
+    "/trash/list",
+    status_code=status.HTTP_200_OK,
+    summary="Liste des documents supprimés (corbeille)",
+)
+async def list_trash(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Liste les documents mis à la corbeille par l'utilisateur."""
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+        .order_by(desc(Document.deleted_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    docs = result.scalars().all()
+    
+    # Compter le total
+    count_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    total = count_result.scalar()
+    
+    return {
+        "documents": [
+            {
+                "id": str(d.id),
+                "original_filename": d.original_filename,
+                "size_bytes": d.size_bytes,
+                "content_type": d.content_type,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+                "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
+                "doc_type": d.doc_type,
+                "status": d.status.value if d.status else None,
+            }
+            for d in docs
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.post(
+    "/{document_id}/restore",
+    status_code=status.HTTP_200_OK,
+    summary="Restaurer un document de la corbeille",
+)
+async def restore_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Restaure un document supprimé (le sort de la corbeille)."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+    
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    document = result.scalar_one_or_none()
+    
+    if not document:
+        raise http_404("Document non trouvé dans la corbeille")
+    
+    document.is_deleted = False
+    document.deleted_at = None
+    await db.commit()
+    
+    return {
+        "message": "Document restauré avec succès",
+        "document_id": str(document.id),
+        "original_filename": document.original_filename,
+    }
+
+
+@router.delete(
+    "/{document_id}/permanent",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Suppression définitive d'un document",
+)
+async def permanent_delete_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    """Supprime définitivement un document (ne peut pas être annulé)."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+    
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    
+    if not document:
+        raise http_404("Document introuvable")
+    
+    # Suppression définitive (hard delete)
+    await db.execute(
+        delete(Document).where(Document.id == doc_uuid)
+    )
     await db.commit()

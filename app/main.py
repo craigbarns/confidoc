@@ -21,29 +21,14 @@ from app.api.v1.router import router as v1_router
 
 
 async def _purge_old_deleted_documents() -> None:
-    """Auto-purge documents soft-deleted more than 30 days ago.
-
-    Runs once at startup. In production, this should be a scheduled task.
+    """Désactivé: Les documents supprimés restent dans la corbeille indéfiniment.
+    
+    Pour vider la corbeille, utilisez l'endpoint DELETE /documents/{id}/permanent
+    ou contactez un administrateur.
     """
-    from sqlalchemy import text
-    from app.core.database import engine
-
-    try:
-        async with engine.begin() as conn:
-            result = await conn.execute(
-                text(
-                    "DELETE FROM documents "
-                    "WHERE is_deleted = true "
-                    "AND deleted_at < NOW() - INTERVAL '30 days'"
-                )
-            )
-            purged = result.rowcount
-            if purged:
-                logger = get_logger(__name__)
-                logger.info("trash_auto_purged", documents_purged=purged)
-    except Exception:
-        # Best-effort: don't block startup if column doesn't exist yet
-        pass
+    # NOTE: La suppression automatique est désactivée.
+    # Les documents en corbeille sont conservés jusqu'à suppression manuelle.
+    pass
 
 
 @asynccontextmanager
@@ -64,8 +49,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_database()
     logger.info("database_initialized")
 
-    # Purge old trash items
-    await _purge_old_deleted_documents()
+    # Pas de purge automatique - les documents restent en corbeille indéfiniment
+    # await _purge_old_deleted_documents()
 
     yield
 
