@@ -295,7 +295,7 @@ async def anonymize_document(
     original_text = None
     extracted_on_demand = False
     
-    if original_version and original_version.content_text:
+    if original_version and original_version.content_text is not None:
         original_text = original_version.content_text
     elif auto_extract:
         # 🔥 AUTO-EXTRACT: Pas de texte ? On lance l'OCR automatiquement !
@@ -305,8 +305,11 @@ async def anonymize_document(
         extracted_on_demand = True
         await db.commit()  # Commit important ici
     
-    if not original_text:
+    if original_text is None:
         raise http_400("Texte non extrait. Lancez /extract d'abord ou utilisez auto_extract=true.")
+    
+    if len(original_text.strip()) == 0:
+        raise http_400("Document vide ou illisible. Vérifiez que le fichier contient du texte extractible.")
     
     # Anonymisation LLM (peut prendre 5-15s)
     preview_text, detections, meta = await build_anonymization_llm(
