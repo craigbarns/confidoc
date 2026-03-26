@@ -131,8 +131,14 @@ async function selectDoc(id, status) {
   );
 
   if (status === "ready") {
-    setStep(3);
-    resetChat();
+    setStep(2);
+    resetAnonPanel();
+    try {
+      const preview = await apiFetch(`/documents/${id}/preview`);
+      $("anon-results").style.display = "";
+      $("stat-count").textContent = preview.detections_count;
+      $("preview-anon-text").innerHTML = highlightTags(preview.preview_text || "");
+    } catch {}
   } else if (status === "processing") {
     setStep(2);
     resetAnonPanel();
@@ -212,18 +218,29 @@ async function anonymize() {
   const profile = $("anon-profile").value;
   showAnonLoading();
   try {
-    const data = await apiFetch(
-      `/documents/${currentDocId}/anonymize?profile=${profile}`,
-      { method: "POST" }
+    const res = await fetch(
+      `/api/v1/documents/${currentDocId}/anonymize?profile=${profile}`,
+      { method: "POST", headers: { "Authorization": `Bearer ${token}` } }
     );
-    $("anon-loading").style.display = "none";
-    $("anon-results").style.display = "";
-    $("stat-count").textContent = data.detections_count;
-    $("preview-anon-text").innerHTML = highlightTags(data.preview_text || "(Aucun texte extrait)");
-    $("btn-anonymize").disabled = false;
-    switchTab("anonymized");
-    toast(`${data.detections_count} entité(s) anonymisée(s)`, "success");
-    await loadDocList();
+    if (res.status === 202) {
+      // Traitement en background — on poll jusqu'à ce que le doc soit READY
+      toast("Anonymisation en cours… (peut prendre 30-60s)", "info");
+      await loadDocList();
+      pollDocStatus(currentDocId);
+    } else if (res.ok) {
+      const data = await res.json();
+      $("anon-loading").style.display = "none";
+      $("anon-results").style.display = "";
+      $("stat-count").textContent = data.detections_count || 0;
+      $("preview-anon-text").innerHTML = highlightTags(data.preview_text || "(Aucun texte extrait)");
+      $("btn-anonymize").disabled = false;
+      switchTab("anonymized");
+      toast(`${data.detections_count} entité(s) anonymisée(s)`, "success");
+      await loadDocList();
+    } else {
+      const err = await res.json().catch(() => ({}));
+      throw new Error(err.detail || `HTTP ${res.status}`);
+    }
   } catch (e) {
     $("anon-loading").style.display = "none";
     $("btn-anonymize").disabled = false;
@@ -235,27 +252,44 @@ function pollDocStatus(docId) {
   let tries = 0;
   const interval = setInterval(async () => {
     tries++;
-    if (tries > 60) { clearInterval(interval); return; } // 2 min max
+    if (tries > 60) {
+      clearInterval(interval);
+      $("anon-loading").style.display = "none";
+      $("btn-anonymize").disabled = false;
+      toast("Délai d'attente dépassé. Veuillez réessayer.", "error");
+      await loadDocList().catch(() => {});
+      return;
+    }
     try {
       const doc = await apiFetch(`/documents/${docId}`);
       if (doc.status === "ready") {
         clearInterval(interval);
+        $("anon-loading").style.display = "none";
+        $("btn-anonymize").disabled = false;
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
-          $("anon-loading").style.display = "none";
           $("anon-results").style.display = "";
           $("stat-count").textContent = preview.detections_count;
           $("preview-anon-text").innerHTML = highlightTags(preview.preview_text || "");
-          $("btn-anonymize").disabled = false;
-        } catch {}
+          toast(`${preview.detections_count || 0} entité(s) anonymisée(s)`, "success");
+        } catch {
+          toast("Anonymisation terminée.", "success");
+        }
         await loadDocList();
       } else if (doc.status !== "processing") {
         clearInterval(interval);
         $("anon-loading").style.display = "none";
         $("btn-anonymize").disabled = false;
+        toast("L'anonymisation a échoué. Veuillez réessayer.", "error");
         await loadDocList();
       }
-    } catch { clearInterval(interval); }
+    } catch {
+      clearInterval(interval);
+      $("anon-loading").style.display = "none";
+      $("btn-anonymize").disabled = false;
+      toast("Erreur de connexion pendant l'anonymisation.", "error");
+      await loadDocList().catch(() => {});
+    }
   }, 2000);
 }
 

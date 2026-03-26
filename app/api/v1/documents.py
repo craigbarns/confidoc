@@ -9,9 +9,10 @@ from types import SimpleNamespace
 
 from fastapi import APIRouter, BackgroundTasks, Body, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import delete, desc, func, select, update
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.database import async_session_factory
 from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
@@ -208,11 +209,38 @@ async def get_document(
     return await _get_user_document_or_404(db, document_id, current_user.id)
 
 
+async def _run_anonymize_background(doc_id: str, file_content: bytes, profile: str, document_type: str) -> None:
+    """Run OCR + LLM anonymization in background with its own DB session."""
+    try:
+        async with async_session_factory() as db:
+            result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
+            document = result.scalar_one_or_none()
+            if not document:
+                return
+            await build_anonymization_preview(
+                db=db, document=document, file_content=file_content,
+                profile=profile, document_type=document_type,
+            )
+            await db.commit()
+            logger.info("background_anonymize_complete", doc_id=doc_id)
+    except Exception as exc:
+        logger.error("background_anonymize_failed", doc_id=doc_id, error=str(exc))
+        try:
+            async with async_session_factory() as db:
+                await db.execute(
+                    update(Document)
+                    .where(Document.id == uuid.UUID(doc_id))
+                    .values(status=DocumentStatus.UPLOADED)
+                )
+                await db.commit()
+        except Exception:
+            pass
+
+
 @router.post(
     "/{document_id}/anonymize",
-    response_model=AnonymizeResponse,
-    status_code=status.HTTP_200_OK,
-    summary="Anonymiser un document",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Anonymiser un document (traitement en arrière-plan)",
 )
 async def anonymize_document(
     document_id: str,
@@ -220,31 +248,17 @@ async def anonymize_document(
     db: DbSession,
     profile: str = Query(default="moderate"),
     document_type: str = Query(default="auto"),
-) -> AnonymizeResponse:
+) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     file_content = _read_file_or_404(document)
-
-    try:
-        preview_text, detections, effective_type, extraction_meta = await build_anonymization_preview(
-            db=db,
-            document=document,
-            file_content=file_content,
-            profile=profile,
-            document_type=document_type,
-        )
-        await db.commit()
-    except Exception as exc:
-        await db.rollback()
-        logger.exception("anonymize_failed", doc_id=str(document.id), error=str(exc))
-        raise http_500(f"Anonymisation impossible: {str(exc)[:500]}") from exc
-
-    return AnonymizeResponse(
-        document_id=document.id,
-        status=document.status.value,
-        detections_count=len(detections),
-        detections=[_detection_item_to_response(item) for item in detections],
-        preview_text=preview_text,
+    # Marquer PROCESSING immédiatement
+    document.status = DocumentStatus.PROCESSING
+    await db.commit()
+    # Lancer le traitement en background — évite le timeout HTTP (OCR 30s + LLM 60s)
+    asyncio.create_task(
+        _run_anonymize_background(str(document.id), file_content, profile, document_type)
     )
+    return {"document_id": str(document.id), "status": "processing"}
 
 
 @router.get(
