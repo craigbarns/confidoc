@@ -187,18 +187,24 @@ async def list_documents(
     db: DbSession,
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
+    include_deleted: bool = Query(default=False, description="Inclure les documents supprimés"),
 ) -> list[Document]:
+    """Liste les documents de l'utilisateur connecté."""
+    logger.info("list_documents", user_id=str(current_user.id), limit=limit, offset=offset, include_deleted=include_deleted)
+    
+    # Requête de base
+    query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
+    
+    # Filtrer les supprimés sauf si demandé
+    if not include_deleted:
+        query = query.where(Document.is_deleted.is_(False))
+    
     result = await db.execute(
-        select(Document)
-        .where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-        )
-        .order_by(desc(Document.created_at))
-        .offset(offset)
-        .limit(limit)
+        query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
     )
-    return list(result.scalars().all())
+    documents = list(result.scalars().all())
+    logger.info("list_documents_result", user_id=str(current_user.id), count=len(documents))
+    return documents
 
 
 @router.get(
