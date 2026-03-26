@@ -14,9 +14,7 @@ from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
-from app.services.anonymization_service import (
-    extract_text_from_file_with_meta,
-)
+from app.services.mistral_ocr_service import extract_text_from_file
 from app.services.llm_anonymization_service import anonymize_document_full
 
 logger = get_logger(__name__)
@@ -56,8 +54,9 @@ async def build_anonymization_preview(
     document.status = DocumentStatus.PROCESSING
     await db.flush()
 
-    # 2) Extract text from file (+ extraction metadata for observability)
-    original_text, extraction_meta = extract_text_from_file_with_meta(
+    # 2) Extract text from file via Mistral OCR
+    # Remplace PyMuPDF/Tesseract par l'OCR natif Mistral
+    original_text, extraction_meta = await extract_text_from_file(
         file_content, document.extension
     )
     original_text = original_text or ""
