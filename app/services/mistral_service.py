@@ -137,7 +137,8 @@ async def generate_summary_with_mistral(
         "- Si suspicious_fields est vide, ne pas inventer de doute supplémentaire\n"
         "\n"
         "Réponds avec JSON strict contenant exactement: "
-        "resume_executif, points_cles, anomalies_ou_alertes, questions_de_revue, confiance_globale.\n"
+        "resume_executif (string), points_cles (array of strings), anomalies_ou_alertes (array of strings), "
+        "questions_de_revue (array of strings), confiance_globale (float entre 0.0 et 1.0, ex: 0.85).\n"
     )
     base_prompt += mode_instruction
     if prudent_mode:
