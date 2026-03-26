@@ -1,0 +1,196 @@
+"""ConfiDoc — Anonymisation 100% LLM (Mistral Large).
+
+Pas de regex, pas de patterns — uniquement un LLM qui identifie et remplace les PII.
+"""
+
+from __future__ import annotations
+
+import json
+import re
+from typing import Any
+
+from app.config import get_settings
+from app.core.logging import get_logger
+from app.services.mistral_service import _chat_completion
+
+logger = get_logger(__name__)
+
+ANONYMIZATION_PROMPT = """Tu es un système d'anonymisation de documents confidentiels.
+
+MISSION: Identifie TOUTES les informations personnelles/sensibles et remplace-les par des tokens.
+
+RÈGLES STRICTES:
+1. Remplace par ces tokens EXACTS:
+   - Noms de personnes → [PERSONNE]
+   - Emails → [EMAIL]
+   - Téléphones → [TELEPHONE]
+   - Adresses postales → [ADRESSE]
+   - SIRET/SIREN → [SIRET]
+   - IBAN/RIB → [IBAN]
+   - Noms de sociétés → [SOCIETE]
+   - Dates de naissance → [DATE_NAISSANCE]
+   - Numéros de sécurité sociale → [NUMERO_SECU]
+   - Montants personnels → [MONTANT_PERSONNEL]
+   - Identifiants uniques → [ID]
+
+2. Garde les informations comptables/financières génériques:
+   - "Total actif", "Résultat net" → CONSERVER
+   - Montants agrégés du bilan → CONSERVER
+   - Postes comptables standards → CONSERVER
+
+3. Format de réponse UNIQUEMENT JSON:
+{
+  "texte_anonymise": "texte complet avec tokens de remplacement",
+  "entites_detectees": [
+    {"type": "PERSONNE", "valeur_originale": "Jean Dupont", "position_debut": 123, "position_fin": 134, "token": "[PERSONNE]"}
+  ],
+  "confiance": "high|medium|low",
+  "nb_remplacements": 5
+}
+
+Document à anonymiser:
+---
+{text}
+---
+
+Réponds UNIQUEMENT avec le JSON, sans texte avant ou après:"""
+
+
+def _clean_json_response(raw: str) -> dict[str, Any] | None:
+    """Extrait et parse le JSON de la réponse LLM."""
+    if not raw:
+        return None
+    
+    # Cherche le bloc JSON
+    start = raw.find("{")
+    end = raw.rfind("}")
+    if start == -1 or end == -1 or start >= end:
+        return None
+    
+    try:
+        return json.loads(raw[start:end + 1])
+    except json.JSONDecodeError:
+        # Tentative de nettoyage
+        cleaned = raw[start:end + 1].replace("\n", " ").replace("'", '"')
+        try:
+            return json.loads(cleaned)
+        except json.JSONDecodeError:
+            return None
+
+
+def _fallback_anonymize(text: str) -> str:
+    """Anonymisation fallback basique si LLM échoue."""
+    # Patterns minimaux de secours
+    patterns = [
+        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]'),
+        (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', '[TELEPHONE]'),
+        (r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b', '[IBAN]'),
+        (r'\b\d{3}[\s.-]?\d{3}[\s.-]?\d{3}[\s.-]?\d{5}\b', '[SIRET]'),
+    ]
+    
+    result = text
+    for pattern, replacement in patterns:
+        result = re.sub(pattern, replacement, result)
+    return result
+
+
+async def anonymize_with_llm(text: str) -> dict[str, Any]:
+    """Anonymise un texte via Mistral Large.
+    
+    Args:
+        text: Texte brut à anonymiser
+        
+    Returns:
+        {
+            "anonymized_text": "texte avec tokens",
+            "entities": [...],
+            "confidence": "high|medium|low",
+            "count": N
+        }
+    """
+    settings = get_settings()
+    
+    if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:
+        logger.warning("llm_anonymization_skipped", reason="mistral_not_configured")
+        # Fallback sur regex basiques
+        return {
+            "anonymized_text": _fallback_anonymize(text),
+            "entities": [],
+            "confidence": "low",
+            "count": 0,
+            "method": "fallback:regex"
+        }
+    
+    # Limite la taille (coût + contexte)
+    max_chars = 12000
+    truncated_text = text[:max_chars]
+    is_truncated = len(text) > max_chars
+    
+    if is_truncated:
+        truncated_text += "\n...[suite du document tronquée pour l'anonymisation]..."
+    
+    prompt = ANONYMIZATION_PROMPT.format(text=truncated_text)
+    
+    try:
+        raw_response = await _chat_completion(prompt, temperature=0.1)
+    except Exception as exc:
+        logger.error("llm_anonymization_api_error", error=str(exc))
+        return {
+            "anonymized_text": _fallback_anonymize(text),
+            "entities": [],
+            "confidence": "low",
+            "count": 0,
+            "method": "fallback:regex_after_error"
+        }
+    
+    parsed = _clean_json_response(raw_response)
+    if parsed is None:
+        logger.warning("llm_anonymization_parse_failed", raw=raw_response[:200])
+        return {
+            "anonymized_text": _fallback_anonymize(text),
+            "entities": [],
+            "confidence": "low",
+            "count": 0,
+            "method": "fallback:regex_after_parse_error"
+        }
+    
+    # Extrait le texte anonymisé
+    anonymized_text = parsed.get("texte_anonymise", _fallback_anonymize(text))
+    
+    # Normalise les entités
+    entities = []
+    for e in parsed.get("entites_detectees", []):
+        if isinstance(e, dict):
+            entities.append({
+                "entity_type": e.get("type", "UNKNOWN"),
+                "start_index": e.get("position_debut", 0),
+                "end_index": e.get("position_fin", 0),
+                "value_excerpt": e.get("valeur_originale", "")[:100],
+                "replacement": e.get("token", "[REDACTED]"),
+                "confidence": 0.9 if parsed.get("confiance") == "high" else 0.7
+            })
+    
+    logger.info(
+        "llm_anonymization_complete",
+        nb_entites=len(entities),
+        confiance=parsed.get("confiance", "unknown"),
+        tronque=is_truncated
+    )
+    
+    return {
+        "anonymized_text": anonymized_text,
+        "entities": entities,
+        "confidence": parsed.get("confiance", "medium"),
+        "count": len(entities),
+        "method": "llm:mistral-large"
+    }
+
+
+async def anonymize_document_full(text: str) -> tuple[str, list[dict]]:
+    """Interface compatible avec l'ancien système.
+    
+    Returns:
+        (anonymized_text, detections_list)
+    """
+    result = await anonymize_with_llm(text)
+    return result["anonymized_text"], result["entities"]
