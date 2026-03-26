@@ -100,7 +100,9 @@ class Settings(BaseSettings):
     # Secrets: à fournir via Railway Secrets / variables d'environnement.
     MISTRAL_API_KEY: str = ""
     MISTRAL_BASE_URL: str = "https://api.mistral.ai"
-    MISTRAL_MODEL: str = "mistral-small-latest"
+    MISTRAL_MODEL: str = "mistral-large-latest"
+    MISTRAL_ENABLED: bool = False
+    MISTRAL_TIMEOUT_SECONDS: int = 60
 
     # Hugging Face NER assistif (API gérée en UE)
     HF_API_KEY: str = ""

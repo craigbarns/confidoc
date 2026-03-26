@@ -17,6 +17,7 @@ from app.models.llm_request import LlmRequest
 from app.models.llm_suggestion import LlmSuggestion
 from app.services.anonymization_service import anonymize_text, classify_document_type
 from app.services.ollama_service import generate_summary_with_ollama, generate_audit_with_ollama
+from app.services.mistral_service import generate_summary_with_mistral, generate_audit_with_mistral, stream_mistral_response
 from app.services.kimi_service import generate_summary_with_kimi, generate_audit_with_kimi, stream_kimi_response
 from app.services.structured_dataset_service import build_structured_dataset
 from app.api.v1.documents import _get_best_text_for_reporting
@@ -26,27 +27,26 @@ router = APIRouter()
 
 
 def _select_llm_provider(requested: str) -> str:
-    """Select best available LLM provider based on configuration."""
+    """Select best available LLM provider. Priority: Mistral → Kimi → Ollama."""
     _settings = get_settings()
-    kimi_available = getattr(_settings, "KIMI_ENABLED", False) and getattr(_settings, "KIMI_API_KEY", "")
-    ollama_available = getattr(_settings, "OLLAMA_ENABLED", True)
-    
+    mistral_available = bool(getattr(_settings, "MISTRAL_ENABLED", False) and getattr(_settings, "MISTRAL_API_KEY", ""))
+    kimi_available = bool(getattr(_settings, "KIMI_ENABLED", False) and getattr(_settings, "KIMI_API_KEY", ""))
+    ollama_available = bool(getattr(_settings, "OLLAMA_ENABLED", True))
+
+    if requested == "mistral" and mistral_available:
+        return "mistral"
     if requested == "kimi" and kimi_available:
         return "kimi"
     if requested == "ollama" and ollama_available:
         return "ollama"
-    if requested == "auto":
-        # Prioritize Kimi if available (better quality), fallback to Ollama
-        if kimi_available:
-            return "kimi"
-        if ollama_available:
-            return "ollama"
-    # Fallback: try Kimi first, then Ollama
+    # Auto: Mistral > Kimi > Ollama
+    if mistral_available:
+        return "mistral"
     if kimi_available:
         return "kimi"
     if ollama_available:
         return "ollama"
-    return "kimi"  # Default to kimi even if not configured (will fail gracefully)
+    return "mistral"  # Will fail gracefully with clear error message
 
 
 def _is_safe_placeholder_text(v: str) -> bool:
@@ -368,7 +368,12 @@ async def ai_audit(
     selected_provider = _select_llm_provider(llm_provider)
     
     try:
-        if selected_provider == "kimi":
+        if selected_provider == "mistral":
+            llm = await generate_audit_with_mistral(
+                ai_payload, doc_type=structured.get("doc_type", "generic")
+            )
+            provider_name = "mistral"
+        elif selected_provider == "kimi":
             llm = await generate_audit_with_kimi(
                 ai_payload, doc_type=structured.get("doc_type", "generic")
             )
@@ -522,7 +527,14 @@ async def ai_summary(
     selected_provider = _select_llm_provider(llm_provider)
     
     try:
-        if selected_provider == "kimi":
+        if selected_provider == "mistral":
+            llm = await generate_summary_with_mistral(
+                ai_payload,
+                prudent_mode=prudent_mode,
+                mode=kimi_mode,
+            )
+            provider_name = "mistral"
+        elif selected_provider == "kimi":
             llm = await generate_summary_with_kimi(
                 ai_payload,
                 prudent_mode=prudent_mode,
@@ -635,9 +647,15 @@ async def ai_stream(
         f"Question: {prompt_question}"
     )
 
+    stream_provider = _select_llm_provider("auto")
+
     async def _event_stream():
         try:
-            async for chunk in stream_kimi_response(user_content, temperature=0.3):
+            if stream_provider == "mistral":
+                gen = stream_mistral_response(user_content, temperature=0.3)
+            else:
+                gen = stream_kimi_response(user_content, temperature=0.3)
+            async for chunk in gen:
                 payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
                 yield f"data: {payload}\n\n"
             yield "data: [DONE]\n\n"
