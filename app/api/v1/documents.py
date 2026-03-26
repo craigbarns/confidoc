@@ -44,6 +44,7 @@ from app.services.anonymization_service import (
 )
 from app.config import get_settings
 from app.services.structured_dataset_service import build_structured_dataset
+from app.services.llm_extraction_fallback import enrich_with_llm_fallback
 from app.services.webhook_notify import notify_document_validated
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import delete_bytes, read_bytes
@@ -1472,6 +1473,7 @@ async def export_structured_dataset(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
     structured.update(
         {
             "document_id": str(document.id),
@@ -1522,6 +1524,7 @@ async def export_accounting_json(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
     quality = structured.get("quality") or {}
     if not bool(quality.get("ready_for_ai_core")):
         raise http_409(
@@ -1566,6 +1569,7 @@ async def export_structured_report_doc(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
     html = _build_structured_report_doc_html(
         structured,
         original_filename=document.original_filename or f"document_{document.id}",
@@ -1610,6 +1614,7 @@ async def export_structured_report_pdf(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
     pdf_bytes = _build_structured_report_pdf_bytes(
         structured,
         original_filename=document.original_filename or f"document_{document.id}",
@@ -1988,6 +1993,7 @@ async def document_audit_quality_bundle(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
     prov = structured.get("provenance") if isinstance(structured.get("provenance"), dict) else {}
     return JSONResponse(
         {
@@ -2089,6 +2095,7 @@ async def document_dataset_summary(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
     structured_quality = structured.get("quality", {}) if isinstance(structured, dict) else {}
     entities_count = len(merged)
     needs_review = bool(structured_quality.get("needs_review", False)) or len(quality_flags) > 0 or entities_count == 0
@@ -2213,6 +2220,7 @@ async def export_csv(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
 
     # Build CSV from fields + tables
     output = io.StringIO()
@@ -2625,6 +2633,7 @@ async def export_xlsx(
         requested_doc_type=doc_type,
         extraction_text=original_text,
     )
+    structured = await enrich_with_llm_fallback(structured, original_text)
 
     wb = openpyxl.Workbook()
 
