@@ -13,107 +13,95 @@ from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
-from app.models.llm_request import LlmRequest
 from app.services.mistral_ocr_service import extract_text_from_file
 from app.services.llm_anonymization_service import anonymize_document_full
 
 logger = get_logger(__name__)
 
 
-def _overlaps(a: dict, b: dict) -> bool:
-    """Check if two span dicts overlap."""
-    return not (a["end_index"] <= b["start_index"] or a["start_index"] >= b["end_index"])
-
-
-def _apply_replacements(text: str, detections: list[dict]) -> str:
-    """Apply replacement tokens to text, processing from end to preserve indices."""
-    out = text
-    for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
-        out = out[: match["start_index"]] + match["replacement"] + out[match["end_index"] :]
-    return out
-
-
-
-
-
-async def build_anonymization_preview(
+async def build_extraction_ocr(
     db: AsyncSession,
     document: Document,
     file_content: bytes,
-    profile: str = "moderate",
-    document_type: str = "auto",
-) -> tuple[str, list[dict], str, dict[str, Any]]:
-    """Compute anonymization preview and persist versions/detections.
-
+) -> tuple[str, dict[str, Any]]:
+    """Étape 1: Extraction OCR via Mistral.
+    
     Returns:
-        (preview_text, merged_detections, effective_document_type, extraction_meta)
+        (texte_extrait, metadata)
     """
-    settings = get_settings()
-
-    # 1) Mark as processing
     document.status = DocumentStatus.PROCESSING
     await db.flush()
-
-    # 2) Extract text from file via Mistral OCR
-    # Remplace PyMuPDF/Tesseract par l'OCR natif Mistral
+    
+    # Extraction OCR Mistral
     original_text, extraction_meta = await extract_text_from_file(
         file_content, document.extension
     )
-    original_text = original_text or ""
-
-    llm_detections: list[dict] = []
-    llm_req_obj: LlmRequest | None = None
-    merged: list[dict] = []
-    preview_text = ""
-    effective_type = "empty"
-
+    
     if not original_text.strip():
-        # Même sans texte (PNG vide, scan illisible…), on persiste les versions pour
-        # GET /preview, export-structured, smoke e2e — sinon 404 + anonymize instable.
         logger.warning("empty_text_extraction", doc_id=str(document.id))
-    else:
-        # 3) Anonymisation 100% LLM (Mistral Large)
-        # Pas de regex, pas de classification — tout passe par le LLM
-        effective_type = document_type if document_type != "auto" else "document"
-        
-        preview_text, merged = await anonymize_document_full(original_text)
-        
-        # Log pour observabilité
-        logger.info(
-            "llm_anonymization_processed",
-            doc_id=str(document.id),
-            detections=len(merged),
-        )
-
-    # 7) Persist: clean old data, save new versions/detections
-    await db.execute(
-        delete(EntityDetection).where(EntityDetection.document_id == document.id)
-    )
+        original_text = ""
+    
+    # Sauvegarde le texte OCR brut
     await db.execute(
         delete(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type.in_([
-                DocumentVersionType.ORIGINAL_TEXT,
-                DocumentVersionType.PREVIEW_ANONYMIZED,
-            ]),
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
         )
     )
-
+    
     original_version = DocumentVersion(
         document_id=document.id,
         version_type=DocumentVersionType.ORIGINAL_TEXT,
         content_text=postgres_safe_text(original_text),
     )
+    db.add(original_version)
+    await db.flush()
+    
+    logger.info(
+        "ocr_extraction_complete",
+        doc_id=str(document.id),
+        chars=len(original_text),
+        pages=extraction_meta.get("pages", 0),
+    )
+    
+    return original_text, extraction_meta
+
+
+async def build_anonymization_llm(
+    db: AsyncSession,
+    document: Document,
+    original_text: str,
+) -> tuple[str, list[dict], dict[str, Any]]:
+    """Étape 2: Anonymisation LLM via Mistral.
+    
+    Returns:
+        (texte_anonymise, detections, metadata)
+    """
+    # Anonymisation LLM
+    preview_text, detections = await anonymize_document_full(original_text)
+    
+    # Sauvegarde le texte anonymisé
+    await db.execute(
+        delete(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    
     preview_version = DocumentVersion(
         document_id=document.id,
         version_type=DocumentVersionType.PREVIEW_ANONYMIZED,
         content_text=postgres_safe_text(preview_text),
     )
-    db.add(original_version)
     db.add(preview_version)
     await db.flush()
-
-    for item in merged:
+    
+    # Sauvegarde les détections
+    await db.execute(
+        delete(EntityDetection).where(EntityDetection.document_id == document.id)
+    )
+    
+    for item in detections:
         db.add(
             EntityDetection(
                 document_id=document.id,
@@ -125,19 +113,41 @@ async def build_anonymization_preview(
                 replacement=postgres_safe_text(str(item.get("replacement", "[REDACTED]")))[:10_000],
             )
         )
-
-    if llm_req_obj is not None:
-        llm_req_obj.preview_version_id = preview_version.id
-
+    
     document.status = DocumentStatus.READY
     await db.flush()
-
+    
     logger.info(
-        "anonymization_complete",
+        "llm_anonymization_complete",
         doc_id=str(document.id),
-        doc_type=effective_type,
-        profile=profile,
-        detections=len(merged),
+        detections=len(detections),
     )
+    
+    meta = {
+        "method": "llm:mistral-large",
+        "detections_count": len(detections),
+    }
+    
+    return preview_text, detections, meta
 
-    return preview_text, merged, effective_type, extraction_meta
+
+# Fonction legacy pour compatibilité (OCR + Anonymisation en une fois)
+async def build_anonymization_preview(
+    db: AsyncSession,
+    document: Document,
+    file_content: bytes,
+    profile: str = "moderate",
+    document_type: str = "auto",
+) -> tuple[str, list[dict], str, dict[str, Any]]:
+    """Pipeline complet: OCR + Anonymisation (legacy)."""
+    # Étape 1: OCR
+    original_text, extraction_meta = await build_extraction_ocr(
+        db, document, file_content
+    )
+    
+    # Étape 2: Anonymisation
+    preview_text, detections, anon_meta = await build_anonymization_llm(
+        db, document, original_text
+    )
+    
+    return preview_text, detections, "document", extraction_meta

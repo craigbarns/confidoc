@@ -27,7 +27,11 @@ from app.schemas.document import (
     DocumentResponse,
     ValidateDocumentRequest,
 )
-from app.services.document_processing_service import build_anonymization_preview
+from app.services.document_processing_service import (
+    build_anonymization_preview,
+    build_extraction_ocr,
+    build_anonymization_llm,
+)
 from app.services.anonymization_service import (
     anonymize_text,
     classify_document_type,
@@ -217,14 +221,14 @@ async def _run_anonymize_background(doc_id: str, file_content: bytes, profile: s
             document = result.scalar_one_or_none()
             if not document:
                 return
-            await build_anonymization_preview(
-                db=db, document=document, file_content=file_content,
-                profile=profile, document_type=document_type,
-            )
+            # Étape 1: OCR
+            original_text, _ = await build_extraction_ocr(db, document, file_content)
+            # Étape 2: Anonymisation
+            await build_anonymization_llm(db, document, original_text)
             await db.commit()
-            logger.info("background_anonymize_complete", doc_id=doc_id)
+            logger.info("background_process_complete", doc_id=doc_id)
     except Exception as exc:
-        logger.error("background_anonymize_failed", doc_id=doc_id, error=str(exc))
+        logger.error("background_process_failed", doc_id=doc_id, error=str(exc))
         try:
             async with async_session_factory() as db:
                 await db.execute(
@@ -238,23 +242,91 @@ async def _run_anonymize_background(doc_id: str, file_content: bytes, profile: s
 
 
 @router.post(
+    "/{document_id}/extract",
+    status_code=status.HTTP_200_OK,
+    summary="Étape 1: Extraire le texte via Mistral OCR",
+)
+async def extract_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Extraction OCR du document. Retourne le texte brut."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    file_content = _read_file_or_404(document)
+    
+    # Extraction OCR synchrone (peut prendre 10-30s)
+    original_text, meta = await build_extraction_ocr(db, document, file_content)
+    await db.commit()
+    
+    return {
+        "document_id": str(document.id),
+        "status": "extracted",
+        "text": original_text[:2000] if len(original_text) > 2000 else original_text,
+        "text_length": len(original_text),
+        "pages": meta.get("pages", 0),
+        "model": meta.get("model", "unknown"),
+    }
+
+
+@router.post(
     "/{document_id}/anonymize",
-    status_code=status.HTTP_202_ACCEPTED,
-    summary="Anonymiser un document (traitement en arrière-plan)",
+    status_code=status.HTTP_200_OK,
+    summary="Étape 2: Anonymiser le texte extrait via Mistral LLM",
 )
 async def anonymize_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Anonymisation LLM du texte déjà extrait."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    
+    # Récupère le texte OCR précédemment extrait
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original_version = result.scalar_one_or_none()
+    
+    if not original_version or not original_version.content_text:
+        raise http_400("Texte non extrait. Lancez /extract d'abord.")
+    
+    # Anonymisation LLM (peut prendre 5-15s)
+    preview_text, detections, meta = await build_anonymization_llm(
+        db, document, original_version.content_text
+    )
+    await db.commit()
+    
+    return {
+        "document_id": str(document.id),
+        "status": "anonymized",
+        "preview_text": preview_text[:2000] if len(preview_text) > 2000 else preview_text,
+        "detections_count": len(detections),
+        "method": meta.get("method", "llm"),
+    }
+
+
+# Endpoint legacy pour traitement complet en background
+@router.post(
+    "/{document_id}/process",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="[Legacy] Traitement complet OCR + Anonymisation en background",
+)
+async def process_document_legacy(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
     profile: str = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> dict:
+    """Pipeline complet en background (pour compatibilité)."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     file_content = _read_file_or_404(document)
-    # Marquer PROCESSING immédiatement
     document.status = DocumentStatus.PROCESSING
     await db.commit()
-    # Lancer le traitement en background — évite le timeout HTTP (OCR 30s + LLM 60s)
     asyncio.create_task(
         _run_anonymize_background(str(document.id), file_content, profile, document_type)
     )
