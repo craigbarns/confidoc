@@ -16,6 +16,8 @@
     </div>
     <div class="header-tagline">Anonymisez. Discutez. En sécurité.</div>
     <div class="header-actions">
+      <span id="header-doc-pill" class="context-pill" style="display:none"></span>
+      <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
       <span id="user-info" class="user-info"></span>
       <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">Déconnexion</button>
     </div>
@@ -114,6 +116,16 @@
         <div id="anon-doc-bar" class="anon-doc-bar" style="display:none">
           <span id="anon-doc-name" class="anon-doc-name"></span>
           <span id="anon-doc-size" class="anon-doc-size"></span>
+          <span id="anon-doc-status" class="doc-stage-badge"></span>
+        </div>
+        <div id="pipeline-timeline" class="pipeline-timeline" style="display:none">
+          <div class="pipe-step" data-step="upload"><span>1</span> Upload</div>
+          <div class="pipe-link"></div>
+          <div class="pipe-step" data-step="extract"><span>2</span> OCR</div>
+          <div class="pipe-link"></div>
+          <div class="pipe-step" data-step="anonymize"><span>3</span> Anonymisation</div>
+          <div class="pipe-link"></div>
+          <div class="pipe-step" data-step="ai"><span>4</span> IA</div>
         </div>
 
         <div class="panel-header">
@@ -171,6 +183,11 @@
 
       <!-- PANEL 3: DISCUSSION IA -->
       <div id="panel-ai" class="panel">
+        <div id="ai-doc-bar" class="anon-doc-bar" style="display:none; margin-bottom:12px;">
+          <span id="ai-doc-name" class="anon-doc-name"></span>
+          <span id="ai-doc-size" class="anon-doc-size"></span>
+          <span id="ai-doc-status" class="doc-stage-badge"></span>
+        </div>
         <div class="panel-header">
           <h2>Discussion IA</h2>
           <div class="panel-actions">
@@ -184,6 +201,26 @@
           <button class="quick-btn" data-q="Quels sont les points clés ?">🔑 Points clés</button>
           <button class="quick-btn" data-q="Y a-t-il des anomalies ou alertes ?">⚠️ Anomalies</button>
           <button class="quick-btn" data-q="Donne-moi les chiffres principaux.">📊 Chiffres</button>
+          <button id="btn-report-mode" class="quick-btn" data-on="false">🧱 Mode rapport: OFF</button>
+        </div>
+
+        <div class="ai-insights">
+          <div class="ai-kpi">
+            <div class="kpi-label">Statut document</div>
+            <div id="kpi-doc-status" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">Texte OCR</div>
+            <div id="kpi-ocr-length" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">Entités masquées</div>
+            <div id="kpi-detections" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">Prochaine action</div>
+            <div id="kpi-next-action" class="kpi-value">—</div>
+          </div>
         </div>
 
         <div id="chat-messages" class="chat-messages">
@@ -197,6 +234,7 @@
           <textarea id="chat-input" class="chat-input" placeholder="Posez une question sur le document…" rows="2"></textarea>
           <div class="chat-controls">
             <span class="input-hint">Entrée pour envoyer · Maj+Entrée pour saut de ligne</span>
+            <button id="btn-copy-answer" class="btn btn-ghost btn-sm" disabled>📋 Copier</button>
             <button id="btn-stop-stream" class="btn btn-ghost btn-sm" style="display:none">⏹ Stop</button>
             <button id="btn-send" class="btn btn-primary">Envoyer</button>
           </div>

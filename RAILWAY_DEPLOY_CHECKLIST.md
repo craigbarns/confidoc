@@ -14,7 +14,8 @@ JWT_SECRET_KEY=<prod_key>
 ENCRYPTION_MASTER_KEY=<prod_key>
 
 # LLM (optionnel mais recommandé)
-KIMI_API_KEY=<key>
+MISTRAL_API_KEY=<key>
+MISTRAL_ENABLED=true
 OLLAMA_ENABLED=false
 
 # Logging

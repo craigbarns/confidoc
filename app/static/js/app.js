@@ -5,6 +5,10 @@ let token = sessionStorage.getItem("confidoc_token") || "";
 let currentDocId = null;
 let currentDocName = "";
 let currentDocStatus = "";
+let currentDocSize = 0;
+let currentProvider = "—";
+let latestAssistantText = "";
+let reportMode = false;
 let activeStream = null; // AbortController pour le streaming SSE
 let originalTextCache = {}; // cache { docId: texte }
 
@@ -24,8 +28,13 @@ async function apiRequest(path, opts = {}) {
     try {
       const j = await resp.json();
       msg = j.detail || j.message || msg;
-    } catch (e) {
-      console.warn("Impossible de parser l'erreur API:", e);
+    } catch (_e) {
+      try {
+        const txt = await resp.text();
+        if (txt && txt.trim()) msg = txt.trim().slice(0, 220);
+      } catch (_e2) {
+        // noop
+      }
     }
     throw new Error(msg);
   }
@@ -107,6 +116,9 @@ function logout() {
   currentDocId = null;
   currentDocName = "";
   currentDocStatus = "";
+  currentDocSize = 0;
+  currentProvider = "—";
+  latestAssistantText = "";
   originalTextCache = {};
   sessionStorage.removeItem("confidoc_token");
   if (activeStream) { activeStream.abort(); activeStream = null; }
@@ -114,6 +126,7 @@ function logout() {
   $("screen-app").style.display = "none";
   $("btn-logout").style.display = "none";
   $("user-info").textContent = "";
+  updateHeaderContext();
 }
 
 async function initApp(email) {
@@ -133,19 +146,121 @@ async function initApp(email) {
     }
   }
 
+  await loadProviderInfo();
+  updateHeaderContext();
   setStep(1);
   await loadDocList();
+}
+
+function updateHeaderContext() {
+  const docPill = $("header-doc-pill");
+  const providerPill = $("header-provider-pill");
+  if (currentDocId && currentDocName) {
+    const labelMap = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
+    docPill.textContent = `📄 ${currentDocName} · ${labelMap[currentDocStatus] || currentDocStatus || "—"}`;
+    docPill.style.display = "";
+  } else {
+    docPill.style.display = "none";
+  }
+  providerPill.textContent = `🤖 Provider IA: ${currentProvider || "—"}`;
+  providerPill.style.display = "";
+}
+
+async function loadProviderInfo() {
+  try {
+    const data = await apiFetch("/ai/providers");
+    currentProvider = (data.selected_provider || "mistral").toUpperCase();
+  } catch (_e) {
+    currentProvider = "MISTRAL";
+  }
+}
+
+function renderAIDocInsights(payload = {}) {
+  $("kpi-doc-status").textContent = payload.status || "—";
+  $("kpi-ocr-length").textContent = payload.ocrLength ?? "—";
+  $("kpi-detections").textContent = payload.detections ?? "—";
+  $("kpi-next-action").textContent = payload.nextAction || "—";
+}
+
+async function refreshAIDocInsights(docId) {
+  if (!docId) {
+    renderAIDocInsights({});
+    return;
+  }
+  try {
+    const st = await apiFetch(`/documents/${docId}/status`);
+    const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Discussion IA";
+    updatePipelineTimeline({
+      status: st.status || currentDocStatus,
+      extractDone: !!st?.extraction?.done,
+      anonymDone: !!st?.anonymization?.done,
+    });
+    renderAIDocInsights({
+      status: st.status || "—",
+      ocrLength: st?.extraction?.text_length ?? 0,
+      detections: st?.anonymization?.detections_count ?? 0,
+      nextAction: next,
+    });
+  } catch (_e) {
+    updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: currentDocStatus === "ready" });
+    renderAIDocInsights({
+      status: currentDocStatus || "—",
+      ocrLength: "—",
+      detections: "—",
+      nextAction: "Vérifier document",
+    });
+  }
+}
+
+function updatePipelineTimeline(payload = {}) {
+  const tl = $("pipeline-timeline");
+  if (!tl) return;
+  if (!currentDocId) {
+    tl.style.display = "none";
+    return;
+  }
+  tl.style.display = "";
+  const extractDone = !!payload.extractDone;
+  const anonymDone = !!payload.anonymDone;
+  const st = (payload.status || currentDocStatus || "").toLowerCase();
+  let currentStep = "extract";
+  if (!extractDone) currentStep = "extract";
+  else if (!anonymDone) currentStep = "anonymize";
+  else if (st === "ready") currentStep = "ai";
+  else currentStep = "anonymize";
+  tl.querySelectorAll(".pipe-step").forEach((el) => {
+    const key = el.dataset.step;
+    el.classList.remove("done", "current");
+    if (key === "upload") el.classList.add("done");
+    if (key === "extract" && extractDone) el.classList.add("done");
+    if (key === "anonymize" && anonymDone) el.classList.add("done");
+    if (key === "ai" && st === "ready") el.classList.add("done");
+    if (key === currentStep) el.classList.add("current");
+  });
 }
 
 // ── Document list ──────────────────────────────────────────────────────
 
 async function loadDocList() {
+  renderDocListSkeleton();
   try {
     const docs = await apiFetch("/documents/");
     renderDocList(docs);
   } catch (e) {
     console.warn("loadDocList failed:", e.message);
   }
+}
+
+function renderDocListSkeleton() {
+  const list = $("doc-list");
+  if (!list) return;
+  list.innerHTML = `
+    <div class="skeleton-wrap">
+      <div class="skeleton-line w90"></div>
+      <div class="skeleton-line w75"></div>
+      <div class="skeleton-line w60"></div>
+    </div>
+  `;
 }
 
 function formatBytes(bytes) {
@@ -244,7 +359,9 @@ async function selectDoc(id, status, name, sizeBytes) {
   currentDocId = id;
   currentDocName = name || "";
   currentDocStatus = status;
+  currentDocSize = sizeBytes || 0;
   delete originalTextCache[id]; // invalide le cache si on recharge
+  updateHeaderContext();
 
   document.querySelectorAll(".doc-item").forEach(el =>
     el.classList.toggle("selected", el.dataset.id === id)
@@ -253,6 +370,8 @@ async function selectDoc(id, status, name, sizeBytes) {
   setStep(2);
   resetAnonPanel();
   updateAnonDocBar(name, sizeBytes);
+  updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: status === "ready" });
+  await refreshAIDocInsights(id);
 
   if (status === "ready") {
     showAnonLoading("Chargement de la prévisualisation…");
@@ -284,7 +403,24 @@ function updateAnonDocBar(name, sizeBytes) {
   if (!name) { $("anon-doc-bar").style.display = "none"; return; }
   $("anon-doc-name").textContent = name;
   $("anon-doc-size").textContent = formatBytes(sizeBytes);
+  const st = $("anon-doc-status");
+  const status = currentDocStatus || "uploaded";
+  const map = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
+  st.textContent = map[status] || status;
+  st.className = `doc-stage-badge ${status}`;
   $("anon-doc-bar").style.display = "";
+}
+
+function updateAIDocBar(name, sizeBytes) {
+  if (!name) { $("ai-doc-bar").style.display = "none"; return; }
+  $("ai-doc-name").textContent = name;
+  $("ai-doc-size").textContent = formatBytes(sizeBytes);
+  const st = $("ai-doc-status");
+  const status = currentDocStatus || "uploaded";
+  const map = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
+  st.textContent = map[status] || status;
+  st.className = `doc-stage-badge ${status}`;
+  $("ai-doc-bar").style.display = "";
 }
 
 // ── Upload ─────────────────────────────────────────────────────────────
@@ -314,6 +450,8 @@ async function uploadFile(file) {
     currentDocId = data.document_id;
     currentDocName = file.name;
     currentDocStatus = "uploaded";
+    currentDocSize = file.size || 0;
+    updateHeaderContext();
     await loadDocList();
 
     setTimeout(() => {
@@ -323,6 +461,7 @@ async function uploadFile(file) {
       setStep(2);
       resetAnonPanel();
       updateAnonDocBar(file.name, file.size);
+      refreshAIDocInsights(currentDocId);
       $("anon-empty").style.display = "";
       $("anon-empty").querySelector(".hint-icon").textContent = "📄";
       $("anon-empty").querySelector("p").innerHTML =
@@ -353,6 +492,7 @@ function resetAnonPanel() {
   $("preview-original-text").textContent = "";
   $("original-loading").style.display = "none";
   switchTab("anonymized");
+  updatePipelineTimeline({});
 }
 
 function showAnonLoading(msg) {
@@ -399,11 +539,14 @@ async function anonymize() {
       showAnonLoading("Traitement en arrière-plan…");
       await loadDocList();
       pollDocStatus(currentDocId);
+      updatePipelineTimeline({ status: "processing", extractDone: true, anonymDone: false });
     } else if (res.ok) {
       const data = await res.json();
       showAnonResults(data.preview_text, data.detections_count);
       toast(`${data.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
       currentDocStatus = "ready";
+      updateHeaderContext();
+      updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });
       await loadDocList();
     } else {
       const err = await res.json().catch(() => ({}));
@@ -442,11 +585,14 @@ function pollDocStatus(docId) {
           toast("Anonymisation terminée.", "success");
         }
         currentDocStatus = "ready";
+        updateHeaderContext();
+        updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });
         await loadDocList();
       } else if (doc.status === "failed") {
         clearInterval(interval);
         hideAnonLoading();
         toast("L'anonymisation a échoué. Veuillez réessayer.", "error");
+        updatePipelineTimeline({ status: "failed", extractDone: true, anonymDone: false });
         await loadDocList();
       }
       // sinon: toujours "processing", on continue à poller
@@ -510,6 +656,8 @@ async function validate() {
       body: JSON.stringify({}),
     });
     setStep(3);
+    updateAIDocBar(currentDocName, currentDocSize);
+    refreshAIDocInsights(currentDocId);
     resetChat();
     await loadDocList();
     toast("Document validé — posez vos questions !", "success");
@@ -525,12 +673,16 @@ async function validate() {
 function goToChat() {
   if (!currentDocId) return;
   setStep(3);
+  updateAIDocBar(currentDocName, currentDocSize);
+  refreshAIDocInsights(currentDocId);
   resetChat();
 }
 
 // ── AI Chat ────────────────────────────────────────────────────────────
 
 function resetChat() {
+  latestAssistantText = "";
+  $("btn-copy-answer").disabled = true;
   $("chat-messages").innerHTML =
     '<div class="chat-intro"><div class="chat-intro-icon">🔒</div>' +
     "<p>Document anonymisé. Posez vos questions en toute sécurité.</p></div>";
@@ -557,6 +709,36 @@ function appendAssistantMsg() {
   return div.querySelector(".msg-body");
 }
 
+function escapeHtml(text) {
+  return (text || "")
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;");
+}
+
+function renderStructuredAnswer(bodyEl, text) {
+  const lines = String(text || "").split(/\r?\n/);
+  const sections = [];
+  let current = { title: "Réponse", items: [] };
+  for (const raw of lines) {
+    const line = raw.trim();
+    if (!line) continue;
+    const heading = line.match(/^#{1,3}\s+(.+)$/) || line.match(/^([A-Za-zÀ-ÿ0-9 \-]+)\s*:\s*$/);
+    if (heading) {
+      if (current.items.length) sections.push(current);
+      current = { title: heading[1], items: [] };
+      continue;
+    }
+    current.items.push(line.replace(/^[\-•]\s*/, ""));
+  }
+  if (current.items.length) sections.push(current);
+  if (!sections.length) return;
+  bodyEl.classList.add("structured");
+  bodyEl.innerHTML = sections
+    .map((s) => `<div class="ai-section"><div class="ai-section-title">${escapeHtml(s.title)}</div><ul>${s.items.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul></div>`)
+    .join("");
+}
+
 async function sendMessage() {
   const input = $("chat-input");
   const question = input.value.trim();
@@ -566,6 +748,9 @@ async function sendMessage() {
   input.value = "";
   appendUserMsg(question);
   const bodyEl = appendAssistantMsg();
+  bodyEl.classList.add("streaming");
+  latestAssistantText = "";
+  $("btn-copy-answer").disabled = true;
 
   $("btn-send").style.display = "none";
   $("btn-stop-stream").style.display = "";
@@ -574,15 +759,27 @@ async function sendMessage() {
   activeStream = controller;
 
   try {
+    const effectiveQuestion = reportMode
+      ? `${question}\n\nRéponds en format rapport structuré avec sections: Résumé, Points clés, Risques, Actions recommandées.`
+      : question;
     const resp = await fetch(
-      `${API}/ai/stream/${currentDocId}?question=${encodeURIComponent(question)}`,
+      `${API}/ai/stream/${currentDocId}?question=${encodeURIComponent(effectiveQuestion)}`,
       {
         method: "POST",
         headers: { Authorization: `Bearer ${token}` },
         signal: controller.signal,
       }
     );
-    if (!resp.ok) throw new Error(`HTTP ${resp.status}`);
+    if (!resp.ok) {
+      let detail = `HTTP ${resp.status}`;
+      try {
+        const j = await resp.json();
+        detail = j.detail || j.message || detail;
+      } catch (_e) {
+        // noop
+      }
+      throw new Error(detail);
+    }
 
     const reader = resp.body.getReader();
     const decoder = new TextDecoder();
@@ -602,9 +799,14 @@ async function sendMessage() {
           const parsed = JSON.parse(raw);
           if (parsed.chunk) {
             bodyEl.textContent += parsed.chunk;
+            latestAssistantText = bodyEl.textContent;
+            $("btn-copy-answer").disabled = latestAssistantText.trim().length === 0;
             $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
           } else if (parsed.error) {
             bodyEl.textContent += `\n[Erreur: ${parsed.error}]`;
+            latestAssistantText = bodyEl.textContent;
+            $("btn-copy-answer").disabled = latestAssistantText.trim().length === 0;
+            bodyEl.classList.remove("streaming");
           }
         } catch (e) {
           console.warn("SSE parse error:", e);
@@ -615,11 +817,31 @@ async function sendMessage() {
     if (e.name !== "AbortError") {
       console.error("sendMessage stream error:", e);
       bodyEl.textContent += `\n[Erreur: ${e.message}]`;
+      latestAssistantText = bodyEl.textContent;
+    } else {
+      bodyEl.textContent += "\n[Réponse interrompue]";
+      latestAssistantText = bodyEl.textContent;
     }
+    $("btn-copy-answer").disabled = latestAssistantText.trim().length === 0;
   } finally {
+    bodyEl.classList.remove("streaming");
+    if (reportMode && latestAssistantText.trim()) {
+      renderStructuredAnswer(bodyEl, latestAssistantText);
+    }
     activeStream = null;
     $("btn-send").style.display = "";
     $("btn-stop-stream").style.display = "none";
+  }
+}
+
+async function copyLatestAnswer() {
+  const text = (latestAssistantText || "").trim();
+  if (!text) return;
+  try {
+    await navigator.clipboard.writeText(text);
+    toast("Réponse IA copiée", "success");
+  } catch (_e) {
+    toast("Impossible de copier automatiquement", "error");
   }
 }
 
@@ -702,7 +924,11 @@ document.addEventListener("DOMContentLoaded", () => {
     currentDocId = null;
     currentDocName = "";
     currentDocStatus = "";
+    currentDocSize = 0;
     document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
+    updateHeaderContext();
+    renderAIDocInsights({});
+    updatePipelineTimeline({});
     setStep(1);
   });
 
@@ -744,13 +970,23 @@ document.addEventListener("DOMContentLoaded", () => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
   $("btn-stop-stream").addEventListener("click", stopStream);
+  $("btn-copy-answer").addEventListener("click", copyLatestAnswer);
 
   // Quick actions
   document.querySelectorAll(".quick-btn").forEach(btn => {
+    if (btn.id === "btn-report-mode") return;
     btn.addEventListener("click", () => {
       $("chat-input").value = btn.dataset.q;
       sendMessage();
     });
+  });
+  $("btn-report-mode").addEventListener("click", () => {
+    reportMode = !reportMode;
+    const b = $("btn-report-mode");
+    b.dataset.on = reportMode ? "true" : "false";
+    b.textContent = reportMode ? "🧱 Mode rapport: ON" : "🧱 Mode rapport: OFF";
+    b.classList.toggle("active", reportMode);
+    toast(reportMode ? "Mode rapport activé" : "Mode rapport désactivé", "info");
   });
 
   // Export

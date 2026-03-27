@@ -16,7 +16,6 @@ from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.services.ollama_service import generate_summary_with_ollama
 from app.services.mistral_service import generate_summary_with_mistral, stream_mistral_response
-from app.services.kimi_service import generate_summary_with_kimi, stream_kimi_response
 from app.services.llm_extraction_service import extract_with_llm
 from app.config import get_settings
 
@@ -25,22 +24,17 @@ logger = get_logger(__name__)
 
 
 def _select_llm_provider(requested: str) -> str:
-    """Sélectionne le meilleur provider disponible. Priorité: Mistral → Kimi → Ollama."""
+    """Sélectionne le meilleur provider disponible. Priorité: Mistral → Ollama."""
     s = get_settings()
     mistral_ok = bool(getattr(s, "MISTRAL_ENABLED", False) and getattr(s, "MISTRAL_API_KEY", ""))
-    kimi_ok = bool(getattr(s, "KIMI_ENABLED", False) and getattr(s, "KIMI_API_KEY", ""))
     ollama_ok = bool(getattr(s, "OLLAMA_ENABLED", True))
 
     if requested == "mistral" and mistral_ok:
         return "mistral"
-    if requested == "kimi" and kimi_ok:
-        return "kimi"
     if requested == "ollama" and ollama_ok:
         return "ollama"
     if mistral_ok:
         return "mistral"
-    if kimi_ok:
-        return "kimi"
     if ollama_ok:
         return "ollama"
     return "mistral"
@@ -103,10 +97,6 @@ async def ai_providers(current_user: CurrentUser) -> JSONResponse:
             "key_set": bool(getattr(s, "MISTRAL_API_KEY", "")),
             "model": getattr(s, "MISTRAL_MODEL", ""),
         },
-        "kimi": {
-            "enabled": bool(getattr(s, "KIMI_ENABLED", False)),
-            "key_set": bool(getattr(s, "KIMI_API_KEY", "")),
-        },
         "ollama": {"enabled": bool(getattr(s, "OLLAMA_ENABLED", True))},
     })
 
@@ -148,9 +138,6 @@ async def ai_summary(
         if selected_provider == "mistral":
             llm = await generate_summary_with_mistral(ai_payload, prudent_mode=False, mode=mode)
             provider_name = "mistral"
-        elif selected_provider == "kimi":
-            llm = await generate_summary_with_kimi(ai_payload, prudent_mode=False, mode=mode)
-            provider_name = "kimi"
         else:
             llm = await generate_summary_with_ollama(ai_payload)
             provider_name = "ollama"
@@ -207,7 +194,19 @@ async def ai_stream(
             if stream_provider == "mistral":
                 gen = stream_mistral_response(user_content, temperature=0.3)
             else:
-                gen = stream_kimi_response(user_content, temperature=0.3)
+                # Streaming désactivé hors Mistral pour éviter les routages implicites.
+                payload = json.dumps(
+                    {
+                        "error": (
+                            "Streaming indisponible pour ce provider. "
+                            "Configurez Mistral (MISTRAL_ENABLED + API key)."
+                        )
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"data: {payload}\n\n"
+                yield "data: [DONE]\n\n"
+                return
             async for chunk in gen:
                 payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
                 yield f"data: {payload}\n\n"
