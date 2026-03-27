@@ -73,21 +73,26 @@ async def build_anonymization_llm(
     document: Document,
     original_text: str,
     use_llm: bool = False,  # Par défaut: dictionnaire (plus fiable)
+    profile: str = "moderate",  # "moderate" = dictionnaire, "strict" = LLM
 ) -> tuple[str, list[dict], dict[str, Any]]:
     """Étape 2: Anonymisation via dictionnaire ou LLM.
-    
+
     Args:
         use_llm: Si True, utilise Mistral LLM. Sinon, dictionnaire (défaut).
-    
+        profile: "moderate" (dictionnaire rapide) ou "strict" (LLM, plus exhaustif).
+
     Returns:
         (texte_anonymise, detections, metadata)
     """
-    if use_llm:
-        # Anonymisation LLM (Mistral)
+    # Le profil "strict" force l'utilisation du LLM pour une anonymisation plus complète
+    effective_use_llm = use_llm or (profile == "strict")
+
+    if effective_use_llm:
+        # Anonymisation LLM (Mistral) — plus exhaustive
         preview_text, detections = await anonymize_document_full(original_text)
         method = "llm:mistral-large"
     else:
-        # Anonymisation par dictionnaire (déterministe, fiable)
+        # Anonymisation par dictionnaire (déterministe, fiable, rapide)
         preview_text, detections = await anonymize_document_dictionary(original_text)
         method = "dictionary"
     

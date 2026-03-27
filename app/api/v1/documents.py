@@ -318,6 +318,7 @@ async def anonymize_document(
     db: DbSession,
     auto_extract: bool = Query(default=True, description="Lance l'OCR automatiquement si texte non extrait"),
     use_llm: bool = Query(default=False, description="Utilise Mistral LLM (sinon dictionnaire)"),
+    profile: str = Query(default="moderate", description="Profil d'anonymisation: 'moderate' (dictionnaire) ou 'strict' (LLM)"),
 ) -> dict:
     """Anonymisation du texte par dictionnaire (défaut) ou LLM."""
     document = await _get_user_document_or_404(db, document_id, current_user.id)
@@ -350,9 +351,9 @@ async def anonymize_document(
     if len(original_text.strip()) == 0:
         raise http_400("Document vide ou illisible. Vérifiez que le fichier contient du texte extractible.")
     
-    # Anonymisation (dictionnaire par défaut, LLM si demandé)
+    # Anonymisation (dictionnaire par défaut, LLM si demandé ou profil strict)
     preview_text, detections, meta = await build_anonymization_llm(
-        db, document, original_text, use_llm=use_llm
+        db, document, original_text, use_llm=use_llm, profile=profile
     )
     await db.commit()
     

@@ -3,7 +3,10 @@
 const API = "/api/v1";
 let token = sessionStorage.getItem("confidoc_token") || "";
 let currentDocId = null;
-let activeStream = null; // AbortController for SSE
+let currentDocName = "";
+let currentDocStatus = "";
+let activeStream = null; // AbortController pour le streaming SSE
+let originalTextCache = {}; // cache { docId: texte }
 
 const $ = id => document.getElementById(id);
 
@@ -18,7 +21,12 @@ async function apiRequest(path, opts = {}) {
   const resp = await fetch(API + path, { ...opts, headers });
   if (!resp.ok) {
     let msg = `Erreur HTTP ${resp.status}`;
-    try { const j = await resp.json(); msg = j.detail || j.message || msg; } catch {}
+    try {
+      const j = await resp.json();
+      msg = j.detail || j.message || msg;
+    } catch (e) {
+      console.warn("Impossible de parser l'erreur API:", e);
+    }
     throw new Error(msg);
   }
   return resp;
@@ -40,6 +48,31 @@ function toast(msg, type = "info") {
   el._timer = setTimeout(() => { el.style.display = "none"; }, 4000);
 }
 
+// ── Confirm dialog ─────────────────────────────────────────────────────
+
+function confirm(message) {
+  return new Promise(resolve => {
+    $("confirm-msg").textContent = message;
+    $("confirm-overlay").style.display = "";
+    const onOk = () => {
+      $("confirm-overlay").style.display = "none";
+      cleanup();
+      resolve(true);
+    };
+    const onCancel = () => {
+      $("confirm-overlay").style.display = "none";
+      cleanup();
+      resolve(false);
+    };
+    const cleanup = () => {
+      $("btn-confirm-ok").removeEventListener("click", onOk);
+      $("btn-confirm-cancel").removeEventListener("click", onCancel);
+    };
+    $("btn-confirm-ok").addEventListener("click", onOk);
+    $("btn-confirm-cancel").addEventListener("click", onCancel);
+  });
+}
+
 // ── Pipeline step / panel navigation ──────────────────────────────────
 
 function setStep(n) {
@@ -48,7 +81,6 @@ function setStep(n) {
     if (!s) return;
     s.className = "step" + (i === n ? " active" : i < n ? " done" : "");
   });
-
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
@@ -73,6 +105,9 @@ async function login(email, password) {
 function logout() {
   token = "";
   currentDocId = null;
+  currentDocName = "";
+  currentDocStatus = "";
+  originalTextCache = {};
   sessionStorage.removeItem("confidoc_token");
   if (activeStream) { activeStream.abort(); activeStream = null; }
   $("screen-auth").style.display = "";
@@ -85,7 +120,19 @@ async function initApp(email) {
   $("screen-auth").style.display = "none";
   $("screen-app").style.display = "";
   $("btn-logout").style.display = "";
-  if (email) $("user-info").textContent = email;
+
+  // Afficher l'email : si non fourni, le charger depuis l'API
+  if (email) {
+    $("user-info").textContent = email;
+  } else {
+    try {
+      const me = await apiFetch("/users/me");
+      $("user-info").textContent = me.email || "";
+    } catch (e) {
+      console.warn("Impossible de charger le profil utilisateur:", e);
+    }
+  }
+
   setStep(1);
   await loadDocList();
 }
@@ -101,53 +148,143 @@ async function loadDocList() {
   }
 }
 
+function formatBytes(bytes) {
+  if (!bytes) return "";
+  if (bytes < 1024) return `${bytes} o`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(0)} Ko`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} Mo`;
+}
+
+function formatDate(isoStr) {
+  if (!isoStr) return "";
+  const d = new Date(isoStr);
+  return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
+}
+
 function renderDocList(docs) {
   const list = $("doc-list");
+  const count = $("doc-count");
+
   if (!docs.length) {
     list.innerHTML = '<div class="empty-state">Aucun document.<br>Uploadez-en un.</div>';
+    if (count) count.textContent = "";
     return;
   }
+
+  if (count) count.textContent = docs.length;
+
+  const statusLabel = {
+    uploaded: "Uploadé",
+    processing: "En cours",
+    ready: "Prêt",
+    failed: "Erreur",
+  };
+
   list.innerHTML = docs.map(d => {
     const name = d.original_filename.length > 26
       ? d.original_filename.slice(0, 24) + "…"
       : d.original_filename;
-    const statusLabel = { uploaded: "Uploadé", processing: "En cours", ready: "Prêt", failed: "Erreur" }[d.status] || d.status;
+    const label = statusLabel[d.status] || d.status;
     const selected = d.id === currentDocId ? " selected" : "";
-    return `<div class="doc-item${selected}" data-id="${d.id}" data-status="${d.status}">
+    const size = formatBytes(d.size_bytes);
+    const date = formatDate(d.created_at);
+    const meta = [date, size].filter(Boolean).join(" · ");
+
+    return `<div class="doc-item${selected}" data-id="${d.id}" data-status="${d.status}" data-name="${d.original_filename}" data-size="${d.size_bytes || 0}">
       <div class="doc-item-name">${name}</div>
-      <span class="doc-item-status status-${d.status}">${statusLabel}</span>
+      <div class="doc-item-meta">
+        <span class="doc-item-status status-${d.status}">${label}</span>
+        ${meta ? `<span>${meta}</span>` : ""}
+      </div>
+      <button class="doc-item-del" data-id="${d.id}" data-name="${d.original_filename}" title="Supprimer">✕</button>
     </div>`;
   }).join("");
 
   list.querySelectorAll(".doc-item").forEach(el => {
-    el.addEventListener("click", () => selectDoc(el.dataset.id, el.dataset.status));
+    el.addEventListener("click", () => selectDoc(
+      el.dataset.id,
+      el.dataset.status,
+      el.dataset.name,
+      parseInt(el.dataset.size, 10) || 0
+    ));
+  });
+
+  list.querySelectorAll(".doc-item-del").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      await deleteDoc(btn.dataset.id, btn.dataset.name);
+    });
   });
 }
 
-async function selectDoc(id, status) {
+// ── Delete document ─────────────────────────────────────────────────────
+
+async function deleteDoc(id, name) {
+  const ok = await confirm(`"${name}" sera déplacé dans la corbeille.`);
+  if (!ok) return;
+  try {
+    await apiRequest(`/documents/${id}`, { method: "DELETE" });
+    toast(`"${name}" supprimé`, "success");
+    if (currentDocId === id) {
+      currentDocId = null;
+      currentDocName = "";
+      currentDocStatus = "";
+      setStep(1);
+    }
+    await loadDocList();
+  } catch (e) {
+    console.error("deleteDoc error:", e);
+    toast(`Erreur suppression: ${e.message}`, "error");
+  }
+}
+
+// ── Select document ─────────────────────────────────────────────────────
+
+async function selectDoc(id, status, name, sizeBytes) {
   currentDocId = id;
+  currentDocName = name || "";
+  currentDocStatus = status;
+  delete originalTextCache[id]; // invalide le cache si on recharge
+
   document.querySelectorAll(".doc-item").forEach(el =>
     el.classList.toggle("selected", el.dataset.id === id)
   );
 
+  setStep(2);
+  resetAnonPanel();
+  updateAnonDocBar(name, sizeBytes);
+
   if (status === "ready") {
-    setStep(2);
-    resetAnonPanel();
+    showAnonLoading("Chargement de la prévisualisation…");
     try {
       const preview = await apiFetch(`/documents/${id}/preview`);
-      $("anon-results").style.display = "";
-      $("stat-count").textContent = preview.detections_count;
-      $("preview-anon-text").innerHTML = highlightTags(preview.preview_text || "");
-    } catch {}
+      showAnonResults(preview.preview_text, preview.detections_count);
+    } catch (e) {
+      console.error("preview load error:", e);
+      hideAnonLoading();
+      toast("Impossible de charger la prévisualisation.", "error");
+    }
   } else if (status === "processing") {
-    setStep(2);
-    resetAnonPanel();
-    showAnonLoading();
+    showAnonLoading("Traitement en cours…");
     pollDocStatus(id);
-  } else {
-    setStep(2);
-    resetAnonPanel();
+  } else if (status === "uploaded") {
+    // Doc uploadé, pas encore anonymisé — montrer panel vide avec instructions
+    $("anon-empty").style.display = "";
+    $("anon-empty").querySelector("p").innerHTML =
+      "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
+  } else if (status === "failed") {
+    $("anon-empty").style.display = "";
+    $("anon-empty").querySelector(".hint-icon").textContent = "⚠️";
+    $("anon-empty").querySelector("p").innerHTML =
+      "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
   }
+}
+
+function updateAnonDocBar(name, sizeBytes) {
+  if (!name) { $("anon-doc-bar").style.display = "none"; return; }
+  $("anon-doc-name").textContent = name;
+  $("anon-doc-size").textContent = formatBytes(sizeBytes);
+  $("anon-doc-bar").style.display = "";
 }
 
 // ── Upload ─────────────────────────────────────────────────────────────
@@ -175,16 +312,26 @@ async function uploadFile(file) {
     fill.style.width = "100%";
     statusEl.textContent = "Upload réussi !";
     currentDocId = data.document_id;
+    currentDocName = file.name;
+    currentDocStatus = "uploaded";
     await loadDocList();
+
     setTimeout(() => {
       zone.style.display = "";
       progress.style.display = "none";
       fill.style.width = "0";
       setStep(2);
       resetAnonPanel();
+      updateAnonDocBar(file.name, file.size);
+      $("anon-empty").style.display = "";
+      $("anon-empty").querySelector(".hint-icon").textContent = "📄";
+      $("anon-empty").querySelector("p").innerHTML =
+        `<strong>${file.name}</strong> uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
     }, 600);
+
     toast(`${file.name} uploadé`, "success");
   } catch (e) {
+    console.error("uploadFile error:", e);
     zone.style.display = "";
     progress.style.display = "none";
     fill.style.width = "0";
@@ -195,15 +342,38 @@ async function uploadFile(file) {
 // ── Anonymisation ──────────────────────────────────────────────────────
 
 function resetAnonPanel() {
-  $("anon-loading").style.display = "none";
+  hideAnonLoading();
   $("anon-results").style.display = "none";
+  $("anon-empty").style.display = "none";
+  $("anon-empty").querySelector(".hint-icon").textContent = "👈";
+  $("anon-empty").querySelector("p").innerHTML =
+    "Sélectionnez un document dans la liste<br>ou uploadez-en un nouveau.";
+  $("btn-anonymize").disabled = false;
+  // Reset onglet original
+  $("preview-original-text").textContent = "";
+  $("original-loading").style.display = "none";
+  switchTab("anonymized");
+}
+
+function showAnonLoading(msg) {
+  $("anon-loading").style.display = "";
+  $("anon-loading-msg").textContent = msg || "Anonymisation en cours…";
+  $("anon-results").style.display = "none";
+  $("anon-empty").style.display = "none";
+  $("btn-anonymize").disabled = true;
+}
+
+function hideAnonLoading() {
+  $("anon-loading").style.display = "none";
   $("btn-anonymize").disabled = false;
 }
 
-function showAnonLoading() {
-  $("anon-loading").style.display = "";
-  $("anon-results").style.display = "none";
-  $("btn-anonymize").disabled = true;
+function showAnonResults(previewText, count) {
+  hideAnonLoading();
+  $("anon-results").style.display = "";
+  $("stat-count").textContent = count ?? 0;
+  $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+  switchTab("anonymized");
 }
 
 function highlightTags(text) {
@@ -216,81 +386,100 @@ function highlightTags(text) {
 async function anonymize() {
   if (!currentDocId) { toast("Aucun document sélectionné", "error"); return; }
   const profile = $("anon-profile").value;
-  showAnonLoading();
+  showAnonLoading("Anonymisation en cours…");
+
   try {
     const res = await fetch(
       `/api/v1/documents/${currentDocId}/anonymize?profile=${profile}`,
       { method: "POST", headers: { "Authorization": `Bearer ${token}` } }
     );
+
     if (res.status === 202) {
-      // Traitement en background — on poll jusqu'à ce que le doc soit READY
-      toast("Anonymisation en cours… (peut prendre 30-60s)", "info");
+      toast("Anonymisation lancée… (peut prendre 30-60 s)", "info");
+      showAnonLoading("Traitement en arrière-plan…");
       await loadDocList();
       pollDocStatus(currentDocId);
     } else if (res.ok) {
       const data = await res.json();
-      $("anon-loading").style.display = "none";
-      $("anon-results").style.display = "";
-      $("stat-count").textContent = data.detections_count || 0;
-      $("preview-anon-text").innerHTML = highlightTags(data.preview_text || "(Aucun texte extrait)");
-      $("btn-anonymize").disabled = false;
-      switchTab("anonymized");
-      toast(`${data.detections_count} entité(s) anonymisée(s)`, "success");
+      showAnonResults(data.preview_text, data.detections_count);
+      toast(`${data.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
+      currentDocStatus = "ready";
       await loadDocList();
     } else {
       const err = await res.json().catch(() => ({}));
       throw new Error(err.detail || `HTTP ${res.status}`);
     }
   } catch (e) {
-    $("anon-loading").style.display = "none";
-    $("btn-anonymize").disabled = false;
+    console.error("anonymize error:", e);
+    hideAnonLoading();
     toast(`Erreur: ${e.message}`, "error");
   }
 }
 
 function pollDocStatus(docId) {
   let tries = 0;
+  const maxTries = 60;
   const interval = setInterval(async () => {
     tries++;
-    if (tries > 60) {
+    if (tries > maxTries) {
       clearInterval(interval);
-      $("anon-loading").style.display = "none";
-      $("btn-anonymize").disabled = false;
-      toast("Délai d'attente dépassé. Veuillez réessayer.", "error");
-      await loadDocList().catch(() => {});
+      hideAnonLoading();
+      toast("Délai dépassé. Veuillez réessayer.", "error");
+      await loadDocList().catch(e => console.warn(e));
       return;
     }
     try {
       const doc = await apiFetch(`/documents/${docId}`);
       if (doc.status === "ready") {
         clearInterval(interval);
-        $("anon-loading").style.display = "none";
-        $("btn-anonymize").disabled = false;
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
-          $("anon-results").style.display = "";
-          $("stat-count").textContent = preview.detections_count;
-          $("preview-anon-text").innerHTML = highlightTags(preview.preview_text || "");
-          toast(`${preview.detections_count || 0} entité(s) anonymisée(s)`, "success");
-        } catch {
+          showAnonResults(preview.preview_text, preview.detections_count);
+          toast(`${preview.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
+        } catch (e) {
+          console.warn("preview load after poll:", e);
+          hideAnonLoading();
           toast("Anonymisation terminée.", "success");
         }
+        currentDocStatus = "ready";
         await loadDocList();
-      } else if (doc.status !== "processing") {
+      } else if (doc.status === "failed") {
         clearInterval(interval);
-        $("anon-loading").style.display = "none";
-        $("btn-anonymize").disabled = false;
+        hideAnonLoading();
         toast("L'anonymisation a échoué. Veuillez réessayer.", "error");
         await loadDocList();
       }
-    } catch {
+      // sinon: toujours "processing", on continue à poller
+    } catch (e) {
+      console.error("pollDocStatus error:", e);
       clearInterval(interval);
-      $("anon-loading").style.display = "none";
-      $("btn-anonymize").disabled = false;
+      hideAnonLoading();
       toast("Erreur de connexion pendant l'anonymisation.", "error");
-      await loadDocList().catch(() => {});
+      await loadDocList().catch(err => console.warn(err));
     }
   }, 2000);
+}
+
+// ── Original text ──────────────────────────────────────────────────────
+
+async function loadOriginalText(docId) {
+  if (originalTextCache[docId]) {
+    $("preview-original-text").textContent = originalTextCache[docId];
+    return;
+  }
+  $("original-loading").style.display = "";
+  $("preview-original-text").textContent = "";
+  try {
+    const data = await apiFetch(`/documents/${docId}/extracted-text`);
+    const text = data.text || "(Aucun texte extrait)";
+    originalTextCache[docId] = text;
+    $("preview-original-text").textContent = text;
+  } catch (e) {
+    console.warn("loadOriginalText error:", e);
+    $("preview-original-text").textContent = "(Texte original non disponible — lancez l'anonymisation d'abord)";
+  } finally {
+    $("original-loading").style.display = "none";
+  }
 }
 
 // ── Preview tabs ───────────────────────────────────────────────────────
@@ -301,6 +490,11 @@ function switchTab(tabName) {
   );
   $("tab-anonymized").style.display = tabName === "anonymized" ? "" : "none";
   $("tab-original").style.display = tabName === "original" ? "" : "none";
+
+  // Chargement lazy du texte original
+  if (tabName === "original" && currentDocId) {
+    loadOriginalText(currentDocId);
+  }
 }
 
 // ── Validate ───────────────────────────────────────────────────────────
@@ -320,11 +514,18 @@ async function validate() {
     await loadDocList();
     toast("Document validé — posez vos questions !", "success");
   } catch (e) {
+    console.error("validate error:", e);
     toast(`Erreur validation: ${e.message}`, "error");
   } finally {
     btn.disabled = false;
     btn.textContent = "Valider et continuer →";
   }
+}
+
+function goToChat() {
+  if (!currentDocId) return;
+  setStep(3);
+  resetChat();
 }
 
 // ── AI Chat ────────────────────────────────────────────────────────────
@@ -405,11 +606,14 @@ async function sendMessage() {
           } else if (parsed.error) {
             bodyEl.textContent += `\n[Erreur: ${parsed.error}]`;
           }
-        } catch {}
+        } catch (e) {
+          console.warn("SSE parse error:", e);
+        }
       }
     }
   } catch (e) {
     if (e.name !== "AbortError") {
+      console.error("sendMessage stream error:", e);
       bodyEl.textContent += `\n[Erreur: ${e.message}]`;
     }
   } finally {
@@ -434,6 +638,7 @@ async function exportText() {
     const blob = new Blob([await resp.text()], { type: "text/plain;charset=utf-8" });
     triggerDownload(blob, `confidoc_${currentDocId.slice(0, 8)}.txt`);
   } catch (e) {
+    console.error("exportText error:", e);
     toast(`Erreur export texte: ${e.message}`, "error");
   }
 }
@@ -445,6 +650,7 @@ async function exportPdf() {
     const blob = await resp.blob();
     triggerDownload(blob, `confidoc_${currentDocId.slice(0, 8)}.pdf`);
   } catch (e) {
+    console.error("exportPdf error:", e);
     toast(`Erreur export PDF: ${e.message}`, "error");
   }
 }
@@ -468,9 +674,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Login form
   $("form-login").addEventListener("submit", async e => {
     e.preventDefault();
-    const btn = e.target.querySelector("button[type=submit]");
+    const btn = $("btn-login");
     const errEl = $("auth-error");
     btn.disabled = true;
+    $("btn-login-text").textContent = "Connexion…";
     errEl.style.display = "none";
     try {
       const email = $("email").value;
@@ -479,18 +686,22 @@ document.addEventListener("DOMContentLoaded", () => {
       sessionStorage.setItem("confidoc_token", token);
       await initApp(data.email || email);
     } catch (err) {
+      console.error("login error:", err);
       errEl.textContent = err.message;
       errEl.style.display = "";
     } finally {
       btn.disabled = false;
+      $("btn-login-text").textContent = "Se connecter";
     }
   });
 
   $("btn-logout").addEventListener("click", logout);
 
-  // Sidebar: new document
+  // Sidebar: nouveau document
   $("btn-new-doc").addEventListener("click", () => {
     currentDocId = null;
+    currentDocName = "";
+    currentDocStatus = "";
     document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
     setStep(1);
   });
@@ -513,25 +724,28 @@ document.addEventListener("DOMContentLoaded", () => {
     fileInput.value = "";
   });
 
-  // Anonymize
+  // Anonymiser
   $("btn-anonymize").addEventListener("click", anonymize);
 
-  // Validate
+  // Valider → discussion IA (avec validation)
   $("btn-validate").addEventListener("click", validate);
 
-  // Preview tabs
+  // Discussion directe → step 3 sans re-valider
+  $("btn-go-ai").addEventListener("click", goToChat);
+
+  // Onglets preview
   document.querySelectorAll(".tab").forEach(tab => {
     tab.addEventListener("click", () => switchTab(tab.dataset.tab));
   });
 
-  // AI chat
+  // Chat IA
   $("btn-send").addEventListener("click", sendMessage);
   $("chat-input").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
   $("btn-stop-stream").addEventListener("click", stopStream);
 
-  // Quick action buttons
+  // Quick actions
   document.querySelectorAll(".quick-btn").forEach(btn => {
     btn.addEventListener("click", () => {
       $("chat-input").value = btn.dataset.q;
@@ -543,7 +757,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
 
-  // Resume session if token exists
+  // Reprendre la session si token en sessionStorage
   if (token) {
     initApp().catch(() => logout());
   }
