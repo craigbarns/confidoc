@@ -10,10 +10,42 @@ let currentProvider = "—";
 let latestAssistantText = "";
 let reportMode = false;
 let currentClientFilter = "";
+let currentIncludeDeleted = false;
+let currentSearchFilter = "";
+let currentStatusFilter = "";
 let activeStream = null; // AbortController pour le streaming SSE
 let originalTextCache = {}; // cache { docId: texte }
 
 const $ = id => document.getElementById(id);
+const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
+
+function saveFilterState() {
+  const payload = {
+    client: currentClientFilter,
+    search: currentSearchFilter,
+    status: currentStatusFilter,
+    includeDeleted: currentIncludeDeleted,
+  };
+  localStorage.setItem(FILTERS_STORAGE_KEY, JSON.stringify(payload));
+}
+
+function restoreFilterState() {
+  try {
+    const raw = localStorage.getItem(FILTERS_STORAGE_KEY);
+    if (!raw) return;
+    const payload = JSON.parse(raw);
+    currentClientFilter = payload.client || "";
+    currentSearchFilter = payload.search || "";
+    currentStatusFilter = payload.status || "";
+    currentIncludeDeleted = !!payload.includeDeleted;
+    if ($("filter-client")) $("filter-client").value = currentClientFilter;
+    if ($("filter-search")) $("filter-search").value = currentSearchFilter;
+    if ($("filter-status")) $("filter-status").value = currentStatusFilter;
+    if ($("filter-include-deleted")) $("filter-include-deleted").checked = currentIncludeDeleted;
+  } catch (_e) {
+    // noop
+  }
+}
 
 // ── API helpers ────────────────────────────────────────────────────────
 
@@ -150,6 +182,8 @@ async function initApp(email) {
   await loadProviderInfo();
   updateHeaderContext();
   setStep(1);
+  restoreFilterState();
+  await loadClientSuggestions();
   await loadDocList();
 }
 
@@ -245,7 +279,12 @@ function updatePipelineTimeline(payload = {}) {
 async function loadDocList() {
   renderDocListSkeleton();
   try {
-    const qp = currentClientFilter ? `?client_name=${encodeURIComponent(currentClientFilter)}` : "";
+    const params = new URLSearchParams();
+    if (currentClientFilter) params.set("client_name", currentClientFilter);
+    if (currentIncludeDeleted) params.set("include_deleted", "true");
+    if (currentSearchFilter) params.set("q", currentSearchFilter);
+    if (currentStatusFilter) params.set("status_filter", currentStatusFilter);
+    const qp = params.toString() ? `?${params.toString()}` : "";
     const docs = await apiFetch(`/documents/${qp}`);
     renderDocList(docs);
   } catch (e) {
@@ -257,6 +296,41 @@ async function loadDocList() {
       list.innerHTML =
         '<div class="empty-state">Impossible de charger les documents.<br>Vérifiez la session ou rechargez la page.</div>';
     }
+  }
+}
+
+function renderSidebarStats(docs = []) {
+  const el = $("sidebar-stats");
+  if (!el) return;
+  if (!Array.isArray(docs) || !docs.length) {
+    el.style.display = "none";
+    el.innerHTML = "";
+    return;
+  }
+  const total = docs.length;
+  const ready = docs.filter((d) => d.status === "ready").length;
+  const processing = docs.filter((d) => d.status === "processing").length;
+  const trashed = docs.filter((d) => !!d.is_deleted).length;
+  el.innerHTML = [
+    `<span class="stat-chip">Total: ${total}</span>`,
+    `<span class="stat-chip">Prêt IA: ${ready}</span>`,
+    `<span class="stat-chip">Traitement: ${processing}</span>`,
+    `<span class="stat-chip">Corbeille: ${trashed}</span>`,
+  ].join("");
+  el.style.display = "";
+}
+
+async function loadClientSuggestions() {
+  const el = $("clients-suggestions");
+  if (!el) return;
+  try {
+    const qp = currentIncludeDeleted ? "?include_deleted=true" : "";
+    const clients = await apiFetch(`/documents/clients${qp}`);
+    el.innerHTML = (clients || [])
+      .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+      .join("");
+  } catch (_e) {
+    el.innerHTML = "";
   }
 }
 
@@ -288,6 +362,7 @@ function formatDate(isoStr) {
 function renderDocList(docs) {
   const list = $("doc-list");
   const count = $("doc-count");
+  renderSidebarStats(docs);
 
   if (!docs.length) {
     list.innerHTML = '<div class="empty-state">Aucun document.<br>Uploadez-en un.</div>';
@@ -316,19 +391,34 @@ function renderDocList(docs) {
     const clientTag = Array.isArray(d.tags) && d.tags.length
       ? `<span class="doc-client-tag">${d.tags[0]}</span>`
       : "";
+    const isDeleted = !!d.is_deleted;
+    const deletedBadge = isDeleted ? `<span class="doc-item-status">Corbeille</span>` : "";
+    const cardClass = isDeleted ? " trashed" : "";
+    const deleteBtn = isDeleted
+      ? ""
+      : `<button class="doc-item-del" data-id="${d.id}" data-name="${d.original_filename}" title="Supprimer">✕</button>`;
+    const trashActions = isDeleted
+      ? `<div class="doc-item-actions">
+          <button class="btn-tiny doc-item-restore" data-id="${d.id}" data-name="${d.original_filename}">Restaurer</button>
+          <button class="btn-tiny doc-item-delete-perm" data-id="${d.id}" data-name="${d.original_filename}">Suppr. définitive</button>
+        </div>`
+      : "";
 
-    return `<div class="doc-item${selected}" data-id="${d.id}" data-status="${d.status}" data-name="${d.original_filename}" data-size="${d.size_bytes || 0}">
+    return `<div class="doc-item${selected}${cardClass}" data-id="${d.id}" data-status="${d.status}" data-name="${d.original_filename}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
       <div class="doc-item-name">${name}</div>
       <div class="doc-item-meta">
         <span class="doc-item-status status-${d.status}">${label}</span>
+        ${deletedBadge}
         ${clientTag}
         ${meta ? `<span>${meta}</span>` : ""}
       </div>
-      <button class="doc-item-del" data-id="${d.id}" data-name="${d.original_filename}" title="Supprimer">✕</button>
+      ${deleteBtn}
+      ${trashActions}
     </div>`;
   }).join("");
 
   list.querySelectorAll(".doc-item").forEach(el => {
+    if (el.dataset.deleted === "1") return;
     el.addEventListener("click", () => selectDoc(
       el.dataset.id,
       el.dataset.status,
@@ -341,6 +431,18 @@ function renderDocList(docs) {
     btn.addEventListener("click", async e => {
       e.stopPropagation();
       await deleteDoc(btn.dataset.id, btn.dataset.name);
+    });
+  });
+  list.querySelectorAll(".doc-item-restore").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      await restoreDoc(btn.dataset.id, btn.dataset.name);
+    });
+  });
+  list.querySelectorAll(".doc-item-delete-perm").forEach(btn => {
+    btn.addEventListener("click", async e => {
+      e.stopPropagation();
+      await permanentDeleteDoc(btn.dataset.id, btn.dataset.name);
     });
   });
 }
@@ -359,10 +461,43 @@ async function deleteDoc(id, name) {
       currentDocStatus = "";
       setStep(1);
     }
+    await loadClientSuggestions();
     await loadDocList();
   } catch (e) {
     console.error("deleteDoc error:", e);
     toast(`Erreur suppression: ${e.message}`, "error");
+  }
+}
+
+async function restoreDoc(id, name) {
+  try {
+    await apiFetch(`/documents/${id}/restore`, { method: "POST" });
+    toast(`"${name}" restauré`, "success");
+    await loadClientSuggestions();
+    await loadDocList();
+  } catch (e) {
+    console.error("restoreDoc error:", e);
+    toast(`Erreur restauration: ${e.message}`, "error");
+  }
+}
+
+async function permanentDeleteDoc(id, name) {
+  const ok = await confirm(`Suppression définitive de "${name}" ? Cette action est irréversible.`);
+  if (!ok) return;
+  try {
+    await apiRequest(`/documents/${id}/permanent`, { method: "DELETE" });
+    toast(`"${name}" supprimé définitivement`, "success");
+    if (currentDocId === id) {
+      currentDocId = null;
+      currentDocName = "";
+      currentDocStatus = "";
+      setStep(1);
+    }
+    await loadClientSuggestions();
+    await loadDocList();
+  } catch (e) {
+    console.error("permanentDeleteDoc error:", e);
+    toast(`Erreur suppression définitive: ${e.message}`, "error");
   }
 }
 
@@ -452,6 +587,14 @@ async function uploadFile(file) {
   const fd = new FormData();
   fd.append("file", file);
   const clientName = ($("upload-client-name")?.value || "").trim();
+  if (!clientName) {
+    zone.style.display = "";
+    progress.style.display = "none";
+    fill.style.width = "0";
+    toast("Le nom client est obligatoire à l'upload.", "error");
+    $("upload-client-name")?.focus();
+    return;
+  }
 
   try {
     fill.style.width = "70%";
@@ -467,6 +610,7 @@ async function uploadFile(file) {
     currentDocStatus = "uploaded";
     currentDocSize = file.size || 0;
     updateHeaderContext();
+    await loadClientSuggestions();
     await loadDocList();
 
     setTimeout(() => {
@@ -948,7 +1092,28 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   $("filter-client").addEventListener("input", (e) => {
     currentClientFilter = (e.target.value || "").trim();
+    saveFilterState();
     loadDocList();
+  });
+  $("filter-search").addEventListener("input", (e) => {
+    currentSearchFilter = (e.target.value || "").trim();
+    saveFilterState();
+    loadDocList();
+  });
+  $("filter-status").addEventListener("change", (e) => {
+    currentStatusFilter = (e.target.value || "").trim();
+    if (currentStatusFilter === "deleted" && !currentIncludeDeleted) {
+      currentIncludeDeleted = true;
+      $("filter-include-deleted").checked = true;
+    }
+    saveFilterState();
+    loadDocList();
+  });
+  $("filter-include-deleted").addEventListener("change", async (e) => {
+    currentIncludeDeleted = !!e.target.checked;
+    saveFilterState();
+    await loadClientSuggestions();
+    await loadDocList();
   });
 
   // Upload: drag-and-drop
@@ -1016,4 +1181,15 @@ document.addEventListener("DOMContentLoaded", () => {
   if (token) {
     initApp().catch(() => logout());
   }
+});
+
+document.addEventListener("keydown", (e) => {
+  if (e.key !== "/") return;
+  const target = e.target;
+  const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");
+  if (isInput) return;
+  const search = $("filter-search");
+  if (!search) return;
+  e.preventDefault();
+  search.focus();
 });

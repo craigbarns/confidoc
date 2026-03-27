@@ -3,6 +3,7 @@
 import asyncio
 import uuid
 import hashlib
+import re
 from datetime import datetime, timezone
 from io import BytesIO
 from types import SimpleNamespace
@@ -44,6 +45,13 @@ from app.services.storage_service import read_bytes
 
 router = APIRouter()
 logger = get_logger(__name__)
+def _normalize_client_name(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return re.sub(r"\s+", " ", raw).lower()
+
+
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -189,6 +197,8 @@ async def list_documents(
     offset: int = Query(default=0, ge=0),
     include_deleted: bool = Query(default=False, description="Inclure les documents supprimés"),
     client_name: str = Query(default="", description="Filtrer par nom client (tag)"),
+    q: str = Query(default="", description="Recherche texte sur le nom du document"),
+    status_filter: str = Query(default="", description="Filtrer par statut (uploaded|processing|ready|failed|deleted)"),
 ) -> list[Document]:
     """Liste les documents de l'utilisateur connecté."""
     logger.info(
@@ -198,24 +208,82 @@ async def list_documents(
         offset=offset,
         include_deleted=include_deleted,
         client_name=client_name,
+        q=q,
+        status_filter=status_filter,
     )
     
+    client_norm = _normalize_client_name(client_name)
+    q_norm = _normalize_client_name(q)
+    status_norm = _normalize_client_name(status_filter)
+
     # Requête de base
     query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
     
     # Filtrer les supprimés sauf si demandé
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
-    if client_name.strip():
-        # V1: client stocké dans tags[0] lors de l'upload.
-        query = query.where(Document.tags.contains([client_name.strip()]))
-    
-    result = await db.execute(
-        query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
-    )
-    documents = list(result.scalars().all())
+    # Récupération complète utilisateur, puis filtre client robuste (insensible casse/espaces)
+    # et pagination applicative pour fiabilité métier.
+    result = await db.execute(query.order_by(desc(Document.created_at)))
+    documents_all = list(result.scalars().all())
+    if client_norm:
+        filtered: list[Document] = []
+        for d in documents_all:
+            tags = list(getattr(d, "tags", []) or [])
+            if not tags:
+                continue
+            tag_norm = _normalize_client_name(tags[0])
+            if client_norm in tag_norm:
+                filtered.append(d)
+        documents_all = filtered
+    if q_norm:
+        documents_all = [
+            d for d in documents_all
+            if q_norm in _normalize_client_name(getattr(d, "original_filename", ""))
+        ]
+    if status_norm:
+        if status_norm == "deleted":
+            documents_all = [d for d in documents_all if bool(getattr(d, "is_deleted", False))]
+        else:
+            documents_all = [
+                d for d in documents_all
+                if _normalize_client_name(getattr(d, "status", "").value if hasattr(getattr(d, "status", ""), "value") else str(getattr(d, "status", ""))) == status_norm
+            ]
+
+    documents = documents_all[offset : offset + limit]
     logger.info("list_documents_result", user_id=str(current_user.id), count=len(documents))
     return documents
+
+
+@router.get(
+    "/clients",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+    summary="Lister les clients connus (tags documents)",
+)
+async def list_clients(
+    current_user: CurrentUser,
+    db: DbSession,
+    include_deleted: bool = Query(default=False, description="Inclure les documents supprimés"),
+) -> list[str]:
+    query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
+    if not include_deleted:
+        query = query.where(Document.is_deleted.is_(False))
+    result = await db.execute(query.order_by(desc(Document.created_at)))
+    docs = list(result.scalars().all())
+    seen: set[str] = set()
+    out: list[str] = []
+    for d in docs:
+        tags = list(getattr(d, "tags", []) or [])
+        if not tags:
+            continue
+        label = re.sub(r"\s+", " ", str(tags[0]).strip())
+        key = _normalize_client_name(label)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(label)
+    return sorted(out, key=lambda x: x.lower())
 
 
 @router.get(

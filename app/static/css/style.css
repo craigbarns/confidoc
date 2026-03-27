@@ -241,6 +241,33 @@ body {
   padding: 8px 12px 10px;
   border-bottom: 1px solid var(--border);
 }
+.toggle-inline {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  margin-top: 8px;
+  font-size: 12px;
+  color: var(--text-muted);
+}
+.toggle-inline input[type="checkbox"] {
+  accent-color: var(--accent);
+}
+.mt-8 { margin-top: 8px; }
+.sidebar-stats {
+  margin-top: 8px;
+  display: flex;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+.stat-chip {
+  background: var(--border-light);
+  color: var(--text-muted);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  font-size: 10px;
+  font-weight: 700;
+  padding: 2px 8px;
+}
 .input-sm {
   width: 100%;
   background: var(--bg);
@@ -311,6 +338,25 @@ body {
   margin-bottom: 4px;
   position: relative;
 }
+.doc-item.trashed {
+  opacity: 0.7;
+  border: 1px dashed var(--border);
+}
+.doc-item-actions {
+  margin-top: 6px;
+  display: flex;
+  gap: 6px;
+}
+.btn-tiny {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: var(--bg);
+  color: var(--text-muted);
+  cursor: pointer;
+}
+.btn-tiny:hover { color: var(--text); border-color: var(--accent); }
 .doc-item:hover { background: var(--bg-hover); }
 .doc-item.selected {
   background: var(--bg-hover);

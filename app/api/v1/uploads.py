@@ -2,6 +2,7 @@
 
 import asyncio
 import hashlib
+import re
 from typing import Literal
 from uuid import UUID
 
@@ -26,6 +27,13 @@ logger = get_logger(__name__)
 
 # Maximum number of files in a single batch upload
 MAX_BATCH_SIZE = 20
+
+
+def _normalize_client_name(value: str | None) -> str:
+    raw = str(value or "").strip()
+    if not raw:
+        return ""
+    return re.sub(r"\s+", " ", raw)
 
 
 async def _anonymize_document_background(
@@ -144,6 +152,10 @@ async def _upload_document_body(
     client_name: str = "",
 ) -> dict:
     """Corps métier upload (isolé pour try/except global)."""
+    normalized_client_name = _normalize_client_name(client_name)
+    if not normalized_client_name:
+        raise http_400("Le champ client_name est obligatoire")
+
     # Store to external storage (MinIO or local /tmp)
     try:
         storage_backend, storage_key = store_bytes(content=content, extension=extension)
@@ -181,7 +193,7 @@ async def _upload_document_body(
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
         raw_content=content,
-        tags=[client_name.strip()] if client_name.strip() else None,
+        tags=[normalized_client_name],
     )
     db.add(document)
     await db.commit()
@@ -224,7 +236,7 @@ async def _upload_document_body(
         "content_type": file.content_type,
         "size_bytes": len(content),
         "uploaded_by": uploaded_by_snapshot,
-        "client_name": client_name.strip() or None,
+        "client_name": normalized_client_name,
         "processing": processing,
     }
 
@@ -243,6 +255,7 @@ async def upload_batch(
     auto_anonymize: bool = Query(default=True),
     profile: Literal["moderate", "strict"] = Query(default="moderate"),
     document_type: str = Query(default="auto"),
+    client_name: str = Query(default=""),
 ) -> dict:
     """Upload multiple documents at once (up to 20).
 
@@ -292,6 +305,7 @@ async def upload_batch(
                 auto_anonymize=auto_anonymize,
                 profile=profile,
                 document_type=document_type,
+                client_name=client_name,
             )
             results.append(result)
             succeeded += 1

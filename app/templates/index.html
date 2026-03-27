@@ -80,7 +80,22 @@
         <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
       </div>
       <div class="sidebar-filters">
-        <input id="filter-client" class="input-sm" type="text" placeholder="Filtrer par client…" />
+        <input id="filter-client" list="clients-suggestions" class="input-sm" type="text" placeholder="Filtrer par client…" />
+        <input id="filter-search" class="input-sm mt-8" type="text" placeholder="Rechercher un document…" />
+        <select id="filter-status" class="input-sm mt-8">
+          <option value="">Tous statuts</option>
+          <option value="ready">Prêt IA</option>
+          <option value="processing">Traitement</option>
+          <option value="uploaded">Uploadé</option>
+          <option value="failed">Erreur</option>
+          <option value="deleted">Corbeille</option>
+        </select>
+        <datalist id="clients-suggestions"></datalist>
+        <label class="toggle-inline" for="filter-include-deleted">
+          <input id="filter-include-deleted" type="checkbox" />
+          Inclure corbeille
+        </label>
+        <div id="sidebar-stats" class="sidebar-stats" style="display:none"></div>
       </div>
       <div id="doc-list" class="doc-list">
         <div class="empty-state">Aucun document.<br>Uploadez-en un.</div>
@@ -94,8 +109,8 @@
       <div id="panel-upload" class="panel active">
         <h2>Uploader un document</h2>
         <div class="field-inline">
-          <label for="upload-client-name">Client (optionnel)</label>
-          <input id="upload-client-name" class="input-sm" type="text" placeholder="ex: SCI Les Pins" />
+          <label for="upload-client-name">Client (obligatoire)</label>
+          <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" />
         </div>
         <div class="upload-zone" id="upload-zone">
           <div class="upload-icon">📄</div>
