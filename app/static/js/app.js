@@ -9,6 +9,7 @@ let currentDocSize = 0;
 let currentProvider = "—";
 let latestAssistantText = "";
 let reportMode = false;
+let currentClientFilter = "";
 let activeStream = null; // AbortController pour le streaming SSE
 let originalTextCache = {}; // cache { docId: texte }
 
@@ -244,10 +245,18 @@ function updatePipelineTimeline(payload = {}) {
 async function loadDocList() {
   renderDocListSkeleton();
   try {
-    const docs = await apiFetch("/documents/");
+    const qp = currentClientFilter ? `?client_name=${encodeURIComponent(currentClientFilter)}` : "";
+    const docs = await apiFetch(`/documents/${qp}`);
     renderDocList(docs);
   } catch (e) {
     console.warn("loadDocList failed:", e.message);
+    const list = $("doc-list");
+    const count = $("doc-count");
+    if (count) count.textContent = "";
+    if (list) {
+      list.innerHTML =
+        '<div class="empty-state">Impossible de charger les documents.<br>Vérifiez la session ou rechargez la page.</div>';
+    }
   }
 }
 
@@ -304,11 +313,15 @@ function renderDocList(docs) {
     const size = formatBytes(d.size_bytes);
     const date = formatDate(d.created_at);
     const meta = [date, size].filter(Boolean).join(" · ");
+    const clientTag = Array.isArray(d.tags) && d.tags.length
+      ? `<span class="doc-client-tag">${d.tags[0]}</span>`
+      : "";
 
     return `<div class="doc-item${selected}" data-id="${d.id}" data-status="${d.status}" data-name="${d.original_filename}" data-size="${d.size_bytes || 0}">
       <div class="doc-item-name">${name}</div>
       <div class="doc-item-meta">
         <span class="doc-item-status status-${d.status}">${label}</span>
+        ${clientTag}
         ${meta ? `<span>${meta}</span>` : ""}
       </div>
       <button class="doc-item-del" data-id="${d.id}" data-name="${d.original_filename}" title="Supprimer">✕</button>
@@ -438,10 +451,12 @@ async function uploadFile(file) {
 
   const fd = new FormData();
   fd.append("file", file);
+  const clientName = ($("upload-client-name")?.value || "").trim();
 
   try {
     fill.style.width = "70%";
-    const data = await apiFetch(`/uploads?auto_anonymize=false`, {
+    const clientQp = clientName ? `&client_name=${encodeURIComponent(clientName)}` : "";
+    const data = await apiFetch(`/uploads?auto_anonymize=false${clientQp}`, {
       method: "POST",
       body: fd,
     });
@@ -930,6 +945,10 @@ document.addEventListener("DOMContentLoaded", () => {
     renderAIDocInsights({});
     updatePipelineTimeline({});
     setStep(1);
+  });
+  $("filter-client").addEventListener("input", (e) => {
+    currentClientFilter = (e.target.value || "").trim();
+    loadDocList();
   });
 
   // Upload: drag-and-drop

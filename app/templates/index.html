@@ -79,6 +79,9 @@
         <h2>Documents <span id="doc-count" class="doc-count"></span></h2>
         <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
       </div>
+      <div class="sidebar-filters">
+        <input id="filter-client" class="input-sm" type="text" placeholder="Filtrer par client…" />
+      </div>
       <div id="doc-list" class="doc-list">
         <div class="empty-state">Aucun document.<br>Uploadez-en un.</div>
       </div>
@@ -90,6 +93,10 @@
       <!-- PANEL 1: UPLOAD -->
       <div id="panel-upload" class="panel active">
         <h2>Uploader un document</h2>
+        <div class="field-inline">
+          <label for="upload-client-name">Client (optionnel)</label>
+          <input id="upload-client-name" class="input-sm" type="text" placeholder="ex: SCI Les Pins" />
+        </div>
         <div class="upload-zone" id="upload-zone">
           <div class="upload-icon">📄</div>
           <p class="upload-main">Glissez votre fichier ici ou</p>

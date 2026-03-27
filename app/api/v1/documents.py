@@ -188,9 +188,17 @@ async def list_documents(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
     include_deleted: bool = Query(default=False, description="Inclure les documents supprimés"),
+    client_name: str = Query(default="", description="Filtrer par nom client (tag)"),
 ) -> list[Document]:
     """Liste les documents de l'utilisateur connecté."""
-    logger.info("list_documents", user_id=str(current_user.id), limit=limit, offset=offset, include_deleted=include_deleted)
+    logger.info(
+        "list_documents",
+        user_id=str(current_user.id),
+        limit=limit,
+        offset=offset,
+        include_deleted=include_deleted,
+        client_name=client_name,
+    )
     
     # Requête de base
     query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
@@ -198,6 +206,9 @@ async def list_documents(
     # Filtrer les supprimés sauf si demandé
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
+    if client_name.strip():
+        # V1: client stocké dans tags[0] lors de l'upload.
+        query = query.where(Document.tags.contains([client_name.strip()]))
     
     result = await db.execute(
         query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
