@@ -237,32 +237,40 @@ async def stream_kimi_response(
         "temperature": effective_temperature,
         "stream": True,
     }
-    async with httpx.AsyncClient(timeout=float(settings.KIMI_TIMEOUT_SECONDS)) as client:
-        async with client.stream(
-            "POST",
-            f"{settings.KIMI_BASE_URL.rstrip('/')}/chat/completions",
-            headers=headers,
-            json=body,
-        ) as resp:
-            resp.raise_for_status()
-            async for line in resp.aiter_lines():
-                if not line.startswith("data: "):
-                    continue
-                data = line[6:].strip()
-                if data == "[DONE]":
+    try:
+        async with httpx.AsyncClient(timeout=float(settings.KIMI_TIMEOUT_SECONDS)) as client:
+            async with client.stream(
+                "POST",
+                f"{settings.KIMI_BASE_URL.rstrip('/')}/chat/completions",
+                headers=headers,
+                json=body,
+            ) as resp:
+                if resp.status_code != 200:
+                    error_body = await resp.aread()
+                    yield f"[Erreur Kimi {resp.status_code}: {error_body.decode(errors='replace')[:200]}]"
                     return
-                try:
-                    chunk = json.loads(data)
-                    content = (
-                        ((chunk.get("choices") or [{}])[0])
-                        .get("delta", {})
-                        .get("content")
-                        or ""
-                    )
-                    if content:
-                        yield content
-                except Exception:
-                    continue
+                async for line in resp.aiter_lines():
+                    if not line.startswith("data: "):
+                        continue
+                    data = line[6:].strip()
+                    if data == "[DONE]":
+                        return
+                    try:
+                        chunk = json.loads(data)
+                        content = (
+                            ((chunk.get("choices") or [{}])[0])
+                            .get("delta", {})
+                            .get("content")
+                            or ""
+                        )
+                        if content:
+                            yield content
+                    except Exception:
+                        continue
+    except httpx.TimeoutException:
+        yield "[Erreur: délai d'attente Kimi dépassé]"
+    except Exception as exc:
+        yield f"[Erreur Kimi: {exc}]"
 
 
 async def generate_audit_with_kimi(payload: dict[str, Any], doc_type: str) -> dict[str, Any]:
