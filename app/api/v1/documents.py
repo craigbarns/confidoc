@@ -580,6 +580,17 @@ async def anonymize_document(
     - **pseudonymization** : tokens réversibles, usage interne, revue humaine.
     - **anonymization** : masquage fort + quasi-identifiants, export/IA/partage.
     """
+    import traceback as _tb
+    try:
+        return await _anonymize_document_inner(document_id, current_user, db, auto_extract, use_llm, profile, mode)
+    except Exception as exc:
+        if hasattr(exc, "status_code"):
+            raise
+        logger.error("anonymize_unhandled", error=str(exc), tb=_tb.format_exc())
+        raise http_500(f"Anonymization failed: {type(exc).__name__}: {str(exc)[:200]}")
+
+
+async def _anonymize_document_inner(document_id, current_user, db, auto_extract, use_llm, profile, mode):
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     
     # Récupère le texte OCR précédemment extrait
