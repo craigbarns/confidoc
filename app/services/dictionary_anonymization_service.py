@@ -64,6 +64,8 @@ REPLACEMENT_RULES = [
     
     # === IDENTIFIANTS ===
     (r'832419428', '[SIREN_SOCIETE_1]', False),  # SIREN
+    (r'032419428', '[SIREN_SOCIETE_1]', False),  # Variante OCR fréquente
+    (r'83241942B', '[SIREN_SOCIETE_1]', False),  # Variante OCR O/B/8
     (r'\[SIRET\]', '[SIRET_SOCIETE_1]', False),  # Déjà tokenisé
     (r'\b\d{3}\s*\d{3}\s*\d{3}\s*\d{5}\b', '[SIRET]', False),  # SIRET générique
     (r'511983496', '[SIREN_TIERS_1]', False),
@@ -105,6 +107,49 @@ PARTIAL_REPLACEMENTS = [
     (r'451\w*\s+WEINVEST', '451 [SOCIETE_LIEE_2]', True),
 ]
 
+# Nettoyage RGPD final: éliminer les fuites résiduelles après remplacements principaux.
+POST_CLEANUP_RULES = [
+    # 1) SIRET partiel du type "Siret [SIREN_SOCIETE_1]00038"
+    (r'(?i)\bSiret\s+\[SIREN_SOCIETE_1\]\s*\d{3,6}\b', 'Siret [SIRET_SOCIETE_1]', False),
+    (r'\[SIREN_SOCIETE_1\]\s*\d{3,6}', '[SIRET_SOCIETE_1]', False),
+
+    # 2) Identifiants entreprise OCRisés (9 à 14 chars alnum ambigu) => token unique
+    (r'\b[0-9OIlSB]{8,14}[A-Z]?\b', '[IDENTIFIANT_ENTREPRISE]', False),
+
+    # 3) Adresses ligne voie génériques
+    (
+        r'(?i)\b\d{1,4}\s*(?:bis|ter)?\s*'
+        r'(?:rue|avenue|av\.?|bd\.?|boulevard|impasse|all[ée]e|chemin|traverse|faubourg|cours|voie|fav)\b'
+        r'[^\n]{0,120}',
+        '[ADRESSE]',
+        False,
+    ),
+    # 4) CP + ville
+    (r'\b\d{5}\s+[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
+
+    # 5) Nom partiellement visible avant token personne
+    (r'(?i)\b[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}\s+\[PERSONNE_1\]\b', '[PERSONNE_1]', False),
+
+    # 6) Bloc cabinet encore visible autour de son adresse
+    (r'(?i)\b(?:SAS\s+)?\[CABINET_COMPTABLE_1\]\b[^\n]{0,100}', '[CABINET_COMPTABLE_1]', False),
+]
+
+
+def _normalize_ocr_identifiers(text: str) -> str:
+    """Normalise les variantes OCR dans les identifiants avant matching."""
+    # Map OCR ambiguities only in long alnum runs likely to be identifiers.
+    def _fix(match: re.Match[str]) -> str:
+        s = match.group(0)
+        return (
+            s.replace("O", "0")
+            .replace("I", "1")
+            .replace("l", "1")
+            .replace("S", "5")
+            .replace("B", "8")
+        )
+
+    return re.sub(r'\b[0-9OIlSB]{8,20}\b', _fix, text)
+
 
 def _count_occurrences(pattern: str, text: str, case_sensitive: bool = True) -> int:
     """Compte les occurrences d'un pattern."""
@@ -134,7 +179,8 @@ def anonymize_with_dictionary(text: str) -> dict[str, Any]:
         }
     
     entities = []
-    result = text
+    # Pré-normalisation OCR pour mieux attraper les SIREN/SIRET dégradés.
+    result = _normalize_ocr_identifiers(text)
     entity_counter = {}
     
     # === ÉTAPE 1: Remplacements complets ===
@@ -188,6 +234,11 @@ def anonymize_with_dictionary(text: str) -> dict[str, Any]:
                 "confidence": 0.90
             })
         
+        result = re.sub(pattern, replacement, result, flags=flags | re.MULTILINE)
+
+    # === ÉTAPE 3: Nettoyage résiduel RGPD (fuites partielles) ===
+    for pattern, replacement, case_sensitive in POST_CLEANUP_RULES:
+        flags = 0 if case_sensitive else re.IGNORECASE
         result = re.sub(pattern, replacement, result, flags=flags | re.MULTILINE)
     
     logger.info(

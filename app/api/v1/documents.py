@@ -286,6 +286,71 @@ async def list_clients(
     return sorted(out, key=lambda x: x.lower())
 
 
+# ═══════════════════════════════════════════════════════════════════════════════
+# CORBEILLE (TRASH) - Gestion des documents supprimés
+# ⚠ IMPORTANT: ces routes statiques DOIVENT être déclarées AVANT /{document_id}
+# sinon FastAPI traite "trash" comme un document_id → 404
+# ═══════════════════════════════════════════════════════════════════════════════
+
+
+@router.get(
+    "/trash/list",
+    status_code=status.HTTP_200_OK,
+    summary="Liste des documents supprimés (corbeille)",
+)
+async def list_trash(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    """Liste les documents mis à la corbeille par l'utilisateur."""
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+        .order_by(desc(Document.deleted_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    docs = result.scalars().all()
+    
+    # Compter le total
+    count_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    total = count_result.scalar()
+    
+    return {
+        "documents": [
+            {
+                "id": str(d.id),
+                "original_filename": d.original_filename,
+                "size_bytes": d.size_bytes,
+                "content_type": d.content_type,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+                "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
+                "doc_type": d.doc_type,
+                "status": d.status.value if d.status else None,
+            }
+            for d in docs
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# ROUTES PARAMÉTRÉES /{document_id} — TOUJOURS EN DERNIER
+# ──────────────────────────────────────────────────────────────────────
+
+
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,
@@ -719,64 +784,6 @@ async def delete_document(
     document.is_deleted = True
     document.deleted_at = datetime.now(timezone.utc)
     await db.commit()
-
-
-# ═══════════════════════════════════════════════════════════════════════════════
-# CORBEILLE (TRASH) - Gestion des documents supprimés
-# ═══════════════════════════════════════════════════════════════════════════════
-
-
-@router.get(
-    "/trash/list",
-    status_code=status.HTTP_200_OK,
-    summary="Liste des documents supprimés (corbeille)",
-)
-async def list_trash(
-    current_user: CurrentUser,
-    db: DbSession,
-    limit: int = Query(default=50, ge=1, le=200),
-    offset: int = Query(default=0, ge=0),
-) -> dict:
-    """Liste les documents mis à la corbeille par l'utilisateur."""
-    result = await db.execute(
-        select(Document)
-        .where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(True),
-        )
-        .order_by(desc(Document.deleted_at))
-        .offset(offset)
-        .limit(limit)
-    )
-    docs = result.scalars().all()
-    
-    # Compter le total
-    count_result = await db.execute(
-        select(func.count()).select_from(Document).where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(True),
-        )
-    )
-    total = count_result.scalar()
-    
-    return {
-        "documents": [
-            {
-                "id": str(d.id),
-                "original_filename": d.original_filename,
-                "size_bytes": d.size_bytes,
-                "content_type": d.content_type,
-                "created_at": d.created_at.isoformat() if d.created_at else None,
-                "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
-                "doc_type": d.doc_type,
-                "status": d.status.value if d.status else None,
-            }
-            for d in docs
-        ],
-        "total": total,
-        "limit": limit,
-        "offset": offset,
-    }
 
 
 @router.post(
