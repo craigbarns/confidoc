@@ -627,7 +627,33 @@ async def anonymize_document(
         preview_text, meta.get("entity_summary", {})
     )
     
-    # Save encrypted pseudonym mapping (reversible only in pseudo mode)
+    # RGPD logging (best-effort: does not block anonymization if tables missing)
+    try:
+        from app.models.audit_log import AuditLog
+        db.add(AuditLog(
+            user_id=current_user.id,
+            org_id=getattr(current_user, "org_id", None),
+            action=f"anonymize:{mode}",
+            resource_type="document",
+            resource_id=str(document.id),
+            method="POST",
+            path=f"/api/v1/documents/{document_id}/anonymize",
+            status_code=200,
+            details={
+                "mode": mode,
+                "profile": effective_profile,
+                "method": meta.get("method", "unknown"),
+                "detections_count": len(detections),
+                "risk_score": risk_report.score,
+                "risk_level": risk_report.level,
+            },
+        ))
+        await db.commit()
+    except Exception as exc:
+        logger.warning("audit_log_save_failed", error=str(exc))
+        await db.rollback()
+
+    # Save encrypted pseudonym mapping (best-effort, separate transaction)
     if mode == "pseudonymization":
         try:
             from app.services.crypto_service import encrypt_mapping
@@ -647,30 +673,10 @@ async def anonymize_document(
                     risk_score=risk_report.score,
                     risk_level=risk_report.level,
                 ))
+                await db.commit()
         except Exception as exc:
             logger.warning("pseudo_mapping_save_failed", error=str(exc))
-
-    # Audit RGPD
-    from app.models.audit_log import AuditLog
-    db.add(AuditLog(
-        user_id=current_user.id,
-        org_id=getattr(current_user, "org_id", None),
-        action=f"anonymize:{mode}",
-        resource_type="document",
-        resource_id=str(document.id),
-        method="POST",
-        path=f"/api/v1/documents/{document_id}/anonymize",
-        status_code=200,
-        details={
-            "mode": mode,
-            "profile": effective_profile,
-            "method": meta.get("method", "unknown"),
-            "detections_count": len(detections),
-            "risk_score": risk_report.score,
-            "risk_level": risk_report.level,
-        },
-    ))
-    await db.commit()
+            await db.rollback()
     
     return {
         "document_id": str(document.id),
@@ -861,6 +867,163 @@ async def validate_document(
 
     return {"status": "validated", "document_id": str(document.id)}
 
+
+
+
+async def _check_export_gate(db, document, current_user) -> None:
+    """Enforce RGPD export policy based on risk level.
+
+    - low: export allowed
+    - medium: export allowed (warning logged)
+    - high: requires human_validated=True on the mapping
+    - critical: export blocked entirely
+    """
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = result.scalar_one_or_none()
+
+        if not mapping:
+            return
+
+        risk_level = mapping.risk_level or "low"
+
+        if risk_level == "critical":
+            raise http_400(
+                "Export bloque : risque de reidentification critique. "
+                "Renforcez l'anonymisation avant d'exporter."
+            )
+
+        if risk_level == "high" and not mapping.human_validated:
+            raise http_400(
+                "Export bloque : risque eleve. "
+                "Une validation humaine est requise avant export. "
+                "Utilisez POST /documents/{id}/approve-export."
+            )
+
+        if risk_level == "medium":
+            logger.warning(
+                "export_medium_risk",
+                doc_id=str(document.id),
+                user_id=str(current_user.id),
+                risk_score=mapping.risk_score,
+            )
+    except Exception as exc:
+        if hasattr(exc, "status_code"):
+            raise
+        logger.warning("export_gate_check_skipped", error=str(exc))
+
+
+@router.post(
+    "/{document_id}/approve-export",
+    status_code=status.HTTP_200_OK,
+    summary="Validation humaine pour autoriser l'export (risque eleve)",
+)
+async def approve_export(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Marque le document comme valide par un humain pour export."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = result.scalar_one_or_none()
+
+        if not mapping:
+            raise http_404("Aucun mapping trouve. Lancez /anonymize d'abord.")
+
+        if mapping.risk_level == "critical":
+            raise http_400("Impossible d'approuver : risque critique.")
+
+        mapping.human_validated = True
+        mapping.validated_by_user_id = current_user.id
+        mapping.validated_at = datetime.now(timezone.utc)
+        await db.commit()
+    except Exception as exc:
+        if hasattr(exc, "status_code"):
+            raise
+        logger.warning("approve_export_failed", error=str(exc))
+        await db.rollback()
+
+    return {"status": "approved", "document_id": str(document.id)}
+
+
+@router.get(
+    "/{document_id}/audit-report",
+    status_code=status.HTTP_200_OK,
+    summary="Rapport d'audit RGPD du document",
+)
+async def get_audit_report(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Retourne l'historique complet des actions RGPD sur ce document."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    entries = []
+    try:
+        from app.models.audit_log import AuditLog
+        result = await db.execute(
+            select(AuditLog)
+            .where(AuditLog.resource_id == str(document.id))
+            .order_by(AuditLog.created_at.desc())
+        )
+        logs = list(result.scalars().all())
+        entries = [
+            {
+                "action": log.action,
+                "user_id": str(log.user_id) if log.user_id else None,
+                "timestamp": log.created_at.isoformat() if log.created_at else None,
+                "method": log.method,
+                "path": log.path,
+                "status_code": log.status_code,
+                "details": log.details,
+            }
+            for log in logs
+        ]
+    except Exception as exc:
+        logger.warning("audit_report_query_failed", error=str(exc))
+
+    risk_info = None
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        mr = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = mr.scalar_one_or_none()
+        if mapping:
+            risk_info = {
+                "score": mapping.risk_score,
+                "level": mapping.risk_level,
+                "human_validated": mapping.human_validated,
+                "validated_at": mapping.validated_at.isoformat() if mapping.validated_at else None,
+                "expires_at": mapping.expires_at.isoformat() if mapping.expires_at else None,
+            }
+    except Exception:
+        pass
+
+    return {
+        "document_id": str(document.id),
+        "filename": document.original_filename,
+        "created_at": document.created_at.isoformat() if document.created_at else None,
+        "risk": risk_info,
+        "audit_entries": entries,
+        "total_actions": len(entries),
+    }
 
 @router.get(
     "/{document_id}/export",
