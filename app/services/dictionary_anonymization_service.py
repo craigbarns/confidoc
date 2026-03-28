@@ -31,11 +31,13 @@ REPLACEMENT_RULES = [
     (r'5085\s+FAV\s+DE\s+SAINT-MENET\s*\n\s*13011\s+MARSEILLE\s+11EME', '[ADRESSE_LOCAL_1]', True),
     (r'Lot\s+25\s+53\s+52\s+51[^\n]*\n\s*5085\s+FAV\s+DE\s+SAINT-MENET[^\n]*\n\s*13011\s+MARSEILLE\s+11EME', '[ADRESSE_LOCAL_DETAIL_1]', True),
     
-    # === PERSONNES (noms complets) ===
+    # === PERSONNES (noms complets, prénoms isolés) ===
     (r'GREGORY\s+BARANES', '[PERSONNE_1]', True),
     (r'BARANES\s+GR[ÉE]GORY', '[PERSONNE_1]', True),
     (r'BARANES\s+GREGORY', '[PERSONNE_1]', True),
-    (r'BARANES', '[PERSONNE_1]', True),  # Fallback
+    (r'BARANES', '[PERSONNE_1]', True),  # Fallback nom seul
+    (r'\bGREGORY\b', '[PRENOM_1]', True),  # Prénom seul en majuscule
+    (r'\bGr[ée]gory\b', '[PRENOM_1]', False),  # Prénom en casse mixte
     
     # === SOCIÉTÉS LIÉES (ordre: plus spécifique avant) ===
     (r'WEINVEST\s+III', '[SOCIETE_LIEE_5]', True),
@@ -82,7 +84,19 @@ REPLACEMENT_RULES = [
     # === DONNÉES PERSONNELLES ===
     (r'23/02/1980', '[DATE_NAISSANCE_1]', False),
     (r'TOULOUSE', '[VILLE_NAISSANCE_1]', False),
+    # Département de naissance en clair (ex: "N° Département 34")
+    (r'(?i)N°\s*D[ée]partement\s+\d{1,3}', 'N° Département [DEPT_NAISSANCE]', False),
+    # Ville + arrondissement en clair dans formulaires (ex: MARSEILLE 11EME)
+    (r'(?i)\bMARSEILLE\s+\d{1,2}(?:E|ER|EME|ÈME)?\b', '[VILLE]', False),
+    (r'(?i)\bMARSEILLE\b', '[VILLE]', False),
+    (r'(?i)\bSAINT-MENET\b', '[LIEU_DIT]', False),
     
+    # === QUASI-IDENTIFIANTS MÉTIER (marques, logiciels, organismes semi-identifiants) ===
+    (r'(?i)\bLOA\s+TESLA\b', 'LOA [MARQUE_VEHICULE]', False),
+    (r'(?i)\bTESLA\b', '[MARQUE_VEHICULE]', False),
+    (r'(?i)\bTiime\s+Expert\b', '[LOGICIEL_COMPTABLE]', False),
+    (r'(?i)\bTiime\b', '[LOGICIEL_COMPTABLE]', False),
+
     # === EMAILS ===
     (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', False),
     
@@ -95,9 +109,10 @@ REPLACEMENT_RULES = [
 
 # Remplacements dans les libellés comptables (partiels)
 PARTIAL_REPLACEMENTS = [
-    # Comptes de personnel
+    # Comptes de personnel — code PCG + nom ou initiales (ex: 421BAR, 455BARANES)
     (r'421\w*\s+BARANES', '421 [PERSONNE_1]', True),
     (r'455\w*\s+BARANES', '455 [PERSONNE_1]', True),
+    (r'421BAR\b', '421[PERSONNE_1]', True),
     (r'421\w*\s+BAR\s+', '421 [PERSONNE_1] ', True),
     
     # Comptes de sociétés liées  
@@ -114,22 +129,36 @@ POST_CLEANUP_RULES = [
     (r'(?i)\bSiret\s+\[SIREN_SOCIETE_1\]\s*\d{3,6}\b', 'Siret [SIRET_SOCIETE_1]', False),
     (r'\[SIREN_SOCIETE_1\]\s*\d{3,6}', '[SIRET_SOCIETE_1]', False),
 
-    # 2) Identifiants entreprise OCRisés (9 à 14 chars alnum ambigu) => token unique
-    (r'\b[0-9OIlSB]{8,14}[A-Z]?\b', '[IDENTIFIANT_ENTREPRISE]', False),
+    # 2) Codes comptables PCG (ex: 2135xx, 6011xx). Ne sont PAS des identifiants d'entreprise.
+    #    On les remplace par [CODE_COMPTABLE] au lieu de [IDENTIFIANT_ENTREPRISE].
+    (r'\b[0-9OIlSB]{8,14}[A-Z]?\b', '[CODE_COMPTABLE]', False),
 
-    # 3) Adresses ligne voie génériques
+    # 3) Adresses ligne voie génériques (élargi: traverse, bat, appt, lot, etc.)
     (
-        r'(?i)\b\d{1,4}\s*(?:bis|ter)?\s*'
-        r'(?:rue|avenue|av\.?|bd\.?|boulevard|impasse|all[ée]e|chemin|traverse|faubourg|cours|voie|fav)\b'
-        r'[^\n]{0,120}',
+        r'(?i)\b\d{1,4}\s*[,.]?\s*(?:bis|ter)?\s*'
+        r'(?:rue|avenue|av\.?|bd\.?|boulevard|impasse|all[ée]e|chemin|traverse|faubourg|cours|voie|fav|route|place|passage)\b'
+        r'[^\n]{0,150}',
         '[ADRESSE]',
         False,
     ),
-    # 4) CP + ville
+    # 3b) Adresses avec "Bat / Bât / appt / apt / étage" (format atypique sans nom de voie)
+    (
+        r'(?i)(?:Bat|Bât|B[aâ]timent)\s+[A-Z0-9]+\s*[-–,]?\s*(?:appt?|apt|[ée]tage|entr[ée]e)\s*\d*[^\n]{0,80}',
+        '[ADRESSE]',
+        False,
+    ),
+    # 3c) "Lot XX XX XX" (références cadastrales/foncières dans DECLOYER)
+    (r'(?i)\bLot\s+\d[\d\s]{2,20}[-–]?\s*(?:Bât|Bat|B[aâ]timent)?[^\n]{0,100}', '[ADRESSE]', False),
+
+    # 4) CP + ville (5 chiffres + mot majuscule)
     (r'\b\d{5}\s+[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
 
-    # 5) Nom partiellement visible avant token personne
-    (r'(?i)\b[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}\s+\[PERSONNE_1\]\b', '[PERSONNE_1]', False),
+    # 5) Prénom ou nom partiellement visible avant/après token personne
+    #    ex: "Gregory [PERSONNE_1]" ou "M [PERSONNE_1]"
+    (r'(?i)\b[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}\s+\[PERSONNE_\d+\]', '[PERSONNE_1]', False),
+    (r'(?i)\[PERSONNE_\d+\]\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}\b', '[PERSONNE_1]', False),
+    #    ex: "M Nom complet" suivi de "Gregory [PERSONNE_1]"
+    (r'(?i)\bM\s+Nom\s+complet\s+\w+\s+\[PERSONNE_\d+\]', 'M Nom complet [PERSONNE_1]', False),
 
     # 6) Bloc cabinet encore visible autour de son adresse
     (r'(?i)\b(?:SAS\s+)?\[CABINET_COMPTABLE_1\]\b[^\n]{0,100}', '[CABINET_COMPTABLE_1]', False),
@@ -255,6 +284,7 @@ def anonymize_with_dictionary(text: str) -> dict[str, Any]:
         ("GREGORY BARANES", "[PERSONNE_1]", "PERSONNE"),
         ("BARANES GREGORY", "[PERSONNE_1]", "PERSONNE"),
         ("BARANES", "[PERSONNE_1]", "PERSONNE"),
+        ("GREGORY", "[PRENOM_1]", "PRENOM"),
         ("WEMADE", "[SOCIETE_1]", "SOCIETE"),
         ("WEBUILD", "[SOCIETE_LIEE_1]", "SOCIETE_LIEE"),
         ("WEINVEST", "[SOCIETE_LIEE_2]", "SOCIETE_LIEE"),
@@ -262,6 +292,10 @@ def anonymize_with_dictionary(text: str) -> dict[str, Any]:
         ("WEINVEST II", "[SOCIETE_LIEE_4]", "SOCIETE_LIEE"),
         ("WEINVEST III", "[SOCIETE_LIEE_5]", "SOCIETE_LIEE"),
         ("NEXTCOMPTA", "[CABINET_COMPTABLE_1]", "CABINET_COMPTABLE"),
+        ("MARSEILLE", "[VILLE]", "VILLE"),
+        ("TOULOUSE", "[VILLE_NAISSANCE_1]", "VILLE"),
+        ("TESLA", "[MARQUE_VEHICULE]", "MARQUE"),
+        ("TIIME EXPERT", "[LOGICIEL_COMPTABLE]", "LOGICIEL"),
     ]
     for raw_val, placeholder, prefix in _SEED_PAIRS:
         registry.seed(raw_val, placeholder, prefix)
