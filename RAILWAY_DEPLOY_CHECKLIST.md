@@ -1,5 +1,7 @@
 # Checklist de déploiement Railway - ConfiDoc
 
+**Walkthrough technique (routes API, EntityRegistry, endpoint `/structured`) :** voir [`WALKTHROUGH.md`](./WALKTHROUGH.md).
+
 ## 🚀 Configuration du déploiement
 
 ### Variables d'environnement requises

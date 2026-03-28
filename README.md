@@ -102,7 +102,7 @@ L'API est documentee via Swagger UI : `http://localhost:8000/docs`
 | POST | `/api/v1/documents/{id}/anonymize` | Anonymiser un document |
 | GET | `/api/v1/documents/{id}/preview` | Preview de l'anonymisation |
 | POST | `/api/v1/documents/{id}/validate` | Valider et figer la version finale |
-| GET | `/api/v1/documents/{id}/export-structured` | Export dataset structure |
+| GET | `/api/v1/documents/{id}/structured` | JSON IA/RAG : entités, tags sémantiques, texte anonymisé (`?include_text=`) |
 | GET | `/health` | Health check |
 | GET | `/readiness` | Readiness probe |
 
