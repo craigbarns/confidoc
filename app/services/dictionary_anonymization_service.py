@@ -10,6 +10,7 @@ import re
 from typing import Any
 
 from app.core.logging import get_logger
+from app.services.entity_registry import EntityRegistry
 
 logger = get_logger(__name__)
 
@@ -246,21 +247,44 @@ def anonymize_with_dictionary(text: str) -> dict[str, Any]:
         detections=len(entities),
         unique_types=len(entity_counter)
     )
-    
+
+    # Build EntityRegistry from the hardcoded dictionary
+    registry = EntityRegistry()
+    # Seed registry with all known mappings from REPLACEMENT_RULES
+    _SEED_PAIRS = [
+        ("GREGORY BARANES", "[PERSONNE_1]", "PERSONNE"),
+        ("BARANES GREGORY", "[PERSONNE_1]", "PERSONNE"),
+        ("BARANES", "[PERSONNE_1]", "PERSONNE"),
+        ("WEMADE", "[SOCIETE_1]", "SOCIETE"),
+        ("WEBUILD", "[SOCIETE_LIEE_1]", "SOCIETE_LIEE"),
+        ("WEINVEST", "[SOCIETE_LIEE_2]", "SOCIETE_LIEE"),
+        ("WEINVEST I", "[SOCIETE_LIEE_3]", "SOCIETE_LIEE"),
+        ("WEINVEST II", "[SOCIETE_LIEE_4]", "SOCIETE_LIEE"),
+        ("WEINVEST III", "[SOCIETE_LIEE_5]", "SOCIETE_LIEE"),
+        ("NEXTCOMPTA", "[CABINET_COMPTABLE_1]", "CABINET_COMPTABLE"),
+    ]
+    for raw_val, placeholder, prefix in _SEED_PAIRS:
+        registry.seed(raw_val, placeholder, prefix)
+
+    # Apply post-OCR cleanup
+    from app.services.anonymization_service import clean_ocr_artifacts
+    result = clean_ocr_artifacts(result)
+
     return {
         "anonymized_text": result,
         "entities": entities,
         "confidence": "high",
         "count": len(entities),
-        "method": "dictionary"
+        "method": "dictionary",
+        "registry": registry,
     }
 
 
-async def anonymize_document_dictionary(text: str) -> tuple[str, list[dict]]:
+async def anonymize_document_dictionary(text: str) -> tuple[str, list[dict], EntityRegistry]:
     """Interface compatible avec l'ancien système.
     
     Returns:
-        (anonymized_text, detections_list)
+        (anonymized_text, detections_list, entity_registry)
     """
     result = anonymize_with_dictionary(text)
-    return result["anonymized_text"], result["entities"]
+    return result["anonymized_text"], result["entities"], result["registry"]

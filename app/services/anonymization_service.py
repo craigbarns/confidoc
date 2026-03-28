@@ -1,9 +1,17 @@
-"""ConfiDoc Backend — Text extraction and anonymization service (v2)."""
+"""ConfiDoc Backend — Text extraction and anonymization service (v3).
+
+v3 changes:
+- EntityRegistry for stable, consistent placeholder naming
+- Quasi-identifier patterns (cities, lieux-dits, loans, birth, cadastral)
+- Post-OCR artifact cleanup
+"""
 
 from functools import lru_cache
 import re
 import unicodedata
 from typing import Any
+
+from app.services.entity_registry import EntityRegistry
 
 import fitz
 
@@ -144,9 +152,69 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     # Bank account code + label  (e.g. "51210000 QONTO")
     (
         "bank_account_code_label",
-        re.compile(r"\b(512\d{5})\s+([A-Z0-9][A-Z0-9\s&/\\'\-]{1,40})\b", re.IGNORECASE),
+        re.compile(r"\b(512\d{5})\s+([A-Z0-9][A-Z0-9\s\&/\\\'\-]{1,40})\b", re.IGNORECASE),
         "[REDACTED]",
     ),
+]
+
+# ──────────────────────────────────────────────────────────────────────
+# QUASI-IDENTIFIER PATTERNS — catches data that is indirectly identifying
+# ──────────────────────────────────────────────────────────────────────
+
+QUASI_IDENTIFIER_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+    # City names (French cities commonly found in accounting/legal docs)
+    ("city_name", re.compile(
+        r"\b(?:Marseille|Toulouse|Lyon|Paris|Bordeaux|Nice|Nantes|Montpellier|"
+        r"Strasbourg|Lille|Rennes|Toulon|Grenoble|Dijon|Angers|Nîmes|Aix[\-\s]en[\-\s]Provence|"
+        r"Saint[\-\s](?:Étienne|Etienne|Denis|Menet|Raphaël|Raphael|Tropez|Malo|Nazaire|Germain|Cloud|Ouen|Priest)|"
+        r"Cannes|Perpignan|Amiens|Metz|Besançon|Besancon|Orléans|Orleans|Rouen|"
+        r"Mulhouse|Caen|Nancy|Avignon|Clermont[\-\s]Ferrand|Limoges|Pau|Brest)\b",
+        re.IGNORECASE,
+    ), "[VILLE]"),
+
+    # Lieux-dits, traverses, hameaux (common in southern France docs)
+    ("lieu_dit", re.compile(
+        r"\b(?:Traverse|Impasse|Hameau|Lotissement|Quartier|Lieu[\-\s]dit)"
+        r"\s+(?:du|de|des|la|le|l')?\s*"
+        r"[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{2,40}\b",
+        re.IGNORECASE,
+    ), "[LIEU]"),
+
+    # Loan / credit references (6-15 digits after a label)
+    ("loan_ref", re.compile(
+        r"(?i)(?:emprunt|prêt|pret|crédit|credit|n[°o]\s*(?:de\s+)?(?:prêt|pret|contrat))"
+        r"\s*(?:n[°o]?)?\s*[:\-]?\s*(\d{6,15})"
+    ), "[EMPRUNT]"),
+
+    # Cadastral / property references (long numeric sequences)
+    ("cadastral_ref", re.compile(
+        r"\b(?:invariant|référence\s+cadastrale|ref\.?\s+cadastrale|cadastre)"
+        r"\s*[:\-]?\s*([A-Z0-9]{8,25})\b",
+        re.IGNORECASE,
+    ), "[REF_CADASTRALE]"),
+
+    # Birth context: "Né(e) le DD/MM/YYYY à VILLE"
+    ("birth_context", re.compile(
+        r"(?i)n[ée]+e?\s+(?:le\s+)?\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"
+        r"(?:\s+[àa]\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{1,30})?"
+    ), "[NAISSANCE]"),
+
+    # Standalone birth date with label
+    ("birth_date_labeled", re.compile(
+        r"(?i)(?:date\s+de\s+naissance|né(?:e)?\s+le)\s*[:\-]?\s*"
+        r"\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"
+    ), "[DATE_NAISSANCE]"),
+
+    # Birth place with label
+    ("birth_place_labeled", re.compile(
+        r"(?i)(?:lieu\s+de\s+naissance|commune\s+de\s+naissance|n[ée]+e?\s+[àa])"
+        r"\s*[:\-]?\s*[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{1,40}"
+    ), "[LIEU_NAISSANCE]"),
+
+    # APT / apartment numbers in address blocks
+    ("apartment_ref", re.compile(
+        r"(?i)\b(?:apt|appt|appartement|app)\.?\s*(?:n[°o]?)?\s*\d{1,5}\b"
+    ), "[APT]"),
 ]
 
 # ──────────────────────────────────────────────────────────────────────
@@ -654,6 +722,21 @@ def _detect_entities(
         if document_type in {"invoice", "accounting", "generic"}:
             _detect_identity_block(text, matches)
 
+    # ── Quasi-identifier patterns (always applied in strict, optional in moderate) ──
+    if is_strict or profile == "moderate":
+        for entity_type, pattern, replacement in QUASI_IDENTIFIER_PATTERNS:
+            for match in pattern.finditer(text):
+                value = match.group(0)
+                if _is_false_positive(value):
+                    continue
+                matches.append({
+                    "entity_type": entity_type,
+                    "start_index": match.start(),
+                    "end_index": match.end(),
+                    "value_excerpt": value,
+                    "replacement": replacement,
+                })
+
     # ── De-duplicate with longest-match priority ──
     return _deduplicate(matches)
 
@@ -796,10 +879,18 @@ def _infer_business_prefix(
     return "DONNEE"
 
 
-def _apply_business_pseudonyms(text: str, detections: list[dict[str, Any]]) -> list[dict[str, Any]]:
-    """Replace generic tokens by stable business pseudonyms inside one document."""
-    counters: dict[str, int] = {}
-    mapping: dict[tuple[str, str], str] = {}
+def _apply_business_pseudonyms(
+    text: str,
+    detections: list[dict[str, Any]],
+    registry: EntityRegistry | None = None,
+) -> list[dict[str, Any]]:
+    """Replace generic tokens by stable business pseudonyms using EntityRegistry.
+
+    Same value → same placeholder everywhere in the document.
+    """
+    if registry is None:
+        registry = EntityRegistry()
+
     out: list[dict[str, Any]] = []
     for d in detections:
         entity_type = str(d.get("entity_type", ""))
@@ -811,30 +902,106 @@ def _apply_business_pseudonyms(text: str, detections: list[dict[str, Any]]) -> l
             start_index=int(d.get("start_index", 0)),
             end_index=int(d.get("end_index", 0)),
         )
-        key = (prefix, _normalize_value_key(value))
-        if key not in mapping:
-            counters[prefix] = counters.get(prefix, 0) + 1
-            mapping[key] = f"{prefix}_{counters[prefix]}"
+        placeholder = registry.get_or_create(value, prefix)
         new_d = dict(d)
-        new_d["replacement"] = mapping[key]
+        new_d["replacement"] = placeholder
         out.append(new_d)
     return out
+
+
+# ──────────────────────────────────────────────────────────────────────
+# POST-OCR CLEANUP — fix artifacts after anonymization
+# ──────────────────────────────────────────────────────────────────────
+
+# Common OCR typos in French accounting documents
+_OCR_FIXES: dict[str, str] = {
+    "TELEGÉLISATION": "TÉLÉGESTION",
+    "TELEGESTION": "TÉLÉGESTION",
+    "TELEBEC": "TÉLÉDEC",
+    "TELEDEC": "TÉLÉDEC",
+    "DGPIP": "DGFiP",
+    "Dérivations": "Déclarations",
+    "DERIVATIONS": "DÉCLARATIONS",
+    "EXRCICE": "EXERCICE",
+    "RESUTLAT": "RÉSULTAT",
+    "RESUTAT": "RÉSULTAT",
+    "RESULAT": "RÉSULTAT",
+    "BIIAN": "BILAN",
+    "BLLAN": "BILAN",
+    "PASSIE": "PASSIF",
+    "PRODUTIS": "PRODUITS",
+    "CHAGRES": "CHARGES",
+    "CHARCES": "CHARGES",
+}
+
+
+def clean_ocr_artifacts(text: str) -> str:
+    """Clean OCR artifacts from anonymized text.
+
+    Fixes:
+    1. Broken tokens: [SOCIETE_1]É → [SOCIETE_1]
+    2. Duplicate adjacent tokens: [PERSONNE_1] [PERSONNE_1] → [PERSONNE_1]
+    3. Excessive blank lines → max 2
+    4. Common accounting OCR typos
+    5. Orphan brackets from partial replacements
+    """
+    if not text:
+        return text
+
+    # 1. Broken tokens: [TOKEN]TrailingChars → [TOKEN]
+    text = re.sub(r"(\[[A-Z_]+\d*\])[A-ZÀ-ÿa-zà-ÿ]{1,3}\b", r"\1", text)
+
+    # 2. Duplicate adjacent tokens (with optional whitespace between)
+    text = re.sub(r"(\[[A-Z_]+\d*\])\s*\1", r"\1", text)
+
+    # 3. Excessive blank lines → max 2 consecutive
+    text = re.sub(r"\n{4,}", "\n\n\n", text)
+
+    # 4. Fix common OCR typos in accounting terms
+    for wrong, correct in _OCR_FIXES.items():
+        text = text.replace(wrong, correct)
+
+    # 5. Clean orphan closing brackets after tokens
+    text = re.sub(r"(\[[A-Z_]+\d*\])\]", r"\1", text)
+
+    # 6. Clean up spaces before punctuation
+    text = re.sub(r"\s+([.,;:])", r"\1", text)
+
+    return text
 
 
 def anonymize_text(
     text: str,
     profile: str = "moderate",
     document_type: str = "generic",
-) -> tuple[str, list[dict[str, Any]]]:
-    """Apply regex-based anonymization and return (anonymized_text, detections)."""
+    registry: EntityRegistry | None = None,
+) -> tuple[str, list[dict[str, Any]], EntityRegistry]:
+    """Apply regex-based anonymization and return (anonymized_text, detections, registry).
+
+    Args:
+        text: Raw text to anonymize
+        profile: Anonymization profile (moderate/strict/dataset_*)
+        document_type: Document type hint (invoice/accounting/legal/generic)
+        registry: Optional pre-seeded EntityRegistry for consistent naming
+
+    Returns:
+        Tuple of (anonymized_text, detections_list, entity_registry)
+    """
     if not text or not text.strip():
-        return text, []
+        return text, [], registry or EntityRegistry()
+
+    if registry is None:
+        registry = EntityRegistry()
 
     detections = _detect_entities(text, profile=profile, document_type=document_type)
     if profile == "dataset_accounting_pseudo":
-        detections = _apply_business_pseudonyms(text, detections)
+        detections = _apply_business_pseudonyms(text, detections, registry)
     anonymized = text
     # Apply replacements from end to start to preserve indices
     for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
         anonymized = anonymized[:match["start_index"]] + match["replacement"] + anonymized[match["end_index"]:]
-    return anonymized, detections
+
+    # Post-OCR cleanup
+    anonymized = clean_ocr_artifacts(anonymized)
+
+    return anonymized, detections, registry

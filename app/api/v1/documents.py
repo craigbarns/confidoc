@@ -26,6 +26,8 @@ from app.schemas.document import (
     DetectionResponse,
     DocumentPreviewResponse,
     DocumentResponse,
+    EntityMappingItem,
+    StructuredDocumentResponse,
     ValidateDocumentRequest,
 )
 from app.services.document_processing_service import (
@@ -362,6 +364,113 @@ async def get_document(
 ) -> Document:
     return await _get_user_document_or_404(db, document_id, current_user.id)
 
+
+@router.get(
+    "/{document_id}/structured",
+    response_model=StructuredDocumentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Données structurées du document pour IA/RAG",
+)
+async def get_structured_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    include_text: bool = Query(default=True, description="Inclure le texte anonymisé complet"),
+) -> StructuredDocumentResponse:
+    """Retourne les données structurées du document pour exploitation IA.
+
+    Inclut:
+    - Le mapping des entités (placeholder → type)
+    - Le résumé par type d'entité
+    - Le texte anonymisé (optionnel)
+    - Les métadonnées du document
+    """
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    # Récupère le texte anonymisé
+    anonymized_text = await _get_anonymized_text(db, document)
+
+    # Récupère les détections
+    det_result = await db.execute(
+        select(EntityDetection).where(
+            EntityDetection.document_id == document.id
+        )
+    )
+    detections = list(det_result.scalars().all())
+
+    # Construire le résumé par type d'entité
+    entity_summary: dict[str, int] = {}
+    entity_tags: list[EntityMappingItem] = []
+    placeholder_counts: dict[str, int] = {}
+
+    for det in detections:
+        # Comptage par entity_type
+        etype = det.entity_type or "unknown"
+        entity_summary[etype] = entity_summary.get(etype, 0) + 1
+
+        # Comptage par placeholder (replacement)
+        replacement = det.replacement or "[REDACTED]"
+        placeholder_counts[replacement] = placeholder_counts.get(replacement, 0) + 1
+
+    # Construire les tags d'entités
+    for placeholder, count in sorted(placeholder_counts.items()):
+        # Inférer le type sémantique depuis le placeholder
+        semantic_type = _infer_semantic_type(placeholder)
+        entity_tags.append(
+            EntityMappingItem(
+                placeholder=placeholder,
+                entity_type=semantic_type,
+                occurrences=count,
+            )
+        )
+
+    return StructuredDocumentResponse(
+        document_id=document.id,
+        doc_type=document.doc_type,
+        status=document.status.value,
+        original_filename=document.original_filename,
+        entity_summary=entity_summary,
+        entity_tags=entity_tags,
+        anonymized_text=anonymized_text if include_text else None,
+        text_length=len(anonymized_text) if anonymized_text else 0,
+        detections_count=len(detections),
+        anonymization_method=None,  # Could be enriched from version metadata
+        created_at=document.created_at,
+    )
+
+
+def _infer_semantic_type(placeholder: str) -> str:
+    """Map a placeholder token to a semantic entity type."""
+    p = placeholder.upper().strip("[]")
+    if "PERSONNE" in p or "PERSON" in p or "ASSOCIE" in p:
+        return "PERSON"
+    if "SOCIETE" in p or "COMPANY" in p or "CABINET" in p:
+        return "COMPANY"
+    if "ADRESSE" in p or "ADDRESS" in p or "LIEU" in p or "VILLE" in p or "CITY" in p or "APT" in p:
+        return "ADDRESS"
+    if "BANQUE" in p or "BANK" in p or "IBAN" in p or "BIC" in p:
+        return "BANK"
+    if "SIREN" in p or "SIRET" in p or "VAT" in p:
+        return "COMPANY_ID"
+    if "EMPRUNT" in p or "LOAN" in p:
+        return "LOAN_REF"
+    if "NAISSANCE" in p or "BIRTH" in p:
+        return "BIRTH_INFO"
+    if "CADASTR" in p or "PROPERTY" in p or "INVARIANT" in p:
+        return "PROPERTY_REF"
+    if "EMAIL" in p:
+        return "EMAIL"
+    if "PHONE" in p or "TELEPHONE" in p:
+        return "PHONE"
+    if "DATE" in p:
+        return "DATE"
+    if "NSS" in p or "SECU" in p:
+        return "SOCIAL_SECURITY"
+    if "AMOUNT" in p or "MONTANT" in p:
+        return "AMOUNT"
+    if "INVOICE" in p or "FACTURE" in p:
+        return "INVOICE_REF"
+    return "OTHER"
 
 async def _run_anonymize_background(doc_id: str, file_content: bytes, profile: str, document_type: str) -> None:
     """Run OCR + LLM anonymization in background with its own DB session."""
@@ -719,7 +828,7 @@ async def export_redacted_pdf(
         source_text = await _get_anonymized_text(db, document)
         if source_text:
             effective_type = classify_document_type(source_text, document.original_filename)
-            _anon_text, regenerated = anonymize_text(
+            _anon_text, regenerated, _registry = anonymize_text(
                 source_text, profile="strict", document_type=effective_type
             )
             detections = [

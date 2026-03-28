@@ -87,14 +87,17 @@ async def build_anonymization_llm(
     # Le profil "strict" force l'utilisation du LLM pour une anonymisation plus complète
     effective_use_llm = use_llm or (profile == "strict")
 
+    entity_summary: dict[str, int] = {}
+
     if effective_use_llm:
         # Anonymisation LLM (Mistral) — plus exhaustive
         preview_text, detections = await anonymize_document_full(original_text)
         method = "llm:mistral-large"
     else:
         # Anonymisation par dictionnaire (déterministe, fiable, rapide)
-        preview_text, detections = await anonymize_document_dictionary(original_text)
+        preview_text, detections, registry = await anonymize_document_dictionary(original_text)
         method = "dictionary"
+        entity_summary = registry.export_entity_summary()
     
     # Sauvegarde le texte anonymisé
     await db.execute(
@@ -137,11 +140,13 @@ async def build_anonymization_llm(
         "llm_anonymization_complete",
         doc_id=str(document.id),
         detections=len(detections),
+        method=method,
     )
     
     meta = {
         "method": method,
         "detections_count": len(detections),
+        "entity_summary": entity_summary,
     }
     
     return preview_text, detections, meta

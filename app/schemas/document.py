@@ -62,3 +62,46 @@ class ValidateDocumentRequest(BaseModel):
         default=None,
         description="Texte final validé, s'il a été édité manuellement.",
     )
+
+
+class EntityMappingItem(BaseModel):
+    """A single entity placeholder → original values mapping."""
+    placeholder: str = Field(description="Le token anonymisé, ex: [PERSONNE_1]")
+    entity_type: str = Field(description="Type sémantique: PERSON, COMPANY, ADDRESS...")
+    occurrences: int = Field(ge=0, description="Nombre d'occurrences dans le document")
+
+
+class StructuredDocumentResponse(BaseModel):
+    """Sortie structurée pour exploitation IA/RAG."""
+    document_id: uuid.UUID
+    doc_type: str | None = Field(default=None, description="Type détecté: invoice, accounting, legal, generic")
+    status: str
+    original_filename: str
+
+    # Entity mapping — key info for downstream AI
+    entity_summary: dict[str, int] = Field(
+        default_factory=dict,
+        description="Comptage par type d'entité: {PERSONNE: 3, SOCIETE: 2, ...}",
+    )
+    entity_tags: list[EntityMappingItem] = Field(
+        default_factory=list,
+        description="Liste détaillée des entités détectées avec leur placeholder",
+    )
+
+    # Text content
+    anonymized_text: str | None = Field(
+        default=None,
+        description="Texte anonymisé complet (si disponible)",
+    )
+    text_length: int = Field(default=0, description="Longueur du texte anonymisé")
+
+    # Detections count
+    detections_count: int = Field(ge=0, default=0)
+
+    # Metadata
+    anonymization_method: str | None = Field(
+        default=None,
+        description="Méthode utilisée: dictionary, llm:mistral-large, etc.",
+    )
+    created_at: datetime
+
