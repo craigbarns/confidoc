@@ -1,23 +1,24 @@
-/* ConfiDoc — Design System */
-
 :root {
   --bg: #0f1117;
-  --bg-card: #1a1d27;
-  --bg-hover: #22263a;
-  --border: #2d3148;
-  --border-light: #3d4168;
-  --text: #e8eaf6;
-  --text-muted: #8b91b8;
-  --text-dim: #5a6080;
-  --accent: #6c63ff;
-  --accent-hover: #7c74ff;
-  --accent-dim: rgba(108, 99, 255, 0.12);
-  --success: #34d399;
+  --bg-card: rgba(26, 29, 39, 0.88);
+  --bg-sidebar: rgba(21, 23, 33, 0.95);
+  --glass: blur(14px) saturate(160%);
+  --bg-hover: rgba(108, 99, 255, 0.08);
+  --border: rgba(255, 255, 255, 0.08);
+  --border-light: rgba(255, 255, 255, 0.12);
+  --text: #ffffff;
+  --text-muted: #a3abc7;
+  --text-dim: #6b7280;
+  --accent: #7c74ff;
+  --accent-hover: #9189ff;
+  --accent-dim: rgba(124, 116, 255, 0.15);
+  --success: #10b981;
   --warning: #f59e0b;
   --danger: #ef4444;
-  --radius: 8px;
-  --radius-lg: 12px;
-  --shadow: 0 4px 24px rgba(0,0,0,0.35);
+  --radius: 10px;
+  --radius-lg: 16px;
+  --shadow-lg: 0 12px 40px -10px rgba(0,0,0,0.5);
+  --shadow-sm: 0 4px 12px rgba(0,0,0,0.25);
 }
 
 * { box-sizing: border-box; margin: 0; padding: 0; }
@@ -34,9 +35,11 @@ body {
 /* ── HEADER ─────────────────────────────── */
 .app-header {
   background: var(--bg-card);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
   border-bottom: 1px solid var(--border);
   padding: 0 24px;
-  height: 52px;
+  height: 60px;
   display: flex;
   align-items: center;
   position: sticky;
@@ -99,12 +102,16 @@ body {
 }
 .auth-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 40px;
-  width: 380px;
-  box-shadow: var(--shadow);
+  padding: 48px 40px;
+  width: 420px;
+  box-shadow: var(--shadow-lg);
+  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
 }
+.auth-card:hover { transform: translateY(-4px); }
 .auth-logo {
   text-align: center;
   font-size: 40px;
@@ -330,13 +337,18 @@ body {
 
 /* Doc items */
 .doc-item {
-  padding: 10px 12px;
+  padding: 12px 14px;
   border-radius: var(--radius);
   cursor: pointer;
-  transition: background 0.15s;
+  transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
   border: 1px solid transparent;
-  margin-bottom: 4px;
+  margin-bottom: 6px;
   position: relative;
+}
+.doc-item:hover {
+  background: var(--bg-hover);
+  transform: translateX(4px);
+  border-left: 2px solid var(--accent);
 }
 .doc-item.trashed {
   opacity: 0.7;
@@ -694,13 +706,20 @@ body {
   overflow-y: auto;
 }
 .anon-tag {
-  background: rgba(108, 99, 255, 0.2);
-  border: 1px solid rgba(108, 99, 255, 0.4);
-  border-radius: 3px;
-  color: #a89cff;
-  padding: 0 3px;
+  background: rgba(255, 255, 255, 0.08);
+  border: 1px solid rgba(255, 255, 255, 0.2);
+  border-radius: 4px;
+  color: #fff;
+  padding: 1px 4px;
   font-weight: 600;
+  box-decoration-break: clone;
+  -webkit-box-decoration-break: clone;
 }
+.anon-tag.tag-person { border-color: rgba(56, 189, 248, 0.45); color: #7dd3fc; background: rgba(56, 189, 248, 0.12); }
+.anon-tag.tag-org    { border-color: rgba(251, 146, 60, 0.45); color: #fdba74; background: rgba(251, 146, 60, 0.12); }
+.anon-tag.tag-geo    { border-color: rgba(74, 222, 128, 0.45); color: #86efac; background: rgba(74, 222, 128, 0.12); }
+.anon-tag.tag-bank   { border-color: rgba(250, 204, 21, 0.45); color: #fde047; background: rgba(250, 204, 21, 0.12); }
+.anon-tag.tag-date   { border-color: rgba(167, 139, 250, 0.45); color: #c4b5fd; background: rgba(167, 139, 250, 0.12); }
 
 .warning-banner {
   background: rgba(245, 158, 11, 0.1);

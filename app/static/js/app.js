@@ -2,6 +2,8 @@
 
 const API = "/api/v1";
 let token = sessionStorage.getItem("confidoc_token") || "";
+let refreshToken = sessionStorage.getItem("confidoc_refresh_token") || "";
+let refreshTimer = null;
 let currentDocId = null;
 let currentDocName = "";
 let currentDocStatus = "";
@@ -55,8 +57,28 @@ async function apiRequest(path, opts = {}) {
   if (!(opts.body instanceof FormData) && opts.body) {
     headers["Content-Type"] = "application/json";
   }
-  const resp = await fetch(API + path, { ...opts, headers });
+  let resp = await fetch(API + path, { ...opts, headers });
+
+  // Auto-refresh on 401 if we have a refresh token
+  if (resp.status === 401 && refreshToken) {
+    const refreshed = await tryRefreshToken();
+    if (refreshed) {
+      // Retry the original request with the new token
+      const retryHeaders = { ...(opts.headers || {}) };
+      retryHeaders["Authorization"] = `Bearer ${token}`;
+      if (!(opts.body instanceof FormData) && opts.body) {
+        retryHeaders["Content-Type"] = "application/json";
+      }
+      resp = await fetch(API + path, { ...opts, headers: retryHeaders });
+    }
+  }
+
   if (!resp.ok) {
+    // If still 401 after refresh attempt, force re-login
+    if (resp.status === 401) {
+      logout();
+      throw new Error("Session expirée. Veuillez vous reconnecter.");
+    }
     let msg = `Erreur HTTP ${resp.status}`;
     try {
       const j = await resp.json();
@@ -72,6 +94,52 @@ async function apiRequest(path, opts = {}) {
     throw new Error(msg);
   }
   return resp;
+}
+
+async function tryRefreshToken() {
+  if (!refreshToken) return false;
+  try {
+    const resp = await fetch(`${API}/auth/refresh`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ refresh_token: refreshToken }),
+    });
+    if (!resp.ok) {
+      console.warn("Token refresh failed:", resp.status);
+      return false;
+    }
+    const data = await resp.json();
+    token = data.access_token;
+    refreshToken = data.refresh_token || refreshToken;
+    sessionStorage.setItem("confidoc_token", token);
+    sessionStorage.setItem("confidoc_refresh_token", refreshToken);
+    scheduleTokenRefresh();
+    console.log("Token refreshed successfully");
+    return true;
+  } catch (e) {
+    console.error("Token refresh error:", e);
+    return false;
+  }
+}
+
+function scheduleTokenRefresh() {
+  if (refreshTimer) clearTimeout(refreshTimer);
+  if (!token) return;
+  // Decode JWT to find expiry (simple base64 decode of payload)
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const expiresAt = payload.exp * 1000; // ms
+    const now = Date.now();
+    // Refresh 2 minutes before expiry (or immediately if < 2 min left)
+    const refreshIn = Math.max((expiresAt - now) - 120_000, 5_000);
+    refreshTimer = setTimeout(async () => {
+      console.log("Proactive token refresh...");
+      await tryRefreshToken();
+    }, refreshIn);
+  } catch (_e) {
+    // If we can't decode, refresh in 10 minutes
+    refreshTimer = setTimeout(() => tryRefreshToken(), 600_000);
+  }
 }
 
 async function apiFetch(path, opts = {}) {
@@ -146,6 +214,8 @@ async function login(email, password) {
 
 function logout() {
   token = "";
+  refreshToken = "";
+  if (refreshTimer) { clearTimeout(refreshTimer); refreshTimer = null; }
   currentDocId = null;
   currentDocName = "";
   currentDocStatus = "";
@@ -154,6 +224,7 @@ function logout() {
   latestAssistantText = "";
   originalTextCache = {};
   sessionStorage.removeItem("confidoc_token");
+  sessionStorage.removeItem("confidoc_refresh_token");
   if (activeStream) { activeStream.abort(); activeStream = null; }
   $("screen-auth").style.display = "";
   $("screen-app").style.display = "none";
@@ -526,7 +597,9 @@ async function selectDoc(id, status, name, sizeBytes) {
     showAnonLoading("Chargement de la prévisualisation…");
     try {
       const preview = await apiFetch(`/documents/${id}/preview`);
-      showAnonResults(preview.preview_text, preview.detections_count);
+      // Use entity_summary if available in preview metadata (if we had it in status)
+      // or from a separate call later. For now, we take count from preview.
+      showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
     } catch (e) {
       console.error("preview load error:", e);
       hideAnonLoading();
@@ -668,11 +741,21 @@ function hideAnonLoading() {
   $("btn-anonymize").disabled = false;
 }
 
-function showAnonResults(previewText, count) {
+function showAnonResults(previewText, count, summary = {}) {
   hideAnonLoading();
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+
+  // Render summary chips
+  const chips = $("anon-summary-chips");
+  if (chips) {
+    const sorted = Object.entries(summary).sort((a, b) => b[1] - a[1]);
+    chips.innerHTML = sorted.map(([type, cnt]) =>
+      `<span class="stat-chip" style="background: var(--bg-hover); border-color: var(--accent);">${type}: ${cnt}</span>`
+    ).join("");
+  }
+
   switchTab("anonymized");
 }
 
@@ -680,7 +763,15 @@ function highlightTags(text) {
   if (!text) return "";
   return text
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
-    .replace(/\[([A-Z][A-Z0-9_]*)\]/g, '<mark class="anon-tag">[$1]</mark>');
+    .replace(/\[([A-Z][A-Z0-9_]*)\]/g, (match, tag) => {
+      let colorClass = "";
+      if (tag.includes("PERSONNE") || tag.includes("ASSOCIE")) colorClass = "tag-person";
+      else if (tag.includes("SOCIETE") || tag.includes("CABINET")) colorClass = "tag-org";
+      else if (tag.includes("ADRESSE") || tag.includes("VILLE")) colorClass = "tag-geo";
+      else if (tag.includes("BANQUE") || tag.includes("IBAN")) colorClass = "tag-bank";
+      else if (tag.includes("DATE")) colorClass = "tag-date";
+      return `<mark class="anon-tag ${colorClass}">${match}</mark>`;
+    });
 }
 
 async function anonymize() {
@@ -702,7 +793,7 @@ async function anonymize() {
       updatePipelineTimeline({ status: "processing", extractDone: true, anonymDone: false });
     } else if (res.ok) {
       const data = await res.json();
-      showAnonResults(data.preview_text, data.detections_count);
+      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {});
       toast(`${data.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
       currentDocStatus = "ready";
       updateHeaderContext();
@@ -737,7 +828,7 @@ function pollDocStatus(docId) {
         clearInterval(interval);
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
-          showAnonResults(preview.preview_text, preview.detections_count);
+          showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
           toast(`${preview.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
         } catch (e) {
           console.warn("preview load after poll:", e);
@@ -1065,7 +1156,10 @@ document.addEventListener("DOMContentLoaded", () => {
       const email = $("email").value;
       const data = await login(email, $("password").value);
       token = data.access_token;
+      refreshToken = data.refresh_token || "";
       sessionStorage.setItem("confidoc_token", token);
+      sessionStorage.setItem("confidoc_refresh_token", refreshToken);
+      scheduleTokenRefresh();
       await initApp(data.email || email);
     } catch (err) {
       console.error("login error:", err);
@@ -1180,6 +1274,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Reprendre la session si token en sessionStorage
   if (token) {
+    scheduleTokenRefresh();
     initApp().catch(() => logout());
   }
 });

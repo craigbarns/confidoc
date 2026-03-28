@@ -55,6 +55,7 @@ class DocumentPreviewResponse(BaseModel):
     status: str
     preview_text: str
     detections_count: int = Field(ge=0)
+    entity_summary: dict[str, int] = Field(default_factory=dict)
 
 
 class ValidateDocumentRequest(BaseModel):

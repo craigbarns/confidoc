@@ -613,8 +613,9 @@ async def anonymize_document(
     return {
         "document_id": str(document.id),
         "status": "anonymized",
-        "preview_text": preview_text,  # ← TOUT le texte anonymisé
+        "preview_text": preview_text,
         "detections_count": len(detections),
+        "entity_summary": meta.get("entity_summary", {}),
         "method": meta.get("method", "llm"),
         "auto_extracted": extracted_on_demand,
     }
@@ -720,18 +721,25 @@ async def preview_document(
     if not preview_version:
         raise http_404("Aucune preview disponible. Lancez /anonymize d'abord.")
 
-    count_result = await db.execute(
-        select(func.count()).select_from(EntityDetection).where(
+    # Récupérer toutes les détections pour le résumé
+    det_result = await db.execute(
+        select(EntityDetection).where(
             EntityDetection.document_id == document.id
         )
     )
-    detections_count = count_result.scalar() or 0
+    detections = list(det_result.scalars().all())
+    
+    entity_summary: dict[str, int] = {}
+    for det in detections:
+        etype = det.entity_type or "unknown"
+        entity_summary[etype] = entity_summary.get(etype, 0) + 1
 
     return DocumentPreviewResponse(
         document_id=document.id,
         status=document.status.value,
-        preview_text=preview_version.content_text,
-        detections_count=detections_count,
+        preview_text=preview_version.content_text or "",
+        detections_count=len(detections),
+        entity_summary=entity_summary,
     )
 
 
