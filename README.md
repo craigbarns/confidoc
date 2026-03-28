@@ -1,18 +1,30 @@
 # ConfiDoc
 
-**Backend SaaS de confidentialisation documentaire pour cabinets comptables et professions reglementees.**
+**Plateforme de pseudonymisation et anonymisation assistee, avec controle humain, journal d'audit, et regles sectorielles comptables/juridiques.**
 
-ConfiDoc transforme des documents sensibles (bilans, comptes de resultat, declarations fiscales) en datasets anonymises exploitables par l'IA, tout en preservant la valeur metier et en garantissant la conformite RGPD.
+ConfiDoc aide les cabinets comptables et professions reglementees a traiter des documents sensibles (bilans, declarations fiscales, liasses) en conformite RGPD, en distinguant clairement pseudonymisation et anonymisation forte.
+
+### Approche RGPD
+
+| | Pseudonymisation | Anonymisation forte |
+|---|---|---|
+| **Usage** | Travail interne, revue, reprise | Export, IA tierce, demo, partage |
+| **Donnees** | Restent des donnees personnelles (RGPD s'applique) | Hors champ RGPD si risque de reidentification elimine |
+| **Tokens** | Reversibles avec cle ([PERSONNE_1]) | Masquage fort + quasi-identifiants |
+| **Controle** | Revue humaine possible | Score de risque de reidentification |
 
 ## Fonctionnalites principales
 
-- **Anonymisation automatique** : detection et masquage des donnees personnelles (noms, SIRET, IBAN, emails) via NLP (spaCy, Presidio)
+- **Deux modes RGPD** : pseudonymisation (interne) et anonymisation forte (export/IA) avec scoring de risque de reidentification
+- **Score de reidentification** : analyse automatique des quasi-identifiants residuels, combinaisons, et risque de recoupement (CNIL)
+- **Journal d'audit RGPD** : tracabilite complete (qui, quand, quel document, quel mode, quel score de risque)
+- **Anonymisation automatique** : detection et masquage des identifiants directs (noms, SIRET, IBAN, emails) et indirects (adresses, filiales, pourcentages, refs locales)
 - **Extraction structuree** : extraction automatique des champs comptables (actif, passif, CA, resultat) avec scoring de qualite
 - **Types de documents** : bilan, compte de resultat, declaration 2072, releve bancaire, liasse simplifiee
 - **Validation humaine** : workflow de revue avec capture de feedbacks pour amelioration continue
 - **Exports multiples** : JSON structure, rapport DOC/PDF, PDF redacte
-- **AI assistee** : resume et audit via Ollama (LLM local), Mistral, ou Hugging Face
-- **Base de connaissances** : ingestion et recherche sur les donnees anonymisees
+- **AI assistee** : resume et audit via Mistral Large (LLM) et Mistral OCR
+- **Privacy by design** : collecte minimale, separation des usages, chiffrement, controle d'acces, suppression securisee
 - **Golden Sets** : 250+ cas de test de regression pour garantir la qualite d'extraction
 
 ## Stack technique

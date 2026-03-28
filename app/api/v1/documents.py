@@ -44,6 +44,7 @@ from app.config import get_settings
 from app.services.webhook_notify import notify_document_validated
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import read_bytes
+from app.services.reidentification_risk_service import analyze_reidentification_risk
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -572,8 +573,13 @@ async def anonymize_document(
     auto_extract: bool = Query(default=True, description="Lance l'OCR automatiquement si texte non extrait"),
     use_llm: bool = Query(default=False, description="Utilise Mistral LLM (sinon dictionnaire)"),
     profile: str = Query(default="moderate", description="Profil d'anonymisation: 'moderate' (dictionnaire) ou 'strict' (LLM)"),
+    mode: str = Query(default="pseudonymization", description="Mode RGPD: 'pseudonymization' (interne) ou 'anonymization' (export/IA)"),
 ) -> dict:
-    """Anonymisation du texte par dictionnaire (défaut) ou LLM."""
+    """Anonymisation du texte avec deux modes RGPD distincts.
+
+    - **pseudonymization** : tokens réversibles, usage interne, revue humaine.
+    - **anonymization** : masquage fort + quasi-identifiants, export/IA/partage.
+    """
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     
     # Récupère le texte OCR précédemment extrait
@@ -591,12 +597,11 @@ async def anonymize_document(
     if original_version and original_version.content_text is not None:
         original_text = original_version.content_text
     elif auto_extract:
-        # 🔥 AUTO-EXTRACT: Pas de texte ? On lance l'OCR automatiquement !
         logger.info("auto_extract_triggered", doc_id=document_id)
         file_content = _read_file_or_404(document)
         original_text, _ = await build_extraction_ocr(db, document, file_content)
         extracted_on_demand = True
-        await db.commit()  # Commit important ici
+        await db.commit()
     
     if original_text is None:
         raise http_400("Texte non extrait. Lancez /extract d'abord ou utilisez auto_extract=true.")
@@ -604,20 +609,56 @@ async def anonymize_document(
     if len(original_text.strip()) == 0:
         raise http_400("Document vide ou illisible. Vérifiez que le fichier contient du texte extractible.")
     
+    # Mode anonymisation forte -> force profil strict + LLM
+    effective_profile = profile
+    effective_use_llm = use_llm
+    if mode == "anonymization":
+        effective_profile = "strict"
+        effective_use_llm = True
+    
     # Anonymisation (dictionnaire par défaut, LLM si demandé ou profil strict)
     preview_text, detections, meta = await build_anonymization_llm(
-        db, document, original_text, use_llm=use_llm, profile=profile
+        db, document, original_text, use_llm=effective_use_llm, profile=effective_profile
     )
+    await db.commit()
+    
+    # Scoring du risque de réidentification (CNIL)
+    risk_report = analyze_reidentification_risk(
+        preview_text, meta.get("entity_summary", {})
+    )
+    
+    # Audit RGPD
+    from app.models.audit_log import AuditLog
+    db.add(AuditLog(
+        user_id=current_user.id,
+        org_id=getattr(current_user, "org_id", None),
+        action=f"anonymize:{mode}",
+        resource_type="document",
+        resource_id=str(document.id),
+        method="POST",
+        path=f"/api/v1/documents/{document_id}/anonymize",
+        status_code=200,
+        details={
+            "mode": mode,
+            "profile": effective_profile,
+            "method": meta.get("method", "unknown"),
+            "detections_count": len(detections),
+            "risk_score": risk_report.score,
+            "risk_level": risk_report.level,
+        },
+    ))
     await db.commit()
     
     return {
         "document_id": str(document.id),
         "status": "anonymized",
+        "mode": mode,
         "preview_text": preview_text,
         "detections_count": len(detections),
         "entity_summary": meta.get("entity_summary", {}),
         "method": meta.get("method", "llm"),
         "auto_extracted": extracted_on_demand,
+        "risk": risk_report.to_dict(),
     }
 
 

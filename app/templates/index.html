@@ -153,6 +153,10 @@
         <div class="panel-header">
           <h2>Anonymisation</h2>
           <div class="panel-actions">
+            <select id="anon-mode" class="select-sm" title="Mode RGPD">
+              <option value="pseudonymization">Pseudonymisation (interne)</option>
+              <option value="anonymization">Anonymisation forte (export)</option>
+            </select>
             <select id="anon-profile" class="select-sm">
               <option value="moderate">Modéré</option>
               <option value="strict">Strict</option>
@@ -179,6 +183,14 @@
               <span class="stat-label">entités masquées</span>
             </div>
             <div id="anon-summary-chips" class="sidebar-stats" style="margin-left: 16px; border-left: 1px solid var(--border); padding-left: 16px;"></div>
+            <div id="risk-indicator" class="risk-indicator" style="display:none; margin-left: 16px; border-left: 1px solid var(--border); padding-left: 16px;">
+              <div class="risk-score-badge" id="risk-badge">
+                <span class="risk-label">Risque</span>
+                <span id="risk-score" class="risk-score">—</span>
+                <span id="risk-level" class="risk-level">—</span>
+              </div>
+              <p id="risk-recommendation" class="risk-recommendation"></p>
+            </div>
             <div class="stat-actions">
               <button id="btn-go-ai" class="btn btn-ghost btn-sm">💬 Discussion directe</button>
               <button id="btn-validate" class="btn btn-success">Valider et continuer →</button>

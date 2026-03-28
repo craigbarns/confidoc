@@ -741,7 +741,7 @@ function hideAnonLoading() {
   $("btn-anonymize").disabled = false;
 }
 
-function showAnonResults(previewText, count, summary = {}) {
+function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization") {
   hideAnonLoading();
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
@@ -754,6 +754,26 @@ function showAnonResults(previewText, count, summary = {}) {
     chips.innerHTML = sorted.map(([type, cnt]) =>
       `<span class="stat-chip" style="background: var(--bg-hover); border-color: var(--accent);">${type}: ${cnt}</span>`
     ).join("");
+  }
+
+  // Risk indicator (RGPD)
+  const riskEl = $("risk-indicator");
+  if (riskEl && risk) {
+    riskEl.style.display = "";
+    const scoreEl = $("risk-score");
+    const levelEl = $("risk-level");
+    const recoEl = $("risk-recommendation");
+    const badgeEl = $("risk-badge");
+    if (scoreEl) scoreEl.textContent = `${Math.round(risk.score * 100)}%`;
+    if (levelEl) {
+      const labels = { low: "Faible", medium: "Moyen", high: "Élevé", critical: "Critique" };
+      levelEl.textContent = labels[risk.level] || risk.level;
+      levelEl.className = "risk-level risk-" + risk.level;
+    }
+    if (badgeEl) badgeEl.className = "risk-score-badge risk-bg-" + risk.level;
+    if (recoEl) recoEl.textContent = risk.recommendation || "";
+  } else if (riskEl) {
+    riskEl.style.display = "none";
   }
 
   switchTab("anonymized");
@@ -777,11 +797,12 @@ function highlightTags(text) {
 async function anonymize() {
   if (!currentDocId) { toast("Aucun document sélectionné", "error"); return; }
   const profile = $("anon-profile").value;
-  showAnonLoading("Anonymisation en cours…");
+  const mode = $("anon-mode") ? $("anon-mode").value : "pseudonymization";
+  showAnonLoading(mode === "anonymization" ? "Anonymisation forte en cours…" : "Pseudonymisation en cours…");
 
   try {
     const res = await fetch(
-      `/api/v1/documents/${currentDocId}/anonymize?profile=${profile}`,
+      `/api/v1/documents/${currentDocId}/anonymize?profile=${profile}&mode=${mode}`,
       { method: "POST", headers: { "Authorization": `Bearer ${token}` } }
     );
 
@@ -793,8 +814,8 @@ async function anonymize() {
       updatePipelineTimeline({ status: "processing", extractDone: true, anonymDone: false });
     } else if (res.ok) {
       const data = await res.json();
-      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {});
-      toast(`${data.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
+      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {}, data.risk || null, data.mode || mode);
+      toast(`${data.detections_count ?? 0} entité(s) anonymisée(s) (${mode === "anonymization" ? "anonymisation forte" : "pseudonymisation"})`, "success");
       currentDocStatus = "ready";
       updateHeaderContext();
       updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });

@@ -1008,6 +1008,43 @@ body {
   gap: 10px;
 }
 
+
+/* ── RISK INDICATOR (RGPD) ────────────────── */
+.risk-indicator {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+.risk-score-badge {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 12px;
+  border-radius: var(--radius);
+  font-size: 12px;
+  font-weight: 600;
+  transition: all 0.2s ease;
+}
+.risk-label { opacity: 0.7; }
+.risk-score { font-size: 16px; font-weight: 700; }
+.risk-level { font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; }
+.risk-recommendation {
+  font-size: 11px;
+  color: var(--text-dim);
+  max-width: 300px;
+  line-height: 1.4;
+  margin: 0;
+}
+.risk-bg-low { background: #10b98115; color: #10b981; border: 1px solid #10b98140; }
+.risk-bg-medium { background: #f59e0b15; color: #f59e0b; border: 1px solid #f59e0b40; }
+.risk-bg-high { background: #ef444415; color: #ef4444; border: 1px solid #ef444440; }
+.risk-bg-critical { background: #dc262615; color: #dc2626; border: 1px solid #dc262640; animation: risk-pulse 1.5s infinite; }
+.risk-low { color: #10b981; }
+.risk-medium { color: #f59e0b; }
+.risk-high { color: #ef4444; }
+.risk-critical { color: #dc2626; font-weight: 700; }
+@keyframes risk-pulse { 0%,100% { opacity: 1; } 50% { opacity: 0.6; } }
 /* ── TOAST ───────────────────────────────────── */
 .toast {
   position: fixed;
