@@ -592,6 +592,11 @@ async def anonymize_document(
 
 async def _anonymize_document_inner(document_id, current_user, db, auto_extract, use_llm, profile, mode):
     document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    # Cache values BEFORE any commit (SQLAlchemy async expires attrs after commit)
+    _doc_id = str(document.id)
+    _user_id = current_user.id
+    _org_id = getattr(current_user, "org_id", None)
     
     # Récupère le texte OCR précédemment extrait
     result = await db.execute(
@@ -642,11 +647,11 @@ async def _anonymize_document_inner(document_id, current_user, db, auto_extract,
     try:
         from app.models.audit_log import AuditLog
         db.add(AuditLog(
-            user_id=current_user.id,
-            org_id=getattr(current_user, "org_id", None),
+            user_id=_user_id,
+            org_id=_org_id,
             action=f"anonymize:{mode}",
             resource_type="document",
-            resource_id=str(document.id),
+            resource_id=_doc_id,
             method="POST",
             path=f"/api/v1/documents/{document_id}/anonymize",
             status_code=200,
@@ -677,8 +682,8 @@ async def _anonymize_document_inner(document_id, current_user, db, auto_extract,
                 encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
                 expiry = datetime.now(timezone.utc) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
                 db.add(PseudonymMapping(
-                    document_id=document.id,
-                    user_id=current_user.id,
+                    document_id=uuid.UUID(_doc_id),
+                    user_id=_user_id,
                     encrypted_mapping=encrypted,
                     expires_at=expiry,
                     risk_score=risk_report.score,
@@ -690,7 +695,7 @@ async def _anonymize_document_inner(document_id, current_user, db, auto_extract,
             await db.rollback()
     
     return {
-        "document_id": str(document.id),
+        "document_id": _doc_id,
         "status": "anonymized",
         "mode": mode,
         "preview_text": preview_text,
