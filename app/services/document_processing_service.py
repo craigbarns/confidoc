@@ -143,10 +143,15 @@ async def build_anonymization_llm(
         method=method,
     )
     
+    registry_raw_mapping = {}
+    if not effective_use_llm and registry:
+        registry_raw_mapping = registry.export_raw_mapping()
+
     meta = {
         "method": method,
         "detections_count": len(detections),
         "entity_summary": entity_summary,
+        "registry_raw_mapping": registry_raw_mapping,
     }
     
     return preview_text, detections, meta

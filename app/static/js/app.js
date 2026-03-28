@@ -16,6 +16,7 @@ let currentIncludeDeleted = false;
 let currentSearchFilter = "";
 let currentStatusFilter = "";
 let activeStream = null; // AbortController pour le streaming SSE
+let currentRiskLevel = null; // RGPD risk level from last anonymization
 let originalTextCache = {}; // cache { docId: texte }
 
 const $ = id => document.getElementById(id);
@@ -756,6 +757,9 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
     ).join("");
   }
 
+  // Store risk level globally for export gating
+  currentRiskLevel = risk ? risk.level : null;
+
   // Risk indicator (RGPD)
   const riskEl = $("risk-indicator");
   if (riskEl && risk) {
@@ -1131,9 +1135,17 @@ async function exportText() {
     const resp = await apiRequest(`/documents/${currentDocId}/export`);
     const blob = new Blob([await resp.text()], { type: "text/plain;charset=utf-8" });
     triggerDownload(blob, `confidoc_${currentDocId.slice(0, 8)}.txt`);
+    toast("Export texte terminé", "success");
   } catch (e) {
     console.error("exportText error:", e);
-    toast(`Erreur export texte: ${e.message}`, "error");
+    if (e.message && e.message.includes("bloque")) {
+      toast(e.message, "error");
+      if (e.message.includes("validation humaine")) {
+        showApproveExportPrompt();
+      }
+    } else {
+      toast(`Erreur export texte: ${e.message}`, "error");
+    }
   }
 }
 
@@ -1143,9 +1155,48 @@ async function exportPdf() {
     const resp = await apiRequest(`/documents/${currentDocId}/export-pdf`);
     const blob = await resp.blob();
     triggerDownload(blob, `confidoc_${currentDocId.slice(0, 8)}.pdf`);
+    toast("Export PDF terminé", "success");
   } catch (e) {
     console.error("exportPdf error:", e);
-    toast(`Erreur export PDF: ${e.message}`, "error");
+    if (e.message && e.message.includes("bloque")) {
+      toast(e.message, "error");
+      if (e.message.includes("validation humaine")) {
+        showApproveExportPrompt();
+      }
+    } else {
+      toast(`Erreur export PDF: ${e.message}`, "error");
+    }
+  }
+}
+
+
+async function showApproveExportPrompt() {
+  if (!currentDocId) return;
+  const ok = confirm(
+    "Ce document a un risque de réidentification élevé.\n\n" +
+    "En tant que responsable, confirmez-vous avoir vérifié manuellement " +
+    "que l'anonymisation est suffisante pour un export externe ?\n\n" +
+    "Cette action sera journalisée."
+  );
+  if (!ok) return;
+  try {
+    await apiFetch(`/documents/${currentDocId}/approve-export`, { method: "POST" });
+    toast("Export approuvé — vous pouvez maintenant exporter.", "success");
+  } catch (e) {
+    toast(`Erreur approbation: ${e.message}`, "error");
+  }
+}
+
+async function downloadAuditReport() {
+  if (!currentDocId) return;
+  try {
+    const data = await apiFetch(`/documents/${currentDocId}/audit-report`);
+    const json = await data.json();
+    const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+    triggerDownload(blob, `audit_${currentDocId.slice(0, 8)}.json`);
+    toast("Rapport d'audit téléchargé", "success");
+  } catch (e) {
+    toast(`Erreur rapport: ${e.message}`, "error");
   }
 }
 
@@ -1292,6 +1343,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Export
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
+  if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
 
   // Reprendre la session si token en sessionStorage
   if (token) {

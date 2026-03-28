@@ -627,6 +627,29 @@ async def anonymize_document(
         preview_text, meta.get("entity_summary", {})
     )
     
+    # Save encrypted pseudonym mapping (reversible only in pseudo mode)
+    if mode == "pseudonymization":
+        try:
+            from app.services.crypto_service import encrypt_mapping
+            from app.models.pseudonym_mapping import PseudonymMapping
+            from app.config import get_settings
+            from datetime import timedelta
+            settings = get_settings()
+            raw_mapping = meta.get("registry_raw_mapping", {})
+            if raw_mapping:
+                encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
+                expiry = datetime.now(timezone.utc) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
+                db.add(PseudonymMapping(
+                    document_id=document.id,
+                    user_id=current_user.id,
+                    encrypted_mapping=encrypted,
+                    expires_at=expiry,
+                    risk_score=risk_report.score,
+                    risk_level=risk_report.level,
+                ))
+        except Exception as exc:
+            logger.warning("pseudo_mapping_save_failed", error=str(exc))
+
     # Audit RGPD
     from app.models.audit_log import AuditLog
     db.add(AuditLog(
@@ -849,7 +872,17 @@ async def export_document(
     document_id: str, current_user: CurrentUser, db: DbSession
 ) -> PlainTextResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
+    # RGPD gate: check risk level before allowing export
+    await _check_export_gate(db, document, current_user)
     final = await _get_or_create_final_version(db, document)
+    # Audit export
+    from app.models.audit_log import AuditLog
+    db.add(AuditLog(
+        user_id=current_user.id, org_id=getattr(current_user, "org_id", None),
+        action="export:text", resource_type="document",
+        resource_id=str(document.id), method="GET",
+        path=f"/api/v1/documents/{document_id}/export", status_code=200,
+    ))
     await db.commit()
     return PlainTextResponse(final.content_text)
 
@@ -864,6 +897,8 @@ async def export_redacted_pdf(
     document_id: str, current_user: CurrentUser, db: DbSession
 ) -> StreamingResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
+    # RGPD gate: check risk level before allowing export
+    await _check_export_gate(db, document, current_user)
 
     if document.extension.lower() != "pdf":
         raise http_400("Export PDF redacté disponible uniquement pour les fichiers PDF")

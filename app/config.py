@@ -63,6 +63,16 @@ class Settings(BaseSettings):
 
     # ---- Encryption ----
     ENCRYPTION_MASTER_KEY: str = "CHANGE-ME"
+    # Key for encrypting the reversible pseudonymization mapping (Fernet)
+    PSEUDO_MAPPING_KEY: str = "CHANGE-ME"
+
+    # ---- RGPD Retention (days, 0 = no auto-purge) ----
+    RETENTION_RAW_FILE_DAYS: int = 90
+    RETENTION_OCR_TEXT_DAYS: int = 180
+    RETENTION_ENTITIES_DAYS: int = 365
+    RETENTION_AUDIT_LOGS_DAYS: int = 1095  # 3 years
+    RETENTION_EXPORTS_DAYS: int = 30
+    RETENTION_MAPPING_DAYS: int = 90
 
     # ---- File Upload ----
     MAX_UPLOAD_SIZE_MB: int = 50
