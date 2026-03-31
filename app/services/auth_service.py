@@ -10,6 +10,7 @@ from app.core.exceptions import http_400, http_401
 from app.core.security import (
     create_access_token,
     generate_opaque_token,
+    hash_token,
     verify_password,
 )
 from app.models.refresh_token import RefreshToken
@@ -51,7 +52,7 @@ async def authenticate_user(
 
     new_refresh = RefreshToken(
         user_id=user.id,
-        token=refresh_token_value,
+        token=hash_token(refresh_token_value),
         expires_at=expires_at,
     )
     db.add(new_refresh)
@@ -68,7 +69,7 @@ async def refresh_access_token(
     db: AsyncSession, refresh_token_value: str
 ) -> TokenResponse:
     """Consomme le refresh token et en génère un nouveau + JWT."""
-    stmt = select(RefreshToken).where(RefreshToken.token == refresh_token_value)
+    stmt = select(RefreshToken).where(RefreshToken.token == hash_token(refresh_token_value))
     result = await db.execute(stmt)
     rt = result.scalar_one_or_none()
 
@@ -106,7 +107,7 @@ async def refresh_access_token(
 
     new_rt = RefreshToken(
         user_id=user.id,
-        token=new_refresh_value,
+        token=hash_token(new_refresh_value),
         expires_at=expires_at,
     )
     db.add(new_rt)

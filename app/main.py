@@ -20,15 +20,19 @@ from app.api.ui import router as ui_router
 from app.api.v1.router import router as v1_router
 
 
-async def _purge_old_deleted_documents() -> None:
-    """Désactivé: Les documents supprimés restent dans la corbeille indéfiniment.
-    
-    Pour vider la corbeille, utilisez l'endpoint DELETE /documents/{id}/permanent
-    ou contactez un administrateur.
-    """
-    # NOTE: La suppression automatique est désactivée.
-    # Les documents en corbeille sont conservés jusqu'à suppression manuelle.
-    pass
+async def _periodic_retention_purge() -> None:
+    """Background task: purge expired data every 24h (RGPD retention policy)."""
+    import asyncio as _aio
+    _logger = get_logger("retention")
+    await _aio.sleep(60)  # wait for app startup
+    while True:
+        try:
+            from app.services.retention_service import purge_expired_data
+            deleted = await purge_expired_data()
+            _logger.info("retention_purge_complete", deleted_counts=deleted)
+        except Exception as exc:
+            _logger.warning("retention_purge_failed", error=str(exc))
+        await _aio.sleep(86400)  # 24 hours
 
 
 @asynccontextmanager
@@ -49,8 +53,8 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     await init_database()
     logger.info("database_initialized")
 
-    # Pas de purge automatique - les documents restent en corbeille indéfiniment
-    # await _purge_old_deleted_documents()
+    import asyncio as _aio
+    _aio.create_task(_periodic_retention_purge())
 
     yield
 

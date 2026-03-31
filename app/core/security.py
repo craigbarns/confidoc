@@ -62,3 +62,9 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
 def generate_opaque_token(length: int = 40) -> str:
     """Génère un token opaque aléatoire (pour refresh tokens, reset mdp)."""
     return secrets.token_urlsafe(length)
+
+
+def hash_token(token: str) -> str:
+    """SHA-256 hash for secure token storage (refresh tokens, API keys)."""
+    import hashlib
+    return hashlib.sha256(token.encode("utf-8")).hexdigest()

@@ -217,7 +217,7 @@ async def _upload_document_body(
     if auto_anonymize:
         # Run OCR + anonymization in background — returns immediately to avoid HTTP timeout
         # on large/complex PDFs. Client polls document status (PROCESSING → READY).
-        asyncio.create_task(
+        task_ = asyncio.create_task(
             _anonymize_document_background(
                 doc_id=str(document.id),
                 content=content,
@@ -225,6 +225,7 @@ async def _upload_document_body(
                 document_type=document_type,
             )
         )
+        task_.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
         processing.update({"status": "processing"})
 
     return {

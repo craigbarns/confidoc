@@ -75,13 +75,23 @@ def _extract_action(method: str, path: str) -> str:
 class AuditLogMiddleware(BaseHTTPMiddleware):
     """Logs mutating API actions to the audit_logs table."""
 
+    _SENSITIVE_GET_RE = re.compile(
+        r"/api/v1/documents/[0-9a-f-]{36}/"
+        r"(preview|export|export-pdf|extracted-text|structured|audit-report)"
+    )
+
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
 
-        # Only audit mutating methods on API endpoints
-        if request.method not in _AUDITED_METHODS:
-            return response
         if not request.url.path.startswith("/api/"):
+            return response
+
+        # Audit mutating methods + sensitive GET endpoints (RGPD traceability)
+        should_audit = request.method in _AUDITED_METHODS
+        if request.method == "GET" and self._SENSITIVE_GET_RE.search(request.url.path):
+            should_audit = True
+
+        if not should_audit:
             return response
 
         # Fire-and-forget: don't block the response

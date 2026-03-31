@@ -19,6 +19,24 @@ logger = get_logger(__name__)
 # =============================================================================
 
 # Ordre important: du plus spécifique au plus général
+
+# ⚠ GOVERNANCE: Rules below may contain client-specific patterns.
+# In production, prefer loading from ANONYMIZATION_RULES_PATH env var.
+def _load_external_rules():
+    """Load rules from external JSON file if ANONYMIZATION_RULES_PATH is set."""
+    import os, json
+    path = os.environ.get("ANONYMIZATION_RULES_PATH", "")
+    if not path:
+        return None
+    try:
+        with open(path) as f:
+            data = json.load(f)
+        return data.get("replacement_rules"), data.get("partial_replacements"), data.get("post_cleanup_rules")
+    except Exception:
+        return None
+
+_external = _load_external_rules()
+
 REPLACEMENT_RULES = [
     # === ADRESSES COMPLÈTES (en premier pour éviter les collisions) ===
     (r'41\s+RUE\s+FONGATE\s*\n\s*13006\s+MARSEILLE', '[ADRESSE_SOCIETE_1]', True),
@@ -186,6 +204,15 @@ def _count_occurrences(pattern: str, text: str, case_sensitive: bool = True) -> 
     flags = 0 if case_sensitive else re.IGNORECASE
     return len(re.findall(pattern, text, flags | re.MULTILINE))
 
+
+
+if _external:
+    if _external[0] is not None:
+        REPLACEMENT_RULES = _external[0]
+    if _external[1] is not None:
+        PARTIAL_REPLACEMENTS = _external[1]
+    if _external[2] is not None:
+        POST_CLEANUP_RULES = _external[2]
 
 def anonymize_with_dictionary(text: str) -> dict[str, Any]:
     """Anonymise un texte en utilisant le dictionnaire de règles.

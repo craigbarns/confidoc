@@ -43,7 +43,7 @@ from app.services.anonymization_service import (
 from app.config import get_settings
 from app.services.webhook_notify import notify_document_validated
 from app.services.pdf_redaction_service import redact_pdf_bytes
-from app.services.storage_service import read_bytes
+from app.services.storage_service import delete_bytes, read_bytes
 from app.services.reidentification_risk_service import analyze_reidentification_risk
 
 router = APIRouter()
@@ -725,9 +725,10 @@ async def process_document_legacy(
     file_content = _read_file_or_404(document)
     document.status = DocumentStatus.PROCESSING
     await db.commit()
-    asyncio.create_task(
+    task = asyncio.create_task(
         _run_anonymize_background(str(document.id), file_content, profile, document_type)
     )
+    task.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
     return {"document_id": str(document.id), "status": "processing"}
 
 
@@ -1207,12 +1208,12 @@ async def permanent_delete_document(
     current_user: CurrentUser,
     db: DbSession,
 ) -> None:
-    """Supprime définitivement un document (ne peut pas être annulé)."""
+    """Supprime définitivement un document et nettoie le stockage (RGPD)."""
     try:
         doc_uuid = uuid.UUID(document_id)
     except ValueError as exc:
         raise http_404("Document introuvable") from exc
-    
+
     result = await db.execute(
         select(Document).where(
             Document.id == doc_uuid,
@@ -1220,12 +1221,26 @@ async def permanent_delete_document(
         )
     )
     document = result.scalar_one_or_none()
-    
+
     if not document:
         raise http_404("Document introuvable")
-    
-    # Suppression définitive (hard delete)
-    await db.execute(
-        delete(Document).where(Document.id == doc_uuid)
-    )
+
+    _storage_backend = document.storage_backend
+    _storage_key = document.storage_key
+    _doc_id_str = str(document.id)
+
+    await db.execute(delete(EntityDetection).where(EntityDetection.document_id == doc_uuid))
+    await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id == doc_uuid))
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        await db.execute(delete(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid))
+    except Exception:
+        pass
+    await db.execute(delete(Document).where(Document.id == doc_uuid))
     await db.commit()
+
+    try:
+        if _storage_backend and _storage_key:
+            delete_bytes(_storage_backend, _storage_key)
+    except Exception as exc:
+        logger.warning("permanent_delete_storage_failed", doc_id=_doc_id_str, error=str(exc))

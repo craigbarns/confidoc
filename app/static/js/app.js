@@ -50,6 +50,33 @@ function restoreFilterState() {
   }
 }
 
+
+// ── Theme toggle ───────────────────────────────────────────────────────
+
+function initTheme() {
+  const saved = localStorage.getItem("confidoc_theme");
+  if (saved === "light") document.documentElement.classList.add("theme-light");
+  else if (saved === "dark") document.documentElement.classList.remove("theme-light");
+  else if (window.matchMedia("(prefers-color-scheme: light)").matches) {
+    document.documentElement.classList.add("theme-light");
+  }
+  updateThemeBtn();
+}
+
+function toggleTheme() {
+  const isLight = document.documentElement.classList.toggle("theme-light");
+  localStorage.setItem("confidoc_theme", isLight ? "light" : "dark");
+  updateThemeBtn();
+}
+
+function updateThemeBtn() {
+  const btn = $("btn-theme");
+  if (!btn) return;
+  const isLight = document.documentElement.classList.contains("theme-light");
+  btn.textContent = isLight ? "🌙" : "☀️";
+  btn.title = isLight ? "Mode sombre" : "Mode clair";
+}
+
 // ── API helpers ────────────────────────────────────────────────────────
 
 async function apiRequest(path, opts = {}) {
@@ -146,6 +173,24 @@ function scheduleTokenRefresh() {
 async function apiFetch(path, opts = {}) {
   const resp = await apiRequest(path, opts);
   return resp.json();
+}
+
+
+// ── Mobile drawer ──────────────────────────────────────────────────────
+
+function toggleSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  const backdrop = $("sidebar-backdrop");
+  if (!sidebar) return;
+  const open = sidebar.classList.toggle("open");
+  if (backdrop) backdrop.classList.toggle("visible", open);
+}
+
+function closeSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  const backdrop = $("sidebar-backdrop");
+  if (sidebar) sidebar.classList.remove("open");
+  if (backdrop) backdrop.classList.remove("visible");
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────
@@ -646,6 +691,37 @@ function updateAIDocBar(name, sizeBytes) {
   $("ai-doc-bar").style.display = "";
 }
 
+
+function uploadWithProgress(formData, path, fillEl, statusEl) {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    xhr.upload.addEventListener("progress", (e) => {
+      if (e.lengthComputable) {
+        const pct = Math.round((e.loaded / e.total) * 100);
+        fillEl.style.width = pct + "%";
+        statusEl.textContent = `Envoi… ${pct}%`;
+      }
+    });
+    xhr.addEventListener("load", () => {
+      if (xhr.status >= 200 && xhr.status < 300) {
+        fillEl.style.width = "100%";
+        statusEl.textContent = "Upload réussi !";
+        try { resolve(JSON.parse(xhr.responseText)); }
+        catch (_e) { resolve({}); }
+      } else {
+        let msg = `HTTP ${xhr.status}`;
+        try { const j = JSON.parse(xhr.responseText); msg = j.detail || msg; } catch(_e) {}
+        reject(new Error(msg));
+      }
+    });
+    xhr.addEventListener("error", () => reject(new Error("Erreur réseau")));
+    xhr.addEventListener("abort", () => reject(new Error("Upload annulé")));
+    xhr.open("POST", API + path);
+    if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
+    xhr.send(formData);
+  });
+}
+
 // ── Upload ─────────────────────────────────────────────────────────────
 
 async function uploadFile(file) {
@@ -672,14 +748,8 @@ async function uploadFile(file) {
   }
 
   try {
-    fill.style.width = "70%";
     const clientQp = clientName ? `&client_name=${encodeURIComponent(clientName)}` : "";
-    const data = await apiFetch(`/uploads?auto_anonymize=false${clientQp}`, {
-      method: "POST",
-      body: fd,
-    });
-    fill.style.width = "100%";
-    statusEl.textContent = "Upload réussi !";
+    const data = await uploadWithProgress(fd, `/uploads?auto_anonymize=false${clientQp}`, fill, statusEl);
     currentDocId = data.document_id;
     currentDocName = file.name;
     currentDocStatus = "uploaded";
@@ -1191,8 +1261,7 @@ async function downloadAuditReport() {
   if (!currentDocId) return;
   try {
     const data = await apiFetch(`/documents/${currentDocId}/audit-report`);
-    const json = await data.json();
-    const blob = new Blob([JSON.stringify(json, null, 2)], { type: "application/json" });
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     triggerDownload(blob, `audit_${currentDocId.slice(0, 8)}.json`);
     toast("Rapport d'audit téléchargé", "success");
   } catch (e) {
@@ -1344,6 +1413,22 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
+
+  // Theme
+  initTheme();
+  if ($("btn-theme")) $("btn-theme").addEventListener("click", toggleTheme);
+
+  // Mobile sidebar toggle
+  if ($("btn-sidebar-toggle")) $("btn-sidebar-toggle").addEventListener("click", toggleSidebar);
+  if ($("sidebar-backdrop")) $("sidebar-backdrop").addEventListener("click", closeSidebar);
+  document.querySelectorAll(".sidebar .doc-item").forEach(el => {
+    el.addEventListener("click", closeSidebar);
+  });
+
+  // Service Worker
+  if ("serviceWorker" in navigator) {
+    navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+  }
 
   // Reprendre la session si token en sessionStorage
   if (token) {

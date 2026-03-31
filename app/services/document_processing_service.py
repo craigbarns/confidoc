@@ -115,23 +115,28 @@ async def build_anonymization_llm(
     db.add(preview_version)
     await db.flush()
     
-    # Sauvegarde les détections
+    # Sauvegarde les détections (bulk insert for performance)
     await db.execute(
         delete(EntityDetection).where(EntityDetection.document_id == document.id)
     )
-    
-    for item in detections:
-        db.add(
-            EntityDetection(
-                document_id=document.id,
-                document_version_id=preview_version.id,
-                entity_type=str(item.get("entity_type", "unknown"))[:40],
-                start_index=int(item.get("start_index", 0)),
-                end_index=int(item.get("end_index", 0)),
-                value_excerpt=postgres_safe_text(str(item.get("value_excerpt", "")))[:50_000],
-                replacement=postgres_safe_text(str(item.get("replacement", "[REDACTED]")))[:10_000],
-            )
-        )
+
+    if detections:
+        from uuid import uuid4
+        from sqlalchemy import insert
+        rows = [
+            {
+                "id": uuid4(),
+                "document_id": document.id,
+                "document_version_id": preview_version.id,
+                "entity_type": str(item.get("entity_type", "unknown"))[:40],
+                "start_index": int(item.get("start_index", 0)),
+                "end_index": int(item.get("end_index", 0)),
+                "value_excerpt": postgres_safe_text(str(item.get("value_excerpt", "")))[:50_000],
+                "replacement": postgres_safe_text(str(item.get("replacement", "[REDACTED]")))[:10_000],
+            }
+            for item in detections
+        ]
+        await db.execute(insert(EntityDetection), rows)
     
     document.status = DocumentStatus.READY
     await db.flush()

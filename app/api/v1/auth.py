@@ -103,9 +103,12 @@ async def login(
 )
 async def login_form_oauth2(
     db: DbSession,
+    request: Request,
     form_data: OAuth2PasswordRequestForm = Depends(),
 ) -> TokenResponse:
     """Endpoint utilisé par le Swagger UI pour l'accès Bearer Auth."""
+    client_ip = request.client.host if request.client else "unknown"
+    _check_rate_limit(f"login:{client_ip}")
     req = LoginRequest(email=form_data.username, password=form_data.password)
     return await auth_service.authenticate_user(db, req)
 
