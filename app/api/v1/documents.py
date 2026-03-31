@@ -890,19 +890,20 @@ async def validate_document(
 async def _check_export_gate(db, document, current_user) -> None:
     """Enforce RGPD export policy based on risk level.
 
-    - low: export allowed
-    - medium: export allowed (warning logged)
-    - high: requires human_validated=True on the mapping
-    - critical: export blocked entirely
+    Uses its own DB session to avoid corrupting the caller's session
+    if the pseudonym_mappings table does not exist yet.
     """
+    doc_id = str(document.id)
+    user_id = str(current_user.id)
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
-        result = await db.execute(
-            select(PseudonymMapping)
-            .where(PseudonymMapping.document_id == document.id)
-            .order_by(PseudonymMapping.created_at.desc())
-        )
-        mapping = result.scalar_one_or_none()
+        async with async_session_factory() as gate_session:
+            result = await gate_session.execute(
+                select(PseudonymMapping)
+                .where(PseudonymMapping.document_id == doc_id)
+                .order_by(PseudonymMapping.created_at.desc())
+            )
+            mapping = result.scalar_one_or_none()
 
         if not mapping:
             return
@@ -925,18 +926,14 @@ async def _check_export_gate(db, document, current_user) -> None:
         if risk_level == "medium":
             logger.warning(
                 "export_medium_risk",
-                doc_id=str(document.id),
-                user_id=str(current_user.id),
+                doc_id=doc_id,
+                user_id=user_id,
                 risk_score=mapping.risk_score,
             )
     except Exception as exc:
         if hasattr(exc, "status_code"):
             raise
         logger.warning("export_gate_check_skipped", error=str(exc))
-        try:
-            await db.rollback()
-        except Exception:
-            pass
 
 
 @router.post(
