@@ -933,6 +933,10 @@ async def _check_export_gate(db, document, current_user) -> None:
         if hasattr(exc, "status_code"):
             raise
         logger.warning("export_gate_check_skipped", error=str(exc))
+        try:
+            await db.rollback()
+        except Exception:
+            pass
 
 
 @router.post(
@@ -1052,19 +1056,32 @@ async def export_document(
     document_id: str, current_user: CurrentUser, db: DbSession
 ) -> PlainTextResponse:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    # RGPD gate: check risk level before allowing export
+    _doc_id = str(document.id)
+    _user_id = current_user.id
+    _org_id = getattr(current_user, "org_id", None)
+
     await _check_export_gate(db, document, current_user)
     final = await _get_or_create_final_version(db, document)
-    # Audit export
-    from app.models.audit_log import AuditLog
-    db.add(AuditLog(
-        user_id=current_user.id, org_id=getattr(current_user, "org_id", None),
-        action="export:text", resource_type="document",
-        resource_id=str(document.id), method="GET",
-        path=f"/api/v1/documents/{document_id}/export", status_code=200,
-    ))
+    text_content = final.content_text
     await db.commit()
-    return PlainTextResponse(final.content_text)
+
+    try:
+        from app.models.audit_log import AuditLog
+        db.add(AuditLog(
+            user_id=_user_id, org_id=_org_id,
+            action="export:text", resource_type="document",
+            resource_id=_doc_id, method="GET",
+            path=f"/api/v1/documents/{document_id}/export", status_code=200,
+        ))
+        await db.commit()
+    except Exception as exc:
+        logger.warning("export_audit_failed", error=str(exc))
+        try:
+            await db.rollback()
+        except Exception:
+            pass
+
+    return PlainTextResponse(text_content)
 
 
 @router.get(
