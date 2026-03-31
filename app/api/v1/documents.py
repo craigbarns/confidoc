@@ -1054,34 +1054,42 @@ async def get_audit_report(
 )
 async def export_document(
     document_id: str, current_user: CurrentUser, db: DbSession
-) -> PlainTextResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    _doc_id = str(document.id)
-    _user_id = current_user.id
-    _org_id = getattr(current_user, "org_id", None)
-
-    await _check_export_gate(db, document, current_user)
-    final = await _get_or_create_final_version(db, document)
-    text_content = final.content_text
-    await db.commit()
-
+):
     try:
-        from app.models.audit_log import AuditLog
-        db.add(AuditLog(
-            user_id=_user_id, org_id=_org_id,
-            action="export:text", resource_type="document",
-            resource_id=_doc_id, method="GET",
-            path=f"/api/v1/documents/{document_id}/export", status_code=200,
-        ))
-        await db.commit()
-    except Exception as exc:
-        logger.warning("export_audit_failed", error=str(exc))
-        try:
-            await db.rollback()
-        except Exception:
-            pass
+        document = await _get_user_document_or_404(db, document_id, current_user.id)
+        _doc_id = str(document.id)
+        _user_id = current_user.id
+        _org_id = getattr(current_user, "org_id", None)
 
-    return PlainTextResponse(text_content)
+        await _check_export_gate(db, document, current_user)
+        final = await _get_or_create_final_version(db, document)
+        text_content = final.content_text
+        await db.commit()
+
+        try:
+            from app.models.audit_log import AuditLog
+            db.add(AuditLog(
+                user_id=_user_id, org_id=_org_id,
+                action="export:text", resource_type="document",
+                resource_id=_doc_id, method="GET",
+                path=f"/api/v1/documents/{document_id}/export", status_code=200,
+            ))
+            await db.commit()
+        except Exception:
+            try:
+                await db.rollback()
+            except Exception:
+                pass
+
+        return PlainTextResponse(text_content)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("export_text_failed", error=str(exc))
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Export failed: {type(exc).__name__}: {str(exc)[:500]}"},
+        )
 
 
 @router.get(
@@ -1092,48 +1100,56 @@ async def export_document(
 )
 async def export_redacted_pdf(
     document_id: str, current_user: CurrentUser, db: DbSession
-) -> StreamingResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    # RGPD gate: check risk level before allowing export
-    await _check_export_gate(db, document, current_user)
-
-    if document.extension.lower() != "pdf":
-        raise http_400("Export PDF redacté disponible uniquement pour les fichiers PDF")
-
-    detections_result = await db.execute(
-        select(EntityDetection).where(EntityDetection.document_id == document.id)
-    )
-    detections = list(detections_result.scalars().all())
-
-    if not detections:
-        source_text = await _get_anonymized_text(db, document)
-        if source_text:
-            effective_type = classify_document_type(source_text, document.original_filename)
-            _anon_text, regenerated, _registry = anonymize_text(
-                source_text, profile="strict", document_type=effective_type
-            )
-            detections = [
-                SimpleNamespace(value_excerpt=item.get("value_excerpt", ""))
-                for item in regenerated
-                if item.get("value_excerpt")
-            ]
-        if not detections:
-            raise http_404("Aucune détection disponible. Lancez /anonymize d'abord.")
-
-    original_bytes = _read_file_or_404(document)
-    sensitive_values = [item.value_excerpt for item in detections if item.value_excerpt]
-
+):
     try:
-        loop = asyncio.get_running_loop()
-        redacted_bytes = await loop.run_in_executor(
-            None, redact_pdf_bytes, original_bytes, sensitive_values
-        )
-    except Exception as exc:
-        logger.error("pdf_redaction_failed", doc_id=str(document.id), error=str(exc))
-        raise http_400("Impossible de générer le PDF redacté.")
+      document = await _get_user_document_or_404(db, document_id, current_user.id)
+      await _check_export_gate(db, document, current_user)
 
-    headers = {"Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'}
-    return StreamingResponse(BytesIO(redacted_bytes), media_type="application/pdf", headers=headers)
+      if document.extension.lower() != "pdf":
+          raise http_400("Export PDF redacté disponible uniquement pour les fichiers PDF")
+
+      detections_result = await db.execute(
+          select(EntityDetection).where(EntityDetection.document_id == document.id)
+      )
+      detections = list(detections_result.scalars().all())
+
+      if not detections:
+          source_text = await _get_anonymized_text(db, document)
+          if source_text:
+              effective_type = classify_document_type(source_text, document.original_filename)
+              _anon_text, regenerated, _registry = anonymize_text(
+                  source_text, profile="strict", document_type=effective_type
+              )
+              detections = [
+                  SimpleNamespace(value_excerpt=item.get("value_excerpt", ""))
+                  for item in regenerated
+                  if item.get("value_excerpt")
+              ]
+          if not detections:
+              raise http_404("Aucune détection disponible. Lancez /anonymize d'abord.")
+
+      original_bytes = _read_file_or_404(document)
+      sensitive_values = [item.value_excerpt for item in detections if item.value_excerpt]
+
+      try:
+          loop = asyncio.get_running_loop()
+          redacted_bytes = await loop.run_in_executor(
+              None, redact_pdf_bytes, original_bytes, sensitive_values
+          )
+      except Exception as exc:
+          logger.error("pdf_redaction_failed", doc_id=str(document.id), error=str(exc))
+          raise http_400("Impossible de générer le PDF redacté.")
+
+      headers = {"Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'}
+      return StreamingResponse(BytesIO(redacted_bytes), media_type="application/pdf", headers=headers)
+    except HTTPException:
+        raise
+    except Exception as exc:
+        logger.error("export_pdf_failed", error=str(exc))
+        return JSONResponse(
+            status_code=500,
+            content={"detail": f"Export PDF failed: {type(exc).__name__}: {str(exc)[:500]}"},
+        )
 
 
 @router.delete(
