@@ -24,7 +24,7 @@ async def root() -> dict:
         "status": "ok",
         "health": "/health",
         "ui": "/ui",
-        "release": "v4.2-gate-session-fix",
+        "release": "v5.0-sprint1-ux",
     }
 
 
@@ -39,7 +39,7 @@ async def health_check() -> dict:
     return {
         "status": "healthy",
         "service": "confidoc-backend",
-        "release": "v4.2-gate-session-fix",
+        "release": "v5.0-sprint1-ux",
     }
 
 

@@ -17,10 +17,13 @@ let currentSearchFilter = "";
 let currentStatusFilter = "";
 let activeStream = null; // AbortController pour le streaming SSE
 let currentRiskLevel = null; // RGPD risk level from last anonymization
-let originalTextCache = {}; // cache { docId: texte }
+let originalTextCache = {};
+let bgPollers = {};
 
 const $ = id => document.getElementById(id);
 const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
+const CHAT_STORAGE_PREFIX = "confidoc_chat_";
+const ONBOARDING_KEY = "confidoc_onboarding_done";
 
 function saveFilterState() {
   const payload = {
@@ -269,6 +272,8 @@ function logout() {
   currentProvider = "—";
   latestAssistantText = "";
   originalTextCache = {};
+  Object.values(bgPollers).forEach(id => clearInterval(id));
+  bgPollers = {};
   sessionStorage.removeItem("confidoc_token");
   sessionStorage.removeItem("confidoc_refresh_token");
   if (activeStream) { activeStream.abort(); activeStream = null; }
@@ -302,6 +307,10 @@ async function initApp(email) {
   restoreFilterState();
   await loadClientSuggestions();
   await loadDocList();
+
+  if (!localStorage.getItem(ONBOARDING_KEY)) {
+    setTimeout(() => showOnboarding(), 500);
+  }
 }
 
 function updateHeaderContext() {
@@ -405,6 +414,7 @@ async function loadDocList() {
     // Ne pas utiliser `/documents/${qp}` : ça produit `/documents/` ou `/documents/?…` (404 / mauvais match).
     const docs = await apiFetch(`/documents${qp}`);
     renderDocList(docs);
+    startBgPollers(docs);
   } catch (e) {
     console.warn("loadDocList failed:", e.message);
     const list = $("doc-list");
@@ -984,9 +994,216 @@ function switchTab(tabName) {
   $("tab-original").style.display = tabName === "original" ? "" : "none";
 
   // Chargement lazy du texte original
-  if (tabName === "original" && currentDocId) {
-    loadOriginalText(currentDocId);
+  const diffTab = $("tab-diff");
+  if (diffTab) diffTab.style.display = tabName === "diff" ? "" : "none";
+
+  if (tabName === "original" && currentDocId) loadOriginalText(currentDocId);
+  if (tabName === "diff" && currentDocId) loadDiffView();
+}
+
+
+// ── Background pollers (notifications) ─────────────────────────────────
+
+function startBgPollers(docs) {
+  Object.values(bgPollers).forEach(id => clearInterval(id));
+  bgPollers = {};
+  const processing = (docs || []).filter(d => d.status === "processing" && !d.is_deleted);
+  processing.forEach(d => {
+    bgPollers[d.id] = setInterval(async () => {
+      try {
+        const doc = await apiFetch(`/documents/${d.id}`);
+        if (doc.status === "ready") {
+          clearInterval(bgPollers[d.id]);
+          delete bgPollers[d.id];
+          notifyDocReady(d.original_filename, d.id);
+          await loadDocList();
+          if (currentDocId === d.id) {
+            try {
+              const preview = await apiFetch(`/documents/${d.id}/preview`);
+              showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
+            } catch (_e) {}
+            currentDocStatus = "ready";
+            updateHeaderContext();
+            updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });
+          }
+        } else if (doc.status === "failed") {
+          clearInterval(bgPollers[d.id]);
+          delete bgPollers[d.id];
+          toast(`"${d.original_filename}" a echoue`, "error");
+          await loadDocList();
+        }
+      } catch (_e) {
+        clearInterval(bgPollers[d.id]);
+        delete bgPollers[d.id];
+      }
+    }, 3000);
+  });
+}
+
+function notifyDocReady(filename, docId) {
+  toast(`"${filename}" est pret !`, "success");
+  const el = document.querySelector(`.doc-item[data-id="${docId}"]`);
+  if (el) {
+    el.classList.add("doc-item-flash");
+    setTimeout(() => el.classList.remove("doc-item-flash"), 2000);
   }
+  if ("Notification" in window && Notification.permission === "granted") {
+    try { new Notification("ConfiDoc", { body: `${filename} est pret pour la discussion IA` }); } catch(_e){}
+  }
+}
+
+// ── Diff view ──────────────────────────────────────────────────────────
+
+function buildDiffView(original, anonymized) {
+  if (!original || !anonymized) return "<p style='color:var(--text-muted)'>Chargez d'abord le texte original et anonymise.</p>";
+  const origLines = original.split("\n");
+  const anonLines = anonymized.split("\n");
+  const maxLen = Math.max(origLines.length, anonLines.length);
+  let html = '<div class="diff-container">';
+  for (let i = 0; i < maxLen; i++) {
+    const oLine = origLines[i] || "";
+    const aLine = anonLines[i] || "";
+    const changed = oLine !== aLine;
+    const cls = changed ? "diff-changed" : "diff-same";
+    html += `<div class="diff-row ${cls}">`;
+    html += `<div class="diff-num">${i + 1}</div>`;
+    html += `<div class="diff-left">${escapeHtml(oLine)}</div>`;
+    html += `<div class="diff-sep">${changed ? "\u2192" : ""}</div>`;
+    html += `<div class="diff-right">${changed ? highlightTags(aLine) : escapeHtml(aLine)}</div>`;
+    html += `</div>`;
+  }
+  html += "</div>";
+  return html;
+}
+
+async function loadDiffView() {
+  const diffEl = $("preview-diff-text");
+  if (!diffEl) return;
+  diffEl.innerHTML = '<div class="loading-state"><div class="spinner spinner-sm"></div><p>Chargement...</p></div>';
+  const anonText = $("preview-anon-text")?.textContent || "";
+  if (!anonText) { diffEl.innerHTML = "<p>Texte anonymise non disponible.</p>"; return; }
+  if (!currentDocId) return;
+  if (!originalTextCache[currentDocId]) {
+    try {
+      const data = await apiFetch(`/documents/${currentDocId}/extracted-text`);
+      originalTextCache[currentDocId] = data.text || "";
+    } catch (_e) {
+      diffEl.innerHTML = "<p>Texte original non disponible.</p>";
+      return;
+    }
+  }
+  diffEl.innerHTML = buildDiffView(originalTextCache[currentDocId], anonText);
+}
+
+// ── Chat history (localStorage) ────────────────────────────────────────
+
+function saveChatHistory(docId) {
+  if (!docId) return;
+  const msgs = $("chat-messages");
+  if (!msgs) return;
+  const messages = [];
+  msgs.querySelectorAll(".msg").forEach(el => {
+    const isUser = el.classList.contains("msg-user");
+    const body = isUser ? el.textContent : (el.querySelector(".msg-body")?.textContent || "");
+    if (body.trim()) messages.push({ role: isUser ? "user" : "assistant", content: body });
+  });
+  if (messages.length) {
+    try { localStorage.setItem(CHAT_STORAGE_PREFIX + docId, JSON.stringify(messages)); } catch (_e) {}
+  }
+}
+
+function loadChatHistory(docId) {
+  if (!docId) return;
+  try {
+    const raw = localStorage.getItem(CHAT_STORAGE_PREFIX + docId);
+    if (!raw) return;
+    const messages = JSON.parse(raw);
+    if (!Array.isArray(messages) || !messages.length) return;
+    const msgs = $("chat-messages");
+    const intro = msgs.querySelector(".chat-intro");
+    if (intro) intro.remove();
+    messages.forEach(m => {
+      if (m.role === "user") {
+        const div = document.createElement("div");
+        div.className = "msg msg-user";
+        div.textContent = m.content;
+        msgs.appendChild(div);
+      } else {
+        const div = document.createElement("div");
+        div.className = "msg msg-ai";
+        div.innerHTML = '<div class="msg-label">IA</div><span class="msg-body">' + escapeHtml(m.content) + '</span>';
+        msgs.appendChild(div);
+        latestAssistantText = m.content;
+      }
+    });
+    msgs.scrollTop = msgs.scrollHeight;
+    $("btn-copy-answer").disabled = !latestAssistantText.trim();
+  } catch (_e) {}
+}
+
+// ── Onboarding ─────────────────────────────────────────────────────────
+
+function showOnboarding() {
+  const steps = [
+    { target: ".upload-zone", title: "1. Uploadez un document", text: "Glissez un PDF ou cliquez pour choisir un fichier. Le nom du client est obligatoire." },
+    { target: "#btn-anonymize", title: "2. Anonymisez", text: "Choisissez un mode RGPD et un profil, puis lancez le traitement." },
+    { target: ".quick-actions", title: "3. Discutez avec l'IA", text: "Posez des questions en toute securite. L'IA ne voit que le texte masque." },
+    { target: "#btn-export-txt", title: "4. Exportez", text: "Telechargez le texte anonymise, le PDF redacte ou le rapport d'audit RGPD." },
+  ];
+  let current = 0;
+  const overlay = document.createElement("div");
+  overlay.className = "onboarding-overlay";
+  overlay.id = "onboarding-overlay";
+
+  function renderStep() {
+    const step = steps[current];
+    const targetEl = document.querySelector(step.target);
+    overlay.innerHTML = '<div class="onboarding-backdrop"></div>' +
+      '<div class="onboarding-card">' +
+      '<div class="onboarding-step-indicator">' + (current+1) + ' / ' + steps.length + '</div>' +
+      '<h3>' + step.title + '</h3>' +
+      '<p>' + step.text + '</p>' +
+      '<div class="onboarding-actions">' +
+      '<button class="btn btn-ghost btn-sm" id="onboarding-skip">Passer</button>' +
+      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant' : 'Commencer !') + '</button>' +
+      '</div></div>';
+    document.body.appendChild(overlay);
+    const card = overlay.querySelector(".onboarding-card");
+    if (targetEl) {
+      const rect = targetEl.getBoundingClientRect();
+      let top = rect.bottom + 12;
+      let left = rect.left;
+      if (top + 200 > window.innerHeight) top = rect.top - 200;
+      if (left + 320 > window.innerWidth) left = window.innerWidth - 336;
+      if (left < 16) left = 16;
+      card.style.top = Math.max(16, top) + "px";
+      card.style.left = left + "px";
+      targetEl.classList.add("onboarding-highlight");
+    } else {
+      card.style.top = "50%";
+      card.style.left = "50%";
+      card.style.transform = "translate(-50%, -50%)";
+    }
+    overlay.querySelector("#onboarding-next").addEventListener("click", () => {
+      if (targetEl) targetEl.classList.remove("onboarding-highlight");
+      current++;
+      if (current >= steps.length) { finishOnboarding(); }
+      else { overlay.remove(); renderStep(); }
+    });
+    overlay.querySelector("#onboarding-skip").addEventListener("click", () => {
+      document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
+      finishOnboarding();
+    });
+  }
+
+  function finishOnboarding() {
+    overlay.remove();
+    document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
+    localStorage.setItem(ONBOARDING_KEY, "true");
+    toast("Bienvenue sur ConfiDoc !", "success");
+  }
+
+  renderStep();
 }
 
 // ── Validate ───────────────────────────────────────────────────────────
@@ -1005,6 +1222,7 @@ async function validate() {
     updateAIDocBar(currentDocName, currentDocSize);
     refreshAIDocInsights(currentDocId);
     resetChat();
+    loadChatHistory(currentDocId);
     await loadDocList();
     toast("Document validé — posez vos questions !", "success");
   } catch (e) {
@@ -1022,6 +1240,7 @@ function goToChat() {
   updateAIDocBar(currentDocName, currentDocSize);
   refreshAIDocInsights(currentDocId);
   resetChat();
+  loadChatHistory(currentDocId);
 }
 
 // ── AI Chat ────────────────────────────────────────────────────────────
@@ -1177,6 +1396,7 @@ async function sendMessage() {
     activeStream = null;
     $("btn-send").style.display = "";
     $("btn-stop-stream").style.display = "none";
+    saveChatHistory(currentDocId);
   }
 }
 
@@ -1424,6 +1644,11 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".sidebar .doc-item").forEach(el => {
     el.addEventListener("click", closeSidebar);
   });
+
+  // Notification permission
+  if ("Notification" in window && Notification.permission === "default") {
+    Notification.requestPermission();
+  }
 
   // Service Worker
   if ("serviceWorker" in navigator) {

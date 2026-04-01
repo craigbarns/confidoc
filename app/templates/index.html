@@ -208,9 +208,17 @@
             <div class="preview-tabs" role="tablist">
               <button class="tab active" data-tab="anonymized" role="tab" aria-selected="true">Texte anonymisé</button>
               <button class="tab" data-tab="original" role="tab" aria-selected="false">Original ⚠️</button>
+              <button class="tab" data-tab="diff" role="tab" aria-selected="false">Comparaison ↔</button>
             </div>
             <div id="tab-anonymized" class="tab-content">
               <pre id="preview-anon-text" class="preview-text"></pre>
+            </div>
+            <div id="tab-diff" class="tab-content" style="display:none">
+              <div class="diff-legend">
+                <span class="diff-legend-item"><span class="diff-dot diff-dot-del"></span> Original</span>
+                <span class="diff-legend-item"><span class="diff-dot diff-dot-ins"></span> Anonymisé</span>
+              </div>
+              <div id="preview-diff-text" class="preview-text" style="max-height:420px;overflow-y:auto;"></div>
             </div>
             <div id="tab-original" class="tab-content" style="display:none">
               <div class="warning-banner">⚠️ Ce texte contient des données personnelles non anonymisées.</div>
