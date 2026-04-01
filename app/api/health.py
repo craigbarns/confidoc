@@ -24,7 +24,7 @@ async def root() -> dict:
         "status": "ok",
         "health": "/health",
         "ui": "/ui",
-        "release": "v7.1-agent-pro",
+        "release": "v7.1.1-stream-fix",
     }
 
 
@@ -39,7 +39,7 @@ async def health_check() -> dict:
     return {
         "status": "healthy",
         "service": "confidoc-backend",
-        "release": "v7.1-agent-pro",
+        "release": "v7.1.1-stream-fix",
     }
 
 

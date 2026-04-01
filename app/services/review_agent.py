@@ -570,29 +570,53 @@ async def run_review_streaming(
         "synthesize": "Redaction de la note de revue",
     }
 
-    try:
-        async for state in graph.astream(initial_state):
-            for node_name, node_output in state.items():
-                if node_name in steps_order:
-                    yield {
-                        "step": node_name,
-                        "label": step_labels.get(node_name, node_name),
-                        "status": "done",
-                        "data": {
-                            k: v for k, v in node_output.items()
-                            if k not in ("anonymized_text",)
-                        },
-                    }
+    def _iter_chunks(raw: object) -> dict[str, Any]:
+        """Normalize LangGraph stream chunks to {node_name: update_dict}.
 
-                    idx = steps_order.index(node_name)
-                    if idx + 1 < len(steps_order):
-                        next_step = steps_order[idx + 1]
-                        yield {
-                            "step": next_step,
-                            "label": step_labels.get(next_step, next_step),
-                            "status": "running",
-                            "data": {},
-                        }
+        Default astream() uses stream_mode='values' (full state per step): keys are
+        state fields (doc_type, findings, …), NOT node names — so SSE never matched
+        classify/extract/… and only accidentally collided with the state key 'findings'.
+        We use stream_mode='updates' so each chunk is {node_name: node_output}.
+        """
+        if isinstance(raw, tuple) and len(raw) >= 2:
+            mode, payload = raw[0], raw[1]
+            if mode == "updates" and isinstance(payload, dict):
+                return payload
+            if isinstance(payload, dict):
+                return payload
+            return {}
+        if isinstance(raw, dict):
+            return raw
+        return {}
+
+    try:
+        async for raw_chunk in graph.astream(initial_state, stream_mode="updates"):
+            state = _iter_chunks(raw_chunk)
+            for node_name, node_output in state.items():
+                if node_name not in steps_order:
+                    continue
+                if not isinstance(node_output, dict):
+                    continue
+                yield {
+                    "step": node_name,
+                    "label": step_labels.get(node_name, node_name),
+                    "status": "done",
+                    "data": {
+                        k: v
+                        for k, v in node_output.items()
+                        if k not in ("anonymized_text",)
+                    },
+                }
+
+                idx = steps_order.index(node_name)
+                if idx + 1 < len(steps_order):
+                    next_step = steps_order[idx + 1]
+                    yield {
+                        "step": next_step,
+                        "label": step_labels.get(next_step, next_step),
+                        "status": "running",
+                        "data": {},
+                    }
 
         yield {"step": "complete", "label": "Analyse terminee", "status": "complete", "data": {}}
 

@@ -1832,10 +1832,7 @@ async function startReview() {
             if (!completedSteps.includes(step)) completedSteps.push(step);
             if (event.data) {
               Object.assign(allData, event.data);
-              if (step === "findings" && event.data.findings) {
-                allData.findings = event.data.findings;
-              }
-              if (step === "filter" && event.data.findings) {
+              if (event.data.findings) {
                 allData.findings = event.data.findings;
               }
             }
