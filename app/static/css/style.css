@@ -1746,3 +1746,54 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
   line-height: 1.5;
   font-style: italic;
 }
+
+/* ── CABINET REVIEW (5 blocs) ─────────────── */
+.review-cabinet-block .review-section-title {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+.review-block-num {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 26px;
+  height: 26px;
+  padding: 0 8px;
+  border-radius: 8px;
+  font-size: 12px;
+  font-weight: 800;
+  background: linear-gradient(135deg, var(--accent), #a78bfa);
+  color: #fff;
+  box-shadow: 0 2px 8px rgba(124,116,255,0.25);
+}
+.review-cabinet-list {
+  margin: 0;
+  padding-left: 1.15rem;
+  font-size: 13px;
+  line-height: 1.65;
+  color: var(--text);
+}
+.review-cabinet-list li { margin-bottom: 6px; }
+.review-cabinet-empty {
+  margin: 0;
+  font-size: 13px;
+  color: var(--text-muted);
+  font-style: italic;
+}
+.review-doc-type {
+  font-weight: 600;
+  color: var(--text-muted);
+  text-transform: lowercase;
+}
+.review-complement {
+  border-style: dashed !important;
+  opacity: 0.95;
+}
+.review-complement-line {
+  margin: 0 0 10px;
+  font-size: 13px;
+  line-height: 1.6;
+  color: var(--text);
+}

@@ -60,6 +60,9 @@ class ReviewState(TypedDict, total=False):
     findings: dict[str, list[dict[str, Any]]]
     review_note: str
     sections: dict[str, str]
+    demandes_formelles: list[str]
+    pieces_a_verifier: list[str]
+    review_complement: dict[str, str]
     confidence: float
     verdict: str
     prochaines_actions: list[str]
@@ -123,7 +126,7 @@ async def classify_node(state: ReviewState) -> ReviewState:
     prompt = f"""Analyse ce texte anonymise et determine le type de document.
 
 Types possibles: liasse_fiscale, bilan, compte_resultat, bail, statuts, facture,
-contrat, bulletin_paie, releve_bancaire, acte_notarie, declaration_tva,
+contrat, courrier, correspondance, bulletin_paie, releve_bancaire, acte_notarie, declaration_tva,
 proces_verbal, rapport_audit, note_frais, devis, autre.
 
 Reponds en JSON strict:
@@ -248,6 +251,11 @@ Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:1500]}
 Analyse precedente: {json.dumps(analysis, ensure_ascii=False)[:1500]}
 
 Tu dois produire des constats structures selon EXACTEMENT 4 categories.
+
+CONTEXTE SELON TYPE:
+- Courrier, correspondance, contrat, gouvernance, mise en demeure: en categorie B, inclure griefs, reserves ou desaccords exprimes de maniere factuelle; en C, ce qui manque pour repondre; en D, pièces ou sources externes a consulter.
+- Bilan, liasse, compte de resultat, piece comptable: rester sur logique comptable (concentrations, coherence, manques de detail).
+
 
 CATEGORIE A — anomalies_confirmees
 Uniquement des erreurs PROUVEES par le document lui-meme:
@@ -398,63 +406,76 @@ async def synthesize_node(state: ReviewState) -> ReviewState:
     n_missing = len(findings.get("informations_manquantes", []))
     n_verif = len(findings.get("verifications_recommandees", []))
 
-    prompt = f"""Genere une note de revue professionnelle pour ce document.
+    prompt = f"""Tu produis la SYNTHESE CABINET pour un professionnel (expert-comptable, juriste, DAF).
+Le texte est anonymise. Type de document detecte: {doc_type}
 
-Type: {doc_type}
-Donnees cles: {json.dumps(extracted, ensure_ascii=False)[:2000]}
+Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:2000]}
 Analyse: {json.dumps(analysis, ensure_ascii=False)[:1500]}
-
-Constats structures:
+Constats structures (4 niveaux):
 - Anomalies confirmees: {n_confirmed}
 - Points d'attention: {n_attention}
 - Informations manquantes: {n_missing}
 - Verifications recommandees: {n_verif}
-Detail: {json.dumps(findings, ensure_ascii=False)[:2000]}
+Detail constats: {json.dumps(findings, ensure_ascii=False)[:2000]}
 Entites anonymisees: {json.dumps(entity_summary, ensure_ascii=False)}
 
 {_GUARDRAILS}
 
+OBJECTIF: sortie en 5 BLOCS METIER pour l'application (pas une landing, une note exploitable).
+
+1) resume_executif: 2 a 4 phrases — enjeu principal, ton du document, ce qu'il faut retenir.
+2) demandes_formelles: liste courte des demandes explicites adressees a quelqu'un (audit, pieces, clarification, delai...). Si aucune demande claire: liste vide.
+3) pieces_a_verifier: liste des pieces, sources ou verifications a obtenir ou rapprocher (contrat, factures, echanges, validation interne, statuts...). Formulations factuelles.
+4) prochaines_actions: liste d'actions concretes pour le cabinet (note interne, relances, preparation de reponse, chronologie...).
+5) complement optionnel: pour les documents COMPTABLES (bilan, liasse, compte de resultat), remplir identification et chiffres_cles en texte court. Pour courriers/contrats, peut rester vide ou resumer parties et objet.
+
 REGLE DE VERDICT:
-- "favorable": aucune anomalie confirmee, peu de points d'attention
-- "reserve": anomalie(s) confirmee(s) ou plusieurs points d'attention significatifs
-- "defavorable": anomalies graves et multiples compromettant la fiabilite du document
-En cas de doute, preferer "reserve" plutot que "defavorable".
+- "favorable": peu de risques residuels, peu de demandes critiques
+- "reserve": plusieurs points a traiter ou informations incompletes
+- "defavorable": document incoherent ou risques majeurs pour la decision
+En cas de doute: "reserve".
 
 Reponds en JSON strict:
 {{
-  "titre": "Note de revue - [type document]",
-  "resume_executif": "2-3 phrases de synthese factuelles et mesurees",
-  "sections": {{
-    "identification": "Type, parties, objet",
-    "chiffres_cles": "Montants et dates importantes",
-    "observations": "Constats factuels et points de controle",
-    "limites": "Elements manquants ou insuffisants pour une analyse complete",
-    "recommandations": "Actions concretes a mener"
-  }},
+  "resume_executif": "...",
+  "demandes_formelles": ["...", "..."],
+  "pieces_a_verifier": ["...", "..."],
+  "prochaines_actions": ["...", "..."],
   "verdict": "favorable|reserve|defavorable",
   "confiance": 0.0-1.0,
-  "prochaines_actions": ["action 1", "action 2", ...]
+  "complement": {{
+    "identification": "parties, objet, dates cles si pertinent",
+    "chiffres_cles": "montants ou postes cles si document comptable, sinon chaine vide"
+  }}
 }}"""
 
     raw = await _llm_call(
         prompt,
         system=(
-            "Tu es un reviseur comptable senior. Tu rediges des notes de revue "
-            "claires, mesurees et actionnables. Tu ne dramatises jamais. "
-            "Tu assumes que le lecteur est un professionnel competent. "
+            "Tu es un senior en cabinet comptable ou juridique. Tu structures la reponse pour "
+            "un collaborateur presse. Tu ne dramatises pas. Tu ne remplis pas de listes inutiles. "
             "Reponds uniquement en JSON."
         ),
         temperature=0.2,
     )
     parsed = _parse_json(raw)
+    comp = parsed.get("complement") or {}
+    if not isinstance(comp, dict):
+        comp = {}
 
     return {
         **state,
         "review_note": parsed.get("resume_executif", ""),
-        "sections": parsed.get("sections", {}),
-        "confidence": parsed.get("confiance", 0.5),
+        "demandes_formelles": [str(x) for x in (parsed.get("demandes_formelles") or []) if str(x).strip()][:12],
+        "pieces_a_verifier": [str(x) for x in (parsed.get("pieces_a_verifier") or []) if str(x).strip()][:12],
+        "prochaines_actions": [str(x) for x in (parsed.get("prochaines_actions") or []) if str(x).strip()][:12],
+        "confidence": float(parsed.get("confiance", 0.5) or 0.5),
         "verdict": parsed.get("verdict", "reserve"),
-        "prochaines_actions": parsed.get("prochaines_actions", []),
+        "review_complement": {
+            "identification": str(comp.get("identification") or "").strip(),
+            "chiffres_cles": str(comp.get("chiffres_cles") or "").strip(),
+        },
+        "sections": {},
         "current_step": "synthesize",
         "steps_completed": state.get("steps_completed", []) + ["synthesize"],
         "error": None,
@@ -518,6 +539,9 @@ async def run_review(
         "confidence": 0.0,
         "verdict": "",
         "prochaines_actions": [],
+        "demandes_formelles": [],
+        "pieces_a_verifier": [],
+        "review_complement": {},
         "current_step": "init",
         "steps_completed": [],
         "error": None,
@@ -555,6 +579,9 @@ async def run_review_streaming(
         "confidence": 0.0,
         "verdict": "",
         "prochaines_actions": [],
+        "demandes_formelles": [],
+        "pieces_a_verifier": [],
+        "review_complement": {},
         "current_step": "init",
         "steps_completed": [],
         "error": None,
@@ -567,7 +594,7 @@ async def run_review_streaming(
         "analyze": "Analyse metier",
         "findings": "Identification des constats",
         "filter": "Controle qualite des constats",
-        "synthesize": "Redaction de la note de revue",
+        "synthesize": "Synthese cabinet (5 blocs)",
     }
 
     def _iter_chunks(raw: object) -> dict[str, Any]:

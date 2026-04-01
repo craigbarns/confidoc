@@ -1702,76 +1702,68 @@ function renderReviewResult(data) {
   const verdict = data.verdict || "";
   const confidence = data.confidence || 0;
   const reviewNote = data.review_note || "";
-  const sections = data.sections || {};
   const findings = data.findings || {};
+  const demandes = data.demandes_formelles || [];
+  const pieces = data.pieces_a_verifier || [];
   const nextActions = data.prochaines_actions || [];
+  const complement = data.review_complement || {};
+  const docType = data.doc_type || "";
 
-  // Verdict badge
+  const block = (num, title, bodyHtml) => `
+    <div class="review-section review-cabinet-block">
+      <div class="review-section-title"><span class="review-block-num">${num}</span> ${title}</div>
+      <div class="review-section-body">${bodyHtml}</div>
+    </div>`;
+
+  const listOrEmpty = (arr, emptyMsg) =>
+    arr.length
+      ? `<ul class="review-cabinet-list">${arr.map(x => `<li>${escapeHtml(x)}</li>`).join("")}</ul>`
+      : `<p class="review-cabinet-empty">${emptyMsg}</p>`;
+
   if (verdict) {
     const verdictIcons = { favorable: "\u2705", reserve: "\u26A0\uFE0F", defavorable: "\u274C" };
     const verdictLabels = { favorable: "Favorable", reserve: "Reserve", defavorable: "Defavorable" };
-    html += `<div class="review-verdict ${verdict}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)</div>`;
+    html += `<div class="review-verdict ${verdict}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)${docType ? ` — <span class="review-doc-type">${escapeHtml(docType)}</span>` : ""}</div>`;
   }
 
-  // Resume executif
-  if (reviewNote) {
-    html += `<div class="review-section">
-      <div class="review-section-title">\uD83D\uDCCB Resume executif</div>
-      <div class="review-section-body">${escapeHtml(reviewNote)}</div>
-    </div>`;
-  }
+  html += block("1", "Résumé exécutif", reviewNote ? escapeHtml(reviewNote) : "Aucun resume disponible.");
 
-  // Sections
-  const sectionIcons = {
-    identification: "\uD83D\uDCC4",
-    chiffres_cles: "\uD83D\uDCCA",
-    observations: "\uD83D\uDD0D",
-    limites: "\uD83D\uDCDD",
-    recommandations: "\u2705",
-  };
-  for (const [key, value] of Object.entries(sections)) {
-    if (!value) continue;
-    const icon = sectionIcons[key] || "\uD83D\uDCDD";
-    const label = key.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
-    html += `<div class="review-section">
-      <div class="review-section-title">${icon} ${label}</div>
-      <div class="review-section-body">${escapeHtml(String(value))}</div>
-    </div>`;
-  }
-
-  // 4-tier findings
   const tiers = [
     { key: "anomalies_confirmees", icon: "\u274C", label: "Anomalies confirmees", cls: "tier-confirmed" },
     { key: "points_attention", icon: "\u26A0\uFE0F", label: "Points d'attention", cls: "tier-attention" },
     { key: "informations_manquantes", icon: "\uD83D\uDCC4", label: "Informations manquantes", cls: "tier-missing" },
     { key: "verifications_recommandees", icon: "\uD83D\uDD0D", label: "Verifications recommandees", cls: "tier-verify" },
   ];
-
   const totalFindings = tiers.reduce((s, t) => s + (findings[t.key]?.length || 0), 0);
+  let vigilHtml = "";
   if (totalFindings > 0) {
-    html += `<div class="review-section"><div class="review-section-title">\uD83D\uDCCB Points de vigilance (${totalFindings})</div>`;
     tiers.forEach(tier => {
       const items = findings[tier.key] || [];
       if (!items.length) return;
-      html += `<div class="review-tier ${tier.cls}">
-        <div class="review-tier-header">${tier.icon} ${tier.label} (${items.length})</div>`;
+      vigilHtml += `<div class="review-tier ${tier.cls}"><div class="review-tier-header">${tier.icon} ${tier.label} (${items.length})</div>`;
       items.forEach(item => {
-        html += `<div class="review-finding">
-          <div class="review-finding-desc">${escapeHtml(item.description || "")}</div>
-          ${item.detail ? `<div class="review-finding-detail">${escapeHtml(item.detail)}</div>` : ""}
-        </div>`;
+        vigilHtml += `<div class="review-finding"><div class="review-finding-desc">${escapeHtml(item.description || "")}</div>${item.detail ? `<div class="review-finding-detail">${escapeHtml(item.detail)}</div>` : ""}</div>`;
       });
-      html += `</div>`;
+      vigilHtml += `</div>`;
     });
-    html += `</div>`;
+  } else {
+    vigilHtml = `<p class="review-cabinet-empty">Aucun point structure en vigilance (document ou analyse limitee).</p>`;
   }
+  html += block("2", "Points de vigilance", vigilHtml);
 
-  // Next actions
-  if (nextActions.length) {
-    html += `<div class="review-section">
-      <div class="review-section-title">\u27A1\uFE0F Prochaines actions</div>
-      <div class="review-section-body">${nextActions.map((a, i) => `${i + 1}. ${escapeHtml(a)}`).join("\n")}</div>
-    </div>`;
+  html += block("3", "Demandes formelles", listOrEmpty(demandes, "Aucune demande formelle explicite identifiee."));
+
+  html += block("4", "Pièces et vérifications à obtenir", listOrEmpty(pieces, "Aucune piece ou verification listee."));
+
+  html += block("5", "Prochaines actions", listOrEmpty(nextActions, "Aucune action listee."));
+
+  const id = complement.identification || "";
+  const ch = complement.chiffres_cles || "";
+  if (id || ch) {
+    html += `<div class="review-section review-cabinet-block review-complement"><div class="review-section-title">Detail complementaire</div>`;
+    if (id) html += `<p class="review-complement-line"><strong>Identification</strong><br/>${escapeHtml(id)}</p>`;
+    if (ch) html += `<p class="review-complement-line"><strong>Chiffres / postes cles</strong><br/>${escapeHtml(ch)}</p>`;
+    html += `</div>`;
   }
 
   el.innerHTML = html;
@@ -1832,9 +1824,10 @@ async function startReview() {
             if (!completedSteps.includes(step)) completedSteps.push(step);
             if (event.data) {
               Object.assign(allData, event.data);
-              if (event.data.findings) {
-                allData.findings = event.data.findings;
-              }
+              if (event.data.findings) allData.findings = event.data.findings;
+              if (event.data.demandes_formelles) allData.demandes_formelles = event.data.demandes_formelles;
+              if (event.data.pieces_a_verifier) allData.pieces_a_verifier = event.data.pieces_a_verifier;
+              if (event.data.review_complement) allData.review_complement = event.data.review_complement;
             }
             renderReviewSteps(null, completedSteps);
           } else if (status === "running") {
@@ -1844,7 +1837,7 @@ async function startReview() {
             renderReviewSteps(null, completedSteps);
             reviewResult = allData;
             renderReviewResult(allData);
-            toast("Analyse documentaire terminee", "success");
+            toast("Synthese cabinet terminee", "success");
           } else if (status === "error") {
             renderReviewSteps(null, completedSteps);
             toast(`Erreur analyse: ${event.data?.error || "inconnue"}`, "error");
@@ -1869,37 +1862,50 @@ function closeReview() {
 
 function copyReviewResult() {
   if (!reviewResult) return;
-  const sections = reviewResult.sections || {};
   const note = reviewResult.review_note || "";
   const findings = reviewResult.findings || {};
-  let text = "=== NOTE DE REVUE ===\n\n";
-  if (reviewResult.verdict) text += `Verdict: ${reviewResult.verdict}\n\n`;
-  text += note + "\n\n";
-  for (const [key, value] of Object.entries(sections)) {
-    text += `--- ${key.replace(/_/g, " ").toUpperCase()} ---\n${value}\n\n`;
-  }
+  const demandes = reviewResult.demandes_formelles || [];
+  const pieces = reviewResult.pieces_a_verifier || [];
+  const complement = reviewResult.review_complement || {};
+  let text = "=== SYNTHESE CABINET ===\n\n";
+  if (reviewResult.doc_type) text += `Type detecte: ${reviewResult.doc_type}\n`;
+  if (reviewResult.verdict) text += `Verdict: ${reviewResult.verdict}\n`;
+  text += "\n--- 1. RESUME EXECUTIF ---\n" + note + "\n\n";
+
   const tierLabels = {
     anomalies_confirmees: "ANOMALIES CONFIRMEES",
     points_attention: "POINTS D'ATTENTION",
     informations_manquantes: "INFORMATIONS MANQUANTES",
     verifications_recommandees: "VERIFICATIONS RECOMMANDEES",
   };
+  text += "--- 2. POINTS DE VIGILANCE ---\n";
+  let vig = false;
   for (const [tier, label] of Object.entries(tierLabels)) {
     const items = findings[tier] || [];
     if (!items.length) continue;
-    text += `--- ${label} ---\n`;
+    vig = true;
+    text += `${label}:\n`;
     items.forEach(item => {
       text += `- ${item.description}\n`;
       if (item.detail) text += `  ${item.detail}\n`;
     });
-    text += "\n";
   }
-  if (reviewResult.prochaines_actions?.length) {
-    text += "--- PROCHAINES ACTIONS ---\n";
-    reviewResult.prochaines_actions.forEach((a, i) => { text += `${i+1}. ${a}\n`; });
+  if (!vig) text += "(aucun)\n";
+  text += "\n--- 3. DEMANDES FORMELLES ---\n";
+  demandes.forEach((d, i) => { text += `${i + 1}. ${d}\n`; });
+  if (!demandes.length) text += "(aucune)\n";
+  text += "\n--- 4. PIECES / VERIFICATIONS ---\n";
+  pieces.forEach((x, i) => { text += `${i + 1}. ${x}\n`; });
+  if (!pieces.length) text += "(aucune)\n";
+  text += "\n--- 5. PROCHAINES ACTIONS ---\n";
+  (reviewResult.prochaines_actions || []).forEach((a, i) => { text += `${i + 1}. ${a}\n`; });
+  if (complement.identification || complement.chiffres_cles) {
+    text += "\n--- DETAIL COMPLEMENTAIRE ---\n";
+    if (complement.identification) text += `Identification: ${complement.identification}\n`;
+    if (complement.chiffres_cles) text += `Chiffres cles: ${complement.chiffres_cles}\n`;
   }
   navigator.clipboard.writeText(text).then(
-    () => toast("Note de revue copiee", "success"),
+    () => toast("Synthese copiee", "success"),
     () => toast("Impossible de copier", "error")
   );
 }
