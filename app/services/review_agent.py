@@ -1,21 +1,24 @@
-"""ConfiDoc — LangGraph Document Review Agent.
+"""ConfiDoc — LangGraph Document Review Agent v2.
 
 Multi-step autonomous agent that analyzes an anonymized document:
   1. Classify document type
   2. Extract structured key data
   3. Analyze against business rules
-  4. Detect anomalies and inconsistencies
-  5. Synthesize a professional review note
+  4. Identify findings (structured taxonomy, NOT flat anomalies)
+  5. Filter: anti-alarmist downgrade pass
+  6. Synthesize a professional review note
 
-Uses Mistral Large via direct API (same as existing mistral_service).
+Taxonomy (4 tiers):
+  A. anomalies_confirmees — only provable contradictions/errors in the document
+  B. points_attention     — significant observations that deserve human review
+  C. informations_manquantes — data gaps preventing complete analysis
+  D. verifications_recommandees — hypotheses to validate with external sources
 """
 
 from __future__ import annotations
 
 import json
-import time
-from dataclasses import dataclass, field
-from typing import Any, Literal, TypedDict
+from typing import Any, TypedDict
 
 import httpx
 from langgraph.graph import StateGraph, END
@@ -26,20 +29,40 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 
 
+# ── Shared System Guardrails ────────────────────────────────────────────
+
+_GUARDRAILS = """
+REGLES ABSOLUES (non negociables):
+- Ne JAMAIS qualifier un point de "non-conformite legale" sans contradiction chiffree explicite dans le document.
+- Ne JAMAIS deduire l'existence d'une provision necessaire de la seule presence de dettes normales.
+- Ne JAMAIS suggerer fraude, dissimulation, conflit d'interets ou prix de transfert sans indice documentaire direct et explicite.
+- Ne JAMAIS affirmer qu'un ratio est "anormal" sans expliquer par rapport a quelle norme sectorielle precise.
+- Ne JAMAIS utiliser "immediatement", "urgence", "sanctions" sauf si le document contient une echeance depassee prouvee.
+- Preferer TOUJOURS "a verifier", "a documenter", "a confirmer" quand l'information est incomplete.
+- Un poste comptable a zero n'est PAS une anomalie en soi.
+- L'absence d'un element optionnel n'est PAS une anomalie.
+- Des amortissements cumules eleves signifient simplement des actifs anciens, PAS un probleme.
+- La mention de societes liees ne suffit PAS a evoquer les prix de transfert.
+- Chaque finding doit etre UTILE et ACTIONNABLE pour un reviseur senior. Pas de remplissage.
+- Maximum 6 findings au total. Qualite > quantite.
+"""
+
+
 # ── Agent State ─────────────────────────────────────────────────────────
 
 class ReviewState(TypedDict, total=False):
-    """State flowing through the review graph."""
     anonymized_text: str
     entity_summary: dict[str, int]
     doc_type: str
     doc_type_confidence: float
     extracted_data: dict[str, Any]
     analysis: dict[str, Any]
-    anomalies: list[dict[str, Any]]
+    findings: dict[str, list[dict[str, Any]]]
     review_note: str
     sections: dict[str, str]
     confidence: float
+    verdict: str
+    prochaines_actions: list[str]
     current_step: str
     steps_completed: list[str]
     error: str | None
@@ -48,7 +71,6 @@ class ReviewState(TypedDict, total=False):
 # ── LLM Call Helper ─────────────────────────────────────────────────────
 
 async def _llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) -> str:
-    """Call Mistral Large and return raw text response."""
     settings = get_settings()
     if not settings.MISTRAL_API_KEY:
         raise RuntimeError("MISTRAL_API_KEY manquant")
@@ -83,7 +105,6 @@ async def _llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) 
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
-    """Extract first JSON object from LLM response."""
     start = raw.find("{")
     end = raw.rfind("}")
     if start == -1 or end == -1 or start >= end:
@@ -94,16 +115,15 @@ def _parse_json(raw: str) -> dict[str, Any]:
         return {}
 
 
-# ── Graph Nodes ─────────────────────────────────────────────────────────
+# ── Node 1: Classify ────────────────────────────────────────────────────
 
 async def classify_node(state: ReviewState) -> ReviewState:
-    """Node 1: Classify document type."""
     text = state["anonymized_text"][:3000]
 
     prompt = f"""Analyse ce texte anonymise et determine le type de document.
 
-Types possibles: liasse_fiscale, bilan, compte_resultat, bail, statuts, facture, 
-contrat, bulletin_paie, releve_bancaire, acte_notarie, declaration_tva, 
+Types possibles: liasse_fiscale, bilan, compte_resultat, bail, statuts, facture,
+contrat, bulletin_paie, releve_bancaire, acte_notarie, declaration_tva,
 proces_verbal, rapport_audit, note_frais, devis, autre.
 
 Reponds en JSON strict:
@@ -112,7 +132,10 @@ Reponds en JSON strict:
 Texte:
 {text}"""
 
-    raw = await _llm_call(prompt, system="Tu es un classificateur de documents comptables et juridiques. Reponds uniquement en JSON.")
+    raw = await _llm_call(
+        prompt,
+        system="Tu es un classificateur de documents comptables et juridiques. Reponds uniquement en JSON.",
+    )
     parsed = _parse_json(raw)
 
     return {
@@ -124,8 +147,9 @@ Texte:
     }
 
 
+# ── Node 2: Extract ─────────────────────────────────────────────────────
+
 async def extract_node(state: ReviewState) -> ReviewState:
-    """Node 2: Extract structured data based on document type."""
     text = state["anonymized_text"][:6000]
     doc_type = state.get("doc_type", "autre")
     entity_summary = state.get("entity_summary", {})
@@ -149,7 +173,10 @@ Reponds en JSON strict:
 Texte anonymise:
 {text}"""
 
-    raw = await _llm_call(prompt, system="Tu es un expert en extraction de donnees documentaires. Reponds uniquement en JSON.")
+    raw = await _llm_call(
+        prompt,
+        system="Tu es un expert en extraction de donnees documentaires. Reponds uniquement en JSON.",
+    )
     parsed = _parse_json(raw)
 
     return {
@@ -160,8 +187,9 @@ Texte anonymise:
     }
 
 
+# ── Node 3: Analyze ─────────────────────────────────────────────────────
+
 async def analyze_node(state: ReviewState) -> ReviewState:
-    """Node 3: Analyze against business rules for the document type."""
     doc_type = state.get("doc_type", "autre")
     extracted = state.get("extracted_data", {})
     text = state["anonymized_text"][:4000]
@@ -169,25 +197,34 @@ async def analyze_node(state: ReviewState) -> ReviewState:
     prompt = f"""Tu analyses un document de type: {doc_type}
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:2000]}
 
-Effectue une analyse metier:
+Effectue une analyse metier factuelle:
 1. Verifie la coherence des montants entre eux
 2. Verifie que les elements obligatoires sont presents
 3. Evalue la qualite et completude du document
 4. Identifie les points d'attention pour un reviseur
+
+{_GUARDRAILS}
 
 Reponds en JSON strict:
 {{
   "completude": {{"score": 0.0-1.0, "elements_manquants": [...]}},
   "coherence": {{"score": 0.0-1.0, "observations": [...]}},
   "points_attention": ["liste des points a verifier"],
-  "conformite": {{"observations": [...], "risques": [...]}},
+  "conformite": {{"observations": [...]}},
   "qualite_globale": 0.0-1.0
 }}
 
 Texte pour contexte:
 {text}"""
 
-    raw = await _llm_call(prompt, system="Tu es un auditeur comptable et juridique expert. Reponds uniquement en JSON.")
+    raw = await _llm_call(
+        prompt,
+        system=(
+            "Tu es un auditeur comptable et juridique senior, prudent et factuel. "
+            "Tu ne specules jamais. Tu identifies uniquement ce que le document montre. "
+            "Reponds uniquement en JSON."
+        ),
+    )
     parsed = _parse_json(raw)
 
     return {
@@ -198,8 +235,9 @@ Texte pour contexte:
     }
 
 
-async def anomalies_node(state: ReviewState) -> ReviewState:
-    """Node 4: Detect anomalies and inconsistencies."""
+# ── Node 4: Findings (structured taxonomy) ──────────────────────────────
+
+async def findings_node(state: ReviewState) -> ReviewState:
     doc_type = state.get("doc_type", "autre")
     extracted = state.get("extracted_data", {})
     analysis = state.get("analysis", {})
@@ -209,74 +247,189 @@ async def anomalies_node(state: ReviewState) -> ReviewState:
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:1500]}
 Analyse precedente: {json.dumps(analysis, ensure_ascii=False)[:1500]}
 
-Detecte les anomalies, incoherences et risques:
-- Montants aberrants ou inhabituels
-- Incoherences entre sections
-- Informations contradictoires
-- Risques juridiques ou fiscaux potentiels
-- Ecarts par rapport aux normes du type de document
+Tu dois produire des constats structures selon EXACTEMENT 4 categories.
+
+CATEGORIE A — anomalies_confirmees
+Uniquement des erreurs PROUVEES par le document lui-meme:
+- total qui ne correspond pas a la somme des composantes
+- contradiction chiffree explicite entre deux sections
+- ratio mathematiquement impossible
+Si tu n'en trouves pas, laisse la liste VIDE. C'est normal et preferable.
+
+CATEGORIE B — points_attention
+Observations significatives meritant un examen humain:
+- poste anormalement concentre par rapport au total
+- evolution inhabituelle d'une periode a l'autre
+- niveau d'endettement significatif a documenter
+Formulation obligatoire: factuelle, neutre, sans jugement juridique.
+
+CATEGORIE C — informations_manquantes
+Donnees absentes du document qui limitent l'analyse:
+- ventilation non disponible
+- annexe non fournie
+- detail d'un poste absent
+Ce ne sont PAS des anomalies. Ce sont des limites documentaires.
+
+CATEGORIE D — verifications_recommandees
+Hypotheses a valider avec des sources EXTERNES (statuts, pieces, client):
+- "Verifier la situation de liberation du capital aupres des statuts"
+- "Confirmer la nature du poste X aupres du client"
+Formulation obligatoire: "Verifier...", "Confirmer...", "Rapprocher..."
+
+{_GUARDRAILS}
+
+REGLE DE VOLUME: maximum 2 items par categorie, maximum 6 au total.
+Mieux vaut 3 constats solides que 9 constats mediocres.
+
+Pour chaque item, indique:
+- "description": formulation factuelle et neutre
+- "detail": explication complementaire si utile (sinon null)
 
 Reponds en JSON strict:
 {{
-  "anomalies": [
-    {{
-      "severite": "critique|majeure|mineure|information",
-      "categorie": "montant|coherence|completude|juridique|fiscal|autre",
-      "description": "...",
-      "recommandation": "..."
-    }}
-  ],
-  "score_risque_global": 0.0-1.0,
-  "resume_risques": "..."
+  "anomalies_confirmees": [{{"description": "...", "detail": "..."}}],
+  "points_attention": [{{"description": "...", "detail": "..."}}],
+  "informations_manquantes": [{{"description": "...", "detail": "..."}}],
+  "verifications_recommandees": [{{"description": "...", "detail": "..."}}]
 }}
 
 Texte pour contexte:
 {text}"""
 
-    raw = await _llm_call(prompt, system="Tu es un detecteur d'anomalies documentaires expert. Reponds uniquement en JSON.")
+    raw = await _llm_call(
+        prompt,
+        system=(
+            "Tu es un reviseur comptable senior avec 15 ans d'experience. "
+            "Tu es connu pour ta rigueur et ton calme. Tu ne dramatises jamais. "
+            "Tu distingues clairement fait prouve, observation, limite documentaire et hypothese. "
+            "Tu preferes ne rien dire plutot que de speculer. "
+            "Reponds uniquement en JSON."
+        ),
+    )
     parsed = _parse_json(raw)
 
-    anomalies = parsed.get("anomalies", [])
+    findings = {
+        "anomalies_confirmees": parsed.get("anomalies_confirmees", []),
+        "points_attention": parsed.get("points_attention", []),
+        "informations_manquantes": parsed.get("informations_manquantes", []),
+        "verifications_recommandees": parsed.get("verifications_recommandees", []),
+    }
 
     return {
         **state,
-        "anomalies": anomalies,
-        "current_step": "anomalies",
-        "steps_completed": state.get("steps_completed", []) + ["anomalies"],
+        "findings": findings,
+        "current_step": "findings",
+        "steps_completed": state.get("steps_completed", []) + ["findings"],
     }
 
 
+# ── Node 5: Anti-Alarmist Filter ────────────────────────────────────────
+
+_ALARMIST_KEYWORDS = [
+    "immediatement", "urgence", "sanctions", "fraude", "dissimulation",
+    "prix de transfert", "conflit d'interets", "non-conformite",
+    "irregularite", "violation", "illegale", "penalite",
+]
+
+_DOWNGRADE_TRIGGERS = [
+    "devrait avoir", "generalement", "habituellement", "normalement",
+    "on s'attendrait", "il est courant", "en principe",
+]
+
+
+async def filter_node(state: ReviewState) -> ReviewState:
+    """Post-processing: downgrade overly aggressive findings."""
+    findings = state.get("findings", {})
+    filtered = {
+        "anomalies_confirmees": [],
+        "points_attention": [],
+        "informations_manquantes": list(findings.get("informations_manquantes", [])),
+        "verifications_recommandees": list(findings.get("verifications_recommandees", [])),
+    }
+
+    for item in findings.get("anomalies_confirmees", []):
+        desc = (item.get("description") or "").lower()
+        detail = (item.get("detail") or "").lower()
+        combined = desc + " " + detail
+
+        if any(kw in combined for kw in _ALARMIST_KEYWORDS):
+            filtered["verifications_recommandees"].append(item)
+            continue
+
+        if any(kw in combined for kw in _DOWNGRADE_TRIGGERS):
+            filtered["points_attention"].append(item)
+            continue
+
+        filtered["anomalies_confirmees"].append(item)
+
+    for item in findings.get("points_attention", []):
+        desc = (item.get("description") or "").lower()
+        detail = (item.get("detail") or "").lower()
+        combined = desc + " " + detail
+
+        if any(kw in combined for kw in _ALARMIST_KEYWORDS):
+            filtered["verifications_recommandees"].append(item)
+            continue
+
+        filtered["points_attention"].append(item)
+
+    for cat in filtered:
+        filtered[cat] = filtered[cat][:3]
+
+    return {
+        **state,
+        "findings": filtered,
+        "current_step": "filter",
+        "steps_completed": state.get("steps_completed", []) + ["filter"],
+    }
+
+
+# ── Node 6: Synthesize ──────────────────────────────────────────────────
+
 async def synthesize_node(state: ReviewState) -> ReviewState:
-    """Node 5: Generate final review note."""
     doc_type = state.get("doc_type", "autre")
     extracted = state.get("extracted_data", {})
     analysis = state.get("analysis", {})
-    anomalies = state.get("anomalies", [])
+    findings = state.get("findings", {})
     entity_summary = state.get("entity_summary", {})
 
-    n_anomalies = len(anomalies)
-    critiques = [a for a in anomalies if a.get("severite") == "critique"]
-    majeures = [a for a in anomalies if a.get("severite") == "majeure"]
+    n_confirmed = len(findings.get("anomalies_confirmees", []))
+    n_attention = len(findings.get("points_attention", []))
+    n_missing = len(findings.get("informations_manquantes", []))
+    n_verif = len(findings.get("verifications_recommandees", []))
 
     prompt = f"""Genere une note de revue professionnelle pour ce document.
 
 Type: {doc_type}
 Donnees cles: {json.dumps(extracted, ensure_ascii=False)[:2000]}
 Analyse: {json.dumps(analysis, ensure_ascii=False)[:1500]}
-Anomalies detectees: {n_anomalies} (dont {len(critiques)} critiques, {len(majeures)} majeures)
-Detail anomalies: {json.dumps(anomalies[:10], ensure_ascii=False)[:1500]}
+
+Constats structures:
+- Anomalies confirmees: {n_confirmed}
+- Points d'attention: {n_attention}
+- Informations manquantes: {n_missing}
+- Verifications recommandees: {n_verif}
+Detail: {json.dumps(findings, ensure_ascii=False)[:2000]}
 Entites anonymisees: {json.dumps(entity_summary, ensure_ascii=False)}
+
+{_GUARDRAILS}
+
+REGLE DE VERDICT:
+- "favorable": aucune anomalie confirmee, peu de points d'attention
+- "reserve": anomalie(s) confirmee(s) ou plusieurs points d'attention significatifs
+- "defavorable": anomalies graves et multiples compromettant la fiabilite du document
+En cas de doute, preferer "reserve" plutot que "defavorable".
 
 Reponds en JSON strict:
 {{
   "titre": "Note de revue - [type document]",
-  "resume_executif": "2-3 phrases de synthese",
+  "resume_executif": "2-3 phrases de synthese factuelles et mesurees",
   "sections": {{
     "identification": "Type, parties, objet",
     "chiffres_cles": "Montants et dates importantes",
-    "analyse": "Points de controle et observations",
-    "alertes": "Anomalies et risques identifies",
-    "recommandations": "Actions a mener"
+    "observations": "Constats factuels et points de controle",
+    "limites": "Elements manquants ou insuffisants pour une analyse complete",
+    "recommandations": "Actions concretes a mener"
   }},
   "verdict": "favorable|reserve|defavorable",
   "confiance": 0.0-1.0,
@@ -285,7 +438,12 @@ Reponds en JSON strict:
 
     raw = await _llm_call(
         prompt,
-        system="Tu es un reviseur comptable senior. Tu rediges des notes de revue claires et actionnables. Reponds uniquement en JSON.",
+        system=(
+            "Tu es un reviseur comptable senior. Tu rediges des notes de revue "
+            "claires, mesurees et actionnables. Tu ne dramatises jamais. "
+            "Tu assumes que le lecteur est un professionnel competent. "
+            "Reponds uniquement en JSON."
+        ),
         temperature=0.2,
     )
     parsed = _parse_json(raw)
@@ -295,6 +453,8 @@ Reponds en JSON strict:
         "review_note": parsed.get("resume_executif", ""),
         "sections": parsed.get("sections", {}),
         "confidence": parsed.get("confiance", 0.5),
+        "verdict": parsed.get("verdict", "reserve"),
+        "prochaines_actions": parsed.get("prochaines_actions", []),
         "current_step": "synthesize",
         "steps_completed": state.get("steps_completed", []) + ["synthesize"],
         "error": None,
@@ -304,20 +464,21 @@ Reponds en JSON strict:
 # ── Build Graph ─────────────────────────────────────────────────────────
 
 def build_review_graph() -> StateGraph:
-    """Build the document review LangGraph."""
     graph = StateGraph(ReviewState)
 
     graph.add_node("classify", classify_node)
     graph.add_node("extract", extract_node)
     graph.add_node("analyze", analyze_node)
-    graph.add_node("anomalies", anomalies_node)
+    graph.add_node("findings", findings_node)
+    graph.add_node("filter", filter_node)
     graph.add_node("synthesize", synthesize_node)
 
     graph.set_entry_point("classify")
     graph.add_edge("classify", "extract")
     graph.add_edge("extract", "analyze")
-    graph.add_edge("analyze", "anomalies")
-    graph.add_edge("anomalies", "synthesize")
+    graph.add_edge("analyze", "findings")
+    graph.add_edge("findings", "filter")
+    graph.add_edge("filter", "synthesize")
     graph.add_edge("synthesize", END)
 
     return graph
@@ -327,18 +488,21 @@ _compiled_graph = None
 
 
 def get_review_graph():
-    """Get or create the compiled review graph (singleton)."""
     global _compiled_graph
     if _compiled_graph is None:
         _compiled_graph = build_review_graph().compile()
     return _compiled_graph
 
 
+def _reset_graph():
+    global _compiled_graph
+    _compiled_graph = None
+
+
 async def run_review(
     anonymized_text: str,
     entity_summary: dict[str, int] | None = None,
 ) -> dict[str, Any]:
-    """Run the full review pipeline and return the final state."""
     graph = get_review_graph()
 
     initial_state: ReviewState = {
@@ -348,10 +512,12 @@ async def run_review(
         "doc_type_confidence": 0.0,
         "extracted_data": {},
         "analysis": {},
-        "anomalies": [],
+        "findings": {},
         "review_note": "",
         "sections": {},
         "confidence": 0.0,
+        "verdict": "",
+        "prochaines_actions": [],
         "current_step": "init",
         "steps_completed": [],
         "error": None,
@@ -373,10 +539,7 @@ async def run_review_streaming(
     anonymized_text: str,
     entity_summary: dict[str, int] | None = None,
 ):
-    """Run review pipeline yielding step updates as they complete.
-    
-    Yields dicts: {"step": str, "status": "running"|"done"|"error", "data": ...}
-    """
+    """Yield step updates as they complete (SSE-friendly)."""
     graph = get_review_graph()
 
     initial_state: ReviewState = {
@@ -386,29 +549,29 @@ async def run_review_streaming(
         "doc_type_confidence": 0.0,
         "extracted_data": {},
         "analysis": {},
-        "anomalies": [],
+        "findings": {},
         "review_note": "",
         "sections": {},
         "confidence": 0.0,
+        "verdict": "",
+        "prochaines_actions": [],
         "current_step": "init",
         "steps_completed": [],
         "error": None,
     }
 
-    steps_order = ["classify", "extract", "analyze", "anomalies", "synthesize"]
+    steps_order = ["classify", "extract", "analyze", "findings", "filter", "synthesize"]
     step_labels = {
         "classify": "Classification du document",
         "extract": "Extraction des donnees cles",
         "analyze": "Analyse metier",
-        "anomalies": "Detection d'anomalies",
+        "findings": "Identification des constats",
+        "filter": "Controle qualite des constats",
         "synthesize": "Redaction de la note de revue",
     }
 
-    last_completed = set()
-
     try:
         async for state in graph.astream(initial_state):
-            # LangGraph astream yields {node_name: state_update}
             for node_name, node_output in state.items():
                 if node_name in steps_order:
                     yield {
@@ -420,9 +583,7 @@ async def run_review_streaming(
                             if k not in ("anonymized_text",)
                         },
                     }
-                    last_completed.add(node_name)
 
-                    # Signal next step as running
                     idx = steps_order.index(node_name)
                     if idx + 1 < len(steps_order):
                         next_step = steps_order[idx + 1]

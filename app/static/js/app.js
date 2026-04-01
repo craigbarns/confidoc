@@ -1662,8 +1662,9 @@ const REVIEW_STEPS = [
   { id: "classify", icon: "1", label: "Classification du document" },
   { id: "extract", icon: "2", label: "Extraction des donnees cles" },
   { id: "analyze", icon: "3", label: "Analyse metier" },
-  { id: "anomalies", icon: "4", label: "Detection d'anomalies" },
-  { id: "synthesize", icon: "5", label: "Redaction de la note de revue" },
+  { id: "findings", icon: "4", label: "Identification des constats" },
+  { id: "filter", icon: "5", label: "Controle qualite" },
+  { id: "synthesize", icon: "6", label: "Note de revue" },
 ];
 
 function renderReviewSteps(activeStep, completedSteps) {
@@ -1698,22 +1699,21 @@ function renderReviewResult(data) {
 
   let html = "";
 
-  // Verdict badge
-  const synthesize = data.synthesize || data;
-  const sections = synthesize.sections || data.sections || {};
-  const verdict = synthesize.verdict || data.verdict || "";
-  const confidence = synthesize.confiance || synthesize.confidence || data.confidence || 0;
-  const reviewNote = synthesize.resume_executif || synthesize.review_note || data.review_note || "";
-  const nextActions = synthesize.prochaines_actions || data.prochaines_actions || [];
-  const titre = synthesize.titre || "Note de revue";
+  const verdict = data.verdict || "";
+  const confidence = data.confidence || 0;
+  const reviewNote = data.review_note || "";
+  const sections = data.sections || {};
+  const findings = data.findings || {};
+  const nextActions = data.prochaines_actions || [];
 
+  // Verdict badge
   if (verdict) {
     const verdictIcons = { favorable: "\u2705", reserve: "\u26A0\uFE0F", defavorable: "\u274C" };
     const verdictLabels = { favorable: "Favorable", reserve: "Reserve", defavorable: "Defavorable" };
     html += `<div class="review-verdict ${verdict}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)</div>`;
   }
 
-  // Resume
+  // Resume executif
   if (reviewNote) {
     html += `<div class="review-section">
       <div class="review-section-title">\uD83D\uDCCB Resume executif</div>
@@ -1725,8 +1725,8 @@ function renderReviewResult(data) {
   const sectionIcons = {
     identification: "\uD83D\uDCC4",
     chiffres_cles: "\uD83D\uDCCA",
-    analyse: "\uD83D\uDD0D",
-    alertes: "\u26A0\uFE0F",
+    observations: "\uD83D\uDD0D",
+    limites: "\uD83D\uDCDD",
     recommandations: "\u2705",
   };
   for (const [key, value] of Object.entries(sections)) {
@@ -1739,20 +1739,29 @@ function renderReviewResult(data) {
     </div>`;
   }
 
-  // Anomalies
-  const anomalies = data.anomalies || [];
-  if (anomalies.length) {
-    html += `<div class="review-section">
-      <div class="review-section-title">\u26A0\uFE0F Anomalies detectees (${anomalies.length})</div>`;
-    anomalies.forEach(a => {
-      const sev = a.severite || "information";
-      html += `<div class="review-anomaly ${sev}">
-        <span class="review-anomaly-sev">${sev}</span>
-        <div>
-          <strong>${escapeHtml(a.description || "")}</strong>
-          ${a.recommandation ? `<br><em style="color:var(--text-muted)">${escapeHtml(a.recommandation)}</em>` : ""}
-        </div>
-      </div>`;
+  // 4-tier findings
+  const tiers = [
+    { key: "anomalies_confirmees", icon: "\u274C", label: "Anomalies confirmees", cls: "tier-confirmed" },
+    { key: "points_attention", icon: "\u26A0\uFE0F", label: "Points d'attention", cls: "tier-attention" },
+    { key: "informations_manquantes", icon: "\uD83D\uDCC4", label: "Informations manquantes", cls: "tier-missing" },
+    { key: "verifications_recommandees", icon: "\uD83D\uDD0D", label: "Verifications recommandees", cls: "tier-verify" },
+  ];
+
+  const totalFindings = tiers.reduce((s, t) => s + (findings[t.key]?.length || 0), 0);
+  if (totalFindings > 0) {
+    html += `<div class="review-section"><div class="review-section-title">\uD83D\uDCCB Points de vigilance (${totalFindings})</div>`;
+    tiers.forEach(tier => {
+      const items = findings[tier.key] || [];
+      if (!items.length) return;
+      html += `<div class="review-tier ${tier.cls}">
+        <div class="review-tier-header">${tier.icon} ${tier.label} (${items.length})</div>`;
+      items.forEach(item => {
+        html += `<div class="review-finding">
+          <div class="review-finding-desc">${escapeHtml(item.description || "")}</div>
+          ${item.detail ? `<div class="review-finding-detail">${escapeHtml(item.detail)}</div>` : ""}
+        </div>`;
+      });
+      html += `</div>`;
     });
     html += `</div>`;
   }
@@ -1823,8 +1832,11 @@ async function startReview() {
             if (!completedSteps.includes(step)) completedSteps.push(step);
             if (event.data) {
               Object.assign(allData, event.data);
-              if (step === "anomalies" && event.data.anomalies) {
-                allData.anomalies = event.data.anomalies;
+              if (step === "findings" && event.data.findings) {
+                allData.findings = event.data.findings;
+              }
+              if (step === "filter" && event.data.findings) {
+                allData.findings = event.data.findings;
               }
             }
             renderReviewSteps(null, completedSteps);
@@ -1861,18 +1873,33 @@ function closeReview() {
 function copyReviewResult() {
   if (!reviewResult) return;
   const sections = reviewResult.sections || {};
-  const note = reviewResult.review_note || reviewResult.resume_executif || "";
+  const note = reviewResult.review_note || "";
+  const findings = reviewResult.findings || {};
   let text = "=== NOTE DE REVUE ===\n\n";
+  if (reviewResult.verdict) text += `Verdict: ${reviewResult.verdict}\n\n`;
   text += note + "\n\n";
   for (const [key, value] of Object.entries(sections)) {
-    text += `--- ${key.toUpperCase()} ---\n${value}\n\n`;
+    text += `--- ${key.replace(/_/g, " ").toUpperCase()} ---\n${value}\n\n`;
   }
-  if (reviewResult.anomalies?.length) {
-    text += "--- ANOMALIES ---\n";
-    reviewResult.anomalies.forEach(a => {
-      text += `[${a.severite}] ${a.description}\n`;
-      if (a.recommandation) text += `  -> ${a.recommandation}\n`;
+  const tierLabels = {
+    anomalies_confirmees: "ANOMALIES CONFIRMEES",
+    points_attention: "POINTS D'ATTENTION",
+    informations_manquantes: "INFORMATIONS MANQUANTES",
+    verifications_recommandees: "VERIFICATIONS RECOMMANDEES",
+  };
+  for (const [tier, label] of Object.entries(tierLabels)) {
+    const items = findings[tier] || [];
+    if (!items.length) continue;
+    text += `--- ${label} ---\n`;
+    items.forEach(item => {
+      text += `- ${item.description}\n`;
+      if (item.detail) text += `  ${item.detail}\n`;
     });
+    text += "\n";
+  }
+  if (reviewResult.prochaines_actions?.length) {
+    text += "--- PROCHAINES ACTIONS ---\n";
+    reviewResult.prochaines_actions.forEach((a, i) => { text += `${i+1}. ${a}\n`; });
   }
   navigator.clipboard.writeText(text).then(
     () => toast("Note de revue copiee", "success"),
