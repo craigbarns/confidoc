@@ -39,10 +39,10 @@ _external = _load_external_rules()
 
 REPLACEMENT_RULES = [
     # === ADRESSES COMPLÈTES (en premier pour éviter les collisions) ===
-    (r'41\s+RUE\s+FONGATE\s*\n\s*13006\s+MARSEILLE', '[ADRESSE_SOCIETE_1]', True),
-    (r'41\s+RUE\s+FONGATE', '[ADRESSE_RUE_1]', True),
-    (r'91\s+RUE\s+BRETEUIL\s*\n\s*13006\s+MARSEILLE', '[ADRESSE_CABINET_1]', True),
-    (r'91\s+RUE\s+BRETEUIL', '[ADRESSE_RUE_2]', True),
+    (r'(?i)41\s+RUE\s+FONGATE\s*\n\s*13006\s+MARSEILLE', '[ADRESSE_SOCIETE_1]', False),
+    (r'(?i)41\s+RUE\s+FONGATE', '[ADRESSE_RUE_1]', False),
+    (r'(?i)91\s+RUE\s+BRETEUIL\s*\n\s*13006\s+MARSEILLE', '[ADRESSE_CABINET_1]', False),
+    (r'(?i)91\s+RUE\s+BRETEUIL', '[ADRESSE_RUE_2]', False),
     (r'12[\s,]*TRAVERSE\s+DU\s+SIPHON[^\n]*\n[^\n]*13012\s+MARSEILLE[^\n]*\n[^\n]*FRANCE', '[ADRESSE_PERSONNE_1]', True),
     (r'12\s+TRAVERSE\s+DU\s+SIPHON\s*\n\s*APT\s+302\s*\n\s*13012\s+MARSEILLE\s*\n\s*FRANCE', '[ADRESSE_SOCIETE_LIEE_1]', True),
     (r'12\s+TRAVERSE\s+DU\s+SIPHON\s*\n\s*13012\s+MARSEILLE\s*\n\s*FRANCE', '[ADRESSE_SOCIETE_LIEE_2]', True),
@@ -50,38 +50,38 @@ REPLACEMENT_RULES = [
     (r'Lot\s+25\s+53\s+52\s+51[^\n]*\n\s*5085\s+FAV\s+DE\s+SAINT-MENET[^\n]*\n\s*13011\s+MARSEILLE\s+11EME', '[ADRESSE_LOCAL_DETAIL_1]', True),
     
     # === PERSONNES (noms complets, prénoms isolés) ===
-    (r'GREGORY\s+BARANES', '[PERSONNE_1]', True),
-    (r'BARANES\s+GR[ÉE]GORY', '[PERSONNE_1]', True),
-    (r'BARANES\s+GREGORY', '[PERSONNE_1]', True),
-    (r'BARANES', '[PERSONNE_1]', True),  # Fallback nom seul
+    (r'(?i)GREGORY\s+BARANES', '[PERSONNE_1]', False),
+    (r'(?i)BARANES\s+GR[ÉE]GORY', '[PERSONNE_1]', False),
+    (r'(?i)BARANES\s+GREGORY', '[PERSONNE_1]', False),
+    (r'(?i)\\bBARANES\\b', '[PERSONNE_1]', False),
     (r'\bGREGORY\b', '[PRENOM_1]', True),  # Prénom seul en majuscule
     (r'\bGr[ée]gory\b', '[PRENOM_1]', False),  # Prénom en casse mixte
     
     # === SOCIÉTÉS LIÉES (ordre: plus spécifique avant) ===
-    (r'WEINVEST\s+III', '[SOCIETE_LIEE_5]', True),
-    (r'WEINVEST\s+II', '[SOCIETE_LIEE_4]', True),
-    (r'WEINVEST\s+I', '[SOCIETE_LIEE_3]', True),
-    (r'WEINVEST', '[SOCIETE_LIEE_2]', True),
-    (r'WEBUILD', '[SOCIETE_LIEE_1]', True),
+    (r'(?i)WEINVEST\s+III', '[SOCIETE_LIEE_5]', False),
+    (r'(?i)WEINVEST\s+II', '[SOCIETE_LIEE_4]', False),
+    (r'(?i)WEINVEST\s+I', '[SOCIETE_LIEE_3]', False),
+    (r'(?i)WEINVEST', '[SOCIETE_LIEE_2]', False),
+    (r'(?i)WEBUILD', '[SOCIETE_LIEE_1]', False),
     
     # === SOCIÉTÉ PRINCIPALE ET VARIANTES OCR ===
-    (r'NEXTCOMPTA', '[CABINET_COMPTABLE_1]', True),
-    (r'WEMADE', '[SOCIETE_1]', True),
-    (r'WEMAD', '[SOCIETE_1]', True),
-    (r'WENAGE', '[SOCIETE_1]', True),
-    (r'WENNDE', '[SOCIETE_1]', True),
-    (r'MENADE', '[SOCIETE_1]', True),
-    (r'NOMBDE', '[SOCIETE_1]', True),
+    (r'(?i)NEXTCOMPTA', '[CABINET_COMPTABLE_1]', False),
+    (r'(?i)WEMADE', '[SOCIETE_1]', False),
+    (r'(?i)WEMAD\b', '[SOCIETE_1]', False),
+    (r'(?i)WENAGE', '[SOCIETE_1]', False),
+    (r'(?i)WENNDE', '[SOCIETE_1]', False),
+    (r'(?i)MENADE', '[SOCIETE_1]', False),
+    (r'(?i)NOMBDE', '[SOCIETE_1]', False),
     
     # === BANQUES / TIERS ===
     (r'BANQUE\s+SOCI[ÉE]T[ÉE]\s+G[ÉE]N[ÉE]RALE', '[BANQUE_1]', True),
     (r'SOCI[ÉE]T[ÉE]\s+G[ÉE]N[ÉE]RALE', '[BANQUE_1]', True),
     (r'BANQUE\s+REVOLUT', '[BANQUE_2]', True),
-    (r'REVOLUT', '[BANQUE_2]', True),
-    (r'PRADIMO', '[TIERS_SOCIETE_1]', True),
-    (r'GENERALI', '[ASSUREUR_1]', True),
-    (r'AXA', '[ASSUREUR_2]', True),
-    (r'AG2R', '[ORGANISME_1]', True),
+    (r'(?i)\bREVOLUT\b', '[BANQUE_2]', False),
+    (r'(?i)\bPRADIMO\b', '[TIERS_SOCIETE_1]', False),
+    (r'(?i)\bGENERALI\b', '[ASSUREUR_1]', False),
+    (r'(?i)\bAXA\b', '[ASSUREUR_2]', False),
+    (r'(?i)\bAG2R\b', '[ORGANISME_1]', False),
     
     # === IDENTIFIANTS ===
     (r'832419428', '[SIREN_SOCIETE_1]', False),  # SIREN
@@ -128,8 +128,8 @@ REPLACEMENT_RULES = [
 # Remplacements dans les libellés comptables (partiels)
 PARTIAL_REPLACEMENTS = [
     # Comptes de personnel — code PCG + nom ou initiales (ex: 421BAR, 455BARANES)
-    (r'421\w*\s+BARANES', '421 [PERSONNE_1]', True),
-    (r'455\w*\s+BARANES', '455 [PERSONNE_1]', True),
+    (r'(?i)421\w*\s+BARANES', '421 [PERSONNE_1]', False),
+    (r'(?i)455\w*\s+BARANES', '455 [PERSONNE_1]', False),
     (r'421BAR\b', '421[PERSONNE_1]', True),
     (r'421\w*\s+BAR\s+', '421 [PERSONNE_1] ', True),
     
@@ -170,6 +170,9 @@ POST_CLEANUP_RULES = [
 
     # 4) CP + ville (5 chiffres + mot majuscule)
     (r'\b\d{5}\s+[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
+
+    # 4b) Standalone postal codes from known addresses (residual after city replacement)
+    (r'\b130(?:06|11|12)\b', '[CODE_POSTAL]', False),
 
     # 5) Prénom ou nom partiellement visible avant/après token personne
     #    ex: "Gregory [PERSONNE_1]" ou "M [PERSONNE_1]"

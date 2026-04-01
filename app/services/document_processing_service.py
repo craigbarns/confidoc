@@ -84,20 +84,23 @@ async def build_anonymization_llm(
     Returns:
         (texte_anonymise, detections, metadata)
     """
-    # Le profil "strict" force l'utilisation du LLM pour une anonymisation plus complète
-    effective_use_llm = use_llm or (profile == "strict")
-
     entity_summary: dict[str, int] = {}
 
+    # ALWAYS run dictionary first (deterministic, reliable, fast)
+    preview_text, detections, registry = await anonymize_document_dictionary(original_text)
+    method = "dictionary"
+    entity_summary = registry.export_entity_summary()
+
+    effective_use_llm = use_llm or (profile == "strict")
     if effective_use_llm:
-        # Anonymisation LLM (Mistral) — plus exhaustive
-        preview_text, detections = await anonymize_document_full(original_text)
-        method = "llm:mistral-large"
-    else:
-        # Anonymisation par dictionnaire (déterministe, fiable, rapide)
-        preview_text, detections, registry = await anonymize_document_dictionary(original_text)
-        method = "dictionary"
-        entity_summary = registry.export_entity_summary()
+        try:
+            llm_text, llm_detections = await anonymize_document_full(preview_text)
+            if llm_detections:
+                preview_text = llm_text
+                detections.extend(llm_detections)
+                method = "dictionary+llm"
+        except Exception as exc:
+            logger.warning("llm_second_pass_skipped", error=str(exc))
     
     # Sauvegarde le texte anonymisé
     await db.execute(
@@ -149,7 +152,7 @@ async def build_anonymization_llm(
     )
     
     registry_raw_mapping = {}
-    if not effective_use_llm and registry:
+    if registry:
         registry_raw_mapping = registry.export_raw_mapping()
 
     meta = {
