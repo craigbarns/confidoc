@@ -1,0 +1,246 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>ConfiDoc — Securite & Conformite RGPD</title>
+  <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    .sec-page { max-width: 860px; margin: 0 auto; padding: 40px 24px 80px; }
+    .sec-hero { text-align: center; padding: 48px 0 40px; }
+    .sec-hero h1 { font-size: 32px; font-weight: 800; margin-bottom: 12px; background: linear-gradient(135deg, var(--accent), #a78bfa); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .sec-hero p { color: var(--text-muted); font-size: 16px; max-width: 600px; margin: 0 auto; line-height: 1.7; }
+    .sec-section { margin-bottom: 40px; }
+    .sec-section h2 { font-size: 20px; font-weight: 700; color: var(--text); margin-bottom: 16px; display: flex; align-items: center; gap: 10px; }
+    .sec-section h2 .sec-icon { font-size: 24px; }
+    .sec-card { background: var(--bg-card); backdrop-filter: var(--glass); border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 24px 28px; margin-bottom: 16px; }
+    .sec-card h3 { font-size: 15px; font-weight: 700; color: var(--accent); margin-bottom: 8px; }
+    .sec-card p, .sec-card li { color: var(--text-muted); font-size: 14px; line-height: 1.7; }
+    .sec-card ul { padding-left: 20px; margin-top: 8px; }
+    .sec-card li { margin-bottom: 6px; }
+    .sec-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(240px, 1fr)); gap: 16px; margin-bottom: 16px; }
+    .sec-metric { background: var(--bg-card); border: 1px solid var(--border); border-radius: var(--radius); padding: 20px; text-align: center; transition: transform 0.2s, box-shadow 0.2s; }
+    .sec-metric:hover { transform: translateY(-3px); box-shadow: var(--shadow-lg); }
+    .sec-metric .metric-icon { font-size: 28px; margin-bottom: 8px; }
+    .sec-metric .metric-value { font-size: 22px; font-weight: 800; color: var(--accent); }
+    .sec-metric .metric-label { font-size: 12px; color: var(--text-muted); margin-top: 4px; }
+    .sec-flow { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; justify-content: center; margin: 24px 0; }
+    .sec-flow-step { background: var(--accent-dim); border: 1px solid rgba(124,116,255,0.3); border-radius: var(--radius); padding: 10px 18px; font-size: 13px; font-weight: 600; color: var(--text); transition: transform 0.15s; }
+    .sec-flow-step:hover { transform: scale(1.05); }
+    .sec-flow-arrow { color: var(--text-dim); font-size: 18px; }
+    .sec-badge { display: inline-flex; align-items: center; gap: 6px; padding: 4px 12px; border-radius: 999px; font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .sec-badge-green { background: rgba(16,185,129,0.15); color: #10b981; border: 1px solid rgba(16,185,129,0.3); }
+    .sec-badge-purple { background: rgba(124,116,255,0.15); color: #7c74ff; border: 1px solid rgba(124,116,255,0.3); }
+    .sec-back { display: inline-flex; align-items: center; gap: 6px; color: var(--accent); text-decoration: none; font-size: 13px; font-weight: 600; margin-bottom: 24px; }
+    .sec-back:hover { text-decoration: underline; }
+    .sec-table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+    .sec-table th { text-align: left; font-size: 12px; color: var(--text-muted); padding: 8px 12px; border-bottom: 2px solid var(--border); font-weight: 700; text-transform: uppercase; letter-spacing: 0.5px; }
+    .sec-table td { font-size: 13px; padding: 8px 12px; border-bottom: 1px solid var(--border); color: var(--text); }
+    .sec-table tr:hover td { background: var(--bg-hover); }
+    .sec-disclaimer { background: rgba(245,158,11,0.08); border: 1px solid rgba(245,158,11,0.25); border-radius: var(--radius); padding: 16px 20px; margin-top: 24px; }
+    .sec-disclaimer p { color: var(--warning); font-size: 13px; line-height: 1.7; }
+    .sec-disclaimer strong { color: var(--warning); }
+  </style>
+</head>
+<body>
+
+<header class="app-header">
+  <div class="header-inner">
+    <div class="logo">
+      <span class="logo-icon">🔒</span>
+      <span class="logo-text">ConfiDoc</span>
+    </div>
+    <div class="header-tagline">Securite & Conformite RGPD</div>
+    <div class="header-actions">
+      <a href="/ui" class="btn btn-ghost btn-sm">← Retour a l'app</a>
+    </div>
+  </div>
+</header>
+
+<div class="sec-page">
+  <a href="/ui" class="sec-back">← Retour a ConfiDoc</a>
+
+  <div class="sec-hero">
+    <h1>Securite & Conformite</h1>
+    <p>ConfiDoc est concu selon les principes du RGPD et du privacy by design, avec des mecanismes de pseudonymisation, d'anonymisation forte, de scoring du risque et de tracabilite.</p>
+  </div>
+
+  <div class="sec-grid">
+    <div class="sec-metric">
+      <div class="metric-icon">🔐</div>
+      <div class="metric-value">AES-256</div>
+      <div class="metric-label">Chiffrement des mappings</div>
+    </div>
+    <div class="sec-metric">
+      <div class="metric-icon">📋</div>
+      <div class="metric-value">100%</div>
+      <div class="metric-label">Actions journalisees</div>
+    </div>
+    <div class="sec-metric">
+      <div class="metric-icon">🛡️</div>
+      <div class="metric-value">2 modes</div>
+      <div class="metric-label">Pseudo / Anonymisation forte</div>
+    </div>
+    <div class="sec-metric">
+      <div class="metric-icon">⚖️</div>
+      <div class="metric-value">RGPD</div>
+      <div class="metric-label">Privacy by design</div>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">🔄</span> Flux de traitement</h2>
+    <div class="sec-flow">
+      <div class="sec-flow-step">📄 Upload</div>
+      <div class="sec-flow-arrow">→</div>
+      <div class="sec-flow-step">👁 OCR (Mistral)</div>
+      <div class="sec-flow-arrow">→</div>
+      <div class="sec-flow-step">🔒 Anonymisation</div>
+      <div class="sec-flow-arrow">→</div>
+      <div class="sec-flow-step">📊 Scoring risque</div>
+      <div class="sec-flow-arrow">→</div>
+      <div class="sec-flow-step">✅ Validation humaine</div>
+      <div class="sec-flow-arrow">→</div>
+      <div class="sec-flow-step">💬 Discussion IA</div>
+    </div>
+    <div class="sec-card">
+      <p>Le document original ne quitte jamais votre infrastructure. Seul le texte anonymise est transmis au LLM pour la discussion IA. Le mapping reversible est chiffre et stocke separement.</p>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">🔐</span> Deux modes d'anonymisation</h2>
+    <div class="sec-grid">
+      <div class="sec-card">
+        <h3>Pseudonymisation <span class="sec-badge sec-badge-purple">Interne</span></h3>
+        <p>Remplacement des donnees personnelles par des tokens reversibles ([PERSONNE_1], [SOCIETE_2]...).</p>
+        <ul>
+          <li>Mapping chiffre AES-128-CBC + HMAC-SHA256</li>
+          <li>Reversible pour correction et reprise</li>
+          <li>Reste soumis au RGPD (donnees personnelles)</li>
+          <li>Usage : revue interne, correction, dossier client</li>
+        </ul>
+      </div>
+      <div class="sec-card">
+        <h3>Anonymisation forte <span class="sec-badge sec-badge-green">Export</span></h3>
+        <p>Double passe dictionnaire + LLM pour masquage maximal, incluant quasi-identifiants.</p>
+        <ul>
+          <li>Dictionnaire case-insensitive + LLM second pass</li>
+          <li>Detection des quasi-identifiants (adresses partielles, codes postaux, %)</li>
+          <li>Scoring du risque de reidentification</li>
+          <li>Usage : export, partage externe, entrainement IA</li>
+        </ul>
+      </div>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">📊</span> Scoring du risque de reidentification</h2>
+    <div class="sec-card">
+      <p>Conforme aux recommandations CNIL : l'anonymisation doit rendre impossible l'identification, pas seulement la masquer. ConfiDoc analyse le risque residuel par detection de :</p>
+      <ul>
+        <li>Fragments d'adresse non masques</li>
+        <li>Villes, codes postaux visibles</li>
+        <li>Prenoms/noms residuels pres de tokens</li>
+        <li>SIRET/SIREN partiels, IBAN, emails, telephones</li>
+        <li>Combinaisons de quasi-identifiants (effet croisement)</li>
+        <li>References d'emprunts, pourcentages de detention</li>
+      </ul>
+    </div>
+    <table class="sec-table">
+      <thead>
+        <tr><th>Niveau</th><th>Score</th><th>Politique d'export</th></tr>
+      </thead>
+      <tbody>
+        <tr><td><span class="sec-badge sec-badge-green">Faible</span></td><td>0 – 20%</td><td>Export autorise</td></tr>
+        <tr><td><span style="background:rgba(245,158,11,0.15);color:#f59e0b;border:1px solid rgba(245,158,11,0.3);display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;">Moyen</span></td><td>21 – 50%</td><td>Export avec avertissement</td></tr>
+        <tr><td><span style="background:rgba(239,68,68,0.15);color:#ef4444;border:1px solid rgba(239,68,68,0.3);display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;">Eleve</span></td><td>51 – 75%</td><td>Validation humaine obligatoire</td></tr>
+        <tr><td><span style="background:rgba(220,38,38,0.15);color:#dc2626;border:1px solid rgba(220,38,38,0.3);display:inline-flex;align-items:center;gap:6px;padding:4px 12px;border-radius:999px;font-size:11px;font-weight:700;text-transform:uppercase;">Critique</span></td><td>> 75%</td><td>Export bloque</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">🗄️</span> Stockage & Chiffrement</h2>
+    <div class="sec-card">
+      <h3>Architecture de securite</h3>
+      <table class="sec-table">
+        <thead><tr><th>Couche</th><th>Protection</th><th>Details</th></tr></thead>
+        <tbody>
+          <tr><td>Fichiers source</td><td>Stockage chiffre</td><td>PostgreSQL + stockage objet, acces restreint</td></tr>
+          <tr><td>Texte OCR</td><td>Base de donnees</td><td>Isole par utilisateur, acces via JWT</td></tr>
+          <tr><td>Mappings reversibles</td><td>AES-128-CBC + HMAC</td><td>Separes du contenu, expiration configurable</td></tr>
+          <tr><td>Tokens JWT</td><td>RS256 / HS256</td><td>Expiration courte + refresh token hache SHA-256</td></tr>
+          <tr><td>Mots de passe</td><td>bcrypt</td><td>Salage automatique, facteur de cout adaptatif</td></tr>
+          <tr><td>Communications</td><td>TLS 1.3</td><td>Certificats manages par l'infrastructure</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">📋</span> Journal d'audit & Tracabilite</h2>
+    <div class="sec-card">
+      <p>Chaque action sensible est journalisee de facon non modifiable :</p>
+      <ul>
+        <li><strong>Anonymisation</strong> : mode, profil, nombre d'entites, score de risque</li>
+        <li><strong>Export</strong> : format (texte/PDF), niveau de risque au moment de l'export</li>
+        <li><strong>Validation humaine</strong> : identifiant du validateur, horodatage</li>
+        <li><strong>Acces sensibles</strong> : consultation du texte original, mapping reversible</li>
+        <li><strong>Suppression</strong> : soft delete + suppression definitive (RGPD)</li>
+      </ul>
+      <p style="margin-top:12px;">Un rapport d'audit PDF professionnel est generable pour chaque document.</p>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">⏱️</span> Politique de retention & Purge</h2>
+    <div class="sec-card">
+      <table class="sec-table">
+        <thead><tr><th>Donnee</th><th>Duree de conservation</th><th>Action a expiration</th></tr></thead>
+        <tbody>
+          <tr><td>Fichiers source</td><td>Configurable (defaut: 90 jours)</td><td>Suppression definitive</td></tr>
+          <tr><td>Texte OCR</td><td>Liee au document</td><td>Suppression avec le document</td></tr>
+          <tr><td>Mappings reversibles</td><td>Configurable (defaut: 30 jours)</td><td>Purge automatique</td></tr>
+          <tr><td>Logs d'audit</td><td>Configurable (defaut: 365 jours)</td><td>Archivage puis purge</td></tr>
+          <tr><td>Refresh tokens</td><td>30 jours</td><td>Revocation automatique</td></tr>
+        </tbody>
+      </table>
+      <p style="margin-top:12px;">Un processus de purge automatique s'execute toutes les 24h pour supprimer les donnees expirees.</p>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">🤖</span> LLM & Donnees</h2>
+    <div class="sec-card">
+      <h3>Separation stricte</h3>
+      <p>Le LLM (Mistral Large) ne recoit <strong>jamais</strong> le texte original. Seul le texte anonymise est transmis pour la discussion IA. Les donnees sensibles restent sur votre infrastructure.</p>
+      <ul>
+        <li>OCR : Mistral OCR (extraction uniquement)</li>
+        <li>Anonymisation : dictionnaire local + LLM second pass</li>
+        <li>Discussion : texte anonymise uniquement</li>
+        <li>Aucun entrainement sur vos donnees</li>
+      </ul>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">⚠️</span> Limites connues</h2>
+    <div class="sec-card">
+      <ul>
+        <li>L'anonymisation par dictionnaire depend de la qualite des regles configurees</li>
+        <li>Les documents tres specifiques (familiaux, micro-structures) peuvent necessiter une revue humaine supplementaire</li>
+        <li>Le scoring de risque est indicatif et ne remplace pas une analyse juridique</li>
+        <li>Les tableaux mal OCRises peuvent contenir des residus non detectes</li>
+        <li>ConfiDoc aide a la conformite mais ne constitue pas un avis juridique</li>
+      </ul>
+    </div>
+    <div class="sec-disclaimer">
+      <p><strong>Important :</strong> ConfiDoc est concu selon les principes du RGPD et du privacy by design. Il aide a la conformite mais ne remplace ni l'analyse juridique ni la gouvernance interne. Une AIPD specifique peut etre necessaire selon le contexte de traitement.</p>
+    </div>
+  </div>
+
+</div>
+
+</body>
+</html>

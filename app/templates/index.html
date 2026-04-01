@@ -24,8 +24,10 @@
       <button id="btn-theme" class="btn-theme-toggle" aria-label="Changer le thème"></button>
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
+      <a href="/security" target="_blank" class="btn btn-ghost btn-sm" id="btn-security" style="display:none" title="Securite & Conformite RGPD">🛡️</a>
+      <button id="btn-dashboard" class="btn btn-ghost btn-sm" style="display:none" title="Dashboard">📊</button>
       <span id="user-info" class="user-info"></span>
-      <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">Déconnexion</button>
+      <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">Deconnexion</button>
     </div>
   </div>
 </header>
@@ -112,6 +114,65 @@
 
     <!-- MAIN -->
     <main id="main-content" class="main-panel">
+
+      <!-- PANEL 0: DASHBOARD -->
+      <div id="panel-dashboard" class="panel">
+        <div class="panel-header">
+          <h2>Dashboard</h2>
+          <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">Actualiser</button>
+        </div>
+        <div id="dash-loading" class="loading-state" style="display:none">
+          <div class="spinner"></div>
+          <p>Chargement des statistiques...</p>
+        </div>
+        <div id="dash-content" style="display:none">
+          <div class="dash-kpi-grid">
+            <div class="dash-kpi-card">
+              <div class="dash-kpi-icon">📄</div>
+              <div class="dash-kpi-num" id="dash-total-docs">0</div>
+              <div class="dash-kpi-label">Documents</div>
+            </div>
+            <div class="dash-kpi-card">
+              <div class="dash-kpi-icon">🔒</div>
+              <div class="dash-kpi-num" id="dash-total-entities">0</div>
+              <div class="dash-kpi-label">Entites masquees</div>
+            </div>
+            <div class="dash-kpi-card">
+              <div class="dash-kpi-icon">✅</div>
+              <div class="dash-kpi-num" id="dash-ready-count">0</div>
+              <div class="dash-kpi-label">Prets IA</div>
+            </div>
+            <div class="dash-kpi-card">
+              <div class="dash-kpi-icon">🗑️</div>
+              <div class="dash-kpi-num" id="dash-trashed">0</div>
+              <div class="dash-kpi-label">Corbeille</div>
+            </div>
+          </div>
+
+          <div class="dash-charts-row">
+            <div class="dash-chart-card">
+              <h3>Distribution du risque</h3>
+              <div id="dash-risk-chart" class="dash-risk-bars"></div>
+            </div>
+            <div class="dash-chart-card">
+              <h3>Entites par type</h3>
+              <div id="dash-entity-chart" class="dash-entity-list"></div>
+            </div>
+          </div>
+
+          <div class="dash-charts-row">
+            <div class="dash-chart-card" style="flex:1">
+              <h3>Statut des documents</h3>
+              <div id="dash-status-chart" class="dash-status-pills"></div>
+            </div>
+          </div>
+
+          <div id="dash-activity-section" class="dash-chart-card" style="margin-top:16px;display:none">
+            <h3>Activite recente (7 jours)</h3>
+            <div id="dash-activity-chart" class="dash-activity-bars"></div>
+          </div>
+        </div>
+      </div>
 
       <!-- PANEL 1: UPLOAD -->
       <div id="panel-upload" class="panel active">

@@ -42,6 +42,9 @@ dependencies = [
     # Utils
     "httpx>=0.27.0",
     "python-magic>=0.4.27",
+
+    # PDF generation
+    "fpdf2>=2.7.0",
 ]
 
 [project.optional-dependencies]

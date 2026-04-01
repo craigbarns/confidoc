@@ -5,10 +5,11 @@ import uuid
 import hashlib
 import re
 from datetime import datetime, timezone
+import io
 from io import BytesIO
 from types import SimpleNamespace
 
-from fastapi import APIRouter, BackgroundTasks, Body, Query, status
+from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import delete, desc, func, select, update
 
@@ -346,6 +347,123 @@ async def list_trash(
         "total": total,
         "limit": limit,
         "offset": offset,
+    }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# DASHBOARD STATS — Route statique, déclarée avant /{document_id}
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/stats/dashboard",
+    status_code=status.HTTP_200_OK,
+    summary="Statistiques dashboard pour l'utilisateur",
+)
+async def get_dashboard_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Aggregated statistics for the user dashboard."""
+    user_id = current_user.id
+
+    # Document counts by status
+    result = await db.execute(
+        select(Document.status, func.count())
+        .where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+        )
+        .group_by(Document.status)
+    )
+    status_counts = {row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in result.all()}
+    total_docs = sum(status_counts.values())
+
+    # Risk distribution (from pseudonym_mappings)
+    risk_distribution = {"low": 0, "medium": 0, "high": 0, "critical": 0}
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        risk_result = await db.execute(
+            select(PseudonymMapping.risk_level, func.count())
+            .where(PseudonymMapping.user_id == user_id)
+            .group_by(PseudonymMapping.risk_level)
+        )
+        for row in risk_result.all():
+            level = row[0] or "low"
+            if level in risk_distribution:
+                risk_distribution[level] = row[1]
+    except Exception:
+        pass
+
+    # Entity type distribution
+    entity_distribution: dict[str, int] = {}
+    try:
+        # Get all document IDs for this user
+        doc_ids_result = await db.execute(
+            select(Document.id).where(
+                Document.uploaded_by_user_id == user_id,
+                Document.is_deleted.is_(False),
+            )
+        )
+        doc_ids = [row[0] for row in doc_ids_result.all()]
+
+        if doc_ids:
+            ent_result = await db.execute(
+                select(EntityDetection.entity_type, func.count())
+                .where(EntityDetection.document_id.in_(doc_ids))
+                .group_by(EntityDetection.entity_type)
+            )
+            entity_distribution = {
+                (row[0] or "unknown"): row[1] for row in ent_result.all()
+            }
+    except Exception:
+        pass
+
+    # Recent activity (last 7 days)
+    recent_activity: list[dict] = []
+    try:
+        from app.models.audit_log import AuditLog
+        from datetime import timedelta
+        since = datetime.now(timezone.utc) - timedelta(days=7)
+        activity_result = await db.execute(
+            select(
+                func.date_trunc("day", AuditLog.created_at).label("day"),
+                func.count(),
+            )
+            .where(
+                AuditLog.user_id == user_id,
+                AuditLog.created_at >= since,
+            )
+            .group_by("day")
+            .order_by("day")
+        )
+        recent_activity = [
+            {"date": row[0].isoformat() if row[0] else "", "count": row[1]}
+            for row in activity_result.all()
+        ]
+    except Exception:
+        pass
+
+    # Trashed count
+    trash_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    trashed = trash_result.scalar() or 0
+
+    # Total entities masked
+    total_entities = sum(entity_distribution.values())
+
+    return {
+        "total_documents": total_docs,
+        "status_counts": status_counts,
+        "risk_distribution": risk_distribution,
+        "entity_distribution": entity_distribution,
+        "total_entities_masked": total_entities,
+        "recent_activity": recent_activity,
+        "trashed_documents": trashed,
     }
 
 
@@ -1042,6 +1160,76 @@ async def get_audit_report(
         "audit_entries": entries,
         "total_actions": len(entries),
     }
+
+
+@router.get(
+    "/{document_id}/audit-report-pdf",
+    status_code=status.HTTP_200_OK,
+    summary="Rapport d'audit RGPD du document (PDF professionnel)",
+)
+async def get_audit_report_pdf(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Generates a professional branded PDF audit report."""
+    report_data = await get_audit_report(document_id, current_user, db)
+
+    # Collect entity summary
+    entity_summary: dict[str, int] = {}
+    try:
+        det_result = await db.execute(
+            select(EntityDetection).where(
+                EntityDetection.document_id == uuid.UUID(document_id)
+            )
+        )
+        for det in det_result.scalars().all():
+            etype = det.entity_type or "unknown"
+            entity_summary[etype] = entity_summary.get(etype, 0) + 1
+    except Exception:
+        pass
+
+    # Get anonymized text preview
+    anonymized_preview = ""
+    try:
+        document = await _get_user_document_or_404(db, document_id, current_user.id)
+        anonymized_preview = await _get_anonymized_text(db, document)
+    except Exception:
+        pass
+
+    # Get risk recommendation from current analysis
+    risk_info = report_data.get("risk")
+    if risk_info and anonymized_preview:
+        risk_report = analyze_reidentification_risk(anonymized_preview, entity_summary)
+        risk_info["recommendation"] = risk_report.recommendation
+
+    document_info = {
+        "document_id": report_data.get("document_id", ""),
+        "filename": report_data.get("filename", "Document"),
+        "created_at": report_data.get("created_at", ""),
+        "doc_type": "Auto",
+        "status": "ready",
+    }
+
+    from app.services.pdf_audit_report_service import generate_audit_pdf
+    pdf_bytes = generate_audit_pdf(
+        document_info=document_info,
+        risk_info=risk_info,
+        entity_summary=entity_summary,
+        audit_entries=report_data.get("audit_entries", []),
+        anonymized_text_preview=anonymized_preview[:4000],
+    )
+
+    short_id = document_info["document_id"][:8]
+    headers = {
+        "Content-Disposition": f'attachment; filename="audit_rgpd_{short_id}.pdf"'
+    }
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers=headers,
+    )
+
 
 @router.get(
     "/{document_id}/export",

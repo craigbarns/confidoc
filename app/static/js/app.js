@@ -288,6 +288,8 @@ async function initApp(email) {
   $("screen-auth").style.display = "none";
   $("screen-app").style.display = "";
   $("btn-logout").style.display = "";
+  if ($("btn-security")) $("btn-security").style.display = "";
+  if ($("btn-dashboard")) $("btn-dashboard").style.display = "";
 
   // Afficher l'email : si non fourni, le charger depuis l'API
   if (email) {
@@ -1480,10 +1482,10 @@ async function showApproveExportPrompt() {
 async function downloadAuditReport() {
   if (!currentDocId) return;
   try {
-    const data = await apiFetch(`/documents/${currentDocId}/audit-report`);
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    triggerDownload(blob, `audit_${currentDocId.slice(0, 8)}.json`);
-    toast("Rapport d'audit téléchargé", "success");
+    const resp = await apiRequest(`/documents/${currentDocId}/audit-report-pdf`);
+    const blob = await resp.blob();
+    triggerDownload(blob, `audit_rgpd_${currentDocId.slice(0, 8)}.pdf`);
+    toast("Rapport d'audit PDF telecharge", "success");
   } catch (e) {
     toast(`Erreur rapport: ${e.message}`, "error");
   }
@@ -1500,6 +1502,156 @@ function triggerDownload(blob, filename) {
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
 }
+
+// ── Dashboard ──────────────────────────────────────────────────────────
+
+let dashboardLoaded = false;
+
+function showDashboard() {
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  const dash = $("panel-dashboard");
+  if (dash) dash.classList.add("active");
+  [1, 2, 3].forEach(i => {
+    const s = $(`step-${i}`);
+    if (s) s.className = "step";
+  });
+  if (!dashboardLoaded) loadDashboard();
+}
+
+async function loadDashboard() {
+  const loading = $("dash-loading");
+  const content = $("dash-content");
+  if (loading) loading.style.display = "";
+  if (content) content.style.display = "none";
+
+  try {
+    const data = await apiFetch("/documents/stats/dashboard");
+    dashboardLoaded = true;
+    renderDashboard(data);
+  } catch (e) {
+    console.warn("loadDashboard failed:", e);
+    if (content) {
+      content.style.display = "";
+      content.innerHTML = '<div class="empty-state">Impossible de charger les statistiques.</div>';
+    }
+  } finally {
+    if (loading) loading.style.display = "none";
+  }
+}
+
+function renderDashboard(data) {
+  const content = $("dash-content");
+  if (!content) return;
+  content.style.display = "";
+
+  // KPIs
+  const sc = data.status_counts || {};
+  animateNumber($("dash-total-docs"), data.total_documents || 0);
+  animateNumber($("dash-total-entities"), data.total_entities_masked || 0);
+  animateNumber($("dash-ready-count"), sc.ready || 0);
+  animateNumber($("dash-trashed"), data.trashed_documents || 0);
+
+  // Risk distribution
+  const riskEl = $("dash-risk-chart");
+  if (riskEl) {
+    const rd = data.risk_distribution || {};
+    const maxRisk = Math.max(1, ...Object.values(rd));
+    const levels = ["low", "medium", "high", "critical"];
+    const labels = { low: "Faible", medium: "Moyen", high: "Eleve", critical: "Critique" };
+    riskEl.innerHTML = levels.map(lvl => {
+      const count = rd[lvl] || 0;
+      const pct = (count / maxRisk) * 100;
+      return `<div class="dash-risk-row">
+        <span class="dash-risk-label risk-label-${lvl}">${labels[lvl]}</span>
+        <div class="dash-risk-bar-bg">
+          <div class="dash-risk-bar-fill dash-risk-bar-${lvl}" style="width:0%" data-target="${pct}" data-count="${count}"></div>
+        </div>
+      </div>`;
+    }).join("");
+    setTimeout(() => {
+      riskEl.querySelectorAll(".dash-risk-bar-fill").forEach(bar => {
+        bar.style.width = bar.dataset.target + "%";
+      });
+    }, 100);
+  }
+
+  // Entity distribution
+  const entityEl = $("dash-entity-chart");
+  if (entityEl) {
+    const ed = data.entity_distribution || {};
+    const sorted = Object.entries(ed).sort((a, b) => b[1] - a[1]).slice(0, 8);
+    const maxEnt = Math.max(1, ...sorted.map(x => x[1]));
+    if (!sorted.length) {
+      entityEl.innerHTML = '<div class="empty-state" style="padding:16px">Aucune entite detectee</div>';
+    } else {
+      entityEl.innerHTML = sorted.map(([type, count]) => {
+        const pct = (count / maxEnt) * 100;
+        return `<div class="dash-entity-row">
+          <span class="dash-entity-type">${type}</span>
+          <div class="dash-entity-bar-bg">
+            <div class="dash-entity-bar-fill" style="width:0%" data-target="${pct}"></div>
+          </div>
+          <span class="dash-entity-count">${count}</span>
+        </div>`;
+      }).join("");
+      setTimeout(() => {
+        entityEl.querySelectorAll(".dash-entity-bar-fill").forEach(bar => {
+          bar.style.width = bar.dataset.target + "%";
+        });
+      }, 200);
+    }
+  }
+
+  // Status distribution
+  const statusEl = $("dash-status-chart");
+  if (statusEl) {
+    const statuses = [
+      { key: "ready", label: "Pret IA", dot: "ready" },
+      { key: "processing", label: "Traitement", dot: "processing" },
+      { key: "uploaded", label: "Uploade", dot: "uploaded" },
+      { key: "failed", label: "Erreur", dot: "failed" },
+    ];
+    statusEl.innerHTML = statuses.map(s => {
+      const count = sc[s.key] || 0;
+      return `<div class="dash-status-pill">
+        <div class="dash-status-dot ${s.dot}"></div>
+        <span class="dash-status-name">${s.label}</span>
+        <span class="dash-status-num">${count}</span>
+      </div>`;
+    }).join("");
+  }
+
+  // Activity chart
+  const actSection = $("dash-activity-section");
+  const actEl = $("dash-activity-chart");
+  if (actEl && data.recent_activity && data.recent_activity.length) {
+    actSection.style.display = "";
+    const maxAct = Math.max(1, ...data.recent_activity.map(a => a.count));
+    actEl.innerHTML = data.recent_activity.map(a => {
+      const h = Math.max(2, (a.count / maxAct) * 80);
+      const day = a.date ? new Date(a.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "";
+      return `<div class="dash-activity-col">
+        <div class="dash-activity-bar" style="height:${h}px"></div>
+        <span class="dash-activity-label">${day}</span>
+      </div>`;
+    }).join("");
+  }
+}
+
+function animateNumber(el, target) {
+  if (!el) return;
+  const duration = 800;
+  const start = performance.now();
+  const from = 0;
+  function step(now) {
+    const progress = Math.min((now - start) / duration, 1);
+    const ease = 1 - Math.pow(1 - progress, 3);
+    el.textContent = Math.round(from + (target - from) * ease);
+    if (progress < 1) requestAnimationFrame(step);
+  }
+  requestAnimationFrame(step);
+}
+
 
 // ── Event listeners ────────────────────────────────────────────────────
 
@@ -1533,6 +1685,13 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   $("btn-logout").addEventListener("click", logout);
+
+  // Dashboard
+  if ($("btn-dashboard")) $("btn-dashboard").addEventListener("click", showDashboard);
+  if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {
+    dashboardLoaded = false;
+    loadDashboard();
+  });
 
   // Sidebar: nouveau document
   $("btn-new-doc").addEventListener("click", () => {
