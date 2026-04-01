@@ -253,3 +253,127 @@ async def ai_extract(
             "anonymized_only": True,
         },
     })
+
+
+
+# ──────────────────────────────────────────────────────────────────────
+# REVIEW AGENT (LangGraph)
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.post(
+    "/review/{document_id}",
+    response_class=StreamingResponse,
+    summary="Analyse documentaire autonome (agent LangGraph multi-etapes)",
+)
+async def ai_review(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+):
+    """Launch the LangGraph document review agent.
+
+    Streams SSE events as each step completes:
+    - classify: document type identification
+    - extract: structured data extraction
+    - analyze: business rules analysis
+    - anomalies: inconsistency detection
+    - synthesize: professional review note
+    """
+    document = await _get_document_or_404(db, document_id, current_user.id)
+    anonymized_text = await _get_anonymized_text(db, document)
+
+    if not anonymized_text:
+        async def _blocked():
+            yield "data: " + json.dumps({"step": "error", "status": "error", "data": {"error": "Aucun texte anonymise. Lancez d'abord l'anonymisation."}}) + "\n\n"
+        return StreamingResponse(_blocked(), media_type="text/event-stream")
+
+    # Get entity summary for richer analysis
+    from app.models.entity_detection import EntityDetection
+    entity_summary: dict[str, int] = {}
+    try:
+        det_result = await db.execute(
+            select(EntityDetection).where(
+                EntityDetection.document_id == document.id
+            )
+        )
+        for det in det_result.scalars().all():
+            etype = det.entity_type or "unknown"
+            entity_summary[etype] = entity_summary.get(etype, 0) + 1
+    except Exception:
+        pass
+
+    from app.services.review_agent import run_review_streaming
+
+    async def _event_stream():
+        # Signal start
+        yield "data: " + json.dumps({
+            "step": "classify",
+            "label": "Classification du document",
+            "status": "running",
+            "data": {},
+        }, ensure_ascii=False) + "\n\n"
+
+        try:
+            async for event in run_review_streaming(anonymized_text, entity_summary):
+                yield "data: " + json.dumps(event, ensure_ascii=False, default=str) + "\n\n"
+        except Exception as exc:
+            yield "data: " + json.dumps({
+                "step": "error",
+                "label": "Erreur",
+                "status": "error",
+                "data": {"error": str(exc)[:300]},
+            }) + "\n\n"
+
+        yield "data: [DONE]\n\n"
+
+    return StreamingResponse(
+        _event_stream(),
+        media_type="text/event-stream",
+        headers={"Cache-Control": "no-cache", "X-Accel-Buffering": "no"},
+    )
+
+
+@router.post(
+    "/review-sync/{document_id}",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Analyse documentaire (mode synchrone, resultat complet)",
+)
+async def ai_review_sync(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> JSONResponse:
+    """Run the full review agent and return complete results."""
+    document = await _get_document_or_404(db, document_id, current_user.id)
+    anonymized_text = await _get_anonymized_text(db, document)
+
+    if not anonymized_text:
+        raise http_400("Aucun texte anonymise. Lancez d'abord l'anonymisation.")
+
+    from app.models.entity_detection import EntityDetection
+    entity_summary: dict[str, int] = {}
+    try:
+        det_result = await db.execute(
+            select(EntityDetection).where(
+                EntityDetection.document_id == document.id
+            )
+        )
+        for det in det_result.scalars().all():
+            etype = det.entity_type or "unknown"
+            entity_summary[etype] = entity_summary.get(etype, 0) + 1
+    except Exception:
+        pass
+
+    from app.services.review_agent import run_review
+
+    result = await run_review(anonymized_text, entity_summary)
+
+    # Remove raw text from response
+    result.pop("anonymized_text", None)
+
+    return JSONResponse({
+        "document_id": str(document.id),
+        "review": result,
+    })

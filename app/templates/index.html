@@ -315,6 +315,7 @@
           <button class="quick-btn" data-q="Y a-t-il des anomalies ou alertes ?">⚠️ Anomalies</button>
           <button class="quick-btn" data-q="Donne-moi les chiffres principaux.">📊 Chiffres</button>
           <button id="btn-report-mode" class="quick-btn" data-on="false">🧱 Mode rapport: OFF</button>
+          <button id="btn-review-agent" class="quick-btn quick-btn-accent">🤖 Analyse documentaire</button>
         </div>
 
         <div class="ai-insights">
@@ -340,6 +341,20 @@
           <div class="chat-intro">
             <div class="chat-intro-icon">🔒</div>
             <p>Document anonymisé. Posez vos questions en toute sécurité.</p>
+          </div>
+        </div>
+
+        <!-- REVIEW AGENT RESULTS -->
+        <div id="review-panel" class="review-panel" style="display:none">
+          <div class="review-header">
+            <h3>🤖 Analyse documentaire autonome</h3>
+            <button id="btn-review-close" class="btn btn-ghost btn-sm">Fermer</button>
+          </div>
+          <div id="review-steps" class="review-steps"></div>
+          <div id="review-result" class="review-result" style="display:none"></div>
+          <div class="review-actions" id="review-actions" style="display:none">
+            <button id="btn-review-copy" class="btn btn-ghost btn-sm">📋 Copier</button>
+            <button id="btn-review-export" class="btn btn-ghost btn-sm">⬇ Exporter</button>
           </div>
         </div>
 

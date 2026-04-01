@@ -1653,6 +1653,241 @@ function animateNumber(el, target) {
 }
 
 
+// ── Review Agent (LangGraph) ────────────────────────────────────────────
+
+let reviewRunning = false;
+let reviewResult = null;
+
+const REVIEW_STEPS = [
+  { id: "classify", icon: "1", label: "Classification du document" },
+  { id: "extract", icon: "2", label: "Extraction des donnees cles" },
+  { id: "analyze", icon: "3", label: "Analyse metier" },
+  { id: "anomalies", icon: "4", label: "Detection d'anomalies" },
+  { id: "synthesize", icon: "5", label: "Redaction de la note de revue" },
+];
+
+function renderReviewSteps(activeStep, completedSteps) {
+  const el = $("review-steps");
+  if (!el) return;
+  el.innerHTML = REVIEW_STEPS.map(s => {
+    let cls = "";
+    let iconContent = s.icon;
+    if (completedSteps.includes(s.id)) {
+      cls = "done";
+      iconContent = "\u2713";
+    } else if (s.id === activeStep) {
+      cls = "running";
+    }
+    const timeEl = completedSteps.includes(s.id)
+      ? '<span class="review-step-time">\u2713</span>'
+      : s.id === activeStep
+        ? '<span class="review-step-time"><div class="spinner spinner-sm"></div></span>'
+        : '';
+    return `<div class="review-step ${cls}">
+      <div class="review-step-icon">${iconContent}</div>
+      <span class="review-step-label">${s.label}</span>
+      ${timeEl}
+    </div>`;
+  }).join("");
+}
+
+function renderReviewResult(data) {
+  const el = $("review-result");
+  if (!el) return;
+  el.style.display = "";
+
+  let html = "";
+
+  // Verdict badge
+  const synthesize = data.synthesize || data;
+  const sections = synthesize.sections || data.sections || {};
+  const verdict = synthesize.verdict || data.verdict || "";
+  const confidence = synthesize.confiance || synthesize.confidence || data.confidence || 0;
+  const reviewNote = synthesize.resume_executif || synthesize.review_note || data.review_note || "";
+  const nextActions = synthesize.prochaines_actions || data.prochaines_actions || [];
+  const titre = synthesize.titre || "Note de revue";
+
+  if (verdict) {
+    const verdictIcons = { favorable: "\u2705", reserve: "\u26A0\uFE0F", defavorable: "\u274C" };
+    const verdictLabels = { favorable: "Favorable", reserve: "Reserve", defavorable: "Defavorable" };
+    html += `<div class="review-verdict ${verdict}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)</div>`;
+  }
+
+  // Resume
+  if (reviewNote) {
+    html += `<div class="review-section">
+      <div class="review-section-title">\uD83D\uDCCB Resume executif</div>
+      <div class="review-section-body">${escapeHtml(reviewNote)}</div>
+    </div>`;
+  }
+
+  // Sections
+  const sectionIcons = {
+    identification: "\uD83D\uDCC4",
+    chiffres_cles: "\uD83D\uDCCA",
+    analyse: "\uD83D\uDD0D",
+    alertes: "\u26A0\uFE0F",
+    recommandations: "\u2705",
+  };
+  for (const [key, value] of Object.entries(sections)) {
+    if (!value) continue;
+    const icon = sectionIcons[key] || "\uD83D\uDCDD";
+    const label = key.replace(/_/g, " ").replace(/^./, c => c.toUpperCase());
+    html += `<div class="review-section">
+      <div class="review-section-title">${icon} ${label}</div>
+      <div class="review-section-body">${escapeHtml(String(value))}</div>
+    </div>`;
+  }
+
+  // Anomalies
+  const anomalies = data.anomalies || [];
+  if (anomalies.length) {
+    html += `<div class="review-section">
+      <div class="review-section-title">\u26A0\uFE0F Anomalies detectees (${anomalies.length})</div>`;
+    anomalies.forEach(a => {
+      const sev = a.severite || "information";
+      html += `<div class="review-anomaly ${sev}">
+        <span class="review-anomaly-sev">${sev}</span>
+        <div>
+          <strong>${escapeHtml(a.description || "")}</strong>
+          ${a.recommandation ? `<br><em style="color:var(--text-muted)">${escapeHtml(a.recommandation)}</em>` : ""}
+        </div>
+      </div>`;
+    });
+    html += `</div>`;
+  }
+
+  // Next actions
+  if (nextActions.length) {
+    html += `<div class="review-section">
+      <div class="review-section-title">\u27A1\uFE0F Prochaines actions</div>
+      <div class="review-section-body">${nextActions.map((a, i) => `${i + 1}. ${escapeHtml(a)}`).join("\n")}</div>
+    </div>`;
+  }
+
+  el.innerHTML = html;
+  $("review-actions").style.display = "";
+}
+
+async function startReview() {
+  if (!currentDocId || reviewRunning) return;
+  reviewRunning = true;
+  reviewResult = null;
+
+  const panel = $("review-panel");
+  panel.style.display = "";
+  $("review-result").style.display = "none";
+  $("review-result").innerHTML = "";
+  $("review-actions").style.display = "none";
+
+  const completedSteps = [];
+  let currentStep = "classify";
+  renderReviewSteps(currentStep, completedSteps);
+
+  let allData = {};
+
+  try {
+    const resp = await fetch(
+      `${API}/ai/review/${currentDocId}`,
+      { method: "POST", headers: { "Authorization": `Bearer ${token}` } }
+    );
+
+    if (!resp.ok) {
+      let msg = `HTTP ${resp.status}`;
+      try { const j = await resp.json(); msg = j.detail || msg; } catch(_e){}
+      throw new Error(msg);
+    }
+
+    const reader = resp.body.getReader();
+    const decoder = new TextDecoder();
+    let buffer = "";
+
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split("\n");
+      buffer = lines.pop();
+
+      for (const line of lines) {
+        if (!line.startsWith("data:")) continue;
+        const raw = line.slice(5).trim();
+        if (raw === "[DONE]") break;
+
+        try {
+          const event = JSON.parse(raw);
+          const step = event.step;
+          const status = event.status;
+
+          if (status === "done" && step !== "complete") {
+            if (!completedSteps.includes(step)) completedSteps.push(step);
+            if (event.data) {
+              Object.assign(allData, event.data);
+              if (step === "anomalies" && event.data.anomalies) {
+                allData.anomalies = event.data.anomalies;
+              }
+            }
+            renderReviewSteps(null, completedSteps);
+          } else if (status === "running") {
+            currentStep = step;
+            renderReviewSteps(step, completedSteps);
+          } else if (status === "complete") {
+            renderReviewSteps(null, completedSteps);
+            reviewResult = allData;
+            renderReviewResult(allData);
+            toast("Analyse documentaire terminee", "success");
+          } else if (status === "error") {
+            renderReviewSteps(null, completedSteps);
+            toast(`Erreur analyse: ${event.data?.error || "inconnue"}`, "error");
+          }
+        } catch (e) {
+          console.warn("Review SSE parse error:", e);
+        }
+      }
+    }
+  } catch (e) {
+    console.error("startReview error:", e);
+    toast(`Erreur analyse: ${e.message}`, "error");
+  } finally {
+    reviewRunning = false;
+  }
+}
+
+function closeReview() {
+  const panel = $("review-panel");
+  if (panel) panel.style.display = "none";
+}
+
+function copyReviewResult() {
+  if (!reviewResult) return;
+  const sections = reviewResult.sections || {};
+  const note = reviewResult.review_note || reviewResult.resume_executif || "";
+  let text = "=== NOTE DE REVUE ===\n\n";
+  text += note + "\n\n";
+  for (const [key, value] of Object.entries(sections)) {
+    text += `--- ${key.toUpperCase()} ---\n${value}\n\n`;
+  }
+  if (reviewResult.anomalies?.length) {
+    text += "--- ANOMALIES ---\n";
+    reviewResult.anomalies.forEach(a => {
+      text += `[${a.severite}] ${a.description}\n`;
+      if (a.recommandation) text += `  -> ${a.recommandation}\n`;
+    });
+  }
+  navigator.clipboard.writeText(text).then(
+    () => toast("Note de revue copiee", "success"),
+    () => toast("Impossible de copier", "error")
+  );
+}
+
+function exportReviewResult() {
+  if (!reviewResult) return;
+  const blob = new Blob([JSON.stringify(reviewResult, null, 2)], { type: "application/json" });
+  triggerDownload(blob, `review_${currentDocId?.slice(0, 8) || "doc"}.json`);
+  toast("Analyse exportee", "success");
+}
+
+
 // ── Event listeners ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
@@ -1779,6 +2014,12 @@ document.addEventListener("DOMContentLoaded", () => {
       sendMessage();
     });
   });
+  // Review agent
+  if ($("btn-review-agent")) $("btn-review-agent").addEventListener("click", startReview);
+  if ($("btn-review-close")) $("btn-review-close").addEventListener("click", closeReview);
+  if ($("btn-review-copy")) $("btn-review-copy").addEventListener("click", copyReviewResult);
+  if ($("btn-review-export")) $("btn-review-export").addEventListener("click", exportReviewResult);
+
   $("btn-report-mode").addEventListener("click", () => {
     reportMode = !reportMode;
     const b = $("btn-report-mode");
