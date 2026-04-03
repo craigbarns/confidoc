@@ -17,7 +17,13 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip && \
     pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
-    pip wheel --no-cache-dir --wheel-dir /build/wheels ".[processing]"
+    pip wheel --no-cache-dir --wheel-dir /build/wheels ".[processing]" && \
+    rm -f /build/wheels/torch-*.whl \
+          /build/wheels/torchvision-*.whl \
+          /build/wheels/nvidia_*.whl \
+          /build/wheels/triton-*.whl \
+          /build/wheels/cuda_*.whl \
+          /build/wheels/cuda-*.whl
 
 FROM python:3.11-slim-bookworm
 
