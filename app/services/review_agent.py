@@ -158,7 +158,7 @@ def _parse_json(raw: str) -> dict[str, Any]:
 # ── Node 1: Classify ────────────────────────────────────────────────────
 
 async def classify_node(state: ReviewState) -> ReviewState:
-    text = state["anonymized_text"][:3000]
+    text = state["anonymized_text"][:8000]
 
     prompt = f"""Analyse ce texte anonymise et determine le type de document.
 
@@ -190,7 +190,7 @@ Texte:
 # ── Node 2: Extract ─────────────────────────────────────────────────────
 
 async def extract_node(state: ReviewState) -> ReviewState:
-    text = state["anonymized_text"][:6000]
+    text = state["anonymized_text"][:12000]
     doc_type = state.get("doc_type", "autre")
     entity_summary = state.get("entity_summary", {})
     docling_ctx = _build_docling_context(state)
@@ -201,16 +201,32 @@ Entites detectees: {json.dumps(entity_summary, ensure_ascii=False)}
 
 Extrais les donnees structurees cles de ce document.
 
+INSTRUCTIONS SPECIFIQUES POUR LES BILANS ET DOCUMENTS COMPTABLES:
+- Lis CHAQUE LIGNE du bilan, y compris les sous-lignes (ex: dans l'actif circulant,
+  distinguer "Creances clients", "Autres creances", "Disponibilites" etc.)
+- Ne fusionne JAMAIS des postes differents. "Autres creances" et "Creances clients"
+  sont des postes DISTINCTS avec des montants DIFFERENTS.
+- Extrais les montants brut, amortissements ET net pour chaque poste si disponibles.
+- Extrais les colonnes N et N-1 quand elles existent.
+- Pour chaque montant, indique le libelle EXACT tel qu'il apparait dans le document.
+
 Reponds en JSON strict:
 {{
   "parties": ["liste des parties/acteurs mentionnes"],
   "dates_cles": {{"description": "date"}},
-  "montants_cles": {{"description": montant_numerique}},
+  "montants_cles": {{"libelle_exact_du_document": montant_numerique}},
+  "postes_bilan": {{
+    "actif": {{"libelle_exact": {{"brut": montant, "amort": montant, "net": montant, "net_n1": montant}}}},
+    "passif": {{"libelle_exact": {{"montant": montant, "montant_n1": montant}}}}
+  }},
   "references": ["numeros de reference, dossier, contrat..."],
   "objet": "objet principal du document",
   "duree": "duree si applicable",
   "conditions_particulieres": ["conditions notables"]
 }}
+
+IMPORTANT: le champ "postes_bilan" est OBLIGATOIRE pour les bilans. Lis le document
+INTEGRALEMENT pour ne manquer aucun poste.
 
 Texte anonymise:
 {text}"""
@@ -234,11 +250,11 @@ Texte anonymise:
 async def analyze_node(state: ReviewState) -> ReviewState:
     doc_type = state.get("doc_type", "autre")
     extracted = state.get("extracted_data", {})
-    text = state["anonymized_text"][:4000]
+    text = state["anonymized_text"][:10000]
     docling_ctx = _build_docling_context(state)
 
     prompt = f"""Tu analyses un document de type: {doc_type}
-Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:2000]}
+Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:4000]}
 {f"DONNEES STRUCTUREES (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Effectue une analyse metier factuelle:
@@ -285,12 +301,12 @@ async def findings_node(state: ReviewState) -> ReviewState:
     doc_type = state.get("doc_type", "autre")
     extracted = state.get("extracted_data", {})
     analysis = state.get("analysis", {})
-    text = state["anonymized_text"][:4000]
+    text = state["anonymized_text"][:10000]
     docling_ctx = _build_docling_context(state)
 
     prompt = f"""Document de type: {doc_type}
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:1500]}
-Analyse precedente: {json.dumps(analysis, ensure_ascii=False)[:1500]}
+Analyse precedente: {json.dumps(analysis, ensure_ascii=False)[:3000]}
 {f"TABLEAUX ET STRUCTURE (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Tu dois produire des constats structures selon EXACTEMENT 4 categories.
@@ -452,14 +468,14 @@ async def synthesize_node(state: ReviewState) -> ReviewState:
     prompt = f"""Tu produis la SYNTHESE CABINET pour un professionnel (expert-comptable, juriste, DAF).
 Le texte est anonymise. Type de document detecte: {doc_type}
 
-Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:2000]}
-Analyse: {json.dumps(analysis, ensure_ascii=False)[:1500]}
+Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:4000]}
+Analyse: {json.dumps(analysis, ensure_ascii=False)[:3000]}
 Constats structures (4 niveaux):
 - Anomalies confirmees: {n_confirmed}
 - Points d'attention: {n_attention}
 - Informations manquantes: {n_missing}
 - Verifications recommandees: {n_verif}
-Detail constats: {json.dumps(findings, ensure_ascii=False)[:2000]}
+Detail constats: {json.dumps(findings, ensure_ascii=False)[:4000]}
 Entites anonymisees: {json.dumps(entity_summary, ensure_ascii=False)}
 
 {_GUARDRAILS}

@@ -128,7 +128,7 @@ async def ai_summary(
 
     ai_payload = {
         "document_id": str(document.id),
-        "anonymized_text": anonymized_text[:8000],
+        "anonymized_text": anonymized_text[:14000],
         "user_question": question.strip() or None,
     }
 
@@ -183,7 +183,7 @@ async def ai_stream(
     prompt_question = question.strip() or "Fais une synthèse courte et claire de ce document."
     user_content = (
         f"Voici le texte anonymisé d'un document confidentiel:\n\n"
-        f"{anonymized_text[:6000]}\n\n"
+        f"{anonymized_text[:12000]}\n\n"
         f"Question: {prompt_question}"
     )
 
