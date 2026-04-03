@@ -277,7 +277,9 @@ async def _get_docling_structured(document: "Document") -> dict:
         )
         from app.services.docling_service import get_structured_content
         return await get_structured_content(file_bytes, document.extension)
-    except Exception:
+    except Exception as exc:
+        import logging
+        logging.getLogger(__name__).warning("docling_structured_skipped: %s", str(exc)[:200])
         return {"tables": [], "sections": [], "available": False}
 
 
