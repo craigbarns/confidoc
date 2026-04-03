@@ -261,11 +261,6 @@ async def ai_extract(
 # ──────────────────────────────────────────────────────────────────────
 
 
-@router.post(
-    "/review/{document_id}",
-    response_class=StreamingResponse,
-    summary="Analyse documentaire autonome (agent LangGraph multi-etapes)",
-)
 async def _get_docling_structured(document: "Document") -> dict:
     """Try to extract structured data (tables, sections) via Docling."""
     try:
@@ -283,6 +278,11 @@ async def _get_docling_structured(document: "Document") -> dict:
         return {"tables": [], "sections": [], "available": False}
 
 
+@router.post(
+    "/review/{document_id}",
+    response_class=StreamingResponse,
+    summary="Analyse documentaire autonome (agent LangGraph multi-etapes)",
+)
 async def ai_review(
     document_id: str,
     current_user: CurrentUser,
