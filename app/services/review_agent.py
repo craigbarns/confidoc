@@ -48,11 +48,32 @@ REGLES ABSOLUES (non negociables):
 """
 
 
+def _build_docling_context(state: dict) -> str:
+    """Build extra context from Docling structured extraction (tables, sections)."""
+    parts: list[str] = []
+    tables = state.get("docling_tables") or []
+    sections = state.get("docling_sections") or []
+
+    if sections:
+        headings = " > ".join(s.get("title", "") for s in sections[:15])
+        parts.append(f"STRUCTURE DU DOCUMENT (sections): {headings}")
+
+    if tables:
+        parts.append(f"TABLEAUX DETECTES ({len(tables)}):")
+        for i, tbl in enumerate(tables[:5], 1):
+            truncated = tbl[:800] if len(tbl) > 800 else tbl
+            parts.append(f"--- Tableau {i} ---\n{truncated}")
+
+    return "\n".join(parts)
+
+
 # ── Agent State ─────────────────────────────────────────────────────────
 
 class ReviewState(TypedDict, total=False):
     anonymized_text: str
     entity_summary: dict[str, int]
+    docling_tables: list[str]
+    docling_sections: list[dict[str, Any]]
     doc_type: str
     doc_type_confidence: float
     extracted_data: dict[str, Any]
@@ -156,9 +177,11 @@ async def extract_node(state: ReviewState) -> ReviewState:
     text = state["anonymized_text"][:6000]
     doc_type = state.get("doc_type", "autre")
     entity_summary = state.get("entity_summary", {})
+    docling_ctx = _build_docling_context(state)
 
     prompt = f"""Tu analyses un document de type: {doc_type}
 Entites detectees: {json.dumps(entity_summary, ensure_ascii=False)}
+{f"DONNEES STRUCTUREES (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Extrais les donnees structurees cles de ce document.
 
@@ -196,9 +219,11 @@ async def analyze_node(state: ReviewState) -> ReviewState:
     doc_type = state.get("doc_type", "autre")
     extracted = state.get("extracted_data", {})
     text = state["anonymized_text"][:4000]
+    docling_ctx = _build_docling_context(state)
 
     prompt = f"""Tu analyses un document de type: {doc_type}
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:2000]}
+{f"DONNEES STRUCTUREES (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Effectue une analyse metier factuelle:
 1. Verifie la coherence des montants entre eux
@@ -245,10 +270,12 @@ async def findings_node(state: ReviewState) -> ReviewState:
     extracted = state.get("extracted_data", {})
     analysis = state.get("analysis", {})
     text = state["anonymized_text"][:4000]
+    docling_ctx = _build_docling_context(state)
 
     prompt = f"""Document de type: {doc_type}
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:1500]}
 Analyse precedente: {json.dumps(analysis, ensure_ascii=False)[:1500]}
+{f"TABLEAUX ET STRUCTURE (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Tu dois produire des constats structures selon EXACTEMENT 4 categories.
 
@@ -523,12 +550,15 @@ def _reset_graph():
 async def run_review(
     anonymized_text: str,
     entity_summary: dict[str, int] | None = None,
+    **kwargs: Any,
 ) -> dict[str, Any]:
     graph = get_review_graph()
 
     initial_state: ReviewState = {
         "anonymized_text": anonymized_text,
         "entity_summary": entity_summary or {},
+        "docling_tables": kwargs.get("docling_tables", []),
+        "docling_sections": kwargs.get("docling_sections", []),
         "doc_type": "",
         "doc_type_confidence": 0.0,
         "extracted_data": {},
@@ -562,6 +592,7 @@ async def run_review(
 async def run_review_streaming(
     anonymized_text: str,
     entity_summary: dict[str, int] | None = None,
+    **kwargs: Any,
 ):
     """Yield step updates as they complete (SSE-friendly)."""
     graph = get_review_graph()
@@ -569,6 +600,8 @@ async def run_review_streaming(
     initial_state: ReviewState = {
         "anonymized_text": anonymized_text,
         "entity_summary": entity_summary or {},
+        "docling_tables": kwargs.get("docling_tables", []),
+        "docling_sections": kwargs.get("docling_sections", []),
         "doc_type": "",
         "doc_type_confidence": 0.0,
         "extracted_data": {},

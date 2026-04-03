@@ -13,7 +13,8 @@ from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
-from app.services.mistral_ocr_service import extract_text_from_file
+from app.services.docling_service import extract_text_from_file_docling
+from app.services.mistral_ocr_service import extract_text_from_file as extract_text_mistral_ocr
 from app.services.llm_anonymization_service import anonymize_document_full
 from app.services.dictionary_anonymization_service import anonymize_document_dictionary
 
@@ -33,8 +34,8 @@ async def build_extraction_ocr(
     document.status = DocumentStatus.PROCESSING
     await db.flush()
     
-    # Extraction OCR Mistral
-    original_text, extraction_meta = await extract_text_from_file(
+    # Extraction Docling (structured parsing) with Mistral OCR fallback
+    original_text, extraction_meta = await extract_text_from_file_docling(
         file_content, document.extension
     )
     

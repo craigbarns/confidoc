@@ -48,6 +48,9 @@ dependencies = [
 
     # LangGraph agent
     "langgraph>=0.2.0",
+
+    # Docling — advanced document parsing (tables, structure, multi-format)
+    "docling>=2.0.0",
 ]
 
 [project.optional-dependencies]

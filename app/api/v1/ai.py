@@ -266,6 +266,21 @@ async def ai_extract(
     response_class=StreamingResponse,
     summary="Analyse documentaire autonome (agent LangGraph multi-etapes)",
 )
+async def _get_docling_structured(document: "Document") -> dict:
+    """Try to extract structured data (tables, sections) via Docling."""
+    try:
+        from app.services.storage_service import read_bytes
+        file_bytes = (
+            document.raw_content
+            if document.raw_content
+            else read_bytes(document.storage_backend, document.storage_key)
+        )
+        from app.services.docling_service import get_structured_content
+        return await get_structured_content(file_bytes, document.extension)
+    except Exception:
+        return {"tables": [], "sections": [], "available": False}
+
+
 async def ai_review(
     document_id: str,
     current_user: CurrentUser,
@@ -305,6 +320,8 @@ async def ai_review(
 
     from app.services.review_agent import run_review_streaming
 
+    docling_data = await _get_docling_structured(document)
+
     async def _event_stream():
         # Signal start
         yield "data: " + json.dumps({
@@ -315,7 +332,12 @@ async def ai_review(
         }, ensure_ascii=False) + "\n\n"
 
         try:
-            async for event in run_review_streaming(anonymized_text, entity_summary):
+            async for event in run_review_streaming(
+                anonymized_text,
+                entity_summary,
+                docling_tables=docling_data.get("tables", []),
+                docling_sections=docling_data.get("sections", []),
+            ):
                 yield "data: " + json.dumps(event, ensure_ascii=False, default=str) + "\n\n"
         except Exception as exc:
             yield "data: " + json.dumps({
@@ -368,7 +390,14 @@ async def ai_review_sync(
 
     from app.services.review_agent import run_review
 
-    result = await run_review(anonymized_text, entity_summary)
+    docling_data = await _get_docling_structured(document)
+
+    result = await run_review(
+        anonymized_text,
+        entity_summary,
+        docling_tables=docling_data.get("tables", []),
+        docling_sections=docling_data.get("sections", []),
+    )
 
     # Remove raw text from response
     result.pop("anonymized_text", None)
