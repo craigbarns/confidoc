@@ -4,7 +4,7 @@ import asyncio
 import uuid
 import hashlib
 import re
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 import io
 from io import BytesIO
 from types import SimpleNamespace
@@ -423,7 +423,6 @@ async def get_dashboard_stats(
     recent_activity: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
-        from datetime import timedelta
         since = datetime.now(timezone.utc) - timedelta(days=7)
         activity_result = await db.execute(
             select(
@@ -465,6 +464,115 @@ async def get_dashboard_stats(
         "recent_activity": recent_activity,
         "trashed_documents": trashed,
     }
+
+
+# ──────────────────────────────────────────────────────────────────────
+# STATUS SUMMARY — Route statique, avant /{document_id}
+# ──────────────────────────────────────────────────────────────────────
+
+
+@router.get(
+    "/status-summary",
+    status_code=status.HTTP_200_OK,
+    summary="Résumé des statuts sur une période",
+)
+async def get_documents_status_summary(
+    current_user: CurrentUser,
+    db: DbSession,
+    days: int = Query(
+        default=30,
+        ge=1,
+        le=365,
+        description="Nombre de jours pour la fenêtre temporelle (1–365)",
+    ),
+) -> dict:
+    """Agrégats par statut sur les documents créés dans la fenêtre, plus uploads 24h."""
+    user_id = current_user.id
+    now = datetime.now(timezone.utc)
+    since = now - timedelta(days=days)
+    last_24h = now - timedelta(hours=24)
+
+    result = await db.execute(
+        select(Document.status, func.count())
+        .where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+            Document.created_at >= since,
+        )
+        .group_by(Document.status)
+    )
+    status_counts: dict[str, int] = {}
+    for row in result.all():
+        st = row[0]
+        key = st.value if hasattr(st, "value") else str(st)
+        status_counts[key] = row[1]
+
+    total_documents = sum(status_counts.values())
+
+    recent_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+            Document.created_at >= last_24h,
+        )
+    )
+    recent_uploads_24h = recent_result.scalar() or 0
+
+    buckets = {
+        "full_ready": {
+            "status": DocumentStatus.READY.value,
+            "label": "Prêt (anonymisation complète)",
+            "count": status_counts.get(DocumentStatus.READY.value, 0),
+        },
+        "processing": {
+            "status": DocumentStatus.PROCESSING.value,
+            "label": "En traitement",
+            "count": status_counts.get(DocumentStatus.PROCESSING.value, 0),
+        },
+        "uploaded": {
+            "status": DocumentStatus.UPLOADED.value,
+            "label": "Téléversé",
+            "count": status_counts.get(DocumentStatus.UPLOADED.value, 0),
+        },
+        "failed": {
+            "status": DocumentStatus.FAILED.value,
+            "label": "Échec",
+            "count": status_counts.get(DocumentStatus.FAILED.value, 0),
+        },
+    }
+
+    return {
+        "period_days": days,
+        "total_documents": total_documents,
+        "buckets": buckets,
+        "status_counts": status_counts,
+        "recent_uploads_24h": recent_uploads_24h,
+        "last_updated": now.isoformat(),
+    }
+
+
+@router.delete(
+    "/all",
+    status_code=status.HTTP_200_OK,
+    summary="Supprimer tous mes documents",
+)
+async def delete_all_my_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    result = await db.execute(
+        select(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+        )
+    )
+    docs = list(result.scalars().all())
+    now = datetime.now(timezone.utc)
+    for doc in docs:
+        doc.is_deleted = True
+        doc.deleted_at = now
+    await db.commit()
+    return {"deleted_count": len(docs)}
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -1335,30 +1443,6 @@ async def export_redacted_pdf(
             status_code=500,
             content={"detail": f"Export PDF failed: {type(exc).__name__}: {str(exc)[:500]}"},
         )
-
-
-@router.delete(
-    "/all",
-    status_code=status.HTTP_200_OK,
-    summary="Supprimer tous mes documents",
-)
-async def delete_all_my_documents(
-    current_user: CurrentUser,
-    db: DbSession,
-) -> dict:
-    result = await db.execute(
-        select(Document).where(
-            Document.uploaded_by_user_id == current_user.id,
-            Document.is_deleted.is_(False),
-        )
-    )
-    docs = list(result.scalars().all())
-    now = datetime.now(timezone.utc)
-    for doc in docs:
-        doc.is_deleted = True
-        doc.deleted_at = now
-    await db.commit()
-    return {"deleted_count": len(docs)}
 
 
 @router.delete(
