@@ -19,6 +19,8 @@ let activeStream = null; // AbortController pour le streaming SSE
 let currentRiskLevel = null; // RGPD risk level from last anonymization
 let originalTextCache = {};
 let bgPollers = {};
+let uploadQueue = [];
+let isUploadProcessing = false;
 
 const $ = id => document.getElementById(id);
 const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
@@ -76,8 +78,11 @@ function updateThemeBtn() {
   const btn = $("btn-theme");
   if (!btn) return;
   const isLight = document.documentElement.classList.contains("theme-light");
-  btn.textContent = isLight ? "🌙" : "☀️";
+  btn.textContent = "";
+  btn.classList.toggle("is-light", isLight);
   btn.title = isLight ? "Mode sombre" : "Mode clair";
+  btn.setAttribute("role", "switch");
+  btn.setAttribute("aria-checked", isLight ? "true" : "false");
 }
 
 // ── API helpers ────────────────────────────────────────────────────────
@@ -199,12 +204,17 @@ function closeSidebar() {
 // ── Toast ──────────────────────────────────────────────────────────────
 
 function toast(msg, type = "info") {
-  const el = $("toast");
-  el.textContent = msg;
+  const container = $("toast-container");
+  if (!container) return;
+  const el = document.createElement("div");
   el.className = `toast${type === "success" ? " success" : type === "error" ? " error" : ""}`;
-  el.style.display = "block";
-  clearTimeout(el._timer);
-  el._timer = setTimeout(() => { el.style.display = "none"; }, 4000);
+  el.textContent = String(msg || "");
+  container.prepend(el);
+  while (container.children.length > 5) container.removeChild(container.lastElementChild);
+  setTimeout(() => {
+    el.classList.add("hide");
+    setTimeout(() => el.remove(), 250);
+  }, 4000);
 }
 
 // ── Confirm dialog ─────────────────────────────────────────────────────
@@ -244,6 +254,10 @@ function setStep(n) {
   const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
   if (el) el.classList.add("active");
+}
+
+function goHome() {
+  showDashboard();
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────
@@ -305,7 +319,7 @@ async function initApp(email) {
 
   await loadProviderInfo();
   updateHeaderContext();
-  setStep(1);
+  showDashboard();
   restoreFilterState();
   await loadClientSuggestions();
   await loadDocList();
@@ -736,6 +750,55 @@ function uploadWithProgress(formData, path, fillEl, statusEl) {
 
 // ── Upload ─────────────────────────────────────────────────────────────
 
+function renderUploadQueue() {
+  const el = $("upload-queue");
+  if (!el) return;
+  if (!uploadQueue.length && !isUploadProcessing) {
+    el.style.display = "none";
+    el.innerHTML = "";
+    return;
+  }
+  el.style.display = "";
+  el.innerHTML = uploadQueue.map((item, idx) => {
+    return `<div class="upload-queue-item ${item.status}">
+      <span>${idx + 1}. ${escapeHtml(item.file.name)}</span>
+      <strong>${item.status_label}</strong>
+    </div>`;
+  }).join("");
+}
+
+function enqueueUpload(files) {
+  files.forEach((file) => {
+    uploadQueue.push({ file, status: "queued", status_label: "En attente" });
+  });
+  renderUploadQueue();
+  processUploadQueue();
+}
+
+async function processUploadQueue() {
+  if (isUploadProcessing) return;
+  isUploadProcessing = true;
+  while (uploadQueue.length) {
+    const item = uploadQueue[0];
+    item.status = "uploading";
+    item.status_label = "Envoi...";
+    renderUploadQueue();
+    try {
+      await uploadFile(item.file);
+      item.status = "done";
+      item.status_label = "Terminé";
+    } catch (e) {
+      item.status = "error";
+      item.status_label = "Échec";
+    }
+    renderUploadQueue();
+    await new Promise((r) => setTimeout(r, 250));
+    uploadQueue.shift();
+  }
+  isUploadProcessing = false;
+  renderUploadQueue();
+}
+
 async function uploadFile(file) {
   const zone = $("upload-zone");
   const progress = $("upload-progress");
@@ -756,7 +819,7 @@ async function uploadFile(file) {
     fill.style.width = "0";
     toast("Le nom client est obligatoire à l'upload.", "error");
     $("upload-client-name")?.focus();
-    return;
+    throw new Error("client_name_required");
   }
 
   try {
@@ -791,6 +854,7 @@ async function uploadFile(file) {
     progress.style.display = "none";
     fill.style.width = "0";
     toast(`Erreur upload: ${e.message}`, "error");
+    throw e;
   }
 }
 
@@ -804,10 +868,10 @@ function resetAnonPanel() {
   $("anon-empty").querySelector("p").innerHTML =
     "Sélectionnez un document dans la liste<br>ou uploadez-en un nouveau.";
   $("btn-anonymize").disabled = false;
-  // Reset onglet original
+  // Reset vue split
   $("preview-original-text").textContent = "";
   $("original-loading").style.display = "none";
-  switchTab("anonymized");
+  $("preview-diff-text").innerHTML = "";
   updatePipelineTimeline({});
 }
 
@@ -838,6 +902,7 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
       `<span class="stat-chip" style="background: var(--bg-hover); border-color: var(--accent);">${type}: ${cnt}</span>`
     ).join("");
   }
+  renderEntityLegend(summary);
 
   // Store risk level globally for export gating
   currentRiskLevel = risk ? risk.level : null;
@@ -861,8 +926,11 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   } else if (riskEl) {
     riskEl.style.display = "none";
   }
-
-  switchTab("anonymized");
+  const score = risk?.score ?? null;
+  renderRiskMeter(score);
+  if (currentDocId) {
+    loadOriginalText(currentDocId).then(() => loadDiffView());
+  }
 }
 
 function highlightTags(text) {
@@ -986,21 +1054,32 @@ async function loadOriginalText(docId) {
   }
 }
 
-// ── Preview tabs ───────────────────────────────────────────────────────
+function renderEntityLegend(summary = {}) {
+  const el = $("entity-legend");
+  if (!el) return;
+  const entries = Object.entries(summary || {});
+  if (!entries.length) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = entries
+    .sort((a, b) => b[1] - a[1])
+    .map(([type, cnt]) => `<span class="entity-pill">${escapeHtml(type)} (${cnt})</span>`)
+    .join("");
+}
 
-function switchTab(tabName) {
-  document.querySelectorAll(".tab").forEach(t =>
-    t.classList.toggle("active", t.dataset.tab === tabName)
-  );
-  $("tab-anonymized").style.display = tabName === "anonymized" ? "" : "none";
-  $("tab-original").style.display = tabName === "original" ? "" : "none";
-
-  // Chargement lazy du texte original
-  const diffTab = $("tab-diff");
-  if (diffTab) diffTab.style.display = tabName === "diff" ? "" : "none";
-
-  if (tabName === "original" && currentDocId) loadOriginalText(currentDocId);
-  if (tabName === "diff" && currentDocId) loadDiffView();
+function renderRiskMeter(score) {
+  const container = $("risk-indicator");
+  if (!container || typeof score !== "number") return;
+  let meter = $("doc-risk-meter");
+  if (!meter) {
+    meter = document.createElement("div");
+    meter.id = "doc-risk-meter";
+    meter.className = "doc-risk-meter";
+    container.appendChild(meter);
+  }
+  const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+  meter.innerHTML = `<span>Sensibilité</span><div class="doc-risk-meter-bar"><div style="width:${pct}%"></div></div><strong>${pct}%</strong>`;
 }
 
 
@@ -1525,9 +1604,12 @@ async function loadDashboard() {
   if (content) content.style.display = "none";
 
   try {
-    const data = await apiFetch("/documents/stats/dashboard");
+    const [data, summary] = await Promise.all([
+      apiFetch("/documents/stats/dashboard"),
+      apiFetch("/documents/status-summary?days=30"),
+    ]);
     dashboardLoaded = true;
-    renderDashboard(data);
+    renderDashboard(data, summary);
   } catch (e) {
     console.warn("loadDashboard failed:", e);
     if (content) {
@@ -1539,7 +1621,7 @@ async function loadDashboard() {
   }
 }
 
-function renderDashboard(data) {
+function renderDashboard(data, summary = {}) {
   const content = $("dash-content");
   if (!content) return;
   content.style.display = "";
@@ -1550,6 +1632,15 @@ function renderDashboard(data) {
   animateNumber($("dash-total-entities"), data.total_entities_masked || 0);
   animateNumber($("dash-ready-count"), sc.ready || 0);
   animateNumber($("dash-trashed"), data.trashed_documents || 0);
+  animateNumber($("dash-bucket-ready"), summary.ready ?? sc.ready ?? 0);
+  animateNumber($("dash-bucket-processing"), summary.processing ?? sc.processing ?? 0);
+  animateNumber($("dash-bucket-uploaded"), summary.uploaded ?? sc.uploaded ?? 0);
+  animateNumber($("dash-bucket-failed"), summary.failed ?? sc.failed ?? 0);
+  animateNumber($("dash-uploads-24h"), summary.uploads_24h ?? 0);
+  const total = Math.max(0, summary.total ?? data.total_documents ?? 0);
+  const ready = Math.max(0, summary.ready ?? sc.ready ?? 0);
+  if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
+  if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
 
   // Risk distribution
   const riskEl = $("dash-risk-chart");
@@ -1634,6 +1725,16 @@ function renderDashboard(data) {
         <div class="dash-activity-bar" style="height:${h}px"></div>
         <span class="dash-activity-label">${day}</span>
       </div>`;
+    }).join("");
+  }
+  const trendEl = $("dash-trend-7d");
+  const trendData = summary.created_last_7_days || [];
+  if (trendEl) {
+    const max = Math.max(1, ...trendData.map((d) => d.count || 0));
+    trendEl.innerHTML = trendData.map((d) => {
+      const h = Math.max(2, ((d.count || 0) / max) * 80);
+      const day = d.date ? new Date(d.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "";
+      return `<div class="dash-activity-col"><div class="dash-activity-bar" style="height:${h}px"></div><span class="dash-activity-label">${day}</span></div>`;
     }).join("");
   }
 }
@@ -1953,9 +2054,16 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Dashboard
   if ($("btn-dashboard")) $("btn-dashboard").addEventListener("click", showDashboard);
+  if ($("btn-home")) $("btn-home").addEventListener("click", goHome);
+  if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", () => setStep(1));
+  if ($("btn-dash-list")) $("btn-dash-list").addEventListener("click", () => document.querySelector(".sidebar")?.classList.add("open"));
   if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {
     dashboardLoaded = false;
     loadDashboard();
+  });
+  [1, 2, 3].forEach((n) => {
+    const stepBtn = $(`step-${n}`);
+    if (stepBtn) stepBtn.addEventListener("click", () => setStep(n));
   });
 
   // Sidebar: nouveau document
@@ -2003,14 +2111,15 @@ document.addEventListener("DOMContentLoaded", () => {
   zone.addEventListener("drop", e => {
     e.preventDefault();
     zone.classList.remove("drag-over");
-    const f = e.dataTransfer.files[0];
-    if (f) uploadFile(f);
+    const files = Array.from(e.dataTransfer.files || []);
+    if (files.length) enqueueUpload(files);
   });
 
   // Upload: file input
   const fileInput = $("file-input");
   fileInput.addEventListener("change", () => {
-    if (fileInput.files[0]) uploadFile(fileInput.files[0]);
+    const files = Array.from(fileInput.files || []);
+    if (files.length) enqueueUpload(files);
     fileInput.value = "";
   });
 
@@ -2023,10 +2132,14 @@ document.addEventListener("DOMContentLoaded", () => {
   // Discussion directe → step 3 sans re-valider
   $("btn-go-ai").addEventListener("click", goToChat);
 
-  // Onglets preview
-  document.querySelectorAll(".tab").forEach(tab => {
-    tab.addEventListener("click", () => switchTab(tab.dataset.tab));
-  });
+  if ($("btn-copy-anonymized")) {
+    $("btn-copy-anonymized").addEventListener("click", async () => {
+      const txt = $("preview-anon-text")?.textContent || "";
+      if (!txt.trim()) return;
+      try { await navigator.clipboard.writeText(txt); toast("Texte anonymisé copié", "success"); }
+      catch (_e) { toast("Copie impossible", "error"); }
+    });
+  }
 
   // Chat IA
   $("btn-send").addEventListener("click", sendMessage);
@@ -2074,6 +2187,15 @@ document.addEventListener("DOMContentLoaded", () => {
   document.querySelectorAll(".sidebar .doc-item").forEach(el => {
     el.addEventListener("click", closeSidebar);
   });
+  document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nav = btn.dataset.nav;
+      if (nav === "dashboard") showDashboard();
+      if (nav === "list") document.querySelector(".sidebar")?.classList.add("open");
+      if (nav === "upload") setStep(1);
+      if (nav === "ai") setStep(3);
+    });
+  });
 
   // Notification permission
   if ("Notification" in window && Notification.permission === "default") {
@@ -2093,6 +2215,24 @@ document.addEventListener("DOMContentLoaded", () => {
 });
 
 document.addEventListener("keydown", (e) => {
+  if (e.key === "Escape") {
+    closeSidebar();
+    if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
+    closeReview();
+  }
+  const mod = e.metaKey || e.ctrlKey;
+  if (mod && e.shiftKey && e.key.toLowerCase() === "u") {
+    e.preventDefault();
+    currentDocId = null;
+    setStep(1);
+    $("upload-client-name")?.focus();
+    return;
+  }
+  if (mod && e.key.toLowerCase() === "k") {
+    e.preventDefault();
+    $("filter-search")?.focus();
+    return;
+  }
   if (e.key !== "/") return;
   const target = e.target;
   const isInput = target && (target.tagName === "INPUT" || target.tagName === "TEXTAREA");

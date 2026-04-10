@@ -63,20 +63,20 @@
 
   <!-- STEPS -->
   <div class="pipeline">
-    <div class="step active" id="step-1">
+    <button class="step active" id="step-1" type="button">
       <div class="step-num">1</div>
       <div class="step-label">Upload</div>
-    </div>
+    </button>
     <div class="step-arrow">→</div>
-    <div class="step" id="step-2">
+    <button class="step" id="step-2" type="button">
       <div class="step-num">2</div>
       <div class="step-label">Anonymisation</div>
-    </div>
+    </button>
     <div class="step-arrow">→</div>
-    <div class="step" id="step-3">
+    <button class="step" id="step-3" type="button">
       <div class="step-num">3</div>
       <div class="step-label">Revue &amp; IA</div>
-    </div>
+    </button>
   </div>
 
   <div class="app-body">
@@ -87,7 +87,10 @@
     <aside class="sidebar">
       <div class="sidebar-header">
         <h2>Documents <span id="doc-count" class="doc-count"></span></h2>
-        <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
+        <div class="sidebar-header-actions">
+          <button id="btn-home" class="btn btn-ghost btn-sm">Accueil</button>
+          <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
+        </div>
       </div>
       <div class="sidebar-filters">
         <input id="filter-client" list="clients-suggestions" class="input-sm" type="text" placeholder="Filtrer par client…" />
@@ -119,7 +122,11 @@
       <div id="panel-dashboard" class="panel">
         <div class="panel-header">
           <h2>Dashboard</h2>
-          <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">Actualiser</button>
+          <div class="panel-actions">
+            <button id="btn-dash-upload" class="btn btn-primary btn-sm">Uploader</button>
+            <button id="btn-dash-list" class="btn btn-ghost btn-sm">Voir la liste</button>
+            <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">Actualiser</button>
+          </div>
         </div>
         <div id="dash-loading" class="loading-state" style="display:none">
           <div class="spinner"></div>
@@ -147,6 +154,24 @@
               <div class="dash-kpi-num" id="dash-trashed">0</div>
               <div class="dash-kpi-label">Corbeille</div>
             </div>
+          </div>
+          <div class="dash-buckets">
+            <div class="dash-bucket"><span>Prêts IA</span><strong id="dash-bucket-ready">0</strong></div>
+            <div class="dash-bucket"><span>Traitement</span><strong id="dash-bucket-processing">0</strong></div>
+            <div class="dash-bucket"><span>Uploadés</span><strong id="dash-bucket-uploaded">0</strong></div>
+            <div class="dash-bucket"><span>Échecs</span><strong id="dash-bucket-failed">0</strong></div>
+            <div class="dash-bucket"><span>Uploads 24h</span><strong id="dash-uploads-24h">0</strong></div>
+          </div>
+          <div class="dash-ready-progress">
+            <div class="dash-ready-progress-head">
+              <span>Prêts / Total</span>
+              <strong id="dash-ready-ratio">0 / 0</strong>
+            </div>
+            <div class="progress-bar"><div id="dash-ready-fill" class="progress-fill"></div></div>
+          </div>
+          <div class="dash-trend">
+            <h3>Tendance docs créés (7 jours)</h3>
+            <div id="dash-trend-7d" class="dash-activity-bars"></div>
           </div>
 
           <div class="dash-charts-row">
@@ -185,7 +210,7 @@
           <div class="upload-icon">📄</div>
           <p class="upload-main">Glissez votre fichier ici ou</p>
           <label class="btn btn-secondary" for="file-input">Choisir un fichier</label>
-          <input id="file-input" type="file" accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
+          <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
           <p class="upload-hint">PDF, PNG, JPG, TIFF — max 50 MB</p>
         </div>
         <div id="upload-progress" style="display:none">
@@ -198,6 +223,7 @@
           <span class="format-badge">🖼 JPG</span>
           <span class="format-badge">🖼 TIFF</span>
         </div>
+        <div id="upload-queue" class="upload-queue" style="display:none"></div>
       </div>
 
       <!-- PANEL 2: ANONYMISATION -->
@@ -266,28 +292,30 @@
             </div>
           </div>
           <div class="text-preview">
-            <div class="preview-tabs" role="tablist">
-              <button class="tab active" data-tab="anonymized" role="tab" aria-selected="true">Texte anonymisé</button>
-              <button class="tab" data-tab="original" role="tab" aria-selected="false">Original ⚠️</button>
-              <button class="tab" data-tab="diff" role="tab" aria-selected="false">Comparaison ↔</button>
+            <div id="anon-split-view" class="split">
+              <div class="split-pane">
+                <h4>Original ⚠️</h4>
+                <div id="original-loading" class="loading-state" style="display:none">
+                  <div class="spinner spinner-sm"></div>
+                  <p>Chargement du texte original…</p>
+                </div>
+                <pre id="preview-original-text" class="preview-text"></pre>
+              </div>
+              <div class="split-pane">
+                <div class="split-pane-header">
+                  <h4>Anonymisé</h4>
+                  <button id="btn-copy-anonymized" class="btn btn-ghost btn-sm">Copier anonymisé</button>
+                </div>
+                <pre id="preview-anon-text" class="preview-text"></pre>
+              </div>
             </div>
-            <div id="tab-anonymized" class="tab-content">
-              <pre id="preview-anon-text" class="preview-text"></pre>
-            </div>
-            <div id="tab-diff" class="tab-content" style="display:none">
+            <div id="entity-legend" class="entity-legend"></div>
+            <div id="tab-diff" class="tab-content">
               <div class="diff-legend">
                 <span class="diff-legend-item"><span class="diff-dot diff-dot-del"></span> Original</span>
                 <span class="diff-legend-item"><span class="diff-dot diff-dot-ins"></span> Anonymisé</span>
               </div>
               <div id="preview-diff-text" class="preview-text" style="max-height:420px;overflow-y:auto;"></div>
-            </div>
-            <div id="tab-original" class="tab-content" style="display:none">
-              <div class="warning-banner">⚠️ Ce texte contient des données personnelles non anonymisées.</div>
-              <div id="original-loading" class="loading-state" style="display:none">
-                <div class="spinner spinner-sm"></div>
-                <p>Chargement du texte original…</p>
-              </div>
-              <pre id="preview-original-text" class="preview-text"></pre>
             </div>
           </div>
         </div>
@@ -386,7 +414,13 @@
 </div>
 
 <!-- TOAST -->
-<div id="toast" class="toast" role="status" aria-live="polite" style="display:none"></div>
+<div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
+<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Navigation principale mobile">
+  <button class="mobile-nav-btn" data-nav="dashboard">Accueil</button>
+  <button class="mobile-nav-btn" data-nav="list">Docs</button>
+  <button class="mobile-nav-btn" data-nav="upload">Upload</button>
+  <button class="mobile-nav-btn" data-nav="ai">IA</button>
+</nav>
 
 <script src="/static/js/app.js"></script>
 </body>
