@@ -1,5 +1,5 @@
-const CACHE_NAME = "confidoc-v1";
-const SHELL = ["/ui", "/static/css/style.css", "/static/js/app.js"];
+const CACHE_NAME = "confidoc-v2-ui-refresh";
+const SHELL = ["/ui", "/static/css/style.css", "/static/js/app.js", "/static/manifest.json"];
 
 self.addEventListener("install", (e) => {
   e.waitUntil(caches.open(CACHE_NAME).then((c) => c.addAll(SHELL)));

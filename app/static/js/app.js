@@ -2204,7 +2204,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Service Worker
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/sw.js").catch(() => {});
+    navigator.serviceWorker.register("/static/sw.js?v=2").catch(() => {});
   }
 
   // Reprendre la session si token en sessionStorage
