@@ -1801,6 +1801,32 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
 /* SPA enhancements */
 .sidebar-header-actions { display: flex; gap: 8px; align-items: center; }
 .step { appearance: none; background: transparent; }
+.app-body { min-width: 0; }
+.sidebar {
+  width: 260px;
+  min-width: 260px;
+  max-width: 260px;
+}
+.main-panel {
+  min-width: 0;
+}
+.sidebar-header {
+  flex-wrap: wrap;
+  align-items: stretch;
+}
+.sidebar-header h2 {
+  width: 100%;
+  justify-content: flex-start;
+}
+.sidebar-header-actions {
+  width: 100%;
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+}
+.sidebar-header-actions .btn {
+  justify-content: center;
+}
 
 .dash-buckets {
   display: grid;
@@ -1870,6 +1896,14 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
 
 .mobile-bottom-nav { display: none; }
 @media (max-width: 768px) {
+  .sidebar {
+    min-width: 280px;
+    max-width: 280px;
+  }
+  .sidebar-header h2,
+  .sidebar-header-actions {
+    width: 100%;
+  }
   .split { grid-template-columns: 1fr; }
   .mobile-bottom-nav {
     display: grid;
