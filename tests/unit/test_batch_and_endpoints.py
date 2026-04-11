@@ -38,3 +38,9 @@ class TestRoutes:
         from app.api.v1.uploads import router
         routes = [r.path for r in router.routes]
         assert "/batch" in routes
+
+    def test_copilot_compare_route_exists(self):
+        from app.api.v1.copilot import router
+
+        routes = [r.path for r in router.routes]
+        assert "/{document_id}/compare" in routes

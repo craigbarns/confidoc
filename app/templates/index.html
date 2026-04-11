@@ -337,13 +337,44 @@
           </div>
         </div>
 
+        <div class="cabinet-tools dash-chart-card">
+          <h3>Outils cabinet</h3>
+          <div class="cabinet-tools-row">
+            <label class="cabinet-label" for="cabinet-doc-type">Type de pièce</label>
+            <select id="cabinet-doc-type" class="select-sm cabinet-select" title="Adapte le contexte métier des questions IA">
+              <option value="generique">Générique</option>
+              <option value="bilan">Bilan / comptes annuels</option>
+              <option value="liasse">Liasse fiscale</option>
+              <option value="urssaf">URSSAF / social</option>
+              <option value="banque">Relevé bancaire</option>
+              <option value="paie">Paie / DS</option>
+            </select>
+            <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm" title="Synthèse multi-étapes (LangGraph)">Revue associé</button>
+          </div>
+          <p class="cabinet-hint">Le type de pièce enrichit le contexte envoyé à l’IA (chat et Copilot).</p>
+          <div class="cabinet-tools-row cabinet-compare">
+            <label class="cabinet-label" for="compare-doc-select">Comparaison N / N-1</label>
+            <select id="compare-doc-select" class="select-sm cabinet-select cabinet-select-wide">
+              <option value="">Deuxième document…</option>
+            </select>
+            <button type="button" id="btn-copilot-compare" class="btn btn-ghost btn-sm">Comparer</button>
+          </div>
+        </div>
+
         <div class="quick-actions">
           <button class="quick-btn" data-q="Fais un résumé de ce document.">📝 Résumé</button>
           <button class="quick-btn" data-q="Quels sont les points clés ?">🔑 Points clés</button>
           <button class="quick-btn" data-q="Y a-t-il des anomalies ou alertes ?">⚠️ Anomalies</button>
           <button class="quick-btn" data-q="Donne-moi les chiffres principaux.">📊 Chiffres</button>
+          <button id="btn-copilot-mode" class="quick-btn" data-on="false">🤖 Copilot: OFF</button>
           <button id="btn-report-mode" class="quick-btn" data-on="false">🧱 Mode rapport: OFF</button>
           <button id="btn-review-agent" class="quick-btn quick-btn-accent" title="Anonymise puis synthese en 5 blocs">Analyser ce document</button>
+        </div>
+        <div id="copilot-insights" class="dash-chart-card" style="display:none; margin-bottom:12px;">
+          <h3>ConfiDoc Copilot</h3>
+          <div><strong>Confiance:</strong> <span id="copilot-confidence">—</span></div>
+          <div id="copilot-warnings" class="sidebar-stats"></div>
+          <div id="copilot-citations" class="dash-entity-list" style="margin-top:10px;"></div>
         </div>
 
         <div class="ai-insights">

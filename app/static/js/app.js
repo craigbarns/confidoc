@@ -11,6 +11,23 @@ let currentDocSize = 0;
 let currentProvider = "—";
 let latestAssistantText = "";
 let reportMode = false;
+let copilotMode = false;
+let selectedCabinetDocType = "generique";
+let lastDocsList = [];
+
+const CABINET_DOC_TYPE_PREFIX = {
+  generique: "",
+  bilan: "[Contexte cabinet — document de type bilan / comptes annuels.] ",
+  liasse: "[Contexte cabinet — document de type liasse fiscale.] ",
+  urssaf: "[Contexte cabinet — document URSSAF ou social.] ",
+  banque: "[Contexte cabinet — relevé ou document bancaire.] ",
+  paie: "[Contexte cabinet — paie, bulletin ou DSN.] ",
+};
+
+function applyCabinetDocTypePrefix(text) {
+  const p = CABINET_DOC_TYPE_PREFIX[selectedCabinetDocType] || "";
+  return p + (text || "");
+}
 let currentClientFilter = "";
 let currentIncludeDeleted = false;
 let currentSearchFilter = "";
@@ -504,6 +521,7 @@ function formatDate(isoStr) {
 }
 
 function renderDocList(docs) {
+  lastDocsList = Array.isArray(docs) ? docs : [];
   const list = $("doc-list");
   const count = $("doc-count");
   renderSidebarStats(docs);
@@ -589,6 +607,7 @@ function renderDocList(docs) {
       await permanentDeleteDoc(btn.dataset.id, btn.dataset.name);
     });
   });
+  refreshCompareDocSelect();
 }
 
 // ── Delete document ─────────────────────────────────────────────────────
@@ -691,6 +710,7 @@ async function selectDoc(id, status, name, sizeBytes) {
     $("anon-empty").querySelector("p").innerHTML =
       "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
   }
+  refreshCompareDocSelect();
 }
 
 function updateAnonDocBar(name, sizeBytes) {
@@ -1322,6 +1342,7 @@ function goToChat() {
   refreshAIDocInsights(currentDocId);
   resetChat();
   loadChatHistory(currentDocId);
+  refreshCompareDocSelect();
 }
 
 // ── AI Chat ────────────────────────────────────────────────────────────
@@ -1389,6 +1410,10 @@ async function sendMessage() {
   const input = $("chat-input");
   const question = input.value.trim();
   if (!question || !currentDocId) return;
+  if (copilotMode) {
+    await sendCopilotMessage(question, input);
+    return;
+  }
   if (activeStream) return;
 
   input.value = "";
@@ -1405,9 +1430,10 @@ async function sendMessage() {
   activeStream = controller;
 
   try {
-    const effectiveQuestion = reportMode
+    const baseQ = reportMode
       ? `${question}\n\nRéponds en format rapport structuré avec sections: Résumé, Points clés, Risques, Actions recommandées.`
       : question;
+    const effectiveQuestion = applyCabinetDocTypePrefix(baseQ);
     const resp = await fetch(
       `${API}/ai/stream/${currentDocId}?question=${encodeURIComponent(effectiveQuestion)}`,
       {
@@ -1477,6 +1503,117 @@ async function sendMessage() {
     activeStream = null;
     $("btn-send").style.display = "";
     $("btn-stop-stream").style.display = "none";
+    saveChatHistory(currentDocId);
+  }
+}
+
+async function sendCopilotMessage(question, inputEl) {
+  if (!question || !currentDocId) return;
+  inputEl.value = "";
+  appendUserMsg(question);
+  const bodyEl = appendAssistantMsg();
+  bodyEl.classList.add("streaming");
+  latestAssistantText = "";
+  $("btn-copy-answer").disabled = true;
+  try {
+    const resp = await apiFetch(`/copilot/${currentDocId}/ask`, {
+      method: "POST",
+      body: JSON.stringify({ question: applyCabinetDocTypePrefix(question), mode: "expert" }),
+    });
+    latestAssistantText = resp.answer || "";
+    bodyEl.textContent = latestAssistantText || "Aucune réponse.";
+    $("btn-copy-answer").disabled = !latestAssistantText.trim();
+    renderCopilotInsights(resp);
+  } catch (e) {
+    bodyEl.textContent = `[Erreur: ${e.message}]`;
+    toast(`Copilot indisponible: ${e.message}`, "error");
+  } finally {
+    bodyEl.classList.remove("streaming");
+    saveChatHistory(currentDocId);
+  }
+}
+
+function renderCopilotInsights(resp = {}) {
+  const panel = $("copilot-insights");
+  if (!panel) return;
+  panel.style.display = "";
+  const conf = (resp.confidence || "—").toUpperCase();
+  $("copilot-confidence").textContent = conf;
+  const warns = $("copilot-warnings");
+  if (warns) {
+    warns.innerHTML = (resp.warnings || []).map((w) => `<span class="stat-chip">${escapeHtml(w)}</span>`).join("");
+  }
+  const cites = $("copilot-citations");
+  if (cites) {
+    const list = resp.citations || [];
+    cites.innerHTML = list.map((c, idx) => `
+      <div class="dash-entity-row">
+        <span class="dash-entity-type">Source ${idx + 1}</span>
+        <div class="dash-entity-bar-bg"><div class="dash-entity-bar-fill" style="width:${Math.round((c.score || 0) * 100)}%"></div></div>
+        <span class="dash-entity-count">${Math.round((c.score || 0) * 100)}%</span>
+      </div>
+      <div class="chat-intro" style="padding:8px 0 12px; text-align:left;"><p>${escapeHtml(c.snippet || "")}</p></div>
+    `).join("");
+  }
+}
+
+function refreshCompareDocSelect() {
+  const sel = $("compare-doc-select");
+  if (!sel) return;
+  sel.innerHTML = '<option value="">Deuxième document…</option>';
+  if (!currentDocId || !lastDocsList.length) return;
+  const current = lastDocsList.find((d) => d.id === currentDocId);
+  const clientTag = current && Array.isArray(current.tags) && current.tags.length ? current.tags[0] : "";
+  let pool = lastDocsList.filter((d) => d.id !== currentDocId);
+  if (clientTag) {
+    const same = pool.filter((d) => (d.tags && d.tags[0]) === clientTag);
+    if (same.length) pool = same;
+  }
+  pool.forEach((d) => {
+    const opt = document.createElement("option");
+    opt.value = d.id;
+    const name = d.original_filename || d.id;
+    opt.textContent = name.length > 44 ? `${name.slice(0, 42)}…` : name;
+    sel.appendChild(opt);
+  });
+}
+
+async function runCopilotCompare() {
+  const otherId = ($("compare-doc-select") && $("compare-doc-select").value) || "";
+  if (!currentDocId) {
+    toast("Sélectionnez un document dans la liste.", "error");
+    return;
+  }
+  if (!otherId) {
+    toast("Choisissez un second document (de préférence le même client).", "error");
+    return;
+  }
+  const customQ = ($("chat-input") && $("chat-input").value.trim()) || "";
+  const payload = { other_document_id: otherId };
+  if (customQ) payload.question = applyCabinetDocTypePrefix(customQ);
+
+  const inputEl = $("chat-input");
+  if (inputEl) inputEl.value = "";
+  appendUserMsg(customQ || "Comparaison de deux documents anonymisés (N / N-1)");
+  const bodyEl = appendAssistantMsg();
+  bodyEl.classList.add("streaming");
+  latestAssistantText = "";
+  $("btn-copy-answer").disabled = true;
+  try {
+    const resp = await apiFetch(`/copilot/${currentDocId}/compare`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    latestAssistantText = resp.answer || "";
+    bodyEl.textContent = latestAssistantText || "Aucune réponse.";
+    $("btn-copy-answer").disabled = !latestAssistantText.trim();
+    renderCopilotInsights(resp);
+    toast("Comparaison terminée — à valider humainement.", "info");
+  } catch (e) {
+    bodyEl.textContent = `[Erreur: ${e.message}]`;
+    toast(`Comparaison impossible: ${e.message}`, "error");
+  } finally {
+    bodyEl.classList.remove("streaming");
     saveChatHistory(currentDocId);
   }
 }
@@ -2150,8 +2287,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-copy-answer").addEventListener("click", copyLatestAnswer);
 
   // Quick actions
+  const skipQuickIds = new Set(["btn-report-mode", "btn-copilot-mode", "btn-review-agent", "btn-revue-associe"]);
   document.querySelectorAll(".quick-btn").forEach(btn => {
-    if (btn.id === "btn-report-mode") return;
+    if (skipQuickIds.has(btn.id)) return;
     btn.addEventListener("click", () => {
       $("chat-input").value = btn.dataset.q;
       sendMessage();
@@ -2159,6 +2297,18 @@ document.addEventListener("DOMContentLoaded", () => {
   });
   // Review agent
   if ($("btn-review-agent")) $("btn-review-agent").addEventListener("click", startReview);
+  if ($("btn-revue-associe")) {
+    $("btn-revue-associe").addEventListener("click", () => {
+      toast("Revue associé : analyse structurée en cours…", "info");
+      startReview();
+    });
+  }
+  if ($("cabinet-doc-type")) {
+    $("cabinet-doc-type").addEventListener("change", (e) => {
+      selectedCabinetDocType = (e.target.value || "generique").trim() || "generique";
+    });
+  }
+  if ($("btn-copilot-compare")) $("btn-copilot-compare").addEventListener("click", runCopilotCompare);
   if ($("btn-review-close")) $("btn-review-close").addEventListener("click", closeReview);
   if ($("btn-review-copy")) $("btn-review-copy").addEventListener("click", copyReviewResult);
   if ($("btn-review-export")) $("btn-review-export").addEventListener("click", exportReviewResult);
@@ -2171,6 +2321,17 @@ document.addEventListener("DOMContentLoaded", () => {
     b.classList.toggle("active", reportMode);
     toast(reportMode ? "Mode rapport activé" : "Mode rapport désactivé", "info");
   });
+  if ($("btn-copilot-mode")) {
+    $("btn-copilot-mode").addEventListener("click", () => {
+      copilotMode = !copilotMode;
+      const b = $("btn-copilot-mode");
+      b.dataset.on = copilotMode ? "true" : "false";
+      b.textContent = copilotMode ? "🤖 Copilot: ON" : "🤖 Copilot: OFF";
+      b.classList.toggle("active", copilotMode);
+      if (!copilotMode && $("copilot-insights")) $("copilot-insights").style.display = "none";
+      toast(copilotMode ? "Copilot activé" : "Copilot désactivé", "info");
+    });
+  }
 
   // Export
   $("btn-export-txt").addEventListener("click", exportText);
