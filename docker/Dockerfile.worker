@@ -11,6 +11,7 @@ WORKDIR /build
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
     libffi-dev \
+    libgl1-mesa-glx \
     tesseract-ocr \
     tesseract-ocr-fra \
     tesseract-ocr-eng \
@@ -35,6 +36,7 @@ WORKDIR /app
 
 # Dépendances système lourdes pour OCR et parsing PDF
 RUN apt-get update && apt-get install -y --no-install-recommends \
+    libgl1-mesa-glx \
     tesseract-ocr \
     tesseract-ocr-fra \
     tesseract-ocr-eng \

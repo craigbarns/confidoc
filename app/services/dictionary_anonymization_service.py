@@ -235,7 +235,8 @@ def anonymize_with_dictionary(text: str) -> dict[str, Any]:
             "entities": [],
             "confidence": "high",
             "count": 0,
-            "method": "dictionary"
+            "method": "dictionary",
+            "registry": EntityRegistry(),
         }
     
     entities = []
