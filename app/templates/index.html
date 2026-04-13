@@ -169,6 +169,29 @@
             </div>
             <div class="progress-bar"><div id="dash-ready-fill" class="progress-fill"></div></div>
           </div>
+
+          <!-- GDPR Score Section -->
+          <div class="dash-gdpr-section">
+            <div class="dash-gdpr-card" id="dash-gdpr-card">
+              <div class="dash-gdpr-score-ring">
+                <svg viewBox="0 0 36 36">
+                  <path class="dash-gdpr-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  <path id="dash-gdpr-ring-fill" class="dash-gdpr-ring-fill" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <div class="dash-gdpr-score-text">
+                  <span id="dash-gdpr-score">0</span>
+                  <small>/ 100</small>
+                </div>
+              </div>
+              <div class="dash-gdpr-info">
+                <div class="dash-gdpr-grade" id="dash-gdpr-grade">-</div>
+                <div class="dash-gdpr-status" id="dash-gdpr-status">En attente</div>
+                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown"></div>
+              </div>
+            </div>
+            <div class="dash-gdpr-recos" id="dash-gdpr-recos"></div>
+          </div>
+
           <div class="dash-trend">
             <h3>Tendance docs créés (7 jours)</h3>
             <div id="dash-trend-7d" class="dash-activity-bars"></div>
@@ -345,6 +368,7 @@
             <button id="btn-export-txt" class="btn btn-ghost btn-sm">⬇ Texte</button>
             <button id="btn-export-pdf" class="btn btn-ghost btn-sm">⬇ PDF redacté</button>
             <button id="btn-audit-report" class="btn btn-ghost btn-sm">📋 Audit RGPD</button>
+            <button id="btn-compliance-report" class="btn btn-ghost btn-sm">📊 Conformite</button>
           </div>
         </div>
 

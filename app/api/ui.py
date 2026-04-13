@@ -10,6 +10,20 @@ router = APIRouter(tags=["ui"])
 _TEMPLATE_DIR = Path(__file__).resolve().parent.parent / "templates"
 _TEMPLATE = _TEMPLATE_DIR / "index.html"
 _SECURITY_TEMPLATE = _TEMPLATE_DIR / "security.html"
+_LANDING_TEMPLATE = _TEMPLATE_DIR / "landing.html"
+
+
+@router.get("/", response_class=HTMLResponse, include_in_schema=False)
+async def landing_page() -> HTMLResponse:
+    """Landing page for investors and prospects."""
+    html_content = _LANDING_TEMPLATE.read_text(encoding="utf-8")
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
 
 
 @router.get("/ui", response_class=HTMLResponse, include_in_schema=False)

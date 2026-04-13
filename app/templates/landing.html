@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>ConfiDoc — Confidentialité documentaire automatisée</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #0ea5e9;
+      --primary-dark: #0284c7;
+      --accent: #10b981;
+      --bg: #0f172a;
+      --surface: #1e293b;
+      --text: #f8fafc;
+      --muted: #94a3b8;
+    }
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.6;
+    }
+    .nav {
+      display: flex; justify-content: space-between; align-items: center;
+      padding: 1.5rem 2rem; max-width: 1200px; margin: 0 auto;
+    }
+    .logo { font-weight: 800; font-size: 1.5rem; letter-spacing: -0.5px; }
+    .logo span { color: var(--primary); }
+    .nav-links a {
+      color: var(--muted); text-decoration: none; margin-left: 2rem; font-weight: 500;
+      transition: color 0.2s;
+    }
+    .nav-links a:hover { color: var(--text); }
+    .btn {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      padding: 0.875rem 1.75rem; border-radius: 0.5rem; font-weight: 600;
+      text-decoration: none; transition: all 0.2s; border: none; cursor: pointer;
+    }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
+      color: white; box-shadow: 0 10px 30px -10px rgba(14, 165, 233, 0.4);
+    }
+    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 36px -10px rgba(14, 165, 233, 0.5); }
+    .btn-ghost {
+      background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.1);
+    }
+    .hero {
+      text-align: center; padding: 6rem 2rem 4rem; max-width: 900px; margin: 0 auto;
+    }
+    .hero-badge {
+      display: inline-flex; align-items: center; gap: 0.5rem;
+      background: rgba(16, 185, 129, 0.1); color: var(--accent);
+      padding: 0.5rem 1rem; border-radius: 999px; font-size: 0.875rem; font-weight: 500;
+      margin-bottom: 1.5rem;
+    }
+    .hero h1 {
+      font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 800; line-height: 1.1;
+      letter-spacing: -1.5px; margin-bottom: 1.5rem;
+    }
+    .hero h1 span {
+      background: linear-gradient(135deg, var(--primary), #60a5fa);
+      -webkit-background-clip: text; -webkit-text-fill-color: transparent;
+    }
+    .hero p { font-size: 1.25rem; color: var(--muted); max-width: 640px; margin: 0 auto 2.5rem; }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+
+    .stats {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+      gap: 1.5rem; max-width: 1000px; margin: 4rem auto; padding: 0 2rem;
+    }
+    .stat-card {
+      background: var(--surface); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 1rem; padding: 1.75rem; text-align: center;
+    }
+    .stat-card h3 { font-size: 2rem; font-weight: 800; color: var(--primary); margin-bottom: 0.25rem; }
+    .stat-card p { color: var(--muted); font-size: 0.9375rem; }
+
+    .features {
+      max-width: 1100px; margin: 5rem auto; padding: 0 2rem;
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;
+    }
+    .feature {
+      background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05);
+      border-radius: 1rem; padding: 1.75rem;
+    }
+    .feature-icon { font-size: 2rem; margin-bottom: 1rem; }
+    .feature h4 { font-size: 1.125rem; margin-bottom: 0.5rem; }
+    .feature p { color: var(--muted); font-size: 0.9375rem; }
+
+    .demo-section {
+      text-align: center; padding: 5rem 2rem; max-width: 800px; margin: 0 auto;
+    }
+    .demo-section h2 { font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem; }
+    .demo-section p { color: var(--muted); font-size: 1.125rem; margin-bottom: 2rem; }
+
+    footer {
+      text-align: center; padding: 3rem 2rem; color: var(--muted); font-size: 0.875rem;
+      border-top: 1px solid rgba(255,255,255,0.05);
+    }
+  </style>
+</head>
+<body>
+  <nav class="nav">
+    <div class="logo">Confi<span>Doc</span></div>
+    <div class="nav-links">
+      <a href="#features">Fonctionnalités</a>
+      <a href="#demo">Démo</a>
+      <a href="/ui" class="btn btn-primary">Accéder à l'app</a>
+    </div>
+  </nav>
+
+  <section class="hero">
+    <div class="hero-badge">✨ Levée de fonds en cours</div>
+    <h1>Anonymisez vos documents sensibles en <span>10 secondes</span></h1>
+    <p>
+      ConfiDoc protège automatiquement les données personnelles et financières
+      dans vos documents juridiques et comptables. Propulsé par l'IA.
+    </p>
+    <div class="hero-actions">
+      <a href="/ui" class="btn btn-primary">🚀 Essayer la démo live</a>
+      <a href="mailto:investir@confidoc.fr" class="btn btn-ghost">📧 Contacter l'équipe</a>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="stat-card"><h3>10s</h3><p>Temps moyen d'anonymisation</p></div>
+    <div class="stat-card"><h3>95%+</h3><p>Précision de détection des entités</p></div>
+    <div class="stat-card"><h3>RGPD</h3><p>Conformité native</p></div>
+    <div class="stat-card"><h3>24/7</h3><p>Traitement automatisé</p></div>
+  </section>
+
+  <section class="features" id="features">
+    <div class="feature">
+      <div class="feature-icon">🛡️</div>
+      <h4>Anonymisation IA</h4>
+      <p>Détection automatique des PII, données financières et juridiques avec remplacement intelligent par tokens.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📊</div>
+      <h4>Score de risque RGPD</h4>
+      <p>Évaluez le risque de réidentification de chaque document et recevez des recommandations d'actions.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🤖</div>
+      <h4>Agent Compliance</h4>
+      <p>Discutez avec un agent IA spécialisé qui analyse vos documents anonymisés et répond à vos questions.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">📄</div>
+      <h4>Rapport d'audit</h4>
+      <p>Générez un rapport PDF complet traçant chaque modification pour vos dossiers de conformité.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">⚡</div>
+      <h4>Pipeline asynchrone</h4>
+      <p>Upload et déposez-vous : notre infrastructure Celery traite vos documents en arrière-plan sans interruption.</p>
+    </div>
+    <div class="feature">
+      <div class="feature-icon">🔒</div>
+      <h4>Sécurité enterprise</h4>
+      <p>Chiffrement AES-256, authentification JWT, headers de sécurité et isolation des données par organisation.</p>
+    </div>
+  </section>
+
+  <section class="demo-section" id="demo">
+    <h2>Prêt à tester ?</h2>
+    <p>Cliquez ci-dessous pour lancer un document de démo et voir l'anonymisation en action.</p>
+    <a href="/ui" class="btn btn-primary" style="font-size:1.125rem;padding:1rem 2.5rem">
+      🚀 Lancer la démo interactive
+    </a>
+  </section>
+
+  <footer>
+    © 2025 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.
+  </footer>
+</body>
+</html>

@@ -1743,6 +1743,18 @@ async function downloadAuditReport() {
   }
 }
 
+async function downloadComplianceReport() {
+  if (!currentDocId) return;
+  try {
+    const data = await apiFetch(`/documents/${currentDocId}/compliance-report`);
+    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
+    triggerDownload(blob, `conformite_rgpd_${currentDocId.slice(0, 8)}.json`);
+    toast("Rapport de conformite telecharge", "success");
+  } catch (e) {
+    toast(`Erreur conformite: ${e.message}`, "error");
+  }
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1814,6 +1826,55 @@ function renderDashboard(data, summary = {}) {
   const ready = Math.max(0, summary.ready ?? sc.ready ?? 0);
   if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
   if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
+
+  // GDPR Score
+  const gdpr = data.gdpr_score || {};
+  const gdprScoreVal = gdpr.score ?? 0;
+  const gdprColor = gdpr.color || "success";
+  const gdprGrade = gdpr.grade || "-";
+  const gdprStatus = gdpr.status || "En attente";
+  const gdprRecos = gdpr.recommendations || [];
+  const gdprBreak = gdpr.breakdown || {};
+
+  if ($("dash-gdpr-score")) {
+    animateNumber($("dash-gdpr-score"), gdprScoreVal);
+  }
+  const ring = $("dash-gdpr-ring-fill");
+  if (ring) {
+    ring.setAttribute("stroke-dasharray", `${gdprScoreVal}, 100`);
+    ring.className = `dash-gdpr-ring-fill color-${gdprColor}`;
+  }
+  const gradeEl = $("dash-gdpr-grade");
+  if (gradeEl) {
+    gradeEl.textContent = `Note ${gdprGrade}`;
+    gradeEl.className = `dash-gdpr-grade color-${gdprColor}`;
+  }
+  const statusElG = $("dash-gdpr-status");
+  if (statusElG) {
+    statusElG.textContent = gdprStatus;
+    statusElG.className = `dash-gdpr-status color-${gdprColor}`;
+  }
+  const breakEl = $("dash-gdpr-breakdown");
+  if (breakEl) {
+    const b = gdprBreak;
+    const parts = [];
+    if (b.success_rate != null) parts.push(`Succès ${Math.round(b.success_rate)}%`);
+    if (b.risk_score != null) parts.push(`Risque ${Math.round(b.risk_score)}%`);
+    if (b.failure_resilience != null) parts.push(`Resilience ${Math.round(b.failure_resilience)}%`);
+    if (b.activity_momentum != null) parts.push(`Activité ${Math.round(b.activity_momentum)}%`);
+    breakEl.innerHTML = parts.map(p => `<span>${p}</span>`).join("");
+  }
+  const recosEl = $("dash-gdpr-recos");
+  if (recosEl) {
+    if (gdprRecos.length) {
+      recosEl.innerHTML = `<h4>Recommandations conformité</h4><ul>` +
+        gdprRecos.map(r => `<li class="${r.toLowerCase().includes('bonne') || r.toLowerCase().includes('continuez') ? 'good' : ''}">${escapeHtml(r)}</li>`).join("") +
+        `</ul>`;
+      recosEl.style.display = "";
+    } else {
+      recosEl.style.display = "none";
+    }
+  }
 
   // Risk distribution
   const riskEl = $("dash-risk-chart");
@@ -2374,6 +2435,7 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
+  if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
 
   // Theme
   initTheme();

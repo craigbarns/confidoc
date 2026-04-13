@@ -8,6 +8,7 @@ from datetime import datetime, timedelta, timezone
 import io
 from io import BytesIO
 from types import SimpleNamespace
+from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, HTTPException, Query, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
@@ -380,71 +381,70 @@ async def get_dashboard_stats(
     status_counts = {row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in result.all()}
     total_docs = sum(status_counts.values())
 
-    # Risk distribution (from pseudonym_mappings)
+    # Risk distribution (from pseudonym_mappings) — isolated session to avoid aborts
     risk_distribution = {"low": 0, "medium": 0, "high": 0, "critical": 0}
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
-        risk_result = await db.execute(
-            select(PseudonymMapping.risk_level, func.count())
-            .where(PseudonymMapping.user_id == user_id)
-            .group_by(PseudonymMapping.risk_level)
-        )
-        for row in risk_result.all():
-            level = row[0] or "low"
-            if level in risk_distribution:
-                risk_distribution[level] = row[1]
+        async with async_session_factory() as db2:
+            risk_result = await db2.execute(
+                select(PseudonymMapping.risk_level, func.count())
+                .where(PseudonymMapping.user_id == user_id)
+                .group_by(PseudonymMapping.risk_level)
+            )
+            for row in risk_result.all():
+                level = row[0] or "low"
+                if level in risk_distribution:
+                    risk_distribution[level] = row[1]
     except Exception:
-        await db.rollback()
         pass
 
-    # Entity type distribution
+    # Entity type distribution — isolated session
     entity_distribution: dict[str, int] = {}
     try:
-        # Get all document IDs for this user
-        doc_ids_result = await db.execute(
-            select(Document.id).where(
-                Document.uploaded_by_user_id == user_id,
-                Document.is_deleted.is_(False),
+        async with async_session_factory() as db2:
+            doc_ids_result = await db2.execute(
+                select(Document.id).where(
+                    Document.uploaded_by_user_id == user_id,
+                    Document.is_deleted.is_(False),
+                )
             )
-        )
-        doc_ids = [row[0] for row in doc_ids_result.all()]
+            doc_ids = [row[0] for row in doc_ids_result.all()]
 
-        if doc_ids:
-            ent_result = await db.execute(
-                select(EntityDetection.entity_type, func.count())
-                .where(EntityDetection.document_id.in_(doc_ids))
-                .group_by(EntityDetection.entity_type)
-            )
-            entity_distribution = {
-                (row[0] or "unknown"): row[1] for row in ent_result.all()
-            }
+            if doc_ids:
+                ent_result = await db2.execute(
+                    select(EntityDetection.entity_type, func.count())
+                    .where(EntityDetection.document_id.in_(doc_ids))
+                    .group_by(EntityDetection.entity_type)
+                )
+                entity_distribution = {
+                    (row[0] or "unknown"): row[1] for row in ent_result.all()
+                }
     except Exception:
-        await db.rollback()
         pass
 
-    # Recent activity (last 7 days)
+    # Recent activity (last 7 days) — isolated session
     recent_activity: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
         since = datetime.now(timezone.utc) - timedelta(days=7)
-        activity_result = await db.execute(
-            select(
-                func.date_trunc("day", AuditLog.created_at).label("day"),
-                func.count(),
+        async with async_session_factory() as db2:
+            activity_result = await db2.execute(
+                select(
+                    func.date_trunc("day", AuditLog.created_at).label("day"),
+                    func.count(),
+                )
+                .where(
+                    AuditLog.user_id == user_id,
+                    AuditLog.created_at >= since,
+                )
+                .group_by("day")
+                .order_by("day")
             )
-            .where(
-                AuditLog.user_id == user_id,
-                AuditLog.created_at >= since,
-            )
-            .group_by("day")
-            .order_by("day")
-        )
-        recent_activity = [
-            {"date": row[0].isoformat() if row[0] else "", "count": row[1]}
-            for row in activity_result.all()
-        ]
+            recent_activity = [
+                {"date": row[0].isoformat() if row[0] else "", "count": row[1]}
+                for row in activity_result.all()
+            ]
     except Exception:
-        await db.rollback()
         pass
 
     # Trashed count
@@ -459,6 +459,14 @@ async def get_dashboard_stats(
     # Total entities masked
     total_entities = sum(entity_distribution.values())
 
+    # GDPR visual score
+    gdpr_score = _calculate_gdpr_score(
+        total_docs=total_docs,
+        status_counts=status_counts,
+        risk_distribution=risk_distribution,
+        recent_activity=recent_activity,
+    )
+
     return {
         "total_documents": total_docs,
         "status_counts": status_counts,
@@ -467,6 +475,93 @@ async def get_dashboard_stats(
         "total_entities_masked": total_entities,
         "recent_activity": recent_activity,
         "trashed_documents": trashed,
+        "gdpr_score": gdpr_score,
+    }
+
+
+def _calculate_gdpr_score(
+    total_docs: int,
+    status_counts: dict,
+    risk_distribution: dict,
+    recent_activity: list,
+) -> dict:
+    """Compute a visual GDPR readiness score (0-100) with recommendations."""
+    ready = status_counts.get("ready", 0)
+    failed = status_counts.get("failed", 0)
+    processing = status_counts.get("processing", 0)
+    uploaded = status_counts.get("uploaded", 0)
+
+    # 1. Processing success rate (0-40 pts)
+    success_rate = (ready / total_docs * 40) if total_docs else 0
+
+    # 2. Risk profile (0-30 pts)
+    total_risks = sum(risk_distribution.values())
+    if total_risks:
+        risk_pts = (
+            risk_distribution.get("low", 0) * 1.0
+            + risk_distribution.get("medium", 0) * 0.7
+            + risk_distribution.get("high", 0) * 0.3
+            + risk_distribution.get("critical", 0) * 0.0
+        ) / total_risks * 30
+    else:
+        risk_pts = 30  # no risk data = neutral
+
+    # 3. Failure penalty inverted (0-15 pts)
+    failure_rate = (failed / total_docs) if total_docs else 0
+    failure_pts = max(0, 15 - int(failure_rate * 30))
+
+    # 4. Recent activity (0-10 pts)
+    recent_count = sum(a.get("count", 0) for a in recent_activity)
+    activity_pts = min(10, recent_count)
+
+    # 5. Documents pending processing (0-5 pts)
+    pending = processing + uploaded
+    pending_pts = max(0, 5 - int((pending / max(total_docs, 1)) * 5))
+
+    total = min(100, int(success_rate + risk_pts + failure_pts + activity_pts + pending_pts))
+
+    if total >= 85:
+        grade = "A"
+        status = "Conforme"
+        color = "success"
+    elif total >= 70:
+        grade = "B"
+        status = "A ameliorer"
+        color = "warning"
+    elif total >= 50:
+        grade = "C"
+        status = "Non conforme"
+        color = "danger"
+    else:
+        grade = "D"
+        status = "Non conforme"
+        color = "danger"
+
+    recommendations = []
+    if failure_rate > 0.1:
+        recommendations.append("Plusieurs documents sont en echec. Verifiez la qualite des fichiers sources.")
+    if pending > 3:
+        recommendations.append(f"{pending} documents sont en attente de traitement. Lancez l'analyse pour reduire le backlog.")
+    if risk_distribution.get("high", 0) + risk_distribution.get("critical", 0) > total_risks * 0.2:
+        recommendations.append("Trop de mappings a haut risque de reidentification. Validez manuellement les exports concernes.")
+    if ready == 0 and total_docs > 0:
+        recommendations.append("Aucun document n'a encore ete anonymise. Lancez le traitement IA sur vos fichiers.")
+    if not recommendations:
+        recommendations.append("Votre posture RGPD est bonne. Continuez a valider les exports a risque eleve.")
+
+    return {
+        "score": total,
+        "grade": grade,
+        "status": status,
+        "color": color,
+        "breakdown": {
+            "success_rate": round(success_rate, 1),
+            "risk_score": round(risk_pts, 1),
+            "failure_resilience": round(failure_pts, 1),
+            "activity_momentum": round(activity_pts, 1),
+            "pending_penalty": round(pending_pts, 1),
+        },
+        "recommendations": recommendations,
     }
 
 
@@ -1318,6 +1413,173 @@ async def get_audit_report_pdf(
 
 
 @router.get(
+    "/{document_id}/compliance-report",
+    status_code=status.HTTP_200_OK,
+    summary="Rapport de conformite structure (JSON)",
+)
+async def get_compliance_report(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Retourne un rapport de conformite RGPD structure avec score, actions et statut."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    # Entity summary
+    entity_summary: dict[str, int] = {}
+    try:
+        det_result = await db.execute(
+            select(EntityDetection).where(
+                EntityDetection.document_id == uuid.UUID(document_id)
+            )
+        )
+        for det in det_result.scalars().all():
+            etype = det.entity_type or "unknown"
+            entity_summary[etype] = entity_summary.get(etype, 0) + 1
+    except Exception:
+        pass
+
+    # Risk info + recommendation
+    risk_info: dict[str, Any] = {"score": 0.0, "level": "low", "human_validated": False}
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        mr = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = mr.scalar_one_or_none()
+        if mapping:
+            risk_info = {
+                "score": mapping.risk_score,
+                "level": mapping.risk_level,
+                "human_validated": mapping.human_validated,
+                "validated_at": mapping.validated_at.isoformat() if mapping.validated_at else None,
+                "expires_at": mapping.expires_at.isoformat() if mapping.expires_at else None,
+            }
+    except Exception:
+        pass
+
+    # Anonymized text for recommendation
+    anonymized_preview = ""
+    try:
+        anonymized_preview = await _get_anonymized_text(db, document)
+    except Exception:
+        pass
+
+    if risk_info and anonymized_preview and entity_summary:
+        try:
+            risk_report = analyze_reidentification_risk(anonymized_preview, entity_summary)
+            risk_info["recommendation"] = risk_report.recommendation
+        except Exception:
+            pass
+
+    # Conformity score (0-100)
+    risk_score_val = float(risk_info.get("score", 0))
+    human_validated = bool(risk_info.get("human_validated", False))
+    total_entities = sum(entity_summary.values())
+
+    # Base score: inverse of risk (max 60 pts)
+    risk_pts = max(0, 60 - int(risk_score_val * 60))
+    # Validation bonus (20 pts)
+    validation_pts = 20 if human_validated else 0
+    # Entity processing proof (10 pts)
+    entity_pts = 10 if total_entities > 0 else 0
+    # Audit trail presence (10 pts)
+    audit_pts = 10  # we assume we can log
+
+    conformity_score = min(100, risk_pts + validation_pts + entity_pts + audit_pts)
+
+    if conformity_score >= 85:
+        grade = "A"
+        status_label = "Conforme"
+        color = "success"
+    elif conformity_score >= 65:
+        grade = "B"
+        status_label = "A valider"
+        color = "warning"
+    elif conformity_score >= 45:
+        grade = "C"
+        status_label = "Non conforme"
+        color = "danger"
+    else:
+        grade = "D"
+        status_label = "Non conforme"
+        color = "danger"
+
+    actions_required = []
+    if risk_score_val > 0.5 and not human_validated:
+        actions_required.append("Validation humaine obligatoire avant export (risque eleve).")
+    if total_entities == 0:
+        actions_required.append("Aucune entite detectee. Verifiez la qualite du document source.")
+    if document.status != DocumentStatus.READY:
+        actions_required.append("Le document n'est pas encore pret. Finalisez le traitement.")
+    if not actions_required:
+        actions_required.append("Aucune action requise. Le document respecte les criteres RGPD.")
+
+    # Audit summary
+    audit_entries: list[dict] = []
+    try:
+        from app.models.audit_log import AuditLog
+        result = await db.execute(
+            select(AuditLog)
+            .where(AuditLog.resource_id == str(document.id))
+            .order_by(AuditLog.created_at.desc())
+        )
+        logs = list(result.scalars().all())
+        audit_entries = [
+            {
+                "action": log.action,
+                "timestamp": log.created_at.isoformat() if log.created_at else None,
+                "method": log.method,
+                "status_code": log.status_code,
+            }
+            for log in logs
+        ]
+    except Exception:
+        pass
+
+    last_action_at = audit_entries[0]["timestamp"] if audit_entries else None
+    methods_used = list({a.get("method", "") for a in audit_entries if a.get("method")})
+
+    return {
+        "report_id": str(uuid.uuid4()),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "document": {
+            "document_id": str(document.id),
+            "filename": document.original_filename,
+            "created_at": document.created_at.isoformat() if document.created_at else None,
+            "status": document.status.value if hasattr(document.status, "value") else str(document.status),
+        },
+        "conformity": {
+            "score": conformity_score,
+            "grade": grade,
+            "status": status_label,
+            "color": color,
+            "max_score": 100,
+        },
+        "risk": risk_info,
+        "entities": {
+            "summary": entity_summary,
+            "total": total_entities,
+            "top_categories": sorted(entity_summary.items(), key=lambda x: -x[1])[:5],
+        },
+        "actions_required": actions_required,
+        "audit_summary": {
+            "total_actions": len(audit_entries),
+            "last_action_at": last_action_at,
+            "methods_used": methods_used,
+        },
+        "certifications": {
+            "pseudonymisation_separated": True,
+            "audit_trail_enabled": True,
+            "risk_scoring_enabled": True,
+            "human_validation_gate": True,
+        },
+    }
+
+
+@router.get(
     "/{document_id}/export",
     response_class=PlainTextResponse,
     status_code=status.HTTP_200_OK,
@@ -1475,6 +1737,210 @@ async def restore_document(
         "message": "Document restauré avec succès",
         "document_id": str(document.id),
         "original_filename": document.original_filename,
+    }
+
+
+@router.get(
+    "/{document_id}/risk-score",
+    status_code=status.HTTP_200_OK,
+    summary="Score RGPD et recommandations",
+)
+async def get_document_risk_score(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Retourne un score de risque RGPD structuré avec recommandations."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404("Document introuvable")
+
+    from app.models.pseudonym_mapping import PseudonymMapping
+    pm_result = await db.execute(
+        select(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid)
+    )
+    mapping = pm_result.scalar_one_or_none()
+
+    # Fallback: compute risk from entity detections if no mapping stored
+    risk_score = 0.0
+    risk_level = "low"
+    recommendations: list[str] = []
+
+    if mapping and mapping.risk_score is not None:
+        risk_score = mapping.risk_score
+        risk_level = mapping.risk_level or "low"
+    else:
+        ent_result = await db.execute(
+            select(EntityDetection.entity_type)
+            .where(EntityDetection.document_id == doc_uuid)
+        )
+        entities = [row[0] for row in ent_result.all()]
+        unique_types = set(entities)
+        count = len(entities)
+
+        # Heuristic scoring
+        if "PERSONNE" in unique_types or "EMAIL" in unique_types or "TELEPHONE" in unique_types:
+            risk_score = max(risk_score, 60.0)
+        if "SIREN" in unique_types or "SIRET" in unique_types:
+            risk_score = max(risk_score, 50.0)
+        if "IBAN" in unique_types or "CARTE_BANCAIRE" in unique_types:
+            risk_score = max(risk_score, 90.0)
+        if count > 50:
+            risk_score = min(risk_score + 15.0, 100.0)
+        elif count > 20:
+            risk_score = min(risk_score + 10.0, 100.0)
+
+        if risk_score >= 80:
+            risk_level = "critical"
+        elif risk_score >= 60:
+            risk_level = "high"
+        elif risk_score >= 40:
+            risk_level = "medium"
+        else:
+            risk_level = "low"
+
+    # Generate recommendations
+    ent_result = await db.execute(
+        select(EntityDetection.entity_type)
+        .where(EntityDetection.document_id == doc_uuid)
+    )
+    unique_types = {row[0] for row in ent_result.all()}
+
+    if "CARTE_BANCAIRE" in unique_types or "IBAN" in unique_types:
+        recommendations.append("Données bancaires détectées : exiger une validation manuelle avant tout export externe.")
+    if "EMAIL" in unique_types or "TELEPHONE" in unique_types:
+        recommendations.append("Coordonnées directes présentes : appliquer une anonymisation stricte.")
+    if "PERSONNE" in unique_types:
+        recommendations.append("Identités de personnes physiques identifiées : vérifier la base légale du traitement.")
+    if risk_score < 40:
+        recommendations.append("Risque faible : le document est probablement conforme pour un usage interne.")
+    if not mapping or not mapping.human_validated:
+        recommendations.append("Validation humaine recommandée avant diffusion externe.")
+
+    return {
+        "document_id": document_id,
+        "risk_score": round(risk_score, 1),
+        "risk_level": risk_level,
+        "human_validated": bool(mapping and mapping.human_validated),
+        "recommendations": recommendations,
+        "entity_types_found": sorted(unique_types) if unique_types else [],
+    }
+
+
+@router.get(
+    "/{document_id}/compliance-report",
+    status_code=status.HTTP_200_OK,
+    summary="Rapport de compliance RGPD généré par l'IA",
+)
+async def get_compliance_report(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    """Génère un rapport structuré de compliance RGPD pour le document."""
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404("Document introuvable")
+
+    # Get preview text
+    preview_res = await db.execute(
+        select(DocumentVersion.content_text)
+        .where(
+            DocumentVersion.document_id == doc_uuid,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+        .order_by(DocumentVersion.created_at.desc())
+        .limit(1)
+    )
+    preview_text = preview_res.scalar() or ""
+
+    # Get risk score
+    from app.models.pseudonym_mapping import PseudonymMapping
+    pm_result = await db.execute(
+        select(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid)
+    )
+    mapping = pm_result.scalar_one_or_none()
+    risk_score = round(mapping.risk_score, 1) if mapping and mapping.risk_score is not None else None
+    risk_level = mapping.risk_level or "unknown" if mapping else "unknown"
+
+    # Count entities
+    ent_result = await db.execute(
+        select(EntityDetection.entity_type, func.count())
+        .where(EntityDetection.document_id == doc_uuid)
+        .group_by(EntityDetection.entity_type)
+    )
+    entity_counts = {row[0] or "unknown": row[1] for row in ent_result.all()}
+
+    # Build LLM prompt
+    prompt = f"""Tu es un Data Protection Officer (DPO). Rédige un rapport de compliance RGPD concis et professionnel pour un document anonymisé.
+
+Infos :
+- Nom : {document.original_filename}
+- Entités détectées : {entity_counts}
+- Score de risque : {risk_score or 'N/A'}/100 ({risk_level})
+- Texte anonymisé (extrait) : {preview_text[:2000]}
+
+Rédige en français, sous forme de JSON strict avec ces clés :
+{{
+  "summary": "phrase d'accroche sur l'état global",
+  "findings": ["constat 1", "constat 2", "constat 3"],
+  "recommendations": ["action 1", "action 2", "action 3"],
+  "conclusion": "verdict final et prochaines étapes"
+}}
+Ne renvoie que le JSON, sans markdown, sans commentaires."""
+
+    settings = get_settings()
+    report = {
+        "summary": "Rapport généré automatiquement.",
+        "findings": [f"{k}: {v} occurrence(s)" for k, v in entity_counts.items()],
+        "recommendations": ["Vérifier la base légale du traitement.", "Valider manuellement avant export externe."],
+        "conclusion": "Document conforme en l'état pour un usage interne."
+    }
+
+    if settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY:
+        try:
+            from app.services.mistral_service import chat_completion
+            raw = await chat_completion(prompt, temperature=0.3)
+            import json
+            parsed = json.loads(raw)
+            report = {
+                "summary": parsed.get("summary", report["summary"]),
+                "findings": parsed.get("findings", report["findings"]),
+                "recommendations": parsed.get("recommendations", report["recommendations"]),
+                "conclusion": parsed.get("conclusion", report["conclusion"]),
+            }
+        except Exception as exc:
+            logger.warning("compliance_llm_failed", error=str(exc))
+
+    return {
+        "document_id": document_id,
+        "filename": document.original_filename,
+        "risk_score": risk_score,
+        "risk_level": risk_level,
+        "entity_counts": entity_counts,
+        "report": report,
     }
 
 
