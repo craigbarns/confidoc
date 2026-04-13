@@ -5,7 +5,7 @@ from typing import Any
 import secrets
 
 import bcrypt
-from jose import JWTError, jwt
+import jwt
 
 from app.config import get_settings
 
@@ -39,8 +39,7 @@ def create_access_token(
         expire = datetime.now(timezone.utc) + timedelta(
             minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
         )
-    
-    # subject (sub) est généralement l'id de l'utilisateur
+
     to_encode = {"exp": expire, "sub": str(subject)}
     encoded_jwt = jwt.encode(
         to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
@@ -52,10 +51,14 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
     """Décode et valide un JWT. Retourne None si invalide ou expiré."""
     try:
         payload = jwt.decode(
-            token, settings.JWT_SECRET_KEY, algorithms=[settings.JWT_ALGORITHM]
+            token,
+            settings.JWT_SECRET_KEY,
+            algorithms=[settings.JWT_ALGORITHM],
         )
         return payload
-    except JWTError:
+    except jwt.ExpiredSignatureError:
+        return None
+    except jwt.InvalidTokenError:
         return None
 
 

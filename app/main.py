@@ -72,9 +72,9 @@ def create_app() -> FastAPI:
             "pour professions réglementées."
         ),
         version="0.3.0",
-        docs_url="/docs",
-        redoc_url="/redoc",
-        openapi_url="/openapi.json",
+        docs_url="/docs" if not settings.is_production else None,
+        redoc_url="/redoc" if not settings.is_production else None,
+        openapi_url="/openapi.json" if not settings.is_production else None,
         lifespan=lifespan,
     )
 

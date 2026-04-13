@@ -215,21 +215,22 @@ class Settings(BaseSettings):
     RATE_LIMIT_DEFAULT: str = "120/minute"
 
     @model_validator(mode="after")
-    def _warn_insecure_defaults(self) -> "Settings":
-        """Emit loud warnings when production runs with default secrets."""
+    def _block_insecure_defaults(self) -> "Settings":
+        """Block startup when production runs with default secrets."""
         if self.APP_ENV == "production":
             insecure = []
-            if self.SECRET_KEY == "CHANGE-ME":
-                insecure.append("SECRET_KEY")
-            if self.JWT_SECRET_KEY == "CHANGE-ME":
-                insecure.append("JWT_SECRET_KEY")
-            if self.ENCRYPTION_MASTER_KEY == "CHANGE-ME":
-                insecure.append("ENCRYPTION_MASTER_KEY")
+            for key in (
+                "SECRET_KEY",
+                "JWT_SECRET_KEY",
+                "ENCRYPTION_MASTER_KEY",
+                "PSEUDO_MAPPING_KEY",
+            ):
+                if getattr(self, key) == "CHANGE-ME":
+                    insecure.append(key)
             if insecure:
-                warnings.warn(
-                    f"SECURITY: Running in production with default values for: "
-                    f"{', '.join(insecure)}. Set these via environment variables!",
-                    stacklevel=2,
+                raise ValueError(
+                    f"Production blocked: insecure default values found for: "
+                    f"{', '.join(insecure)}. Set these via environment variables!"
                 )
         return self
 

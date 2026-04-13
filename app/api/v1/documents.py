@@ -46,6 +46,7 @@ from app.services.webhook_notify import notify_document_validated
 from app.services.pdf_redaction_service import redact_pdf_bytes
 from app.services.storage_service import delete_bytes, read_bytes
 from app.services.reidentification_risk_service import analyze_reidentification_risk
+from app.workers.tasks import process_document_legacy_task
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -699,34 +700,6 @@ def _infer_semantic_type(placeholder: str) -> str:
         return "INVOICE_REF"
     return "OTHER"
 
-async def _run_anonymize_background(doc_id: str, file_content: bytes, profile: str, document_type: str) -> None:
-    """Run OCR + LLM anonymization in background with its own DB session."""
-    try:
-        async with async_session_factory() as db:
-            result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
-            document = result.scalar_one_or_none()
-            if not document:
-                return
-            # Étape 1: OCR
-            original_text, _ = await build_extraction_ocr(db, document, file_content)
-            # Étape 2: Anonymisation
-            await build_anonymization_llm(db, document, original_text)
-            await db.commit()
-            logger.info("background_process_complete", doc_id=doc_id)
-    except Exception as exc:
-        logger.error("background_process_failed", doc_id=doc_id, error=str(exc))
-        try:
-            async with async_session_factory() as db:
-                await db.execute(
-                    update(Document)
-                    .where(Document.id == uuid.UUID(doc_id))
-                    .values(status=DocumentStatus.UPLOADED)
-                )
-                await db.commit()
-        except Exception:
-            pass
-
-
 @router.post(
     "/{document_id}/extract",
     status_code=status.HTTP_200_OK,
@@ -951,10 +924,12 @@ async def process_document_legacy(
     file_content = _read_file_or_404(document)
     document.status = DocumentStatus.PROCESSING
     await db.commit()
-    task = asyncio.create_task(
-        _run_anonymize_background(str(document.id), file_content, profile, document_type)
+    process_document_legacy_task.delay(
+        doc_id=str(document.id),
+        file_content=file_content,
+        profile=profile,
+        document_type=document_type,
     )
-    task.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
     return {"document_id": str(document.id), "status": "processing"}
 
 

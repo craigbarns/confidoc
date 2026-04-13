@@ -1,25 +1,23 @@
 """ConfiDoc Backend — Upload Endpoints (v2)."""
 
-import asyncio
 import hashlib
 import re
 from typing import Literal
 from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
-from app.core.database import async_session_factory
 from app.core.exceptions import http_400, http_413
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
-from app.services.document_processing_service import build_anonymization_preview
 from app.services.storage_service import store_bytes
+from app.workers.tasks import anonymize_document_task
 
 router = APIRouter()
 settings = get_settings()
@@ -34,44 +32,6 @@ def _normalize_client_name(value: str | None) -> str:
     if not raw:
         return ""
     return re.sub(r"\s+", " ", raw)
-
-
-async def _anonymize_document_background(
-    doc_id: str,
-    content: bytes,
-    profile: str,
-    document_type: str,
-) -> None:
-    """Run OCR + anonymization in background with its own DB session."""
-    try:
-        async with async_session_factory() as db:
-            result = await db.execute(select(Document).where(Document.id == UUID(doc_id)))
-            document = result.scalar_one_or_none()
-            if not document:
-                logger.warning("background_anon_doc_not_found", doc_id=doc_id)
-                return
-            await build_anonymization_preview(
-                db=db,
-                document=document,
-                file_content=content,
-                profile=profile,
-                document_type=document_type,
-            )
-            await db.commit()
-            logger.info("background_anonymization_complete", doc_id=doc_id)
-    except Exception as exc:
-        logger.error("background_anonymization_failed", doc_id=doc_id, error=str(exc))
-        # Reset status to UPLOADED so user can retry manually
-        try:
-            async with async_session_factory() as db:
-                await db.execute(
-                    update(Document)
-                    .where(Document.id == UUID(doc_id))
-                    .values(status=DocumentStatus.UPLOADED)
-                )
-                await db.commit()
-        except Exception:
-            pass
 
 
 @router.post(
@@ -215,17 +175,13 @@ async def _upload_document_body(
     }
 
     if auto_anonymize:
-        # Run OCR + anonymization in background — returns immediately to avoid HTTP timeout
-        # on large/complex PDFs. Client polls document status (PROCESSING → READY).
-        task_ = asyncio.create_task(
-            _anonymize_document_background(
-                doc_id=str(document.id),
-                content=content,
-                profile=profile,
-                document_type=document_type,
-            )
+        # Run OCR + anonymization in background via Celery to survive Railway restarts
+        anonymize_document_task.delay(
+            doc_id=str(document.id),
+            content=content,
+            profile=profile,
+            document_type=document_type,
         )
-        task_.add_done_callback(lambda t: t.exception() if not t.cancelled() and t.exception() else None)
         processing.update({"status": "processing"})
 
     return {
