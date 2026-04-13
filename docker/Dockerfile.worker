@@ -53,5 +53,5 @@ RUN python -m spacy download fr_core_news_md
 RUN useradd -m confidoc && chown -R confidoc:confidoc /app
 USER confidoc
 
-# Lancer le worker principal
-CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "-Q", "ingestion,ocr,processing,rendering,export,maintenance,notifications"]
+# Lancer le worker principal (écoute la queue par défaut celery)
+CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO"]
