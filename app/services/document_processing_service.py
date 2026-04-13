@@ -32,18 +32,35 @@ async def build_extraction_ocr(
     document.status = DocumentStatus.PROCESSING
     await db.flush()
     
-    # Extraction: Docling (structured) -> Mistral OCR fallback
+    # Extraction: Fast PyMuPDF -> Docling fallback -> Mistral OCR fallback
     try:
-        from app.services.docling_service import extract_text_from_file_docling
-        original_text, extraction_meta = await extract_text_from_file_docling(
-            file_content, document.extension
+        from app.services.fast_extraction_service import extract_text_sync
+        import asyncio
+        loop = asyncio.get_running_loop()
+        fast_result = await loop.run_in_executor(
+            None, extract_text_sync, file_content, document.extension
         )
+        if fast_result["text"].strip():
+            original_text = fast_result["text"]
+            extraction_meta = {
+                "method": fast_result["method"],
+                "pages": fast_result["pages"],
+            }
+        else:
+            raise ValueError(f"fast extraction returned empty text: {fast_result.get('error')}")
     except Exception as exc:
-        logger.warning("docling_import_failed_using_mistral", error=str(exc)[:200])
-        from app.services.mistral_ocr_service import extract_text_from_file
-        original_text, extraction_meta = await extract_text_from_file(
-            file_content, document.extension
-        )
+        logger.warning("fast_extraction_failed_using_docling", error=str(exc)[:200])
+        try:
+            from app.services.docling_service import extract_text_from_file_docling
+            original_text, extraction_meta = await extract_text_from_file_docling(
+                file_content, document.extension
+            )
+        except Exception as exc2:
+            logger.warning("docling_failed_using_mistral", error=str(exc2)[:200])
+            from app.services.mistral_ocr_service import extract_text_from_file
+            original_text, extraction_meta = await extract_text_from_file(
+                file_content, document.extension
+            )
     
     if not original_text.strip():
         logger.warning("empty_text_extraction", doc_id=str(document.id))
