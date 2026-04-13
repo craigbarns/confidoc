@@ -394,6 +394,7 @@ async def get_dashboard_stats(
             if level in risk_distribution:
                 risk_distribution[level] = row[1]
     except Exception:
+        await db.rollback()
         pass
 
     # Entity type distribution
@@ -418,6 +419,7 @@ async def get_dashboard_stats(
                 (row[0] or "unknown"): row[1] for row in ent_result.all()
             }
     except Exception:
+        await db.rollback()
         pass
 
     # Recent activity (last 7 days)
@@ -442,6 +444,7 @@ async def get_dashboard_stats(
             for row in activity_result.all()
         ]
     except Exception:
+        await db.rollback()
         pass
 
     # Trashed count
