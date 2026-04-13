@@ -20,7 +20,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
 
 COPY pyproject.toml ./
 RUN pip install --no-cache-dir --upgrade pip && \
-    pip wheel --no-cache-dir --no-deps --wheel-dir /build/wheels ".[processing]"
+    pip wheel --no-cache-dir --wheel-dir /build/wheels ".[processing]"
 
 
 # ==============================================================================
@@ -43,8 +43,7 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/wheels /wheels
-COPY pyproject.toml ./
-RUN pip install --no-cache-dir /wheels/confidoc_backend*.whl[processing] && rm -rf /wheels
+RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY . .
 
