@@ -4,7 +4,6 @@ from typing import Annotated, Any
 
 from fastapi import Depends, Request
 from fastapi.security import OAuth2PasswordBearer
-from jose import JWTError
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
