@@ -113,7 +113,6 @@ async def generate_copilot_answer(question: str, citations: list[dict[str, Any]]
     payload = {
         "anonymized_text": context[:9000],
         "user_question": question.strip(),
-        "quality": {"ready_for_ai": True, "ready_for_ai_core": True, "needs_review": False},
     }
     try:
         llm = await generate_summary_with_mistral(payload, prudent_mode=True, mode="question")
