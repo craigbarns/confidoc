@@ -25,3 +25,4 @@ class BootstrapAdminRequest(BaseModel):
     password: str
     first_name: str = "Super"
     last_name: str = "Admin"
+    bootstrap_secret: str = ""  # Requis en production (voir BOOTSTRAP_SECRET env var)

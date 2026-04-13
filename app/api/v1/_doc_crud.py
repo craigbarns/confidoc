@@ -1,0 +1,317 @@
+"""ConfiDoc — Documents CRUD endpoints.
+
+Routes : list, clients, trash/list, /all, /{id}, DELETE, restore, permanent delete.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+
+from fastapi import APIRouter, Query, status
+from sqlalchemy import delete, desc, func, select
+
+from app.api.deps import CurrentUser, DbSession
+from app.api.v1._doc_shared import (
+    _get_user_document_or_404,
+    _normalize_client_name,
+    _read_file_or_404,
+)
+from app.core.database import async_session_factory
+from app.core.exceptions import http_404
+from app.core.logging import get_logger
+from app.models.document import Document, DocumentStatus
+from app.models.document_version import DocumentVersion
+from app.models.entity_detection import EntityDetection
+from app.schemas.document import DocumentResponse
+
+router = APIRouter()
+logger = get_logger(__name__)
+
+
+@router.get(
+    "",
+    response_model=list[DocumentResponse],
+    status_code=status.HTTP_200_OK,
+    summary="Lister les documents de l'utilisateur",
+)
+async def list_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+    include_deleted: bool = Query(default=False),
+    client_name: str = Query(default="", description="Filtrer par nom client (tag)"),
+    q: str = Query(default="", description="Recherche texte sur le nom du document"),
+    status_filter: str = Query(default="", description="uploaded|processing|ready|failed|deleted"),
+) -> list[Document]:
+    logger.info(
+        "list_documents",
+        user_id=str(current_user.id),
+        limit=limit,
+        offset=offset,
+    )
+    client_norm = _normalize_client_name(client_name)
+    q_norm = _normalize_client_name(q)
+    status_norm = _normalize_client_name(status_filter)
+
+    query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
+    if not include_deleted:
+        query = query.where(Document.is_deleted.is_(False))
+
+    result = await db.execute(query.order_by(desc(Document.created_at)))
+    documents_all = list(result.scalars().all())
+
+    if client_norm:
+        filtered: list[Document] = []
+        for d in documents_all:
+            tags = list(getattr(d, "tags", []) or [])
+            if not tags:
+                continue
+            if client_norm in _normalize_client_name(tags[0]):
+                filtered.append(d)
+        documents_all = filtered
+
+    if q_norm:
+        documents_all = [
+            d for d in documents_all
+            if q_norm in _normalize_client_name(getattr(d, "original_filename", ""))
+        ]
+
+    if status_norm:
+        if status_norm == "deleted":
+            documents_all = [d for d in documents_all if bool(getattr(d, "is_deleted", False))]
+        else:
+            documents_all = [
+                d for d in documents_all
+                if _normalize_client_name(
+                    getattr(d, "status", "").value
+                    if hasattr(getattr(d, "status", ""), "value")
+                    else str(getattr(d, "status", ""))
+                ) == status_norm
+            ]
+
+    return documents_all[offset: offset + limit]
+
+
+@router.get(
+    "/clients",
+    response_model=list[str],
+    status_code=status.HTTP_200_OK,
+    summary="Lister les clients connus (tags documents)",
+)
+async def list_clients(
+    current_user: CurrentUser,
+    db: DbSession,
+    include_deleted: bool = Query(default=False),
+) -> list[str]:
+    import re
+    query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
+    if not include_deleted:
+        query = query.where(Document.is_deleted.is_(False))
+    result = await db.execute(query.order_by(desc(Document.created_at)))
+    docs = list(result.scalars().all())
+
+    seen: set[str] = set()
+    out: list[str] = []
+    for d in docs:
+        tags = list(getattr(d, "tags", []) or [])
+        if not tags:
+            continue
+        label = re.sub(r"\s+", " ", str(tags[0]).strip())
+        key = _normalize_client_name(label)
+        if not key or key in seen:
+            continue
+        seen.add(key)
+        out.append(label)
+    return sorted(out, key=lambda x: x.lower())
+
+
+# ── CORBEILLE — routes statiques AVANT /{document_id} ────────────────
+
+@router.get(
+    "/trash/list",
+    status_code=status.HTTP_200_OK,
+    summary="Liste des documents supprimés (corbeille)",
+)
+async def list_trash(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=50, ge=1, le=200),
+    offset: int = Query(default=0, ge=0),
+) -> dict:
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+        .order_by(desc(Document.deleted_at))
+        .offset(offset)
+        .limit(limit)
+    )
+    docs = result.scalars().all()
+
+    count_result = await db.execute(
+        select(func.count()).select_from(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    total = count_result.scalar()
+
+    return {
+        "documents": [
+            {
+                "id": str(d.id),
+                "original_filename": d.original_filename,
+                "size_bytes": d.size_bytes,
+                "content_type": d.content_type,
+                "created_at": d.created_at.isoformat() if d.created_at else None,
+                "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
+                "doc_type": d.doc_type,
+                "status": d.status.value if d.status else None,
+            }
+            for d in docs
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+@router.delete(
+    "/all",
+    status_code=status.HTTP_200_OK,
+    summary="Supprimer tous mes documents (soft delete)",
+)
+async def delete_all_my_documents(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    result = await db.execute(
+        select(Document).where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(False),
+        )
+    )
+    docs = list(result.scalars().all())
+    now = datetime.now(timezone.utc)
+    for doc in docs:
+        doc.is_deleted = True
+        doc.deleted_at = now
+    await db.commit()
+    return {"deleted_count": len(docs)}
+
+
+# ── Routes paramétrées /{document_id} ────────────────────────────────
+
+@router.get(
+    "/{document_id}",
+    response_model=DocumentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Récupérer un document",
+)
+async def get_document(
+    document_id: str, current_user: CurrentUser, db: DbSession
+) -> Document:
+    return await _get_user_document_or_404(db, document_id, current_user.id)
+
+
+@router.delete(
+    "/{document_id}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Supprimer un document (soft delete — corbeille)",
+)
+async def delete_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document.is_deleted = True
+    document.deleted_at = datetime.now(timezone.utc)
+    await db.commit()
+
+
+@router.post(
+    "/{document_id}/restore",
+    status_code=status.HTTP_200_OK,
+    summary="Restaurer un document de la corbeille",
+)
+async def restore_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+            Document.is_deleted.is_(True),
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404("Document non trouvé dans la corbeille")
+
+    document.is_deleted = False
+    document.deleted_at = None
+    await db.commit()
+    return {
+        "message": "Document restauré avec succès",
+        "document_id": str(document.id),
+        "original_filename": document.original_filename,
+    }
+
+
+@router.delete(
+    "/{document_id}/permanent",
+    status_code=status.HTTP_204_NO_CONTENT,
+    summary="Suppression définitive d'un document (RGPD)",
+)
+async def permanent_delete_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> None:
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document introuvable") from exc
+
+    result = await db.execute(
+        select(Document).where(
+            Document.id == doc_uuid,
+            Document.uploaded_by_user_id == current_user.id,
+        )
+    )
+    document = result.scalar_one_or_none()
+    if not document:
+        raise http_404("Document introuvable")
+
+    _storage_backend = document.storage_backend
+    _storage_key = document.storage_key
+    _doc_id_str = str(document.id)
+
+    await db.execute(delete(EntityDetection).where(EntityDetection.document_id == doc_uuid))
+    await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id == doc_uuid))
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        await db.execute(delete(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid))
+    except Exception:
+        pass
+    await db.execute(delete(Document).where(Document.id == doc_uuid))
+    await db.commit()
+
+    try:
+        if _storage_backend and _storage_key:
+            from app.services.storage_service import delete_bytes
+            delete_bytes(_storage_backend, _storage_key)
+    except Exception as exc:
+        logger.warning("permanent_delete_storage_failed", doc_id=_doc_id_str, error=str(exc))

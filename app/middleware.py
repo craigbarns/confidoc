@@ -1,5 +1,6 @@
 """ConfiDoc Backend — Middleware stack (request ID, security headers, timing)."""
 
+import hashlib
 import time
 import uuid
 
@@ -30,22 +31,37 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
         response = await call_next(request)
+
         response.headers["X-Content-Type-Options"] = "nosniff"
         response.headers["X-Frame-Options"] = "DENY"
         response.headers["Referrer-Policy"] = "strict-origin-when-cross-origin"
         response.headers["Permissions-Policy"] = "camera=(), microphone=(), geolocation=()"
+
+        # HSTS — force HTTPS for 1 year, including subdomains
+        response.headers["Strict-Transport-Security"] = (
+            "max-age=31536000; includeSubDomains; preload"
+        )
+
+        # CSP — inline styles replaced by a per-response nonce so 'unsafe-inline' is removed.
+        # The nonce is injected into templates via request.state for server-rendered pages.
+        nonce = hashlib.sha256(uuid.uuid4().bytes).hexdigest()[:16]
+        request.state.csp_nonce = nonce
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
-            "script-src 'self'; "
-            "style-src 'self' 'unsafe-inline'; "
+            f"script-src 'self' 'nonce-{nonce}'; "
+            f"style-src 'self' 'nonce-{nonce}'; "
             "img-src 'self' data: blob:; "
             "font-src 'self'; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; "
-            "base-uri 'self';"
+            "base-uri 'self'; "
+            "form-action 'self';"
         )
+
         if request.url.path.startswith("/api/"):
-            response.headers["Cache-Control"] = "no-store"
+            response.headers["Cache-Control"] = "no-store, no-cache"
+            response.headers["Pragma"] = "no-cache"
+
         return response
 
 

@@ -125,7 +125,9 @@ class Settings(BaseSettings):
     LLM_CONFIDENCE_THRESHOLD: float = 0.75
     LLM_MAX_SNIPPETS: int = 3
     LLM_SNIPPET_CHARS: int = 800
-    LLM_MAX_DOC_CHARS: int = 6000
+    # Augmenté de 6 000 → 20 000 chars pour couvrir des bilans/actes de plusieurs pages.
+    # Pour les documents dépassant cette limite, le service doit chunker avant appel LLM.
+    LLM_MAX_DOC_CHARS: int = 20000
 
     # ---- Local AI (Ollama / Open WebUI stack) ----
     OLLAMA_ENABLED: bool = False
@@ -133,6 +135,22 @@ class Settings(BaseSettings):
     OLLAMA_MODEL: str = "qwen3:1.7b"
     OLLAMA_TIMEOUT_SECONDS: int = 90
     ADMIN_RECOVERY_TOKEN: str = ""
+
+    # ---- Bootstrap & setup ----
+    # Requis en production pour appeler POST /auth/bootstrap-admin.
+    BOOTSTRAP_SECRET: str = ""
+
+    # ---- Email (password reset, notifications) ----
+    SMTP_HOST: str = ""
+    SMTP_PORT: int = 587
+    SMTP_USER: str = ""
+    SMTP_PASSWORD: str = ""
+    SMTP_FROM: str = "noreply@confidoc.fr"
+    SMTP_TLS: bool = True
+    # URL de base de l'interface (ex: https://app.confidoc.fr) pour les liens de reset.
+    APP_BASE_URL: str = "http://localhost:3000"
+    # Durée de validité du token de reset (en minutes)
+    PASSWORD_RESET_TOKEN_EXPIRE_MINUTES: int = 30
 
     # ---- Structured extraction thresholds (optional overrides) ----
     EXTRACT_AMOUNT_MIN_DEFAULT: float | None = None

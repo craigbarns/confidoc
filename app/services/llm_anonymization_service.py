@@ -11,27 +11,37 @@ from typing import Any
 
 from app.config import get_settings
 from app.core.logging import get_logger
+from app.core.tokens import (
+    TOKEN_PERSONNE, TOKEN_EMAIL, TOKEN_TELEPHONE, TOKEN_ADRESSE,
+    TOKEN_SIRET, TOKEN_SIREN, TOKEN_IBAN, TOKEN_SOCIETE,
+    TOKEN_DATE_NAISSANCE, TOKEN_NSS, TOKEN_MONTANT, TOKEN_ID,
+    TOKEN_DATE, TOKEN_VILLE, TOKEN_TVA,
+)
 from app.services.mistral_service import _chat_completion
 
 logger = get_logger(__name__)
 
-ANONYMIZATION_PROMPT = """Tu es un système d'anonymisation de documents confidentiels.
+ANONYMIZATION_PROMPT = f"""Tu es un système d'anonymisation de documents confidentiels.
 
 MISSION: Identifie TOUTES les informations personnelles/sensibles et remplace-les par des tokens.
 
 RÈGLES STRICTES:
-1. Remplace par ces tokens EXACTS:
-   - Noms de personnes → [PERSONNE]
-   - Emails → [EMAIL]
-   - Téléphones → [TELEPHONE]
-   - Adresses postales → [ADRESSE]
-   - SIRET/SIREN → [SIRET]
-   - IBAN/RIB → [IBAN]
-   - Noms de sociétés → [SOCIETE]
-   - Dates de naissance → [DATE_NAISSANCE]
-   - Numéros de sécurité sociale → [NUMERO_SECU]
-   - Montants personnels → [MONTANT_PERSONNEL]
-   - Identifiants uniques → [ID]
+1. Remplace par ces tokens EXACTS (orthographe impérative — copie exactement) :
+   - Noms de personnes → {TOKEN_PERSONNE}
+   - Emails → {TOKEN_EMAIL}
+   - Téléphones → {TOKEN_TELEPHONE}
+   - Adresses postales → {TOKEN_ADRESSE}
+   - Villes / codes postaux → {TOKEN_VILLE}
+   - SIRET → {TOKEN_SIRET}
+   - SIREN → {TOKEN_SIREN}
+   - IBAN/RIB → {TOKEN_IBAN}
+   - Noms de sociétés → {TOKEN_SOCIETE}
+   - Numéro TVA intracommunautaire → {TOKEN_TVA}
+   - Dates de naissance → {TOKEN_DATE_NAISSANCE}
+   - Autres dates → {TOKEN_DATE}
+   - Numéros de sécurité sociale → {TOKEN_NSS}
+   - Montants personnels (non agrégés) → {TOKEN_MONTANT}
+   - Identifiants uniques divers → {TOKEN_ID}
 
 2. Garde les informations comptables/financières génériques:
    - "Total actif", "Résultat net" → CONSERVER
@@ -39,18 +49,18 @@ RÈGLES STRICTES:
    - Postes comptables standards → CONSERVER
 
 3. Format de réponse UNIQUEMENT JSON:
-{{
+{{{{
   "texte_anonymise": "texte complet avec tokens de remplacement",
   "entites_detectees": [
-    {{"type": "PERSONNE", "valeur_originale": "Jean Dupont", "position_debut": 123, "position_fin": 134, "token": "[PERSONNE]"}}
+    {{{{"type": "PERSONNE", "valeur_originale": "Jean Dupont", "position_debut": 123, "position_fin": 134, "token": "{TOKEN_PERSONNE}"}}}}
   ],
   "confiance": "high|medium|low",
   "nb_remplacements": 5
-}}
+}}}}
 
 Document à anonymiser:
 ---
-{text}
+{{text}}
 ---
 
 Réponds UNIQUEMENT avec le JSON, sans texte avant ou après:"""
@@ -80,12 +90,11 @@ def _clean_json_response(raw: str) -> dict[str, Any] | None:
 
 def _fallback_anonymize(text: str) -> str:
     """Anonymisation fallback basique si LLM échoue."""
-    # Patterns minimaux de secours
     patterns = [
-        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]'),
-        (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', '[TELEPHONE]'),
-        (r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b', '[IBAN]'),
-        (r'\b\d{3}[\s.-]?\d{3}[\s.-]?\d{3}[\s.-]?\d{5}\b', '[SIRET]'),
+        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', TOKEN_EMAIL),
+        (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', TOKEN_TELEPHONE),
+        (r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b', TOKEN_IBAN),
+        (r'\b\d{3}[\s.-]?\d{3}[\s.-]?\d{3}[\s.-]?\d{5}\b', TOKEN_SIRET),
     ]
     
     result = text

@@ -11,6 +11,7 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
 from app.models.audit_log import AuditLog
+from app.models.password_reset_token import PasswordResetToken
 
 __all__ = [
     "Base", "BaseModel", "TenantModel", "TimestampMixin",
@@ -21,4 +22,5 @@ __all__ = [
     "EntityDetection",
     "LlmRequest",
     "AuditLog",
+    "PasswordResetToken",
 ]
