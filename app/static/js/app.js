@@ -844,7 +844,8 @@ async function uploadFile(file) {
 
   try {
     const clientQp = clientName ? `&client_name=${encodeURIComponent(clientName)}` : "";
-    const data = await uploadWithProgress(fd, `/uploads?auto_anonymize=false${clientQp}`, fill, statusEl);
+    const autoAnon = $("upload-auto-anonymize")?.checked ?? true;
+    const data = await uploadWithProgress(fd, `/uploads?auto_anonymize=${autoAnon}${clientQp}`, fill, statusEl);
     currentDocId = data.document_id;
     currentDocName = file.name;
     currentDocStatus = "uploaded";
@@ -863,8 +864,15 @@ async function uploadFile(file) {
       refreshAIDocInsights(currentDocId);
       $("anon-empty").style.display = "";
       $("anon-empty").querySelector(".hint-icon").textContent = "📄";
-      $("anon-empty").querySelector("p").innerHTML =
-        `<strong>${file.name}</strong> uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+      if (autoAnon) {
+        $("anon-empty").querySelector("p").innerHTML =
+          `<strong>${file.name}</strong> uploadé.<br>Anonymisation en cours en arrière-plan…`;
+        showAnonLoading("Anonymisation en cours…");
+        pollDocStatus(currentDocId);
+      } else {
+        $("anon-empty").querySelector("p").innerHTML =
+          `<strong>${file.name}</strong> uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+      }
     }, 600);
 
     toast(`${file.name} uploadé`, "success");
