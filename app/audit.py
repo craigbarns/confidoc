@@ -17,6 +17,33 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+
+def _extract_user_id_from_request(request: Request) -> str | None:
+    """Extrait l'user_id depuis request.state (si auth déjà résolue)
+    ou depuis le JWT Authorization header (pour les routes auth comme /login).
+
+    Retourne None si aucun utilisateur identifiable.
+    """
+    # Chemin rapide : auth middleware a déjà résolu l'utilisateur
+    if hasattr(request.state, "user") and request.state.user:
+        return str(request.state.user.id)
+
+    # Chemin fallback : décoder le JWT nous-mêmes (best-effort, sans lever d'exception)
+    auth_header = request.headers.get("Authorization", "")
+    if not auth_header.startswith("Bearer "):
+        return None
+    token = auth_header.removeprefix("Bearer ").strip()
+    if not token:
+        return None
+    try:
+        from app.core.security import decode_access_token
+        payload = decode_access_token(token)
+        if payload and "sub" in payload:
+            return str(payload["sub"])
+    except Exception:
+        pass
+    return None
+
 # Only audit mutating methods on API paths
 _AUDITED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}
 
@@ -106,13 +133,10 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         from app.core.database import async_session_factory
         from app.models.audit_log import AuditLog
 
-        user_id = None
+        user_id = _extract_user_id_from_request(request)
         org_id = None
-        if hasattr(request.state, "user") and request.state.user:
-            user_id = request.state.user.id
-            # Try to get org_id from membership (already loaded in some paths)
-            if hasattr(request.state, "org_id"):
-                org_id = request.state.org_id
+        if hasattr(request.state, "org_id"):
+            org_id = request.state.org_id
 
         resource_type, resource_id = _extract_resource(request.url.path)
         action = _extract_action(request.method, request.url.path)

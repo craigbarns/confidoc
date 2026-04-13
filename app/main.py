@@ -20,21 +20,74 @@ from app.api.ui import router as ui_router
 from app.api.v1.router import router as v1_router
 
 
-async def _periodic_retention_purge() -> None:
-    """Background task: purge expired data every 24h (RGPD retention policy)."""
-    import asyncio as _aio
+_RETENTION_REDIS_KEY = "confidoc:retention:last_purge_ts"
+_RETENTION_INTERVAL_SECONDS = 86400      # 24h normal interval
+_RETENTION_MAX_GAP_SECONDS = 172800      # alerte si gap > 48h au démarrage
+
+
+async def _run_retention_purge(logger: object) -> None:
+    """Exécute une purge de rétention et met à jour le timestamp Redis."""
+    import time
     from app.core.database import async_session_factory
+    from app.services.retention_service import purge_expired_data
+
+    try:
+        async with async_session_factory() as db:
+            deleted = await purge_expired_data(db)
+            logger.info("retention_purge_complete", deleted_counts=deleted)  # type: ignore[attr-defined]
+    except Exception as exc:
+        logger.warning("retention_purge_failed", error=str(exc))  # type: ignore[attr-defined]
+        return
+
+    try:
+        import redis.asyncio as aioredis
+        settings = get_settings()
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1)
+        async with r:
+            await r.set(_RETENTION_REDIS_KEY, str(int(time.time())))
+    except Exception:
+        pass  # Redis indisponible : la purge a quand même eu lieu
+
+
+async def _periodic_retention_purge() -> None:
+    """Background task: purge expired data every 24h (RGPD retention policy).
+
+    - Au démarrage : vérifie via Redis si la dernière purge date de plus de 48h.
+      Si oui, déclenche immédiatement une purge de rattrapage et logue un warning.
+    - Toutes les 24h ensuite : purge normale.
+    """
+    import asyncio as _aio
+    import time
+
     _logger = get_logger("retention")
-    await _aio.sleep(60)  # wait for app startup
+    await _aio.sleep(60)  # attendre la fin du démarrage complet
+
+    # ── Vérification de rattrapage au démarrage ──────────────────────
+    last_purge_ts: float = 0.0
+    try:
+        import redis.asyncio as aioredis
+        settings = get_settings()
+        r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1)
+        async with r:
+            raw = await r.get(_RETENTION_REDIS_KEY)
+        if raw:
+            last_purge_ts = float(raw)
+    except Exception:
+        pass  # Redis indisponible ou clé absente → on assume qu'une purge est nécessaire
+
+    gap = time.time() - last_purge_ts
+    if gap > _RETENTION_MAX_GAP_SECONDS:
+        _logger.warning(
+            "retention_purge_overdue",
+            gap_hours=round(gap / 3600, 1),
+            action="triggering_catchup_purge",
+        )
+        await _run_retention_purge(_logger)
+
+    # ── Boucle normale 24h ───────────────────────────────────────────
     while True:
-        try:
-            from app.services.retention_service import purge_expired_data
-            async with async_session_factory() as db:
-                deleted = await purge_expired_data(db)
-                _logger.info("retention_purge_complete", deleted_counts=deleted)
-        except Exception as exc:
-            _logger.warning("retention_purge_failed", error=str(exc))
-        await _aio.sleep(86400)  # 24 hours
+        await _aio.sleep(_RETENTION_INTERVAL_SECONDS)
+        await _run_retention_purge(_logger)
 
 
 @asynccontextmanager

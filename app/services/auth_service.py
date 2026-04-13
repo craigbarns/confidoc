@@ -125,3 +125,78 @@ async def logout_user(db: AsyncSession, user_id: str) -> None:
     stmt = delete(RefreshToken).where(RefreshToken.user_id == user_id)
     await db.execute(stmt)
     await db.commit()
+
+
+# ── Password reset ────────────────────────────────────────────────────
+
+async def request_password_reset(db: AsyncSession, email: str) -> None:
+    """Génère un token de reset et envoie l'email.
+
+    Ne lève jamais d'exception visible (anti-enumeration : même réponse
+    que l'email existe ou non).
+    """
+    from app.core.security import generate_opaque_token, hash_token
+    from app.models.password_reset_token import PasswordResetToken
+    from app.services.email_service import send_password_reset_email
+
+    normalized = email.strip().lower()
+    result = await db.execute(select(User).where(User.email == normalized))
+    user = result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        return  # silencieux
+
+    # Invalider les anciens tokens pour cet utilisateur
+    await db.execute(
+        delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
+    )
+
+    token_value = generate_opaque_token(40)
+    expires_at = datetime.now(timezone.utc) + timedelta(
+        minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    )
+    db.add(PasswordResetToken(
+        user_id=user.id,
+        token=hash_token(token_value),
+        expires_at=expires_at,
+    ))
+    await db.commit()
+
+    reset_url = f"{settings.APP_BASE_URL}/reset-password?token={token_value}"
+    await send_password_reset_email(normalized, reset_url)
+
+
+async def reset_password(db: AsyncSession, token_value: str, new_password: str) -> None:
+    """Vérifie le token et met à jour le mot de passe."""
+    from app.core.security import hash_token, get_password_hash
+    from app.models.password_reset_token import PasswordResetToken
+
+    result = await db.execute(
+        select(PasswordResetToken).where(
+            PasswordResetToken.token == hash_token(token_value)
+        )
+    )
+    prt = result.scalar_one_or_none()
+
+    if not prt:
+        raise http_400("Token invalide ou expiré")
+
+    if prt.expires_at < datetime.now(timezone.utc):
+        await db.delete(prt)
+        await db.commit()
+        raise http_400("Token expiré. Faites une nouvelle demande.")
+
+    user_result = await db.execute(select(User).where(User.id == prt.user_id))
+    user = user_result.scalar_one_or_none()
+
+    if not user or not user.is_active:
+        raise http_400("Compte introuvable ou désactivé")
+
+    user.password_hash = get_password_hash(new_password)
+    user.last_login_at = datetime.now(timezone.utc)
+
+    # Invalider toutes les sessions actives (refresh tokens)
+    await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))
+    # Consommer le reset token
+    await db.delete(prt)
+    await db.commit()

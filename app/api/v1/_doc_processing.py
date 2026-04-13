@@ -1,0 +1,496 @@
+"""ConfiDoc — Documents processing endpoints.
+
+Routes : /status, extract, extracted-text, anonymize, process (legacy),
+         structured, status, preview, validate, approve-export.
+"""
+
+from __future__ import annotations
+
+import uuid
+from datetime import datetime, timezone
+from io import BytesIO
+from types import SimpleNamespace
+from typing import Any
+
+from fastapi import APIRouter, BackgroundTasks, Body, Query, status
+from sqlalchemy import delete, func, select
+
+from app.api.deps import CurrentUser, DbSession
+from app.api.v1._doc_shared import (
+    _check_export_gate,
+    _get_anonymized_text,
+    _get_or_create_final_version,
+    _get_user_document_or_404,
+    _infer_semantic_type,
+    _read_file_or_404,
+)
+from app.core.database import async_session_factory
+from app.core.exceptions import http_400, http_404, http_500
+from app.core.logging import get_logger
+from app.core.text_sanitize import postgres_safe_text
+from app.models.document import Document, DocumentStatus
+from app.models.document_version import DocumentVersion, DocumentVersionType
+from app.models.entity_detection import EntityDetection
+from app.schemas.document import (
+    AnonymizeResponse,
+    DocumentPreviewResponse,
+    EntityMappingItem,
+    StructuredDocumentResponse,
+    ValidateDocumentRequest,
+)
+
+router = APIRouter()
+logger = get_logger(__name__)
+
+
+@router.get(
+    "/{document_id}/status",
+    status_code=status.HTTP_200_OK,
+    summary="Vérifier le statut OCR + Anonymisation",
+)
+async def document_status(
+    document_id: str, current_user: CurrentUser, db: DbSession
+) -> dict:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original = result.scalar_one_or_none()
+
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview = result.scalar_one_or_none()
+
+    count_result = await db.execute(
+        select(func.count()).select_from(EntityDetection).where(
+            EntityDetection.document_id == document.id
+        )
+    )
+    detections_count = count_result.scalar() or 0
+
+    return {
+        "document_id": str(document.id),
+        "status": document.status.value,
+        "extraction": {
+            "done": original is not None and bool(original.content_text),
+            "text_length": len(original.content_text) if original and original.content_text else 0,
+        },
+        "anonymization": {
+            "done": preview is not None and bool(preview.content_text),
+            "preview_length": len(preview.content_text) if preview and preview.content_text else 0,
+            "detections_count": detections_count,
+        },
+        "next_steps": [] if (preview and preview.content_text) else (
+            ["anonymize"] if (original and original.content_text) else ["extract", "anonymize"]
+        ),
+    }
+
+
+@router.post(
+    "/{document_id}/extract",
+    status_code=status.HTTP_200_OK,
+    summary="Étape 1 : Extraire le texte via Mistral OCR",
+)
+async def extract_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    file_content = _read_file_or_404(document)
+
+    from app.services.document_processing_service import build_extraction_ocr
+    original_text, meta = await build_extraction_ocr(db, document, file_content)
+    await db.commit()
+
+    return {
+        "document_id": str(document.id),
+        "status": "extracted",
+        "text": original_text,
+        "text_length": len(original_text),
+        "pages": meta.get("pages", 0),
+        "model": meta.get("model", "unknown"),
+    }
+
+
+@router.get(
+    "/{document_id}/extracted-text",
+    status_code=status.HTTP_200_OK,
+    summary="Récupérer le texte OCR extrait (sans le relancer)",
+)
+async def get_extracted_text(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original_version = result.scalar_one_or_none()
+    if not original_version or original_version.content_text is None:
+        raise http_400("Texte non extrait. Lancez POST /extract d'abord.")
+
+    return {
+        "document_id": str(document.id),
+        "text": original_version.content_text,
+        "text_length": len(original_version.content_text),
+        "extraction_date": original_version.created_at.isoformat() if original_version.created_at else None,
+    }
+
+
+@router.post(
+    "/{document_id}/anonymize",
+    status_code=status.HTTP_200_OK,
+    summary="Étape 2 : Anonymiser le texte extrait",
+)
+async def anonymize_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    auto_extract: bool = Query(default=True),
+    use_llm: bool = Query(default=False),
+    profile: str = Query(default="moderate", description="moderate | strict"),
+    mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
+) -> dict:
+    """Anonymisation du texte.
+
+    - **pseudonymization** : tokens réversibles, usage interne.
+    - **anonymization** : masquage fort, export/IA.
+    """
+    import traceback as _tb
+    try:
+        return await _anonymize_inner(document_id, current_user, db, auto_extract, use_llm, profile, mode)
+    except Exception as exc:
+        if hasattr(exc, "status_code"):
+            raise
+        logger.error("anonymize_unhandled", error=str(exc), tb=_tb.format_exc())
+        raise http_500(f"Anonymization failed: {type(exc).__name__}: {str(exc)[:200]}")
+
+
+async def _anonymize_inner(
+    document_id: str,
+    current_user: Any,
+    db: Any,
+    auto_extract: bool,
+    use_llm: bool,
+    profile: str,
+    mode: str,
+) -> dict:
+    from app.services.document_processing_service import build_anonymization_llm, build_extraction_ocr
+    from app.services.reidentification_risk_service import analyze_reidentification_risk
+
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    _doc_id = str(document.id)
+    _user_id = current_user.id
+    _org_id = getattr(current_user, "org_id", None)
+
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original_version = result.scalar_one_or_none()
+    original_text = None
+    extracted_on_demand = False
+
+    if original_version and original_version.content_text is not None:
+        original_text = original_version.content_text
+    elif auto_extract:
+        file_content = _read_file_or_404(document)
+        original_text, _ = await build_extraction_ocr(db, document, file_content)
+        extracted_on_demand = True
+        await db.commit()
+
+    if original_text is None:
+        raise http_400("Texte non extrait. Lancez /extract d'abord ou activez auto_extract.")
+    if len(original_text.strip()) == 0:
+        raise http_400("Document vide ou illisible.")
+
+    effective_profile = "strict" if mode == "anonymization" else profile
+    effective_use_llm = True if mode == "anonymization" else use_llm
+
+    preview_text, detections, meta = await build_anonymization_llm(
+        db, document, original_text, use_llm=effective_use_llm, profile=effective_profile
+    )
+    await db.commit()
+
+    risk_report = analyze_reidentification_risk(preview_text, meta.get("entity_summary", {}))
+
+    try:
+        from app.models.audit_log import AuditLog
+        db.add(AuditLog(
+            user_id=_user_id, org_id=_org_id,
+            action=f"anonymize:{mode}", resource_type="document",
+            resource_id=_doc_id, method="POST",
+            path=f"/api/v1/documents/{document_id}/anonymize", status_code=200,
+            details={
+                "mode": mode, "profile": effective_profile,
+                "method": meta.get("method", "unknown"),
+                "detections_count": len(detections),
+                "risk_score": risk_report.score, "risk_level": risk_report.level,
+            },
+        ))
+        await db.commit()
+    except Exception as exc:
+        logger.warning("audit_log_save_failed", error=str(exc))
+        await db.rollback()
+
+    if mode == "pseudonymization":
+        try:
+            from app.services.crypto_service import encrypt_mapping
+            from app.models.pseudonym_mapping import PseudonymMapping
+            from app.config import get_settings
+            from datetime import timedelta
+            settings = get_settings()
+            raw_mapping = meta.get("registry_raw_mapping", {})
+            if raw_mapping:
+                encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
+                expiry = datetime.now(timezone.utc) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
+                db.add(PseudonymMapping(
+                    document_id=uuid.UUID(_doc_id),
+                    user_id=_user_id,
+                    encrypted_mapping=encrypted,
+                    expires_at=expiry,
+                    risk_score=risk_report.score,
+                    risk_level=risk_report.level,
+                ))
+                await db.commit()
+        except Exception as exc:
+            logger.warning("pseudo_mapping_save_failed", error=str(exc))
+            await db.rollback()
+
+    return {
+        "document_id": _doc_id,
+        "status": "anonymized",
+        "mode": mode,
+        "preview_text": preview_text,
+        "detections_count": len(detections),
+        "entity_summary": meta.get("entity_summary", {}),
+        "method": meta.get("method", "llm"),
+        "auto_extracted": extracted_on_demand,
+        "risk": risk_report.to_dict(),
+    }
+
+
+@router.post(
+    "/{document_id}/process",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="[Legacy] Traitement complet OCR + Anonymisation en background",
+)
+async def process_document_legacy(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    profile: str = Query(default="moderate"),
+    document_type: str = Query(default="auto"),
+) -> dict:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    file_content = _read_file_or_404(document)
+    document.status = DocumentStatus.PROCESSING
+    await db.commit()
+    from app.workers.tasks import process_document_legacy_task
+    process_document_legacy_task.delay(
+        doc_id=str(document.id),
+        file_content=file_content,
+        profile=profile,
+        document_type=document_type,
+    )
+    return {"document_id": str(document.id), "status": "processing"}
+
+
+@router.get(
+    "/{document_id}/preview",
+    response_model=DocumentPreviewResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Prévisualiser le document anonymisé",
+)
+async def preview_document(
+    document_id: str, current_user: CurrentUser, db: DbSession
+) -> DocumentPreviewResponse:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    preview_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview_version = preview_result.scalar_one_or_none()
+    if not preview_version:
+        raise http_404("Aucune preview disponible. Lancez /anonymize d'abord.")
+
+    det_result = await db.execute(
+        select(EntityDetection).where(EntityDetection.document_id == document.id)
+    )
+    detections = list(det_result.scalars().all())
+    entity_summary: dict[str, int] = {}
+    for det in detections:
+        etype = det.entity_type or "unknown"
+        entity_summary[etype] = entity_summary.get(etype, 0) + 1
+
+    return DocumentPreviewResponse(
+        document_id=document.id,
+        status=document.status.value,
+        preview_text=preview_version.content_text or "",
+        detections_count=len(detections),
+        entity_summary=entity_summary,
+    )
+
+
+@router.get(
+    "/{document_id}/structured",
+    response_model=StructuredDocumentResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Données structurées du document pour IA/RAG",
+)
+async def get_structured_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    include_text: bool = Query(default=True),
+) -> StructuredDocumentResponse:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    anonymized_text = await _get_anonymized_text(db, document)
+
+    det_result = await db.execute(
+        select(EntityDetection).where(EntityDetection.document_id == document.id)
+    )
+    detections = list(det_result.scalars().all())
+
+    entity_summary: dict[str, int] = {}
+    placeholder_counts: dict[str, int] = {}
+    for det in detections:
+        etype = det.entity_type or "unknown"
+        entity_summary[etype] = entity_summary.get(etype, 0) + 1
+        replacement = det.replacement or "[REDACTED]"
+        placeholder_counts[replacement] = placeholder_counts.get(replacement, 0) + 1
+
+    entity_tags = [
+        EntityMappingItem(
+            placeholder=placeholder,
+            entity_type=_infer_semantic_type(placeholder),
+            occurrences=count,
+        )
+        for placeholder, count in sorted(placeholder_counts.items())
+    ]
+
+    return StructuredDocumentResponse(
+        document_id=document.id,
+        doc_type=document.doc_type,
+        status=document.status.value,
+        original_filename=document.original_filename,
+        entity_summary=entity_summary,
+        entity_tags=entity_tags,
+        anonymized_text=anonymized_text if include_text else None,
+        text_length=len(anonymized_text) if anonymized_text else 0,
+        detections_count=len(detections),
+        anonymization_method=None,
+        created_at=document.created_at,
+    )
+
+
+@router.post(
+    "/{document_id}/validate",
+    status_code=status.HTTP_200_OK,
+    summary="Valider et figer la version anonymisée finale",
+)
+async def validate_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    args: ValidateDocumentRequest = Body(default_factory=ValidateDocumentRequest),
+) -> dict:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    preview_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview_version = preview_result.scalar_one_or_none()
+    if not preview_version:
+        raise http_404("Aucune preview disponible")
+
+    final_text = args.final_text if args.final_text is not None else preview_version.content_text
+    final_text = postgres_safe_text(final_text)
+
+    await db.execute(
+        delete(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
+        )
+    )
+    db.add(DocumentVersion(
+        document_id=document.id,
+        version_type=DocumentVersionType.FINAL_ANONYMIZED,
+        content_text=final_text,
+    ))
+    await db.commit()
+
+    from app.config import get_settings
+    from app.services.webhook_notify import notify_document_validated
+    settings = get_settings()
+    wh_url = (settings.WEBHOOK_ON_VALIDATE_URL or "").strip()
+    if wh_url:
+        background_tasks.add_task(
+            notify_document_validated,
+            document_id=str(document.id),
+            url=wh_url,
+            secret=settings.WEBHOOK_ON_VALIDATE_SECRET or "",
+        )
+
+    return {"status": "validated", "document_id": str(document.id)}
+
+
+@router.post(
+    "/{document_id}/approve-export",
+    status_code=status.HTTP_200_OK,
+    summary="Validation humaine pour autoriser l'export (risque élevé)",
+)
+async def approve_export(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> dict:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+
+    try:
+        from app.models.pseudonym_mapping import PseudonymMapping
+        result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = result.scalar_one_or_none()
+        if not mapping:
+            raise http_404("Aucun mapping trouvé. Lancez /anonymize d'abord.")
+        if mapping.risk_level == "critical":
+            raise http_400("Impossible d'approuver : risque critique.")
+
+        mapping.human_validated = True
+        mapping.validated_by_user_id = current_user.id
+        mapping.validated_at = datetime.now(timezone.utc)
+        await db.commit()
+    except Exception as exc:
+        if hasattr(exc, "status_code"):
+            raise
+        logger.warning("approve_export_failed", error=str(exc))
+        await db.rollback()
+
+    return {"status": "approved", "document_id": str(document.id)}
