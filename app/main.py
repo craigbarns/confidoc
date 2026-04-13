@@ -23,13 +23,15 @@ from app.api.v1.router import router as v1_router
 async def _periodic_retention_purge() -> None:
     """Background task: purge expired data every 24h (RGPD retention policy)."""
     import asyncio as _aio
+    from app.core.database import async_session_factory
     _logger = get_logger("retention")
     await _aio.sleep(60)  # wait for app startup
     while True:
         try:
             from app.services.retention_service import purge_expired_data
-            deleted = await purge_expired_data()
-            _logger.info("retention_purge_complete", deleted_counts=deleted)
+            async with async_session_factory() as db:
+                deleted = await purge_expired_data(db)
+                _logger.info("retention_purge_complete", deleted_counts=deleted)
         except Exception as exc:
             _logger.warning("retention_purge_failed", error=str(exc))
         await _aio.sleep(86400)  # 24 hours
