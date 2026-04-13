@@ -32,35 +32,49 @@ async def build_extraction_ocr(
     document.status = DocumentStatus.PROCESSING
     await db.flush()
     
-    # Extraction: Fast PyMuPDF -> Docling fallback -> Mistral OCR fallback
-    try:
-        from app.services.fast_extraction_service import extract_text_sync
-        import asyncio
-        loop = asyncio.get_running_loop()
-        fast_result = await loop.run_in_executor(
-            None, extract_text_sync, file_content, document.extension
-        )
-        if fast_result["text"].strip():
-            original_text = fast_result["text"]
-            extraction_meta = {
-                "method": fast_result["method"],
-                "pages": fast_result["pages"],
-            }
-        else:
-            raise ValueError(f"fast extraction returned empty text: {fast_result.get('error')}")
-    except Exception as exc:
-        logger.warning("fast_extraction_failed_using_docling", error=str(exc)[:200])
+    # Extraction: Mistral OCR (premium) -> Fast PyMuPDF fallback -> Docling fallback
+    settings = get_settings()
+    original_text = ""
+    extraction_meta: dict[str, Any] = {}
+
+    if settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY:
         try:
-            from app.services.docling_service import extract_text_from_file_docling
-            original_text, extraction_meta = await extract_text_from_file_docling(
-                file_content, document.extension
-            )
-        except Exception as exc2:
-            logger.warning("docling_failed_using_mistral", error=str(exc2)[:200])
             from app.services.mistral_ocr_service import extract_text_from_file
             original_text, extraction_meta = await extract_text_from_file(
                 file_content, document.extension
             )
+            if not original_text.strip():
+                raise ValueError("mistral_ocr_empty_text")
+        except Exception as exc:
+            logger.warning("mistral_ocr_failed_fallback_to_pymupdf", error=str(exc)[:200])
+            original_text = ""
+
+    if not original_text.strip():
+        try:
+            from app.services.fast_extraction_service import extract_text_sync
+            import asyncio
+            loop = asyncio.get_running_loop()
+            fast_result = await loop.run_in_executor(
+                None, extract_text_sync, file_content, document.extension
+            )
+            if fast_result["text"].strip():
+                original_text = fast_result["text"]
+                extraction_meta = {
+                    "method": fast_result["method"],
+                    "pages": fast_result["pages"],
+                }
+            else:
+                raise ValueError(f"fast extraction returned empty text: {fast_result.get('error')}")
+        except Exception as exc:
+            logger.warning("fast_extraction_failed_using_docling", error=str(exc)[:200])
+            try:
+                from app.services.docling_service import extract_text_from_file_docling
+                original_text, extraction_meta = await extract_text_from_file_docling(
+                    file_content, document.extension
+                )
+            except Exception as exc2:
+                logger.error("docling_failed_no_more_fallbacks", error=str(exc2)[:200])
+                raise
     
     if not original_text.strip():
         logger.warning("empty_text_extraction", doc_id=str(document.id))
