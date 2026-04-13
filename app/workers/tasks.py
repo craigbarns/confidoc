@@ -37,7 +37,7 @@ async def _reset_document_status(doc_id: str) -> None:
         logger.error("reset_document_status_failed", doc_id=doc_id, error=str(exc))
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30)
+@shared_task(bind=True, max_retries=2, default_retry_delay=30, time_limit=600, soft_time_limit=540)
 def anonymize_document_task(
     self,
     doc_id: str,

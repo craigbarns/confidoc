@@ -1015,7 +1015,7 @@ async function anonymize() {
 
 function pollDocStatus(docId) {
   let tries = 0;
-  const maxTries = 60;
+  const maxTries = 240;  // 240 × 2s = 8 minutes for Railway cold-start + model load
   const interval = setInterval(async () => {
     tries++;
     if (tries > maxTries) {
