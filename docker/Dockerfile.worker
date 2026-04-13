@@ -49,6 +49,9 @@ RUN pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY . .
 
+# Pre-download docling models to avoid 4min cold-start during investor demos
+RUN python -c "from docling.document_converter import DocumentConverter; DocumentConverter()"
+
 # Télécharger le modèle spaCy de base (NER FR) - Optionnel mais recommandé ici
 RUN python -m spacy download fr_core_news_md
 

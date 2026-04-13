@@ -886,6 +886,34 @@ async function uploadFile(file) {
   }
 }
 
+async function createDemoDocument() {
+  try {
+    const res = await apiFetch("/demo", { method: "POST" });
+    currentDocId = res.document_id;
+    currentDocName = res.original_filename;
+    currentDocStatus = "processing";
+    currentDocSize = 0;
+    updateHeaderContext();
+    await loadDocList();
+
+    setStep(2);
+    resetAnonPanel();
+    updateAnonDocBar(res.original_filename, 0);
+    refreshAIDocInsights(currentDocId);
+    $("anon-empty").style.display = "";
+    $("anon-empty").querySelector(".hint-icon").textContent = "🚀";
+    $("anon-empty").querySelector("p").innerHTML =
+      `<strong>${res.original_filename}</strong> créé.<br>Anonymisation en cours en arrière-plan…`;
+    showAnonLoading("Anonymisation en cours…");
+    pollDocStatus(currentDocId);
+
+    toast("Document de démo créé — anonymisation lancée", "success");
+  } catch (e) {
+    console.error("demo error:", e);
+    toast(`Erreur démo: ${e.message}`, "error");
+  }
+}
+
 // ── Anonymisation ──────────────────────────────────────────────────────
 
 function resetAnonPanel() {
@@ -2269,6 +2297,7 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Anonymiser
+  $("btn-demo")?.addEventListener("click", createDemoDocument);
   $("btn-anonymize").addEventListener("click", anonymize);
 
   // Valider → discussion IA (avec validation)
