@@ -1799,7 +1799,7 @@ async function exportText() {
     toast("Export texte terminé", "success");
   } catch (e) {
     console.error("exportText error:", e);
-    if (e.message && e.message.includes("bloque")) {
+    if (e.message && e.message.includes("bloqu")) {
       toast(e.message, "error");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
@@ -1819,7 +1819,7 @@ async function exportPdf() {
     toast("Export PDF terminé", "success");
   } catch (e) {
     console.error("exportPdf error:", e);
-    if (e.message && e.message.includes("bloque")) {
+    if (e.message && e.message.includes("bloqu")) {
       toast(e.message, "error");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
@@ -1938,7 +1938,7 @@ function renderDashboard(data, summary = {}) {
   animateNumber($("dash-bucket-processing"), summary.processing ?? sc.processing ?? 0);
   animateNumber($("dash-bucket-uploaded"), summary.uploaded ?? sc.uploaded ?? 0);
   animateNumber($("dash-bucket-failed"), summary.failed ?? sc.failed ?? 0);
-  animateNumber($("dash-uploads-24h"), summary.uploads_24h ?? 0);
+  animateNumber($("dash-uploads-24h"), summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
   const total = Math.max(0, summary.total ?? data.total_documents ?? 0);
   const ready = Math.max(0, summary.ready ?? sc.ready ?? 0);
   if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
@@ -2374,9 +2374,10 @@ function exportReviewResult() {
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  // Garantir l'état initial : overlay fermé, forgot-section caché
+  // Garantir l'état initial : overlay fermé, forgot/reset-section cachés
   if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
   if ($("forgot-section")) $("forgot-section").style.display = "none";
+  if ($("reset-section")) $("reset-section").style.display = "none";
 
   // Fermer la modal confirm avec Echap
   document.addEventListener("keydown", (e) => {
@@ -2780,7 +2781,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Service Worker
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/sw.js?v=2").catch(() => {});
+    navigator.serviceWorker.register("/static/sw.js?v=4").catch(() => {});
   }
 
   // Reprendre la session si token en sessionStorage
