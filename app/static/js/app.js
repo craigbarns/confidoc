@@ -546,37 +546,36 @@ function renderDocList(docs) {
   };
 
   list.innerHTML = docs.map(d => {
-    const name = d.original_filename.length > 26
-      ? d.original_filename.slice(0, 24) + "…"
-      : d.original_filename;
-    const label = statusLabel[d.status] || d.status;
+    const rawName = escapeHtml(d.original_filename || "");
+    const name = rawName.length > 26 ? rawName.slice(0, 24) + "…" : rawName;
+    const label = escapeHtml(statusLabel[d.status] || d.status || "");
     const selected = d.id === currentDocId ? " selected" : "";
     const size = formatBytes(d.size_bytes);
     const date = formatDate(d.created_at);
     const meta = [date, size].filter(Boolean).join(" · ");
     const clientTag = Array.isArray(d.tags) && d.tags.length
-      ? `<span class="doc-client-tag">${d.tags[0]}</span>`
+      ? `<span class="doc-client-tag">${escapeHtml(d.tags[0])}</span>`
       : "";
     const isDeleted = !!d.is_deleted;
     const deletedBadge = isDeleted ? `<span class="doc-item-status">Corbeille</span>` : "";
     const cardClass = isDeleted ? " trashed" : "";
     const deleteBtn = isDeleted
       ? ""
-      : `<button class="doc-item-del" data-id="${d.id}" data-name="${d.original_filename}" title="Supprimer">✕</button>`;
+      : `<button class="doc-item-del" data-id="${escapeHtml(d.id)}" data-name="${rawName}" title="Supprimer">✕</button>`;
     const trashActions = isDeleted
       ? `<div class="doc-item-actions">
-          <button class="btn-tiny doc-item-restore" data-id="${d.id}" data-name="${d.original_filename}">Restaurer</button>
-          <button class="btn-tiny doc-item-delete-perm" data-id="${d.id}" data-name="${d.original_filename}">Suppr. définitive</button>
+          <button class="btn-tiny doc-item-restore" data-id="${escapeHtml(d.id)}" data-name="${rawName}">Restaurer</button>
+          <button class="btn-tiny doc-item-delete-perm" data-id="${escapeHtml(d.id)}" data-name="${rawName}">Suppr. définitive</button>
         </div>`
       : "";
 
-    return `<div class="doc-item${selected}${cardClass}" data-id="${d.id}" data-status="${d.status}" data-name="${d.original_filename}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
+    return `<div class="doc-item${selected}${cardClass}" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" data-name="${rawName}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
       <div class="doc-item-name">${name}</div>
       <div class="doc-item-meta">
-        <span class="doc-item-status status-${d.status}">${label}</span>
+        <span class="doc-item-status status-${escapeHtml(d.status)}">${label}</span>
         ${deletedBadge}
         ${clientTag}
-        ${meta ? `<span>${meta}</span>` : ""}
+        ${meta ? `<span>${escapeHtml(meta)}</span>` : ""}
       </div>
       ${deleteBtn}
       ${trashActions}
@@ -1563,9 +1562,12 @@ async function sendCopilotMessage(question, inputEl) {
   latestAssistantText = "";
   $("btn-copy-answer").disabled = true;
   try {
+    const baseQ = reportMode
+      ? `${question}\n\nRéponds en format rapport structuré avec sections: Résumé, Points clés, Risques, Actions recommandées.`
+      : question;
     const resp = await apiFetch(`/copilot/${currentDocId}/ask`, {
       method: "POST",
-      body: JSON.stringify({ question: applyCabinetDocTypePrefix(question), mode: "expert" }),
+      body: JSON.stringify({ question: applyCabinetDocTypePrefix(baseQ), mode: "expert" }),
     });
     latestAssistantText = resp.answer || "";
     bodyEl.textContent = latestAssistantText || "Aucune réponse.";
@@ -1576,6 +1578,9 @@ async function sendCopilotMessage(question, inputEl) {
     toast(`Copilot indisponible: ${e.message}`, "error");
   } finally {
     bodyEl.classList.remove("streaming");
+    if (reportMode && latestAssistantText.trim()) {
+      renderStructuredAnswer(bodyEl, latestAssistantText);
+    }
     saveChatHistory(currentDocId);
   }
 }
@@ -2350,6 +2355,74 @@ document.addEventListener("DOMContentLoaded", () => {
       } finally {
         btn.disabled = false;
         btn.textContent = "Envoyer le lien";
+      }
+    });
+  }
+
+  // Reset password flow (from ?reset_token=... URL)
+  const urlParams = new URLSearchParams(window.location.search);
+  const resetToken = urlParams.get("reset_token");
+  if (resetToken && $("reset-section") && $("form-login")) {
+    $("form-login").style.display = "none";
+    $("forgot-section").style.display = "none";
+    $("reset-section").style.display = "";
+  }
+  if ($("btn-toggle-reset-password")) {
+    $("btn-toggle-reset-password").addEventListener("click", () => {
+      const inp = $("reset-password-new");
+      const btn = $("btn-toggle-reset-password");
+      if (inp.type === "password") {
+        inp.type = "text";
+        btn.textContent = "🙈";
+        btn.title = "Masquer le mot de passe";
+      } else {
+        inp.type = "password";
+        btn.textContent = "👁";
+        btn.title = "Afficher le mot de passe";
+      }
+    });
+  }
+  if ($("btn-reset-submit")) {
+    $("btn-reset-submit").addEventListener("click", async () => {
+      const token = resetToken || "";
+      const newPassword = ($("reset-password-new").value || "").trim();
+      const msgEl = $("reset-msg");
+      const btn = $("btn-reset-submit");
+      if (!newPassword || newPassword.length < 8) {
+        msgEl.textContent = "Le mot de passe doit contenir au moins 8 caractères.";
+        msgEl.style.display = "";
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Enregistrement…";
+      msgEl.style.display = "none";
+      try {
+        const resp = await fetch(`${API}/auth/reset-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ token, new_password: newPassword }),
+        });
+        if (!resp.ok) {
+          const data = await resp.json().catch(() => ({}));
+          throw new Error(data.detail || "Token invalide ou expiré.");
+        }
+        msgEl.textContent = "Mot de passe mis à jour. Redirection…";
+        msgEl.style.color = "var(--success)";
+        msgEl.style.background = "rgba(16,185,129,0.08)";
+        msgEl.style.borderColor = "rgba(16,185,129,0.2)";
+        msgEl.style.display = "";
+        setTimeout(() => {
+          window.location.href = "/ui";
+        }, 1500);
+      } catch (e) {
+        msgEl.textContent = e.message || "Erreur. Veuillez réessayer.";
+        msgEl.style.color = "";
+        msgEl.style.background = "";
+        msgEl.style.borderColor = "";
+        msgEl.style.display = "";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Enregistrer le mot de passe";
       }
     });
   }

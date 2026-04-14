@@ -162,7 +162,7 @@ async def request_password_reset(db: AsyncSession, email: str) -> None:
     ))
     await db.commit()
 
-    reset_url = f"{settings.APP_BASE_URL}/reset-password?token={token_value}"
+    reset_url = f"{settings.APP_BASE_URL}/ui?reset_token={token_value}"
     await send_password_reset_email(normalized, reset_url)
 
 

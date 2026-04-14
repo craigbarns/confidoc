@@ -13,10 +13,18 @@ _SECURITY_TEMPLATE = _TEMPLATE_DIR / "security.html"
 _LANDING_TEMPLATE = _TEMPLATE_DIR / "landing.html"
 
 
+def _render_template(template_path: Path, request, nonce: str) -> str:
+    html_content = template_path.read_text(encoding="utf-8")
+    if nonce:
+        html_content = html_content.replace('{{CSP_NONCE}}', nonce)
+    return html_content
+
+
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def landing_page() -> HTMLResponse:
+async def landing_page(request) -> HTMLResponse:
     """Landing page for investors and prospects."""
-    html_content = _LANDING_TEMPLATE.read_text(encoding="utf-8")
+    nonce = getattr(request.state, "csp_nonce", "")
+    html_content = _render_template(_LANDING_TEMPLATE, request, nonce)
     return HTMLResponse(
         content=html_content,
         headers={
@@ -27,9 +35,10 @@ async def landing_page() -> HTMLResponse:
 
 
 @router.get("/ui", response_class=HTMLResponse, include_in_schema=False)
-async def upload_ui() -> HTMLResponse:
+async def upload_ui(request) -> HTMLResponse:
     """Interface web ConfiDoc -- Console premium."""
-    html_content = _TEMPLATE.read_text(encoding="utf-8")
+    nonce = getattr(request.state, "csp_nonce", "")
+    html_content = _render_template(_TEMPLATE, request, nonce)
     return HTMLResponse(
         content=html_content,
         headers={
@@ -40,9 +49,10 @@ async def upload_ui() -> HTMLResponse:
 
 
 @router.get("/security", response_class=HTMLResponse, include_in_schema=False)
-async def security_page() -> HTMLResponse:
+async def security_page(request) -> HTMLResponse:
     """Page Securite & Conformite RGPD."""
-    html_content = _SECURITY_TEMPLATE.read_text(encoding="utf-8")
+    nonce = getattr(request.state, "csp_nonce", "")
+    html_content = _render_template(_SECURITY_TEMPLATE, request, nonce)
     return HTMLResponse(
         content=html_content,
         headers={

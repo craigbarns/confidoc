@@ -30,6 +30,10 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
     """Add standard security headers to all responses."""
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
+        # CSP nonce must be generated *before* call_next so server-rendered pages can use it.
+        nonce = hashlib.sha256(uuid.uuid4().bytes).hexdigest()[:16]
+        request.state.csp_nonce = nonce
+
         response = await call_next(request)
 
         response.headers["X-Content-Type-Options"] = "nosniff"
@@ -42,16 +46,14 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "max-age=31536000; includeSubDomains; preload"
         )
 
-        # CSP — inline styles replaced by a per-response nonce so 'unsafe-inline' is removed.
-        # The nonce is injected into templates via request.state for server-rendered pages.
-        nonce = hashlib.sha256(uuid.uuid4().bytes).hexdigest()[:16]
-        request.state.csp_nonce = nonce
+        # CSP — scripts use nonce; styles allow 'unsafe-inline' because of numerous inline
+        # style attributes in the UI templates. Google Fonts allowed for the landing page.
         response.headers["Content-Security-Policy"] = (
             "default-src 'self'; "
             f"script-src 'self' 'nonce-{nonce}'; "
-            f"style-src 'self' 'nonce-{nonce}'; "
+            "style-src 'self' 'unsafe-inline' https://fonts.googleapis.com; "
             "img-src 'self' data: blob:; "
-            "font-src 'self'; "
+            "font-src 'self' https://fonts.gstatic.com; "
             "connect-src 'self'; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "

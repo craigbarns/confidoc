@@ -60,6 +60,19 @@
       </button>
       <p id="auth-error" class="error-msg" style="display:none"></p>
     </form>
+    <!-- RESET PASSWORD (depuis lien email ?reset_token=) -->
+    <div id="reset-section" style="display:none">
+      <p class="auth-subtitle" style="margin-bottom:20px">Choisissez un nouveau mot de passe (min. 8 caractères, 1 majuscule, 1 chiffre).</p>
+      <div class="field">
+        <label for="reset-password-new">Nouveau mot de passe</label>
+        <div class="field-password-wrap">
+          <input id="reset-password-new" type="password" placeholder="Nouveau mot de passe…" />
+          <button type="button" id="btn-toggle-reset-password" class="btn-password-toggle" title="Afficher">👁</button>
+        </div>
+      </div>
+      <button id="btn-reset-submit" class="btn btn-primary btn-full">Enregistrer le mot de passe</button>
+      <p id="reset-msg" class="error-msg" style="display:none"></p>
+    </div>
     <!-- FORGOT PASSWORD -->
     <div id="forgot-section" style="display:none">
       <p class="auth-subtitle" style="margin-bottom:20px">Entrez votre email pour recevoir un lien de réinitialisation.</p>
