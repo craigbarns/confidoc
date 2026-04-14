@@ -121,6 +121,7 @@
         <h2>Documents <span id="doc-count" class="doc-count"></span></h2>
         <div class="sidebar-header-actions">
           <button id="btn-home" class="btn btn-ghost btn-sm">Accueil</button>
+          <button id="btn-batch-toggle" title="Sélection multiple">☑</button>
           <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
           <button id="btn-sidebar-collapse" class="sidebar-collapse-btn" aria-label="Réduire la sidebar" title="Réduire/Agrandir">◀</button>
         </div>
@@ -145,6 +146,12 @@
       </div>
       <div id="doc-list" class="doc-list">
         <div class="empty-state">Aucun document.<br>Uploadez-en un.</div>
+      </div>
+      <div id="batch-bar" class="batch-bar">
+        <span id="batch-count" class="batch-count">0 sélectionné(s)</span>
+        <button id="btn-batch-anonymize" class="btn btn-primary btn-sm">🔒 Anonymiser</button>
+        <button id="btn-batch-delete" class="btn btn-sm" style="color:var(--danger);border-color:var(--danger)">🗑 Supprimer</button>
+        <button id="btn-batch-cancel" class="btn btn-ghost btn-sm">Annuler</button>
       </div>
     </aside>
 

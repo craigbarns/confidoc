@@ -38,6 +38,8 @@ let originalTextCache = {};
 let bgPollers = {};
 let uploadQueue = [];
 let isUploadProcessing = false;
+let batchMode = false;
+let selectedDocIds = new Set();
 
 const $ = id => document.getElementById(id);
 const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
@@ -654,8 +656,27 @@ function renderDocList(docs) {
       : "";
     const isDeleted = !!d.is_deleted;
     const deletedBadge = isDeleted ? `<span class="doc-item-status">Corbeille</span>` : "";
+    // Risk dot
+    const riskDotClass = {
+      ready: "risk-dot-green",
+      processing: "risk-dot-blue",
+      uploaded: "risk-dot-orange",
+      failed: "risk-dot-red",
+    }[d.status] || "risk-dot-orange";
+    const riskDotTitle = {
+      ready: "Anonymisé — prêt pour l'IA",
+      processing: "Anonymisation en cours…",
+      uploaded: "Non anonymisé — risque RGPD",
+      failed: "Erreur de traitement",
+    }[d.status] || "";
+    const riskDot = isDeleted ? "" : `<span class="risk-dot ${riskDotClass}" title="${riskDotTitle}"></span>`;
     const cardClass = isDeleted ? " trashed" : "";
-    const deleteBtn = isDeleted
+    const batchCheck = batchMode && !isDeleted
+      ? `<input type="checkbox" class="doc-item-check" data-id="${escapeHtml(d.id)}" ${selectedDocIds.has(d.id) ? "checked" : ""} />`
+      : "";
+    const batchSelectedClass = selectedDocIds.has(d.id) ? " batch-selected" : "";
+    const batchModeClass = batchMode ? " batch-mode" : "";
+    const deleteBtn = isDeleted || batchMode
       ? ""
       : `<button class="doc-item-del" data-id="${escapeHtml(d.id)}" data-name="${rawName}" title="Supprimer">✕</button>`;
     const trashActions = isDeleted
@@ -665,8 +686,8 @@ function renderDocList(docs) {
         </div>`
       : "";
 
-    return `<div class="doc-item${selected}${cardClass}" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" data-name="${rawName}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
-      <div class="doc-item-name">${name}</div>
+    return `<div class="doc-item${selected}${cardClass}${batchModeClass}${batchSelectedClass}" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" data-name="${rawName}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
+      <div class="doc-item-name" style="display:flex;align-items:center;gap:6px">${batchCheck}${riskDot}${name}</div>
       <div class="doc-item-meta">
         <span class="doc-item-status status-${escapeHtml(d.status)}">${label}</span>
         ${deletedBadge}
@@ -680,12 +701,35 @@ function renderDocList(docs) {
 
   list.querySelectorAll(".doc-item").forEach(el => {
     if (el.dataset.deleted === "1") return;
-    el.addEventListener("click", () => selectDoc(
-      el.dataset.id,
-      el.dataset.status,
-      el.dataset.name,
-      parseInt(el.dataset.size, 10) || 0
-    ));
+    el.addEventListener("click", (e) => {
+      if (batchMode) {
+        if (e.target.classList.contains("doc-item-check")) return; // handled by checkbox
+        const id = el.dataset.id;
+        if (selectedDocIds.has(id)) selectedDocIds.delete(id);
+        else selectedDocIds.add(id);
+        renderDocList(lastDocsList);
+        updateBatchBar();
+        return;
+      }
+      selectDoc(
+        el.dataset.id,
+        el.dataset.status,
+        el.dataset.name,
+        parseInt(el.dataset.size, 10) || 0
+      );
+    });
+  });
+
+  list.querySelectorAll(".doc-item-check").forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      e.stopPropagation();
+      const id = cb.dataset.id;
+      if (cb.checked) selectedDocIds.add(id);
+      else selectedDocIds.delete(id);
+      const item = cb.closest(".doc-item");
+      if (item) item.classList.toggle("batch-selected", cb.checked);
+      updateBatchBar();
+    });
   });
 
   list.querySelectorAll(".doc-item-del").forEach(btn => {
@@ -707,6 +751,91 @@ function renderDocList(docs) {
     });
   });
   refreshCompareDocSelect();
+}
+
+// ── Batch mode ──────────────────────────────────────────────────────────
+
+function updateBatchBar() {
+  const bar = $("batch-bar");
+  const countEl = $("batch-count");
+  if (!bar) return;
+  const n = selectedDocIds.size;
+  if (batchMode && n > 0) {
+    bar.classList.add("visible");
+    if (countEl) countEl.textContent = `${n} sélectionné${n > 1 ? "s" : ""}`;
+  } else {
+    bar.classList.remove("visible");
+  }
+}
+
+function toggleBatchMode() {
+  batchMode = !batchMode;
+  selectedDocIds.clear();
+  const btn = $("btn-batch-toggle");
+  if (btn) btn.classList.toggle("active", batchMode);
+  updateBatchBar();
+  renderDocList(lastDocsList);
+}
+
+async function batchDeleteSelected() {
+  const ids = [...selectedDocIds];
+  if (!ids.length) return;
+  const names = ids.map(id => {
+    const d = lastDocsList.find(x => x.id === id);
+    return d ? d.original_filename : id;
+  });
+  const ok = await confirm(
+    `${ids.length} document(s) seront déplacés dans la corbeille.`,
+    `Supprimer ${ids.length} document(s) ?`,
+    "Supprimer"
+  );
+  if (!ok) return;
+  let succeeded = 0;
+  for (const id of ids) {
+    try {
+      await apiRequest(`/documents/${id}`, { method: "DELETE" });
+      succeeded++;
+    } catch (_e) { /* continue */ }
+  }
+  toast(`${succeeded} / ${ids.length} document(s) supprimé(s)`, "success");
+  selectedDocIds.clear();
+  batchMode = false;
+  const btn = $("btn-batch-toggle");
+  if (btn) btn.classList.remove("active");
+  updateBatchBar();
+  await loadClientSuggestions();
+  await loadDocList();
+}
+
+async function batchAnonymizeSelected() {
+  const ids = [...selectedDocIds].filter(id => {
+    const d = lastDocsList.find(x => x.id === id);
+    return d && (d.status === "uploaded" || d.status === "failed");
+  });
+  if (!ids.length) {
+    toast("Aucun document éligible (seuls les docs non anonymisés sont traités)", "error");
+    return;
+  }
+  const ok = await confirm(
+    `${ids.length} document(s) vont être anonymisés.`,
+    `Anonymiser ${ids.length} document(s) ?`,
+    "Lancer"
+  );
+  if (!ok) return;
+  let launched = 0;
+  for (const id of ids) {
+    try {
+      await apiFetch(`/documents/${id}/anonymize`, { method: "POST", body: JSON.stringify({ profile: "moderate", document_type: "auto" }) });
+      launched++;
+    } catch (_e) { /* continue */ }
+  }
+  toast(`${launched} anonymisation(s) lancée(s)`, "success");
+  selectedDocIds.clear();
+  batchMode = false;
+  const btn = $("btn-batch-toggle");
+  if (btn) btn.classList.remove("active");
+  updateBatchBar();
+  await loadDocList();
 }
 
 // ── Delete document ─────────────────────────────────────────────────────
@@ -1393,10 +1522,10 @@ function loadChatHistory(docId) {
 
 function showOnboarding() {
   const steps = [
-    { target: ".upload-zone", title: "1. Uploadez un document", text: "Glissez un PDF ou cliquez pour choisir un fichier. Le nom du client est obligatoire." },
-    { target: "#btn-anonymize", title: "2. Anonymisez", text: "Choisissez un mode RGPD et un profil, puis lancez le traitement." },
-    { target: ".quick-actions", title: "3. Discutez avec l'IA", text: "Posez des questions en toute securite. L'IA ne voit que le texte masque." },
-    { target: "#btn-export-txt", title: "4. Exportez", text: "Telechargez le texte anonymise, le PDF redacte ou le rapport d'audit RGPD." },
+    { target: ".upload-zone", title: "📄 Uploadez un document", text: "Glissez un PDF, PNG ou JPEG — contrat, bilan, relevé bancaire. Saisissez le nom du client. Max 50 MB." },
+    { target: "#btn-anonymize", title: "🔒 Anonymisation RGPD", text: "L'IA détecte noms, IBAN, SIREN, adresses… et les remplace par des balises. Mode modéré ou strict selon votre besoin." },
+    { target: ".quick-actions", title: "💬 Discussion IA sécurisée", text: "Posez vos questions métier. L'IA ne voit que le texte masqué — vos données confidentielles ne sortent jamais." },
+    { target: "#btn-export-txt", title: "⬇ Export & Audit", text: "Téléchargez le texte anonymisé, le PDF rédacté, ou le rapport d'audit RGPD complet pour vos dossiers." },
   ];
   let current = 0;
   const overlay = document.createElement("div");
@@ -1406,14 +1535,18 @@ function showOnboarding() {
   function renderStep() {
     const step = steps[current];
     const targetEl = document.querySelector(step.target);
+    const dots = steps.map((_, i) =>
+      `<div class="onboarding-dot${i === current ? " active" : ""}"></div>`
+    ).join("");
     overlay.innerHTML = '<div class="onboarding-backdrop"></div>' +
       '<div class="onboarding-card">' +
-      '<div class="onboarding-step-indicator">' + (current+1) + ' / ' + steps.length + '</div>' +
+      '<div class="onboarding-dots">' + dots + '</div>' +
       '<h3>' + step.title + '</h3>' +
       '<p>' + step.text + '</p>' +
       '<div class="onboarding-actions">' +
-      '<button class="btn btn-ghost btn-sm" id="onboarding-skip">Passer</button>' +
-      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant' : 'Commencer !') + '</button>' +
+      '<button class="btn btn-ghost btn-sm" id="onboarding-skip">Ignorer</button>' +
+      (current > 0 ? '<button class="btn btn-ghost btn-sm" id="onboarding-prev">← Précédent</button>' : '') +
+      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant →' : '🚀 Commencer !') + '</button>' +
       '</div></div>';
     document.body.appendChild(overlay);
     const card = overlay.querySelector(".onboarding-card");
@@ -1438,6 +1571,12 @@ function showOnboarding() {
       if (current >= steps.length) { finishOnboarding(); }
       else { overlay.remove(); renderStep(); }
     });
+    const prevBtn = overlay.querySelector("#onboarding-prev");
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (targetEl) targetEl.classList.remove("onboarding-highlight");
+      current--;
+      overlay.remove(); renderStep();
+    });
     overlay.querySelector("#onboarding-skip").addEventListener("click", () => {
       document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
       finishOnboarding();
@@ -1448,7 +1587,8 @@ function showOnboarding() {
     overlay.remove();
     document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
     localStorage.setItem(ONBOARDING_KEY, "true");
-    toast("Bienvenue sur ConfiDoc !", "success");
+    toast("Bienvenue sur ConfiDoc ! Uploadez votre premier document.", "success");
+    setStep(1);
   }
 
   renderStep();
@@ -2596,6 +2736,19 @@ document.addEventListener("DOMContentLoaded", () => {
     const stepBtn = $(`step-${n}`);
     if (stepBtn) stepBtn.addEventListener("click", () => setStep(n));
   });
+
+  // Batch mode
+  if ($("btn-batch-toggle")) $("btn-batch-toggle").addEventListener("click", toggleBatchMode);
+  if ($("btn-batch-cancel")) $("btn-batch-cancel").addEventListener("click", () => {
+    batchMode = false;
+    selectedDocIds.clear();
+    const btn = $("btn-batch-toggle");
+    if (btn) btn.classList.remove("active");
+    updateBatchBar();
+    renderDocList(lastDocsList);
+  });
+  if ($("btn-batch-delete")) $("btn-batch-delete").addEventListener("click", batchDeleteSelected);
+  if ($("btn-batch-anonymize")) $("btn-batch-anonymize").addEventListener("click", batchAnonymizeSelected);
 
   // Sidebar: nouveau document
   $("btn-new-doc").addEventListener("click", () => {
