@@ -2565,17 +2565,21 @@ document.addEventListener("DOMContentLoaded", () => {
     $("btn-dash-list").addEventListener("click", () => {
       const sidebar = document.querySelector(".sidebar");
       if (!sidebar) return;
-      // Ouvrir le drawer sur mobile/tablette
-      sidebar.classList.add("open");
-      const backdrop = $("sidebar-backdrop");
-      if (backdrop) backdrop.classList.add("visible");
-      // Sur desktop, scroll + highlight temporaire pour guider l'utilisateur
-      sidebar.scrollIntoView({ behavior: "smooth", inline: "start" });
-      sidebar.animate([
-        { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" },
-        { boxShadow: "inset 4px 0 0 0 rgba(124,116,255,0.6)" },
-        { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" }
-      ], { duration: 700, iterations: 2 });
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        // Ouvrir le drawer sur mobile/tablette avec backdrop
+        sidebar.classList.add("open");
+        const backdrop = $("sidebar-backdrop");
+        if (backdrop) backdrop.classList.add("visible");
+      } else {
+        // Sur desktop, scroll + highlight temporaire pour guider l'utilisateur
+        sidebar.scrollIntoView({ behavior: "smooth", inline: "start" });
+        sidebar.animate([
+          { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" },
+          { boxShadow: "inset 4px 0 0 0 rgba(124,116,255,0.6)" },
+          { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" }
+        ], { duration: 700, iterations: 2 });
+      }
     });
   }
   if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {
