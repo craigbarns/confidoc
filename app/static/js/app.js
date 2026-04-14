@@ -777,37 +777,42 @@ async function selectDoc(id, status, name, sizeBytes) {
     el.classList.toggle("selected", el.dataset.id === id)
   );
 
-  setStep(2);
-  resetAnonPanel();
-  updateAnonDocBar(name, sizeBytes);
-  updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: status === "ready" });
-  await refreshAIDocInsights(id);
+  // Si le document est prêt, aller directement à l'étape 3 (Discussion IA)
+  // pour un flux naturel. Sinon, étape 2 (Anonymisation).
+  const targetStep = status === "ready" ? 3 : 2;
+  setStep(targetStep);
 
-  if (status === "ready") {
-    showAnonLoading("Chargement de la prévisualisation…");
+  if (targetStep === 2) {
+    resetAnonPanel();
+    updateAnonDocBar(name, sizeBytes);
+    updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: status === "ready" });
+    await refreshAIDocInsights(id);
+
+    if (status === "processing") {
+      showAnonLoading("Traitement en cours…");
+      pollDocStatus(id);
+    } else if (status === "uploaded") {
+      $("anon-empty").style.display = "";
+      $("anon-empty").querySelector("p").innerHTML =
+        "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
+    } else if (status === "failed") {
+      $("anon-empty").style.display = "";
+      $("anon-empty").querySelector(".hint-icon").textContent = "⚠️";
+      $("anon-empty").querySelector("p").innerHTML =
+        "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
+    }
+  } else {
+    // targetStep === 3 (ready doc)
+    updateAIDocBar(name, sizeBytes);
+    updatePipelineTimeline({ status, extractDone: true, anonymDone: true });
+    await refreshAIDocInsights(id);
+    // Pre-fill quick insights if possible, but don't block on preview
     try {
       const preview = await apiFetch(`/documents/${id}/preview`);
-      // Use entity_summary if available in preview metadata (if we had it in status)
-      // or from a separate call later. For now, we take count from preview.
       showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
     } catch (e) {
       console.error("preview load error:", e);
-      hideAnonLoading();
-      toast("Impossible de charger la prévisualisation.", "error");
     }
-  } else if (status === "processing") {
-    showAnonLoading("Traitement en cours…");
-    pollDocStatus(id);
-  } else if (status === "uploaded") {
-    // Doc uploadé, pas encore anonymisé — montrer panel vide avec instructions
-    $("anon-empty").style.display = "";
-    $("anon-empty").querySelector("p").innerHTML =
-      "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
-  } else if (status === "failed") {
-    $("anon-empty").style.display = "";
-    $("anon-empty").querySelector(".hint-icon").textContent = "⚠️";
-    $("anon-empty").querySelector("p").innerHTML =
-      "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
   }
   refreshCompareDocSelect();
 }
@@ -2727,6 +2732,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-export-pdf").addEventListener("click", exportPdf);
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
   if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
+
+  // Logo → dashboard
+  if ($("logo-btn")) $("logo-btn").addEventListener("click", showDashboard);
 
   // Theme
   initTheme();
