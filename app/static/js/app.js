@@ -2904,20 +2904,10 @@ document.addEventListener("DOMContentLoaded", () => {
   // Desktop/tablet sidebar collapse
   if ($("btn-sidebar-collapse")) $("btn-sidebar-collapse").addEventListener("click", toggleSidebarCollapse);
 
-  // Restore sidebar collapse state
-  try {
-    if (localStorage.getItem("confidoc_sidebar_collapsed") === "1" && window.innerWidth > 1024) {
-      const sidebar = document.querySelector(".sidebar");
-      if (sidebar) sidebar.classList.add("collapsed");
-      const collapseBtn = $("btn-sidebar-collapse");
-      if (collapseBtn) {
-        collapseBtn.textContent = "▶";
-        collapseBtn.setAttribute("aria-label", "Agrandir la sidebar");
-      }
-      const expandBtn = $("btn-sidebar-expand");
-      if (expandBtn) expandBtn.style.display = "";
-    }
-  } catch (_e) {}
+  // Sidebar : toujours visible au démarrage — on remet collapsed à false
+  localStorage.removeItem("confidoc_sidebar_collapsed");
+  const sidebar = document.querySelector(".sidebar");
+  if (sidebar) sidebar.classList.remove("collapsed");
 
   // Bouton d'expansion sidebar (outside sidebar, visible when collapsed)
   if ($("btn-sidebar-expand")) {
