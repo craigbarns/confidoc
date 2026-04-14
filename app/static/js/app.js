@@ -236,8 +236,10 @@ function toast(msg, type = "info") {
 
 // ── Confirm dialog ─────────────────────────────────────────────────────
 
-function confirm(message) {
+function confirm(message, title = "Confirmer", okLabel = "Confirmer") {
   return new Promise(resolve => {
+    if ($("confirm-title")) $("confirm-title").textContent = title;
+    if ($("btn-confirm-ok")) $("btn-confirm-ok").textContent = okLabel;
     $("confirm-msg").textContent = message;
     $("confirm-overlay").style.display = "";
     const onOk = () => {
@@ -615,7 +617,7 @@ function renderDocList(docs) {
 // ── Delete document ─────────────────────────────────────────────────────
 
 async function deleteDoc(id, name) {
-  const ok = await confirm(`"${name}" sera déplacé dans la corbeille.`);
+  const ok = await confirm(`"${name}" sera déplacé dans la corbeille.`, "Supprimer ce document ?", "Supprimer");
   if (!ok) return;
   try {
     await apiRequest(`/documents/${id}`, { method: "DELETE" });
@@ -647,7 +649,7 @@ async function restoreDoc(id, name) {
 }
 
 async function permanentDeleteDoc(id, name) {
-  const ok = await confirm(`Suppression définitive de "${name}" ? Cette action est irréversible.`);
+  const ok = await confirm(`Suppression définitive de "${name}" ? Cette action est irréversible.`, "Suppression définitive", "Supprimer définitivement");
   if (!ok) return;
   try {
     await apiRequest(`/documents/${id}/permanent`, { method: "DELETE" });
@@ -999,9 +1001,12 @@ function highlightTags(text) {
       let colorClass = "";
       if (tag.includes("PERSONNE") || tag.includes("ASSOCIE")) colorClass = "tag-person";
       else if (tag.includes("SOCIETE") || tag.includes("CABINET")) colorClass = "tag-org";
-      else if (tag.includes("ADRESSE") || tag.includes("VILLE")) colorClass = "tag-geo";
-      else if (tag.includes("BANQUE") || tag.includes("IBAN")) colorClass = "tag-bank";
+      else if (tag.includes("ADRESSE") || tag.includes("VILLE") || tag.includes("NAISSANCE")) colorClass = "tag-geo";
+      else if (tag.includes("IBAN") || tag.includes("BANQUE") || tag.includes("MONTANT") || tag.includes("EMPRUNT") || tag.includes("REF")) colorClass = "tag-bank";
       else if (tag.includes("DATE")) colorClass = "tag-date";
+      else if (tag.includes("EMAIL")) colorClass = "tag-email";
+      else if (tag.includes("TELEPHONE")) colorClass = "tag-phone";
+      else if (tag.includes("NSS") || tag.includes("SIRET") || tag.includes("SIREN") || tag.includes("TVA") || tag.includes("CADASTRE")) colorClass = "tag-id";
       return `<mark class="anon-tag ${colorClass}">${match}</mark>`;
     });
 }
@@ -2258,6 +2263,82 @@ function exportReviewResult() {
 // ── Event listeners ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+
+  // Password visibility toggle
+  if ($("btn-toggle-password")) {
+    $("btn-toggle-password").addEventListener("click", () => {
+      const inp = $("password");
+      const btn = $("btn-toggle-password");
+      if (inp.type === "password") {
+        inp.type = "text";
+        btn.textContent = "🙈";
+        btn.title = "Masquer le mot de passe";
+      } else {
+        inp.type = "password";
+        btn.textContent = "👁";
+        btn.title = "Afficher le mot de passe";
+      }
+    });
+  }
+
+  // Forgot password flow
+  if ($("link-forgot-password")) {
+    $("link-forgot-password").addEventListener("click", e => {
+      e.preventDefault();
+      $("form-login").style.display = "none";
+      $("forgot-section").style.display = "";
+      const emailVal = $("email").value.trim();
+      if (emailVal && $("forgot-email")) $("forgot-email").value = emailVal;
+      const msgEl = $("forgot-msg");
+      if (msgEl) msgEl.style.display = "none";
+    });
+  }
+  if ($("link-back-login")) {
+    $("link-back-login").addEventListener("click", e => {
+      e.preventDefault();
+      $("forgot-section").style.display = "none";
+      $("form-login").style.display = "";
+    });
+  }
+  if ($("btn-forgot-submit")) {
+    $("btn-forgot-submit").addEventListener("click", async () => {
+      const email = ($("forgot-email").value || "").trim();
+      const msgEl = $("forgot-msg");
+      const btn = $("btn-forgot-submit");
+      if (!email) {
+        msgEl.textContent = "Entrez votre adresse email.";
+        msgEl.style.color = "";
+        msgEl.style.background = "";
+        msgEl.style.borderColor = "";
+        msgEl.style.display = "";
+        return;
+      }
+      btn.disabled = true;
+      btn.textContent = "Envoi en cours…";
+      msgEl.style.display = "none";
+      try {
+        await fetch(`${API}/auth/forgot-password`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ email }),
+        });
+        msgEl.textContent = "Si cet email est enregistré, un lien de réinitialisation vous a été envoyé.";
+        msgEl.style.color = "var(--success)";
+        msgEl.style.background = "rgba(16,185,129,0.08)";
+        msgEl.style.borderColor = "rgba(16,185,129,0.2)";
+        msgEl.style.display = "";
+      } catch (_e) {
+        msgEl.textContent = "Erreur réseau. Veuillez réessayer.";
+        msgEl.style.color = "";
+        msgEl.style.background = "";
+        msgEl.style.borderColor = "";
+        msgEl.style.display = "";
+      } finally {
+        btn.disabled = false;
+        btn.textContent = "Envoyer le lien";
+      }
+    });
+  }
 
   // Login form
   $("form-login").addEventListener("submit", async e => {

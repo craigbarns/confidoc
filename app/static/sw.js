@@ -1,4 +1,4 @@
-const CACHE_NAME = "confidoc-v3-ui-refresh";
+const CACHE_NAME = "confidoc-v4-ui-refresh";
 const SHELL = ["/ui", "/static/css/style.css", "/static/js/app.js", "/static/manifest.json"];
 
 self.addEventListener("install", (e) => {

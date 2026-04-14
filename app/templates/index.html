@@ -47,13 +47,30 @@
       </div>
       <div class="field">
         <label for="password">Mot de passe</label>
-        <input id="password" type="password" placeholder="••••••••" required />
+        <div class="field-password-wrap">
+          <input id="password" type="password" placeholder="••••••••" required />
+          <button type="button" id="btn-toggle-password" class="btn-password-toggle" aria-label="Afficher le mot de passe" title="Afficher">👁</button>
+        </div>
+      </div>
+      <div class="auth-helpers">
+        <a href="#" id="link-forgot-password" class="forgot-link">Mot de passe oublié ?</a>
       </div>
       <button type="submit" class="btn btn-primary btn-full" id="btn-login">
         <span id="btn-login-text">Se connecter</span>
       </button>
       <p id="auth-error" class="error-msg" style="display:none"></p>
     </form>
+    <!-- FORGOT PASSWORD -->
+    <div id="forgot-section" style="display:none">
+      <p class="auth-subtitle" style="margin-bottom:20px">Entrez votre email pour recevoir un lien de réinitialisation.</p>
+      <div class="field">
+        <label for="forgot-email">Email</label>
+        <input id="forgot-email" type="email" placeholder="vous@exemple.com" />
+      </div>
+      <button id="btn-forgot-submit" class="btn btn-primary btn-full">Envoyer le lien</button>
+      <p id="forgot-msg" class="error-msg" style="display:none"></p>
+      <a href="#" id="link-back-login" class="forgot-link" style="display:block;text-align:center;margin-top:16px">← Retour à la connexion</a>
+    </div>
     <p class="auth-footer">Vos données restent confidentielles et ne quittent pas votre organisation.</p>
   </div>
 </div>
@@ -470,11 +487,11 @@
 <!-- DELETE CONFIRM DIALOG -->
 <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-label="Confirmation" style="display:none">
   <div class="confirm-card">
-    <h3>Supprimer ce document ?</h3>
+    <h3 id="confirm-title">Confirmer</h3>
     <p id="confirm-msg"></p>
     <div class="confirm-actions">
       <button id="btn-confirm-cancel" class="btn btn-ghost">Annuler</button>
-      <button id="btn-confirm-ok" class="btn btn-danger">Supprimer</button>
+      <button id="btn-confirm-ok" class="btn btn-danger">Confirmer</button>
     </div>
   </div>
 </div>
