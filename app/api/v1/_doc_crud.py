@@ -30,7 +30,7 @@ logger = get_logger(__name__)
 
 
 @router.get(
-    "",
+    "/",
     response_model=list[DocumentResponse],
     status_code=status.HTTP_200_OK,
     summary="Lister les documents de l'utilisateur",
