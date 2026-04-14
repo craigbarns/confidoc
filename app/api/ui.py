@@ -4,6 +4,7 @@ from pathlib import Path
 
 from fastapi import APIRouter
 from fastapi.responses import HTMLResponse
+from starlette.requests import Request
 
 router = APIRouter(tags=["ui"])
 
@@ -13,7 +14,7 @@ _SECURITY_TEMPLATE = _TEMPLATE_DIR / "security.html"
 _LANDING_TEMPLATE = _TEMPLATE_DIR / "landing.html"
 
 
-def _render_template(template_path: Path, request, nonce: str) -> str:
+def _render_template(template_path: Path, request: Request, nonce: str) -> str:
     html_content = template_path.read_text(encoding="utf-8")
     if nonce:
         html_content = html_content.replace('{{CSP_NONCE}}', nonce)
@@ -21,7 +22,7 @@ def _render_template(template_path: Path, request, nonce: str) -> str:
 
 
 @router.get("/", response_class=HTMLResponse, include_in_schema=False)
-async def landing_page(request) -> HTMLResponse:
+async def landing_page(request: Request) -> HTMLResponse:
     """Landing page for investors and prospects."""
     nonce = getattr(request.state, "csp_nonce", "")
     html_content = _render_template(_LANDING_TEMPLATE, request, nonce)
@@ -35,7 +36,7 @@ async def landing_page(request) -> HTMLResponse:
 
 
 @router.get("/ui", response_class=HTMLResponse, include_in_schema=False)
-async def upload_ui(request) -> HTMLResponse:
+async def upload_ui(request: Request) -> HTMLResponse:
     """Interface web ConfiDoc -- Console premium."""
     nonce = getattr(request.state, "csp_nonce", "")
     html_content = _render_template(_TEMPLATE, request, nonce)
@@ -49,7 +50,7 @@ async def upload_ui(request) -> HTMLResponse:
 
 
 @router.get("/security", response_class=HTMLResponse, include_in_schema=False)
-async def security_page(request) -> HTMLResponse:
+async def security_page(request: Request) -> HTMLResponse:
     """Page Securite & Conformite RGPD."""
     nonce = getattr(request.state, "csp_nonce", "")
     html_content = _render_template(_SECURITY_TEMPLATE, request, nonce)
