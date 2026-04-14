@@ -3,33 +3,44 @@
 import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.api.v1.auth import _check_rate_limit, _login_attempts
+from app.api.v1.auth import _login_attempts_fallback, _RATE_MAX, _RATE_WINDOW
 
 
-class TestRateLimit:
-    """Test the in-memory rate limiter."""
+class TestRateLimitFallback:
+    """Test the in-memory fallback rate limiter (used when Redis is unavailable)."""
 
     def setup_method(self):
-        _login_attempts.clear()
+        _login_attempts_fallback.clear()
 
-    def test_allows_under_limit(self):
-        for _ in range(9):
-            _check_rate_limit("test:127.0.0.1")
+    @pytest.mark.asyncio
+    async def test_allows_under_limit(self):
+        """Under the limit, no exception raised (Redis unavailable → fallback)."""
+        from app.api.v1.auth import _check_rate_limit
+        with patch("redis.asyncio.from_url", side_effect=Exception("no redis")):
+            for _ in range(_RATE_MAX - 1):
+                await _check_rate_limit("test:127.0.0.1")
 
-    def test_blocks_over_limit(self):
+    @pytest.mark.asyncio
+    async def test_blocks_over_limit_fallback(self):
+        """Fallback rate limiter blocks after _RATE_MAX attempts."""
         from fastapi import HTTPException
+        from app.api.v1.auth import _check_rate_limit
+        with patch("redis.asyncio.from_url", side_effect=Exception("no redis")):
+            for _ in range(_RATE_MAX):
+                await _check_rate_limit("test:127.0.0.2")
+            with pytest.raises(HTTPException) as exc_info:
+                await _check_rate_limit("test:127.0.0.2")
+            assert exc_info.value.status_code == 429
 
-        for _ in range(10):
-            _check_rate_limit("test:127.0.0.1")
-        with pytest.raises(HTTPException) as exc_info:
-            _check_rate_limit("test:127.0.0.1")
-        assert exc_info.value.status_code == 429
-
-    def test_separate_keys_independent(self):
-        for _ in range(10):
-            _check_rate_limit("test:10.0.0.1")
-        # Different key should still work
-        _check_rate_limit("test:10.0.0.2")
+    @pytest.mark.asyncio
+    async def test_separate_keys_independent_fallback(self):
+        """Different IP keys are tracked independently in the fallback."""
+        from app.api.v1.auth import _check_rate_limit
+        with patch("redis.asyncio.from_url", side_effect=Exception("no redis")):
+            for _ in range(_RATE_MAX):
+                await _check_rate_limit("test:10.0.0.1")
+            # Different key should still work
+            await _check_rate_limit("test:10.0.0.3")
 
 
 class TestRecoveryResetRequest:

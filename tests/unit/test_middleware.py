@@ -11,8 +11,21 @@ class TestSecurityHeaders:
         resp = await client.get("/health")
         assert resp.headers.get("X-Content-Type-Options") == "nosniff"
         assert resp.headers.get("X-Frame-Options") == "DENY"
-        assert resp.headers.get("X-XSS-Protection") == "1; mode=block"
+        # X-XSS-Protection est obsolète (remplacé par CSP) — non envoyé
         assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
+
+    @pytest.mark.asyncio
+    async def test_health_has_hsts(self, client):
+        resp = await client.get("/health")
+        hsts = resp.headers.get("Strict-Transport-Security", "")
+        assert "max-age=" in hsts
+
+    @pytest.mark.asyncio
+    async def test_health_has_csp(self, client):
+        resp = await client.get("/health")
+        csp = resp.headers.get("Content-Security-Policy", "")
+        assert "default-src" in csp
+        assert "nonce-" in csp
 
     @pytest.mark.asyncio
     async def test_request_id_header(self, client):
@@ -34,6 +47,6 @@ class TestSecurityHeaders:
     @pytest.mark.asyncio
     async def test_api_no_cache(self, client):
         resp = await client.get("/api/v1/auth/login")
-        # Even on error, Cache-Control should be set for API paths
-        cache = resp.headers.get("Cache-Control")
-        assert cache == "no-store"
+        cache = resp.headers.get("Cache-Control", "")
+        # Must contain no-store (+ possibly no-cache, Pragma)
+        assert "no-store" in cache

@@ -2,6 +2,8 @@
 
 import warnings
 
+import pytest
+
 from app.config import Settings, get_settings
 
 
@@ -49,13 +51,28 @@ def test_settings_async_database_url():
     assert s3.async_database_url == "postgresql+asyncpg://user:pass@host/db"
 
 
-def test_production_warns_on_default_secrets():
-    """Production mode warns if secrets are not changed."""
-    with warnings.catch_warnings(record=True) as w:
-        warnings.simplefilter("always")
-        Settings(APP_ENV="production", SECRET_KEY="CHANGE-ME")
-        security_warnings = [x for x in w if "SECURITY" in str(x.message)]
-        assert len(security_warnings) >= 1
+def test_production_blocks_on_default_secrets():
+    """Production mode raises ValidationError if secrets are not changed."""
+    from pydantic import ValidationError
+    with pytest.raises(ValidationError, match="Production blocked"):
+        Settings(
+            APP_ENV="production",
+            SECRET_KEY="CHANGE-ME",
+            ENCRYPTION_MASTER_KEY="real-key-32-chars-long-enough-ok",
+            PSEUDO_MAPPING_KEY="real-pseudo-32-chars-long-enough!",
+        )
+
+def test_production_blocks_if_any_secret_missing():
+    """All three secrets must be non-default in production."""
+    from pydantic import ValidationError
+    # Even with good SECRET_KEY, ENCRYPTION_MASTER_KEY default blocks it
+    with pytest.raises(ValidationError, match="Production blocked"):
+        Settings(
+            APP_ENV="production",
+            SECRET_KEY="a-very-long-secret-key-that-is-definitely-not-the-default-changeme",
+            ENCRYPTION_MASTER_KEY="CHANGE-ME",
+            PSEUDO_MAPPING_KEY="real-pseudo-32-chars-long-enough!",
+        )
 
 
 def test_development_no_warning():

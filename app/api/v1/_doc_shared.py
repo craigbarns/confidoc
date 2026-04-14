@@ -53,13 +53,10 @@ def _detection_item_to_response(item: dict) -> DetectionResponse:
 
 
 def _infer_semantic_type(placeholder: str) -> str:
-    """Map a placeholder token to a semantic entity type."""
-    from app.core.tokens import SEMANTIC_MAP
+    """Map a placeholder token to a semantic entity type string."""
     p = placeholder.upper().strip("[]")
-    # Direct lookup first
-    if p in SEMANTIC_MAP:
-        return SEMANTIC_MAP[p]
-    # Substring fallback
+    # Substring matching — handles both bare tokens ([PERSONNE]) and
+    # numbered variants ([PERSONNE_1], [SOCIETE_3], …)
     if "PERSONNE" in p or "PERSON" in p or "ASSOCIE" in p:
         return "PERSON"
     if "SOCIETE" in p or "COMPANY" in p or "CABINET" in p:
