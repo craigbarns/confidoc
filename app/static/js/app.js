@@ -885,7 +885,11 @@ async function uploadFile(file) {
     zone.style.display = "";
     progress.style.display = "none";
     fill.style.width = "0";
-    toast(`Erreur upload: ${e.message}`, "error");
+    if (e.message !== "client_name_required") {
+      toast(`Erreur upload: ${e.message}`, "error");
+      // Rafraîchir la liste même en cas d'erreur : le doc peut être en DB
+      loadDocList().catch(() => {});
+    }
     throw e;
   }
 }

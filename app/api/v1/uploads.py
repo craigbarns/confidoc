@@ -175,14 +175,25 @@ async def _upload_document_body(
     }
 
     if auto_anonymize:
-        # Run OCR + anonymization in background via Celery to survive Railway restarts
-        anonymize_document_task.delay(
-            doc_id=str(document.id),
-            content=content,
-            profile=profile,
-            document_type=document_type,
-        )
-        processing.update({"status": "processing"})
+        # Run OCR + anonymization in background via Celery
+        # Wrapped in try/except: if Redis/Celery is unavailable (ex: Railway sans Redis),
+        # the upload still succeeds — the document appears in the list with status "uploaded"
+        # and the user can manually trigger anonymization.
+        try:
+            anonymize_document_task.delay(
+                doc_id=str(document.id),
+                content=content,
+                profile=profile,
+                document_type=document_type,
+            )
+            processing.update({"status": "processing"})
+        except Exception as exc:
+            logger.warning(
+                "celery_unavailable_background_task_skipped",
+                doc_id=str(document.id),
+                error=str(exc),
+            )
+            processing.update({"status": "uploaded", "background_processing": False})
 
     return {
         "status": document.status.value,
