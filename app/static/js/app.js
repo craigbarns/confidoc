@@ -308,6 +308,8 @@ function logout() {
   sessionStorage.removeItem("confidoc_token");
   sessionStorage.removeItem("confidoc_refresh_token");
   if (activeStream) { activeStream.abort(); activeStream = null; }
+  // Ferme la modale de confirmation si elle était ouverte (ex: token expiré pendant un delete)
+  if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
   $("screen-auth").style.display = "";
   $("screen-app").style.display = "none";
   $("btn-logout").style.display = "none";
