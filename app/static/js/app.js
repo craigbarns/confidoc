@@ -89,13 +89,15 @@ function toggleTheme() {
   const isLight = document.documentElement.classList.toggle("theme-light");
   localStorage.setItem("confidoc_theme", isLight ? "light" : "dark");
   updateThemeBtn();
+  // Update meta theme-color for mobile browsers
+  const metaTheme = document.querySelector('meta[name="theme-color"]');
+  if (metaTheme) metaTheme.content = isLight ? "#f4f6fb" : "#0f1117";
 }
 
 function updateThemeBtn() {
   const btn = $("btn-theme");
   if (!btn) return;
   const isLight = document.documentElement.classList.contains("theme-light");
-  btn.textContent = "";
   btn.classList.toggle("is-light", isLight);
   btn.title = isLight ? "Mode sombre" : "Mode clair";
   btn.setAttribute("role", "switch");
@@ -207,8 +209,20 @@ function toggleSidebar() {
   const sidebar = document.querySelector(".sidebar");
   const backdrop = $("sidebar-backdrop");
   if (!sidebar) return;
-  const open = sidebar.classList.toggle("open");
-  if (backdrop) backdrop.classList.toggle("visible", open);
+  // On mobile: toggle drawer
+  if (window.innerWidth <= 1024) {
+    const open = sidebar.classList.toggle("open");
+    if (backdrop) backdrop.classList.toggle("visible", open);
+  } else {
+    // On desktop/tablet: toggle collapse
+    sidebar.classList.toggle("collapsed");
+    // Update collapse button icon
+    const collapseBtn = $("btn-sidebar-collapse");
+    if (collapseBtn) {
+      collapseBtn.textContent = sidebar.classList.contains("collapsed") ? "▶" : "◀";
+      collapseBtn.setAttribute("aria-label", sidebar.classList.contains("collapsed") ? "Agrandir la sidebar" : "Réduire la sidebar");
+    }
+  }
 }
 
 function closeSidebar() {
@@ -216,6 +230,19 @@ function closeSidebar() {
   const backdrop = $("sidebar-backdrop");
   if (sidebar) sidebar.classList.remove("open");
   if (backdrop) backdrop.classList.remove("visible");
+}
+
+function toggleSidebarCollapse() {
+  const sidebar = document.querySelector(".sidebar");
+  if (!sidebar) return;
+  sidebar.classList.toggle("collapsed");
+  const collapseBtn = $("btn-sidebar-collapse");
+  if (collapseBtn) {
+    const collapsed = sidebar.classList.contains("collapsed");
+    collapseBtn.textContent = collapsed ? "▶" : "◀";
+    collapseBtn.setAttribute("aria-label", collapsed ? "Agrandir la sidebar" : "Réduire la sidebar");
+    localStorage.setItem("confidoc_sidebar_collapsed", collapsed ? "1" : "0");
+  }
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────
@@ -242,14 +269,62 @@ function confirm(message, title = "Confirmer", okLabel = "Confirmer") {
     if ($("btn-confirm-ok")) $("btn-confirm-ok").textContent = okLabel;
     $("confirm-msg").textContent = message;
     $("confirm-overlay").style.display = "";
+
+    // Focus trap: store previously focused element
+    const previouslyFocused = document.activeElement;
+    // Focus the OK button by default
+    setTimeout(() => $("btn-confirm-ok")?.focus(), 50);
+
+    // Trap focus within dialog
+    function handleTab(e) {
+      if (e.key !== "Tab") return;
+      const focusable = [
+        $("btn-confirm-ok"),
+        $("btn-confirm-cancel"),
+      ].filter(Boolean);
+      const first = focusable[0];
+      const last = focusable[focusable.length - 1];
+
+      if (e.shiftKey) {
+        if (document.activeElement === first) {
+          e.preventDefault();
+          last.focus();
+        }
+      } else {
+        if (document.activeElement === last) {
+          e.preventDefault();
+          first.focus();
+        }
+      }
+    }
+
+    // Close on Escape
+    function handleEscape(e) {
+      if (e.key === "Escape") {
+        $("confirm-overlay").style.display = "none";
+        document.removeEventListener("keydown", handleTab);
+        document.removeEventListener("keydown", handleEscape);
+        if (previouslyFocused && previouslyFocused !== document.body) previouslyFocused.focus();
+        resolve(false);
+      }
+    }
+
     const onOk = () => {
       $("confirm-overlay").style.display = "none";
+      document.removeEventListener("keydown", handleTab);
+      document.removeEventListener("keydown", handleEscape);
       cleanup();
+      // Restore focus
+      if (previouslyFocused && previouslyFocused !== document.body) previouslyFocused.focus();
       resolve(true);
     };
     const onCancel = () => {
       $("confirm-overlay").style.display = "none";
+      document.removeEventListener("keydown", handleTab);
+      document.removeEventListener("keydown", handleEscape);
       cleanup();
+      // Restore focus
+      if (previouslyFocused && previouslyFocused !== document.body) previouslyFocused.focus();
       resolve(false);
     };
     const cleanup = () => {
@@ -258,6 +333,8 @@ function confirm(message, title = "Confirmer", okLabel = "Confirmer") {
     };
     $("btn-confirm-ok").addEventListener("click", onOk);
     $("btn-confirm-cancel").addEventListener("click", onCancel);
+    document.addEventListener("keydown", handleTab);
+    document.addEventListener("keydown", handleEscape);
   });
 }
 
@@ -273,6 +350,8 @@ function setStep(n) {
   const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
   if (el) el.classList.add("active");
+  const titles = { 1: "Upload", 2: "Anonymisation", 3: "Discussion IA" };
+  setPageTitle(titles[n] || "");
 }
 
 function goHome() {
@@ -362,6 +441,24 @@ function updateHeaderContext() {
   }
   providerPill.textContent = `🤖 Provider IA: ${currentProvider || "—"}`;
   providerPill.style.display = "";
+}
+
+// ── Dynamic page title ───────────────────────────────────────────────
+
+function setPageTitle(section) {
+  const titleEl = $("page-title");
+  if (!titleEl) return;
+  const titles = {
+    "": "ConfiDoc — Documents confidentiels anonymisés",
+    "Dashboard": "ConfiDoc — Dashboard",
+    "Upload": "ConfiDoc — Uploader un document",
+    "Anonymisation": "ConfiDoc — Anonymisation",
+    "Discussion IA": "ConfiDoc — Discussion IA",
+  };
+  titleEl.textContent = titles[section] || titles[""];
+  if (currentDocName && section) {
+    titleEl.textContent = `${currentDocName} — ${titles[section] || "ConfiDoc"}`;
+  }
 }
 
 async function loadProviderInfo() {
@@ -1793,6 +1890,7 @@ function showDashboard() {
     const s = $(`step-${i}`);
     if (s) s.className = "step";
   });
+  setPageTitle("Dashboard");
   if (!dashboardLoaded) loadDashboard();
 }
 
@@ -2289,12 +2387,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const btn = $("btn-toggle-password");
       if (inp.type === "password") {
         inp.type = "text";
-        btn.textContent = "🙈";
+        btn.textContent = "🙈️";
         btn.title = "Masquer le mot de passe";
+        btn.setAttribute("aria-pressed", "true");
       } else {
         inp.type = "password";
-        btn.textContent = "👁";
+        btn.textContent = "👁️";
         btn.title = "Afficher le mot de passe";
+        btn.setAttribute("aria-pressed", "false");
       }
     });
   }
@@ -2372,12 +2472,14 @@ document.addEventListener("DOMContentLoaded", () => {
       const btn = $("btn-toggle-reset-password");
       if (inp.type === "password") {
         inp.type = "text";
-        btn.textContent = "🙈";
+        btn.textContent = "🙈️";
         btn.title = "Masquer le mot de passe";
+        btn.setAttribute("aria-pressed", "true");
       } else {
         inp.type = "password";
-        btn.textContent = "👁";
+        btn.textContent = "👁️";
         btn.title = "Afficher le mot de passe";
+        btn.setAttribute("aria-pressed", "false");
       }
     });
   }
@@ -2629,6 +2731,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // Mobile sidebar toggle
   if ($("btn-sidebar-toggle")) $("btn-sidebar-toggle").addEventListener("click", toggleSidebar);
   if ($("sidebar-backdrop")) $("sidebar-backdrop").addEventListener("click", closeSidebar);
+
+  // Desktop/tablet sidebar collapse
+  if ($("btn-sidebar-collapse")) $("btn-sidebar-collapse").addEventListener("click", toggleSidebarCollapse);
+
+  // Restore sidebar collapse state
+  try {
+    if (localStorage.getItem("confidoc_sidebar_collapsed") === "1") {
+      const sidebar = document.querySelector(".sidebar");
+      if (sidebar && window.innerWidth > 1024) sidebar.classList.add("collapsed");
+      const collapseBtn = $("btn-sidebar-collapse");
+      if (collapseBtn) {
+        collapseBtn.textContent = "▶";
+        collapseBtn.setAttribute("aria-label", "Agrandir la sidebar");
+      }
+    }
+  } catch (_e) {}
+
   document.querySelectorAll(".sidebar .doc-item").forEach(el => {
     el.addEventListener("click", closeSidebar);
   });
