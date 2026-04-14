@@ -1723,11 +1723,10 @@ async function exportPdf() {
 
 async function showApproveExportPrompt() {
   if (!currentDocId) return;
-  const ok = confirm(
-    "Ce document a un risque de réidentification élevé.\n\n" +
-    "En tant que responsable, confirmez-vous avoir vérifié manuellement " +
-    "que l'anonymisation est suffisante pour un export externe ?\n\n" +
-    "Cette action sera journalisée."
+  const ok = await confirm(
+    "Risque de réidentification élevé détecté. Confirmez-vous avoir vérifié manuellement que l'anonymisation est suffisante pour un export externe ? Cette action sera journalisée.",
+    "Validation humaine requise",
+    "Confirmer l'export"
   );
   if (!ok) return;
   try {
@@ -2263,6 +2262,17 @@ function exportReviewResult() {
 // ── Event listeners ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+
+  // Garantir l'état initial : overlay fermé, forgot-section caché
+  if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
+  if ($("forgot-section")) $("forgot-section").style.display = "none";
+
+  // Fermer la modal confirm avec Echap
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "Escape" && $("confirm-overlay") && $("confirm-overlay").style.display !== "none") {
+      $("confirm-overlay").style.display = "none";
+    }
+  });
 
   // Password visibility toggle
   if ($("btn-toggle-password")) {
