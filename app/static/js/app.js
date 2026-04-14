@@ -448,8 +448,7 @@ async function loadDocList() {
     if (currentSearchFilter) params.set("q", currentSearchFilter);
     if (currentStatusFilter) params.set("status_filter", currentStatusFilter);
     const qp = params.toString() ? `?${params.toString()}` : "";
-    // Ne pas utiliser `/documents/${qp}` : ça produit `/documents/` ou `/documents/?…` (404 / mauvais match).
-    const docs = await apiFetch(`/documents${qp}`);
+    const docs = await apiFetch(`/documents/${qp}`);
     renderDocList(docs);
     startBgPollers(docs);
   } catch (e) {
