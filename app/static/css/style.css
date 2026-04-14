@@ -2290,6 +2290,52 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
 .sec-disclaimer p { color: var(--warning); font-size: 13px; line-height: 1.7; }
 .sec-disclaimer strong { color: var(--warning); }
 
+/* ── SIDEBAR BATCH ROW & EXPAND BTN ─────────── */
+.sidebar-batch-row {
+  padding: 6px 16px 8px;
+  border-bottom: 1px solid var(--border);
+}
+.btn-batch-toggle-inline {
+  font-size: 11px;
+  font-weight: 600;
+  padding: 4px 10px;
+  border-radius: 6px;
+  border: 1px solid var(--border);
+  background: none;
+  color: var(--text-muted);
+  cursor: pointer;
+  transition: all 0.15s;
+  width: 100%;
+  text-align: left;
+  letter-spacing: 0.2px;
+}
+.btn-batch-toggle-inline:hover { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+.btn-batch-toggle-inline.active { color: var(--accent); border-color: var(--accent); background: var(--accent-dim); }
+
+/* Button to expand collapsed sidebar (desktop) */
+.sidebar-expand-btn {
+  position: fixed;
+  left: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  z-index: 300;
+  width: 28px;
+  height: 48px;
+  background: var(--bg-card);
+  border: 1px solid var(--border);
+  border-left: none;
+  border-radius: 0 var(--radius) var(--radius) 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.15s;
+  box-shadow: var(--shadow-sm);
+}
+.sidebar-expand-btn:hover { background: var(--accent-dim); color: var(--accent); border-color: var(--accent); }
+
 /* ── RISK DOT (sidebar) ─────────────────────── */
 .risk-dot {
   display: inline-block;

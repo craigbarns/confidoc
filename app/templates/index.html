@@ -113,6 +113,9 @@
 
   <div class="app-body">
 
+    <!-- Bouton d'expansion sidebar (visible quand sidebar collapsée sur desktop) -->
+    <button id="btn-sidebar-expand" class="sidebar-expand-btn" aria-label="Afficher la liste des documents" title="Afficher la liste" style="display:none">☰</button>
+
     <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
     <!-- SIDEBAR -->
@@ -121,9 +124,11 @@
         <h2>Documents <span id="doc-count" class="doc-count"></span></h2>
         <div class="sidebar-header-actions">
           <button id="btn-home" class="btn btn-ghost btn-sm">Accueil</button>
-          <button id="btn-batch-toggle" title="Sélection multiple">☑</button>
           <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
           <button id="btn-sidebar-collapse" class="sidebar-collapse-btn" aria-label="Réduire la sidebar" title="Réduire/Agrandir">◀</button>
+        </div>
+        <div class="sidebar-batch-row">
+          <button id="btn-batch-toggle" class="btn-batch-toggle-inline" title="Sélection multiple pour actions groupées">☑ Sélectionner</button>
         </div>
       </div>
       <div class="sidebar-filters">

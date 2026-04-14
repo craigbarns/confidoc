@@ -238,13 +238,16 @@ function toggleSidebarCollapse() {
   const sidebar = document.querySelector(".sidebar");
   if (!sidebar) return;
   sidebar.classList.toggle("collapsed");
+  const collapsed = sidebar.classList.contains("collapsed");
   const collapseBtn = $("btn-sidebar-collapse");
   if (collapseBtn) {
-    const collapsed = sidebar.classList.contains("collapsed");
     collapseBtn.textContent = collapsed ? "▶" : "◀";
     collapseBtn.setAttribute("aria-label", collapsed ? "Agrandir la sidebar" : "Réduire la sidebar");
     localStorage.setItem("confidoc_sidebar_collapsed", collapsed ? "1" : "0");
   }
+  // Show/hide the external expand button
+  const expandBtn = $("btn-sidebar-expand");
+  if (expandBtn) expandBtn.style.display = collapsed ? "" : "none";
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────
@@ -2903,16 +2906,31 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Restore sidebar collapse state
   try {
-    if (localStorage.getItem("confidoc_sidebar_collapsed") === "1") {
+    if (localStorage.getItem("confidoc_sidebar_collapsed") === "1" && window.innerWidth > 1024) {
       const sidebar = document.querySelector(".sidebar");
-      if (sidebar && window.innerWidth > 1024) sidebar.classList.add("collapsed");
+      if (sidebar) sidebar.classList.add("collapsed");
       const collapseBtn = $("btn-sidebar-collapse");
       if (collapseBtn) {
         collapseBtn.textContent = "▶";
         collapseBtn.setAttribute("aria-label", "Agrandir la sidebar");
       }
+      const expandBtn = $("btn-sidebar-expand");
+      if (expandBtn) expandBtn.style.display = "";
     }
   } catch (_e) {}
+
+  // Bouton d'expansion sidebar (outside sidebar, visible when collapsed)
+  if ($("btn-sidebar-expand")) {
+    $("btn-sidebar-expand").addEventListener("click", () => {
+      const sidebar = document.querySelector(".sidebar");
+      if (sidebar) sidebar.classList.remove("collapsed");
+      localStorage.setItem("confidoc_sidebar_collapsed", "0");
+      const collapseBtn = $("btn-sidebar-collapse");
+      if (collapseBtn) { collapseBtn.textContent = "◀"; }
+      const expandBtn = $("btn-sidebar-expand");
+      if (expandBtn) expandBtn.style.display = "none";
+    });
+  }
 
   document.querySelectorAll(".sidebar .doc-item").forEach(el => {
     el.addEventListener("click", closeSidebar);
