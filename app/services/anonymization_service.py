@@ -27,13 +27,20 @@ from app.core.tokens import (
 logger = get_logger(__name__)
 
 try:
-    import pytesseract
     from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+
+    HAS_PIL = True
+except ImportError:
+    HAS_PIL = False
+
+try:
+    import pytesseract
     from io import BytesIO
     from pdf2image import convert_from_bytes
-    HAS_OCR = True
 except ImportError:
     HAS_OCR = False
+else:
+    HAS_OCR = HAS_PIL
 
 try:
     import numpy as np

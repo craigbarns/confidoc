@@ -4,7 +4,7 @@ import re
 import secrets
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Depends, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
@@ -177,10 +177,11 @@ async def refresh_token(
 async def logout(
     current_user: CurrentUser,
     db: DbSession,
-) -> None:
+) -> Response:
     """Déconnecte l'utilisateur en révoquant ses refresh tokens."""
     await auth_service.logout_user(db, str(current_user.id))
     logger.info("auth_logout", user_id=str(current_user.id))
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(

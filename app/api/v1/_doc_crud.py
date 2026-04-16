@@ -8,7 +8,7 @@ from __future__ import annotations
 import uuid
 from datetime import datetime, timezone
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import delete, desc, func, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -227,11 +227,12 @@ async def delete_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
-) -> None:
+) -> Response:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     document.is_deleted = True
     document.deleted_at = datetime.now(timezone.utc)
     await db.commit()
+    return Response(status_code=status.HTTP_204_NO_CONTENT)
 
 
 @router.post(
@@ -279,7 +280,7 @@ async def permanent_delete_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
-) -> None:
+) -> Response:
     try:
         doc_uuid = uuid.UUID(document_id)
     except ValueError as exc:
@@ -315,3 +316,5 @@ async def permanent_delete_document(
             delete_bytes(_storage_backend, _storage_key)
     except Exception as exc:
         logger.warning("permanent_delete_storage_failed", doc_id=_doc_id_str, error=str(exc))
+
+    return Response(status_code=status.HTTP_204_NO_CONTENT)

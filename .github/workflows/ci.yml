@@ -13,7 +13,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
       - name: Install dependencies
         run: |
@@ -63,7 +63,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
+          python-version: "3.11"
           cache: pip
       - name: Install dependencies
         run: |
@@ -79,15 +79,17 @@ jobs:
     needs: lint
     steps:
       - uses: actions/checkout@v4
-      - uses: actions/setup-python@v5
         with:
-          python-version: "3.12"
-          cache: pip
-      - name: Install dependencies
+          fetch-depth: 0
+      - uses: gitleaks/gitleaks-action@v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      - name: Check for hardcoded default secrets
         run: |
-          python -m pip install --upgrade pip
-          pip install -e ".[dev]"
-      - name: Check for hardcoded secrets
-        run: |
-          # Fail if production-default secrets found in committed code
-          ! grep -rn "CHANGE-ME" app/ --include="*.py" | grep -v config.py | grep -v "CHANGE-ME" || true
+          set -euo pipefail
+          out=$(grep -rn "CHANGE-ME" app/ --include="*.py" | grep -v '^app/config\.py:' || true)
+          if [ -n "${out}" ]; then
+            echo "${out}"
+            echo "::error::Found CHANGE-ME placeholders outside app/config.py"
+            exit 1
+          fi
