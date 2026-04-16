@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Celery background tasks for document processing."""
 
 import asyncio
+import contextlib
 import uuid
 
 from celery import shared_task
@@ -10,8 +11,8 @@ from app.core.database import async_session_factory
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.services.document_processing_service import (
-    build_anonymization_preview,
     build_anonymization_llm,
+    build_anonymization_preview,
     build_extraction_ocr,
 )
 
@@ -50,10 +51,8 @@ def anonymize_document_task(
         _run_async(_anonymize_document_async(doc_id, content, profile, document_type))
     except Exception as exc:
         logger.error("celery_anonymize_failed", doc_id=doc_id, error=str(exc))
-        try:
+        with contextlib.suppress(Exception):
             _run_async(_reset_document_status(doc_id))
-        except Exception:
-            pass
         raise self.retry(exc=exc) from exc
 
 
@@ -99,10 +98,8 @@ def process_document_legacy_task(
         _run_async(_process_document_legacy_async(doc_id, file_content, profile, document_type))
     except Exception as exc:
         logger.error("celery_process_legacy_failed", doc_id=doc_id, error=str(exc))
-        try:
+        with contextlib.suppress(Exception):
             _run_async(_reset_document_status(doc_id))
-        except Exception:
-            pass
         raise self.retry(exc=exc) from exc
 
 

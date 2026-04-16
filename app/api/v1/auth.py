@@ -2,13 +2,12 @@
 
 import re
 import secrets
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Depends, HTTPException, Request, Response, status
 from fastapi.security import OAuth2PasswordRequestForm
 from pydantic import BaseModel, EmailStr, field_validator
 from sqlalchemy import select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
@@ -32,8 +31,8 @@ settings = get_settings()
 # Uses Redis INCR + EXPIRE so it survives restarts and multi-instance deploys.
 # Falls back to in-memory if Redis is unavailable (dev mode).
 
-_RATE_WINDOW = 300   # 5 minutes sliding window
-_RATE_MAX = 10       # max attempts per window
+_RATE_WINDOW = 300  # 5 minutes sliding window
+_RATE_MAX = 10  # max attempts per window
 
 # In-memory fallback (single-process, dev only)
 _login_attempts_fallback: dict[str, list[float]] = {}
@@ -46,6 +45,7 @@ async def _check_rate_limit(key: str) -> None:
     redis_key = f"confidoc:auth_rl:{key}"
     try:
         import redis.asyncio as aioredis
+
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1)
         async with r:
             pipe = r.pipeline()
@@ -72,15 +72,13 @@ async def _check_rate_limit(key: str) -> None:
             raise HTTPException(
                 status_code=429,
                 detail="Trop de tentatives. Réessayez dans quelques minutes.",
-            )
+            ) from None
         attempts.append(now)
         _login_attempts_fallback[key] = attempts
 
 
 _PASSWORD_MIN_LENGTH = 8
-_PASSWORD_PATTERN = re.compile(
-    r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$"
-)
+_PASSWORD_PATTERN = re.compile(r"^(?=.*[a-z])(?=.*[A-Z])(?=.*\d).{8,}$")
 
 
 def _validate_password(v: str) -> str:
@@ -146,7 +144,7 @@ async def login(
 async def login_form_oauth2(
     db: DbSession,
     request: Request,
-    form_data: OAuth2PasswordRequestForm = Depends(),
+    form_data: OAuth2PasswordRequestForm = Depends(),  # noqa: B008
 ) -> TokenResponse:
     """Endpoint utilisé par le Swagger UI pour l'accès Bearer Auth."""
     client_ip = request.client.host if request.client else "unknown"
@@ -202,17 +200,15 @@ async def bootstrap_admin(
     if settings.is_production:
         bootstrap_secret = (getattr(settings, "BOOTSTRAP_SECRET", "") or "").strip()
         if not bootstrap_secret:
-            raise http_400(
-                "bootstrap-admin désactivé en production : configurez BOOTSTRAP_SECRET."
-            )
-        provided = (payload.bootstrap_secret if hasattr(payload, "bootstrap_secret") else "").strip()
+            raise http_400("bootstrap-admin désactivé en production : configurez BOOTSTRAP_SECRET.")
+        provided = (
+            payload.bootstrap_secret if hasattr(payload, "bootstrap_secret") else ""
+        ).strip()
         if not secrets.compare_digest(provided, bootstrap_secret):
             logger.warning("bootstrap_admin_unauthorized_attempt")
             raise HTTPException(status_code=403, detail="Accès refusé.")
 
-    existing_admin = await db.execute(
-        select(User).where(User.is_platform_admin.is_(True))
-    )
+    existing_admin = await db.execute(select(User).where(User.is_platform_admin.is_(True)))
     if existing_admin.scalar_one_or_none():
         raise http_400("Un admin plateforme existe déjà")
 
@@ -299,7 +295,7 @@ async def recover_access(
 
     user.password_hash = get_password_hash(payload.new_password)
     user.is_active = True
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
     await db.commit()
     logger.warning("auth_recovery_password_reset", email=user.email)
     return {"status": "password_reset", "email": user.email}

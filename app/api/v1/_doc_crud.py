@@ -6,7 +6,7 @@ Routes : list, clients, trash/list, /all, /{id}, DELETE, restore, permanent dele
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import delete, desc, func, select
@@ -15,12 +15,10 @@ from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import (
     _get_user_document_or_404,
     _normalize_client_name,
-    _read_file_or_404,
 )
-from app.core.database import async_session_factory
 from app.core.exceptions import http_404
 from app.core.logging import get_logger
-from app.models.document import Document, DocumentStatus
+from app.models.document import Document
 from app.models.document_version import DocumentVersion
 from app.models.entity_detection import EntityDetection
 from app.schemas.document import DocumentResponse
@@ -74,7 +72,8 @@ async def list_documents(
 
     if q_norm:
         documents_all = [
-            d for d in documents_all
+            d
+            for d in documents_all
             if q_norm in _normalize_client_name(getattr(d, "original_filename", ""))
         ]
 
@@ -83,15 +82,17 @@ async def list_documents(
             documents_all = [d for d in documents_all if bool(getattr(d, "is_deleted", False))]
         else:
             documents_all = [
-                d for d in documents_all
+                d
+                for d in documents_all
                 if _normalize_client_name(
                     getattr(d, "status", "").value
                     if hasattr(getattr(d, "status", ""), "value")
                     else str(getattr(d, "status", ""))
-                ) == status_norm
+                )
+                == status_norm
             ]
 
-    return documents_all[offset: offset + limit]
+    return documents_all[offset : offset + limit]
 
 
 @router.get(
@@ -106,6 +107,7 @@ async def list_clients(
     include_deleted: bool = Query(default=False),
 ) -> list[str]:
     import re
+
     query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
@@ -128,6 +130,7 @@ async def list_clients(
 
 
 # ── CORBEILLE — routes statiques AVANT /{document_id} ────────────────
+
 
 @router.get(
     "/trash/list",
@@ -153,7 +156,9 @@ async def list_trash(
     docs = result.scalars().all()
 
     count_result = await db.execute(
-        select(func.count()).select_from(Document).where(
+        select(func.count())
+        .select_from(Document)
+        .where(
             Document.uploaded_by_user_id == current_user.id,
             Document.is_deleted.is_(True),
         )
@@ -196,7 +201,7 @@ async def delete_all_my_documents(
         )
     )
     docs = list(result.scalars().all())
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     for doc in docs:
         doc.is_deleted = True
         doc.deleted_at = now
@@ -206,15 +211,14 @@ async def delete_all_my_documents(
 
 # ── Routes paramétrées /{document_id} ────────────────────────────────
 
+
 @router.get(
     "/{document_id}",
     response_model=DocumentResponse,
     status_code=status.HTTP_200_OK,
     summary="Récupérer un document",
 )
-async def get_document(
-    document_id: str, current_user: CurrentUser, db: DbSession
-) -> Document:
+async def get_document(document_id: str, current_user: CurrentUser, db: DbSession) -> Document:
     return await _get_user_document_or_404(db, document_id, current_user.id)
 
 
@@ -230,7 +234,7 @@ async def delete_document(
 ) -> Response:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     document.is_deleted = True
-    document.deleted_at = datetime.now(timezone.utc)
+    document.deleted_at = datetime.now(UTC)
     await db.commit()
     return Response(status_code=status.HTTP_204_NO_CONTENT)
 
@@ -304,6 +308,7 @@ async def permanent_delete_document(
     await db.execute(delete(DocumentVersion).where(DocumentVersion.document_id == doc_uuid))
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
+
         await db.execute(delete(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid))
     except Exception:
         pass
@@ -313,6 +318,7 @@ async def permanent_delete_document(
     try:
         if _storage_backend and _storage_key:
             from app.services.storage_service import delete_bytes
+
             delete_bytes(_storage_backend, _storage_key)
     except Exception as exc:
         logger.warning("permanent_delete_storage_failed", doc_id=_doc_id_str, error=str(exc))

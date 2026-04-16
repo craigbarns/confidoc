@@ -6,36 +6,52 @@ v3 changes:
 - Post-OCR artifact cleanup
 """
 
-from functools import lru_cache
+import contextlib
 import re
 import unicodedata
+from functools import lru_cache
 from typing import Any
-
-from app.services.entity_registry import EntityRegistry
 
 import fitz
 
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
 from app.core.tokens import (
-    TOKEN_EMAIL, TOKEN_TELEPHONE, TOKEN_IBAN, TOKEN_SIRET, TOKEN_SIREN,
-    TOKEN_TVA, TOKEN_NSS, TOKEN_ADRESSE, TOKEN_VILLE, TOKEN_PERSONNE,
-    TOKEN_DATE, TOKEN_DATE_NAISSANCE, TOKEN_MONTANT, TOKEN_REF_FACTURE,
-    TOKEN_SOCIETE, TOKEN_EMPRUNT, TOKEN_CADASTRE, TOKEN_NAISSANCE, TOKEN_REDACTED,
+    TOKEN_ADRESSE,
+    TOKEN_CADASTRE,
+    TOKEN_DATE,
+    TOKEN_DATE_NAISSANCE,
+    TOKEN_EMAIL,
+    TOKEN_EMPRUNT,
+    TOKEN_IBAN,
+    TOKEN_MONTANT,
+    TOKEN_NAISSANCE,
+    TOKEN_NSS,
+    TOKEN_PERSONNE,
+    TOKEN_REDACTED,
+    TOKEN_REF_FACTURE,
+    TOKEN_SIREN,
+    TOKEN_SIRET,
+    TOKEN_SOCIETE,
+    TOKEN_TELEPHONE,
+    TOKEN_TVA,
+    TOKEN_VILLE,
 )
+from app.services.entity_registry import EntityRegistry
 
 logger = get_logger(__name__)
 
 try:
-    from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+    from PIL import Image, ImageEnhance, ImageFilter, ImageOps
 
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
 
 try:
-    import pytesseract
     from io import BytesIO
+
+    import pytesseract
     from pdf2image import convert_from_bytes
 except ImportError:
     HAS_OCR = False
@@ -44,12 +60,14 @@ else:
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
 
 try:
     import pymupdf4llm
+
     HAS_MD_EXTRACTOR = True
 except ImportError:
     HAS_MD_EXTRACTOR = False
@@ -72,13 +90,16 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ("email", re.compile(r"\b[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}\b"), TOKEN_EMAIL),
     ("phone_fr", re.compile(r"\b(?:\+33|0)\s?[1-9](?:[\s.\-]?\d{2}){4}\b"), TOKEN_TELEPHONE),
     ("phone_intl", re.compile(r"\+\d{1,3}[\s.\-]?\d(?:[\s.\-]?\d){6,14}\b"), TOKEN_TELEPHONE),
-    ("iban", re.compile(r"\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b"), TOKEN_IBAN),
+    (
+        "iban",
+        re.compile(r"\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b"),
+        TOKEN_IBAN,
+    ),
     ("iban_compact", re.compile(r"\b[A-Z]{2}\d{2}[A-Z0-9]{11,30}\b"), TOKEN_IBAN),
     ("siret", re.compile(r"\b\d{3}[\s.\-]?\d{3}[\s.\-]?\d{3}[\s.\-]?\d{5}\b"), TOKEN_SIRET),
     ("siren", re.compile(r"\b\d{3}[\s.\-]?\d{3}[\s.\-]?\d{3}\b"), TOKEN_SIREN),
     ("vat_fr", re.compile(r"\bFR\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b"), TOKEN_TVA),
     ("nss", re.compile(r"\b[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2}\b"), TOKEN_NSS),
-
     # Addresses & locations
     (
         "address_line",
@@ -91,7 +112,6 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
         TOKEN_ADRESSE,
     ),
     ("postal_city", re.compile(r"\b\d{5}\s+[A-Za-zÀ-ÖØ-öø-ÿ''\- ]{2,40}\b"), TOKEN_VILLE),
-
     # Persons (with title prefix)
     (
         "person_title",
@@ -109,48 +129,69 @@ PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
 
 STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     # Dates
-    ("date_fr", re.compile(
-        r"\b(?:0?[1-9]|[12]\d|3[01])[/\-.](?:0?[1-9]|1[0-2])[/\-.](?:19|20)\d{2}\b"
-    ), TOKEN_DATE),
-    ("date_iso", re.compile(r"\b(?:19|20)\d{2}[\-/](?:0?[1-9]|1[0-2])[\-/](?:0?[1-9]|[12]\d|3[01])\b"), TOKEN_DATE),
-    ("date_text_fr", re.compile(
-        r"\b(?:0?[1-9]|[12]\d|3[01])\s+(?:janvier|février|fevrier|mars|avril|mai|juin|"
-        r"juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(?:19|20)\d{2}\b",
-        re.IGNORECASE,
-    ), TOKEN_DATE),
-
+    (
+        "date_fr",
+        re.compile(r"\b(?:0?[1-9]|[12]\d|3[01])[/\-.](?:0?[1-9]|1[0-2])[/\-.](?:19|20)\d{2}\b"),
+        TOKEN_DATE,
+    ),
+    (
+        "date_iso",
+        re.compile(r"\b(?:19|20)\d{2}[\-/](?:0?[1-9]|1[0-2])[\-/](?:0?[1-9]|[12]\d|3[01])\b"),
+        TOKEN_DATE,
+    ),
+    (
+        "date_text_fr",
+        re.compile(
+            r"\b(?:0?[1-9]|[12]\d|3[01])\s+(?:janvier|février|fevrier|mars|avril|mai|juin|"
+            r"juillet|août|aout|septembre|octobre|novembre|décembre|decembre)\s+(?:19|20)\d{2}\b",
+            re.IGNORECASE,
+        ),
+        TOKEN_DATE,
+    ),
     # Monetary amounts
-    ("amount_eur", re.compile(
-        r"\b\d{1,3}(?:[\s\u00a0]?\d{3})*(?:[.,]\d{2})?\s?(?:€|EUR|euros?)\b", re.IGNORECASE
-    ), TOKEN_MONTANT),
+    (
+        "amount_eur",
+        re.compile(
+            r"\b\d{1,3}(?:[\s\u00a0]?\d{3})*(?:[.,]\d{2})?\s?(?:€|EUR|euros?)\b", re.IGNORECASE
+        ),
+        TOKEN_MONTANT,
+    ),
     ("amount_plain", re.compile(r"\b\d{1,3}(?:[\s\u00a0]?\d{3})*,\d{2}\b"), TOKEN_MONTANT),
-
     # Invoice references
-    ("invoice_number", re.compile(
-        r"(?i)\b(?:facture|invoice|fact|fa|fac|avoir|devis|bon\sde\scommande|bdc|bl)"
-        r"\s*(?:n[°o]|#|num(?:é|e)ro)?\s*[:\-]?\s*[A-Z0-9\-/]{2,20}\b"
-    ), TOKEN_REF_FACTURE),
-
+    (
+        "invoice_number",
+        re.compile(
+            r"(?i)\b(?:facture|invoice|fact|fa|fac|avoir|devis|bon\sde\scommande|bdc|bl)"
+            r"\s*(?:n[°o]|#|num(?:é|e)ro)?\s*[:\-]?\s*[A-Z0-9\-/]{2,20}\b"
+        ),
+        TOKEN_REF_FACTURE,
+    ),
     # Company names (legal forms)
-    ("company_legal_name", re.compile(
-        r"\b(?:SAS|SARL|EURL|SCI|SELARL|SCP|SA|SNC|EI|EIRL|SASU|SEL|GIE)"
-        r"\s+[A-Z0-9][A-Z0-9\s\-'&]{1,60}\b"
-    ), TOKEN_SOCIETE),
-
+    (
+        "company_legal_name",
+        re.compile(
+            r"\b(?:SAS|SARL|EURL|SCI|SELARL|SCP|SA|SNC|EI|EIRL|SASU|SEL|GIE)"
+            r"\s+[A-Z0-9][A-Z0-9\s\-'&]{1,60}\b"
+        ),
+        TOKEN_SOCIETE,
+    ),
     # Person names (two+ capitalized words)
-    ("person_name", re.compile(
-        r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ''\-]{2,}"
-        r"\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ''\-]{2,}\b"
-    ), TOKEN_PERSONNE),
-
+    (
+        "person_name",
+        re.compile(
+            r"\b[A-ZÀ-ÖØ-Ý][a-zà-öø-ÿ''\-]{2,}"
+            r"\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ''\-]{2,}\b"
+        ),
+        TOKEN_PERSONNE,
+    ),
     # All-caps person names (e.g. "BARANES GREGORY")
-    ("person_uppercase", re.compile(
-        r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,3}\b"
-    ), TOKEN_PERSONNE),
-
+    (
+        "person_uppercase",
+        re.compile(r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,3}\b"),
+        TOKEN_PERSONNE,
+    ),
     # Country
     ("country", re.compile(r"\bFrance\b", re.IGNORECASE), "[PAYS]"),
-
     # Residence/address block patterns
     (
         "address_residence",
@@ -161,7 +202,6 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
         ),
         TOKEN_ADRESSE,
     ),
-
     # Bank account code + label  (e.g. "51210000 QONTO")
     (
         "bank_account_code_label",
@@ -176,58 +216,81 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
 
 QUASI_IDENTIFIER_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     # City names (French cities commonly found in accounting/legal docs)
-    ("city_name", re.compile(
-        r"\b(?:Marseille|Toulouse|Lyon|Paris|Bordeaux|Nice|Nantes|Montpellier|"
-        r"Strasbourg|Lille|Rennes|Toulon|Grenoble|Dijon|Angers|Nîmes|Aix[\-\s]en[\-\s]Provence|"
-        r"Saint[\-\s](?:Étienne|Etienne|Denis|Menet|Raphaël|Raphael|Tropez|Malo|Nazaire|Germain|Cloud|Ouen|Priest)|"
-        r"Cannes|Perpignan|Amiens|Metz|Besançon|Besancon|Orléans|Orleans|Rouen|"
-        r"Mulhouse|Caen|Nancy|Avignon|Clermont[\-\s]Ferrand|Limoges|Pau|Brest)\b",
-        re.IGNORECASE,
-    ), TOKEN_VILLE),
-
+    (
+        "city_name",
+        re.compile(
+            r"\b(?:Marseille|Toulouse|Lyon|Paris|Bordeaux|Nice|Nantes|Montpellier|"
+            r"Strasbourg|Lille|Rennes|Toulon|Grenoble|Dijon|Angers|Nîmes|Aix[\-\s]en[\-\s]Provence|"
+            r"Saint[\-\s](?:Étienne|Etienne|Denis|Menet|Raphaël|Raphael|Tropez|Malo|Nazaire|Germain|Cloud|Ouen|Priest)|"
+            r"Cannes|Perpignan|Amiens|Metz|Besançon|Besancon|Orléans|Orleans|Rouen|"
+            r"Mulhouse|Caen|Nancy|Avignon|Clermont[\-\s]Ferrand|Limoges|Pau|Brest)\b",
+            re.IGNORECASE,
+        ),
+        TOKEN_VILLE,
+    ),
     # Lieux-dits, traverses, hameaux (common in southern France docs)
-    ("lieu_dit", re.compile(
-        r"\b(?:Traverse|Impasse|Hameau|Lotissement|Quartier|Lieu[\-\s]dit)"
-        r"\s+(?:du|de|des|la|le|l')?\s*"
-        r"[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{2,40}\b",
-        re.IGNORECASE,
-    ), TOKEN_ADRESSE),
-
+    (
+        "lieu_dit",
+        re.compile(
+            r"\b(?:Traverse|Impasse|Hameau|Lotissement|Quartier|Lieu[\-\s]dit)"
+            r"\s+(?:du|de|des|la|le|l')?\s*"
+            r"[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{2,40}\b",
+            re.IGNORECASE,
+        ),
+        TOKEN_ADRESSE,
+    ),
     # Loan / credit references (6-15 digits after a label)
-    ("loan_ref", re.compile(
-        r"(?i)(?:emprunt|prêt|pret|crédit|credit|n[°o]\s*(?:de\s+)?(?:prêt|pret|contrat))"
-        r"\s*(?:n[°o]?)?\s*[:\-]?\s*(\d{6,15})"
-    ), TOKEN_EMPRUNT),
-
+    (
+        "loan_ref",
+        re.compile(
+            r"(?i)(?:emprunt|prêt|pret|crédit|credit|n[°o]\s*(?:de\s+)?(?:prêt|pret|contrat))"
+            r"\s*(?:n[°o]?)?\s*[:\-]?\s*(\d{6,15})"
+        ),
+        TOKEN_EMPRUNT,
+    ),
     # Cadastral / property references (long numeric sequences)
-    ("cadastral_ref", re.compile(
-        r"\b(?:invariant|référence\s+cadastrale|ref\.?\s+cadastrale|cadastre)"
-        r"\s*[:\-]?\s*([A-Z0-9]{8,25})\b",
-        re.IGNORECASE,
-    ), TOKEN_CADASTRE),
-
+    (
+        "cadastral_ref",
+        re.compile(
+            r"\b(?:invariant|référence\s+cadastrale|ref\.?\s+cadastrale|cadastre)"
+            r"\s*[:\-]?\s*([A-Z0-9]{8,25})\b",
+            re.IGNORECASE,
+        ),
+        TOKEN_CADASTRE,
+    ),
     # Birth context: "Né(e) le DD/MM/YYYY à VILLE"
-    ("birth_context", re.compile(
-        r"(?i)n[ée]+e?\s+(?:le\s+)?\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"
-        r"(?:\s+[àa]\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{1,30})?"
-    ), TOKEN_NAISSANCE),
-
+    (
+        "birth_context",
+        re.compile(
+            r"(?i)n[ée]+e?\s+(?:le\s+)?\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"
+            r"(?:\s+[àa]\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{1,30})?"
+        ),
+        TOKEN_NAISSANCE,
+    ),
     # Standalone birth date with label
-    ("birth_date_labeled", re.compile(
-        r"(?i)(?:date\s+de\s+naissance|né(?:e)?\s+le)\s*[:\-]?\s*"
-        r"\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"
-    ), TOKEN_DATE_NAISSANCE),
-
+    (
+        "birth_date_labeled",
+        re.compile(
+            r"(?i)(?:date\s+de\s+naissance|né(?:e)?\s+le)\s*[:\-]?\s*"
+            r"\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}"
+        ),
+        TOKEN_DATE_NAISSANCE,
+    ),
     # Birth place with label
-    ("birth_place_labeled", re.compile(
-        r"(?i)(?:lieu\s+de\s+naissance|commune\s+de\s+naissance|n[ée]+e?\s+[àa])"
-        r"\s*[:\-]?\s*[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{1,40}"
-    ), TOKEN_NAISSANCE),
-
+    (
+        "birth_place_labeled",
+        re.compile(
+            r"(?i)(?:lieu\s+de\s+naissance|commune\s+de\s+naissance|n[ée]+e?\s+[àa])"
+            r"\s*[:\-]?\s*[A-ZÀ-ÿ][A-Za-zÀ-ÿ'\-\s]{1,40}"
+        ),
+        TOKEN_NAISSANCE,
+    ),
     # APT / apartment numbers in address blocks
-    ("apartment_ref", re.compile(
-        r"(?i)\b(?:apt|appt|appartement|app)\.?\s*(?:n[°o]?)?\s*\d{1,5}\b"
-    ), TOKEN_ADRESSE),
+    (
+        "apartment_ref",
+        re.compile(r"(?i)\b(?:apt|appt|appartement|app)\.?\s*(?:n[°o]?)?\s*\d{1,5}\b"),
+        TOKEN_ADRESSE,
+    ),
 ]
 
 # ──────────────────────────────────────────────────────────────────────
@@ -244,13 +307,19 @@ LABEL_VALUE_PATTERN = re.compile(
 )
 
 # BIC should be detected only with an explicit label to avoid masking accounting words.
-BIC_LABELED_PATTERN = re.compile(
-    r"(?im)\bBIC\b\s*[:\-]?\s*([A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b"
-)
+BIC_LABELED_PATTERN = re.compile(r"(?im)\bBIC\b\s*[:\-]?\s*([A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?)\b")
 
 INVOICE_HINTS = (
-    "facture", "invoice", "tva", "total ttc", "total ht",
-    "montant ht", "règlement", "reglement", "avoir", "devis",
+    "facture",
+    "invoice",
+    "tva",
+    "total ttc",
+    "total ht",
+    "montant ht",
+    "règlement",
+    "reglement",
+    "avoir",
+    "devis",
 )
 
 # ──────────────────────────────────────────────────────────────────────
@@ -259,25 +328,97 @@ INVOICE_HINTS = (
 
 FALSE_POSITIVE_WORDS: set[str] = {
     # Common uppercase header words in French accounting/invoices
-    "FACTURE", "AVOIR", "DEVIS", "TOTAL", "MONTANT", "DESIGNATION",
-    "DÉSIGNATION", "DESCRIPTION", "QUANTITÉ", "QUANTITE", "PRIX",
-    "UNITAIRE", "HT", "TTC", "TVA", "SOLDE", "REPORT", "SOUS",
-    "DATE", "NUMERO", "NUMÉRO", "RÉFÉRENCE", "REFERENCE", "PAGE",
-    "OBJET", "NOTE", "COMPTE", "DÉBIT", "DEBIT", "CRÉDIT", "CREDIT",
-    "PIÈCE", "PIECE", "LIBELLÉ", "LIBELLE", "JOURNAL", "EXERCICE",
-    "PÉRIODE", "PERIODE", "BILAN", "ACTIF", "PASSIF", "CHARGES",
-    "PRODUITS", "RÉSULTAT", "RESULTAT", "BRUT", "NET", "BALANCE",
-    "GÉNÉRALE", "GENERALE", "ANALYTIQUE", "AUXILIAIRE", "GRAND",
-    "LIVRE", "BORDEREAU", "RÉCAPITULATIF", "RECAPITULATIF",
-    "BON", "COMMANDE", "LIVRAISON", "RETOUR",
-    "MODE", "PAIEMENT", "CONDITIONS", "GÉNÉRALES", "GENERALES",
-    "VENTE", "ACHAT", "CLIENT", "FOURNISSEUR",
+    "FACTURE",
+    "AVOIR",
+    "DEVIS",
+    "TOTAL",
+    "MONTANT",
+    "DESIGNATION",
+    "DÉSIGNATION",
+    "DESCRIPTION",
+    "QUANTITÉ",
+    "QUANTITE",
+    "PRIX",
+    "UNITAIRE",
+    "HT",
+    "TTC",
+    "TVA",
+    "SOLDE",
+    "REPORT",
+    "SOUS",
+    "DATE",
+    "NUMERO",
+    "NUMÉRO",
+    "RÉFÉRENCE",
+    "REFERENCE",
+    "PAGE",
+    "OBJET",
+    "NOTE",
+    "COMPTE",
+    "DÉBIT",
+    "DEBIT",
+    "CRÉDIT",
+    "CREDIT",
+    "PIÈCE",
+    "PIECE",
+    "LIBELLÉ",
+    "LIBELLE",
+    "JOURNAL",
+    "EXERCICE",
+    "PÉRIODE",
+    "PERIODE",
+    "BILAN",
+    "ACTIF",
+    "PASSIF",
+    "CHARGES",
+    "PRODUITS",
+    "RÉSULTAT",
+    "RESULTAT",
+    "BRUT",
+    "NET",
+    "BALANCE",
+    "GÉNÉRALE",
+    "GENERALE",
+    "ANALYTIQUE",
+    "AUXILIAIRE",
+    "GRAND",
+    "LIVRE",
+    "BORDEREAU",
+    "RÉCAPITULATIF",
+    "RECAPITULATIF",
+    "BON",
+    "COMMANDE",
+    "LIVRAISON",
+    "RETOUR",
+    "MODE",
+    "PAIEMENT",
+    "CONDITIONS",
+    "GÉNÉRALES",
+    "GENERALES",
+    "VENTE",
+    "ACHAT",
+    "CLIENT",
+    "FOURNISSEUR",
     # Extra accounting words frequently hit by OCR/NER false positives
-    "CHIFFRE", "AFFAIRES", "EXPLOITATION", "EXCEPTIONNEL", "FINANCIERES",
-    "NETTES", "COURANT", "ACTIFS", "CREANCES", "PARTICIPATIONS",
-    "DISPONIBILITES", "IMMOBILISATIONS", "CAPITAUX", "DETTES",
-    "RATTACHEES", "EXERCICE", "CLOS", "VARIATION", "REPORT",
-    "NOUVEAU", "COMPTE", "COMPTES", "RÉSULTAT", "RESULTAT",
+    "CHIFFRE",
+    "AFFAIRES",
+    "EXPLOITATION",
+    "EXCEPTIONNEL",
+    "FINANCIERES",
+    "NETTES",
+    "COURANT",
+    "ACTIFS",
+    "CREANCES",
+    "PARTICIPATIONS",
+    "DISPONIBILITES",
+    "IMMOBILISATIONS",
+    "CAPITAUX",
+    "DETTES",
+    "RATTACHEES",
+    "CLOS",
+    "VARIATION",
+    "NOUVEAU",
+    "COMPTES",
 }
 
 
@@ -328,17 +469,14 @@ def _preprocess_image_for_ocr(img: "Image.Image") -> "Image.Image":
 
     # 7. Deskew (straighten tilted scans) — requires numpy
     if HAS_NUMPY:
-        try:
+        with contextlib.suppress(Exception):
             img = _deskew_image(img)
-        except Exception:
-            pass  # deskew is best-effort
 
     return img
 
 
 def _deskew_image(img: "Image.Image") -> "Image.Image":
     """Deskew a grayscale image by detecting dominant line angle."""
-    arr = np.array(img)
     # Compute horizontal projection profile variance at different angles
     best_angle = 0.0
     best_score = 0.0
@@ -406,7 +544,9 @@ def _score_ocr_text_candidate(text: str) -> int:
         return 0
     words = len(text.split())
     digits = len(re.findall(r"\d", text))
-    tables = len(re.findall(r"\b(total|résultat|resultat|passif|actif|revenus?)\b", text, re.IGNORECASE))
+    tables = len(
+        re.findall(r"\b(total|résultat|resultat|passif|actif|revenus?)\b", text, re.IGNORECASE)
+    )
     return (words * 2) + digits + (tables * 10)
 
 
@@ -451,13 +591,31 @@ def classify_document_type(text: str, filename: str = "") -> str:
     if any(hint in source for hint in INVOICE_HINTS):
         return "invoice"
 
-    accounting_hints = ("grand livre", "balance", "journal", "écriture", "ecriture",
-                        "compte de résultat", "bilan", "pcg", "plan comptable")
+    accounting_hints = (
+        "grand livre",
+        "balance",
+        "journal",
+        "écriture",
+        "ecriture",
+        "compte de résultat",
+        "bilan",
+        "pcg",
+        "plan comptable",
+    )
     if any(h in source for h in accounting_hints):
         return "accounting"
 
-    legal_hints = ("contrat", "convention", "avenant", "clause", "article",
-                   "tribunal", "juridiction", "assignation", "jugement")
+    legal_hints = (
+        "contrat",
+        "convention",
+        "avenant",
+        "clause",
+        "article",
+        "tribunal",
+        "juridiction",
+        "assignation",
+        "jugement",
+    )
     if any(h in source for h in legal_hints):
         return "legal"
 
@@ -492,8 +650,9 @@ def _extract_text_from_file_raw(
         ext_text = ""
         # 1. Tentative d'extraction structurée (Markdown + Tableaux)
         if HAS_MD_EXTRACTOR:
-            import tempfile
             import os
+            import tempfile
+
             # pymupdf4llm est plus robuste sur un fichier physique que sur un stream en mémoire
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 tmp.write(content)
@@ -505,7 +664,7 @@ def _extract_text_from_file_raw(
                 ext_text = ""
             finally:
                 os.unlink(tmp_path)
-        
+
         # 2. Fallback d'extraction de texte native (si markdown a échoué)
         if not ext_text or not str(ext_text).strip():
             try:
@@ -570,7 +729,7 @@ def _extract_text_from_file_raw(
                     error=str(exc),
                 )
                 return ext_text
-        
+
         meta["method"] = "native_pdf_pymupdf"
         logger.info("document_extraction", method="native_pdf_pymupdf", extension="pdf")
         return ext_text
@@ -579,6 +738,7 @@ def _extract_text_from_file_raw(
     if extension in ["png", "jpg", "jpeg", "tiff", "tif"] and HAS_OCR:
         try:
             from app.config import get_settings
+
             settings = get_settings()
             ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
             img = Image.open(BytesIO(content))
@@ -620,7 +780,9 @@ def _extract_text_from_file_raw(
             logger.warning("ocr_image_failed", extension=extension, error=str(exc))
 
     meta["method"] = "fallback_plain_text_or_error"
-    logger.warning("document_extraction", method="fallback_plain_text_or_error", extension=extension)
+    logger.warning(
+        "document_extraction", method="fallback_plain_text_or_error", extension=extension
+    )
     # Plain text fallback
     try:
         return content.decode("utf-8", errors="ignore").strip()
@@ -653,9 +815,7 @@ def _is_false_positive(value: str) -> bool:
         r"\bACTIF\b",
         r"\bPASSIF\b",
     )
-    if any(re.search(pat, clean) for pat in accounting_guard_patterns):
-        return True
-    return False
+    return any(re.search(pat, clean) for pat in accounting_guard_patterns)
 
 
 def _detect_entities(
@@ -670,46 +830,60 @@ def _detect_entities(
             value = match.group(0)
             if _is_false_positive(value):
                 continue
-            matches.append({
-                "entity_type": entity_type,
-                "start_index": match.start(),
-                "end_index": match.end(),
-                "value_excerpt": value,
-                "replacement": replacement,
-            })
+            matches.append(
+                {
+                    "entity_type": entity_type,
+                    "start_index": match.start(),
+                    "end_index": match.end(),
+                    "value_excerpt": value,
+                    "replacement": replacement,
+                }
+            )
 
     # ── Label:Value detection (always applied) ──
     for match in LABEL_VALUE_PATTERN.finditer(text):
         value = match.group(1).strip()
         if not value or _is_false_positive(value):
             continue
-        matches.append({
-            "entity_type": "labeled_sensitive_value",
-            "start_index": match.start(1),
-            "end_index": match.end(1),
-            "value_excerpt": value,
-            "replacement": "[REDACTED]",
-        })
+        matches.append(
+            {
+                "entity_type": "labeled_sensitive_value",
+                "start_index": match.start(1),
+                "end_index": match.end(1),
+                "value_excerpt": value,
+                "replacement": "[REDACTED]",
+            }
+        )
 
     # ── BIC detection only when explicitly labeled (avoid false positives) ──
     for match in BIC_LABELED_PATTERN.finditer(text):
         value = match.group(1).strip()
         if not value or _is_false_positive(value):
             continue
-        matches.append({
-            "entity_type": "bic",
-            "start_index": match.start(1),
-            "end_index": match.end(1),
-            "value_excerpt": value,
-            "replacement": "[BIC]",
-        })
+        matches.append(
+            {
+                "entity_type": "bic",
+                "start_index": match.start(1),
+                "end_index": match.end(1),
+                "value_excerpt": value,
+                "replacement": "[BIC]",
+            }
+        )
 
     # ── Strict-only patterns ──
-    is_strict = profile in {"strict", "dataset_strict", "dataset_accounting", "dataset_accounting_pseudo"}
+    is_strict = profile in {
+        "strict",
+        "dataset_strict",
+        "dataset_accounting",
+        "dataset_accounting_pseudo",
+    }
     if is_strict:
         for entity_type, pattern, replacement in STRICT_ONLY_PATTERNS:
             # Dataset accounting: keep amounts for business utility
-            if profile in {"dataset_accounting", "dataset_accounting_pseudo"} and entity_type in {"amount_eur", "amount_plain"}:
+            if profile in {"dataset_accounting", "dataset_accounting_pseudo"} and entity_type in {
+                "amount_eur",
+                "amount_plain",
+            }:
                 continue
 
             for match in pattern.finditer(text):
@@ -721,15 +895,21 @@ def _detect_entities(
                 # Bank account: keep code in accounting mode
                 if entity_type == "bank_account_code_label":
                     code = match.group(1)
-                    rep = f"{code} [REDACTED]" if profile in {"dataset_accounting", "dataset_accounting_pseudo"} else "[REDACTED]"
+                    rep = (
+                        f"{code} [REDACTED]"
+                        if profile in {"dataset_accounting", "dataset_accounting_pseudo"}
+                        else "[REDACTED]"
+                    )
 
-                matches.append({
-                    "entity_type": entity_type,
-                    "start_index": match.start(),
-                    "end_index": match.end(),
-                    "value_excerpt": value,
-                    "replacement": rep,
-                })
+                matches.append(
+                    {
+                        "entity_type": entity_type,
+                        "start_index": match.start(),
+                        "end_index": match.end(),
+                        "value_excerpt": value,
+                        "replacement": rep,
+                    }
+                )
 
         # ── Identity block heuristic (invoice/accounting header zone) ──
         if document_type in {"invoice", "accounting", "generic"}:
@@ -742,13 +922,15 @@ def _detect_entities(
                 value = match.group(0)
                 if _is_false_positive(value):
                     continue
-                matches.append({
-                    "entity_type": entity_type,
-                    "start_index": match.start(),
-                    "end_index": match.end(),
-                    "value_excerpt": value,
-                    "replacement": replacement,
-                })
+                matches.append(
+                    {
+                        "entity_type": entity_type,
+                        "start_index": match.start(),
+                        "end_index": match.end(),
+                        "value_excerpt": value,
+                        "replacement": replacement,
+                    }
+                )
 
     # ── De-duplicate with longest-match priority ──
     return _deduplicate(matches)
@@ -776,12 +958,16 @@ def _detect_identity_block(text: str, matches: list[dict[str, Any]]) -> None:
             # Legal form keywords
             any(kw in clean.lower() for kw in ("sci", "sas", "sarl", "eurl", "selarl"))
             # Address keywords
-            or any(kw in clean.lower() for kw in ("terrasses", "rue", "avenue", "boulevard", "résidence"))
+            or any(
+                kw in clean.lower()
+                for kw in ("terrasses", "rue", "avenue", "boulevard", "résidence")
+            )
             # Two+ capitalized words (person name pattern)
             or re.search(
                 r"\b[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ''\-]{2,}\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ''\-]{2,}\b",
                 clean,
-            ) is not None
+            )
+            is not None
             # Heavy uppercase non-digit line (likely a name/company)
             or (upper_count >= max(5, int(len(clean) * 0.5)) and not has_digits)
         )
@@ -793,13 +979,15 @@ def _detect_identity_block(text: str, matches: list[dict[str, Any]]) -> None:
         if start < 0:
             continue
         end = start + len(line)
-        matches.append({
-            "entity_type": "invoice_identity_block",
-            "start_index": start,
-            "end_index": end,
-            "value_excerpt": line,
-            "replacement": "[IDENTITY]",
-        })
+        matches.append(
+            {
+                "entity_type": "invoice_identity_block",
+                "start_index": start,
+                "end_index": end,
+                "value_excerpt": line,
+                "replacement": "[IDENTITY]",
+            }
+        )
 
 
 def _deduplicate(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
@@ -808,7 +996,10 @@ def _deduplicate(matches: list[dict[str, Any]]) -> list[dict[str, Any]]:
     kept: list[dict[str, Any]] = []
     for candidate in matches:
         overlap = any(
-            not (candidate["end_index"] <= item["start_index"] or candidate["start_index"] >= item["end_index"])
+            not (
+                candidate["end_index"] <= item["start_index"]
+                or candidate["start_index"] >= item["end_index"]
+            )
             for item in kept
         )
         if not overlap:
@@ -858,7 +1049,20 @@ def _infer_business_prefix(
         return "SOCIETE"
 
     if entity_type in {"address_line", "address_residence"}:
-        if any(k in ctx for k in ("loyer", "immeuble", "bien", "locatif", "locat", "residence", "résidence", "batiment", "bâtiment")):
+        if any(
+            k in ctx
+            for k in (
+                "loyer",
+                "immeuble",
+                "bien",
+                "locatif",
+                "locat",
+                "residence",
+                "résidence",
+                "batiment",
+                "bâtiment",
+            )
+        ):
             return "BIEN"
         return "ADRESSE"
 
@@ -1012,7 +1216,11 @@ def anonymize_text(
     anonymized = text
     # Apply replacements from end to start to preserve indices
     for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
-        anonymized = anonymized[:match["start_index"]] + match["replacement"] + anonymized[match["end_index"]:]
+        anonymized = (
+            anonymized[: match["start_index"]]
+            + match["replacement"]
+            + anonymized[match["end_index"] :]
+        )
 
     # Post-OCR cleanup
     anonymized = clean_ocr_artifacts(anonymized)
