@@ -105,9 +105,10 @@ def test_rate_limit_config_defaults():
 
 
 def test_debug_defaults_to_false():
-    """DEBUG defaults to False for safety."""
-    s = Settings()
-    assert s.DEBUG is False
+    """DEBUG defaults to False in the Settings class definition."""
+    # The class-level default is False; .env may override it.
+    # We test the class attribute directly.
+    assert Settings.model_fields["DEBUG"].default is False
 
 
 def test_ocr_config_defaults():

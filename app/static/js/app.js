@@ -1680,20 +1680,59 @@ function renderStructuredAnswer(bodyEl, text) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    const heading = line.match(/^#{1,3}\s+(.+)$/) || line.match(/^([A-Za-zÀ-ÿ0-9 \-]+)\s*:\s*$/);
+    // Detect headings: ## Title, **Title**, Title :, 1) Title, 1. Title
+    const heading =
+      line.match(/^#{1,3}\s+(.+)$/) ||
+      line.match(/^\*\*([^*]+)\*\*\s*:?\s*$/) ||
+      line.match(/^([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 ''\-\/]+)\s*:\s*$/) ||
+      line.match(/^\d+[.)\-]\s+\*\*([^*]+)\*\*/) ||
+      line.match(/^\d+[.)\-]\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9 ''\-\/]{3,})\s*:?\s*$/);
     if (heading) {
       if (current.items.length) sections.push(current);
-      current = { title: heading[1], items: [] };
+      current = { title: heading[1].replace(/\*\*/g, "").trim(), items: [] };
       continue;
     }
-    current.items.push(line.replace(/^[\-•]\s*/, ""));
+    // Strip list markers: - • * 1. 1) a)
+    const cleaned = line.replace(/^(?:[\-•*]|\d+[.)\-]|[a-z][.)\-])\s+/, "").replace(/\*\*(.+?)\*\*/g, "$1");
+    current.items.push(cleaned);
   }
   if (current.items.length) sections.push(current);
   if (!sections.length) return;
+
+  // Map section titles to icons
+  const sectionIcons = {
+    résumé: "📋", resume: "📋", synthèse: "📋", synthese: "📋", executif: "📋",
+    points: "🔑", clés: "🔑", cles: "🔑", clef: "🔑",
+    risques: "⚠️", alertes: "⚠️", anomalies: "⚠️", vigilance: "⚠️",
+    actions: "✅", recommandations: "✅", prochaines: "✅", recommandées: "✅",
+    chiffres: "📊", montants: "📊", données: "📊", donnees: "📊",
+  };
+  function getIcon(title) {
+    const lower = title.toLowerCase();
+    for (const [kw, icon] of Object.entries(sectionIcons)) {
+      if (lower.includes(kw)) return icon;
+    }
+    return "📌";
+  }
+  function getSectionClass(title) {
+    const lower = title.toLowerCase();
+    if (/risque|alerte|anomalie|vigilance/.test(lower)) return "ai-section-risk";
+    if (/action|recommand|prochaine/.test(lower)) return "ai-section-action";
+    if (/chiffre|montant|donn[ée]e/.test(lower)) return "ai-section-data";
+    return "";
+  }
+
   bodyEl.classList.add("structured");
   bodyEl.innerHTML = sections
-    .map((s) => `<div class="ai-section"><div class="ai-section-title">${escapeHtml(s.title)}</div><ul>${s.items.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul></div>`)
+    .map((s) => {
+      const icon = getIcon(s.title);
+      const cls = getSectionClass(s.title);
+      return `<div class="ai-section ${cls}"><div class="ai-section-title">${icon} ${escapeHtml(s.title)}</div><ul>${s.items.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul></div>`;
+    })
     .join("");
+
+  // Show export button if report mode
+  if (reportMode && $("btn-export-rapport")) $("btn-export-rapport").style.display = "";
 }
 
 async function sendMessage() {
@@ -1805,9 +1844,12 @@ async function sendCopilotMessage(question, inputEl) {
   bodyEl.classList.add("streaming");
   latestAssistantText = "";
   $("btn-copy-answer").disabled = true;
+  // Show loading state for copilot (no streaming but still needs visual feedback)
+  $("btn-send").style.display = "none";
+  $("btn-stop-stream").style.display = "";
   try {
     const baseQ = reportMode
-      ? `${question}\n\nRéponds en format rapport structuré avec sections: Résumé, Points clés, Risques, Actions recommandées.`
+      ? `${question}\n\nRéponds en format rapport structuré avec sections: ## Résumé, ## Points clés, ## Risques, ## Actions recommandées. Utilise des tirets pour les listes.`
       : question;
     const resp = await apiFetch(`/copilot/${currentDocId}/ask`, {
       method: "POST",
@@ -1825,6 +1867,8 @@ async function sendCopilotMessage(question, inputEl) {
     if (reportMode && latestAssistantText.trim()) {
       renderStructuredAnswer(bodyEl, latestAssistantText);
     }
+    $("btn-send").style.display = "";
+    $("btn-stop-stream").style.display = "none";
     saveChatHistory(currentDocId);
   }
 }
@@ -2870,8 +2914,23 @@ document.addEventListener("DOMContentLoaded", () => {
     b.dataset.on = reportMode ? "true" : "false";
     b.textContent = reportMode ? "🧱 Mode rapport: ON" : "🧱 Mode rapport: OFF";
     b.classList.toggle("active", reportMode);
-    toast(reportMode ? "Mode rapport activé" : "Mode rapport désactivé", "info");
+    // Show/hide export rapport button
+    if ($("btn-export-rapport")) $("btn-export-rapport").style.display = reportMode ? "" : "none";
+    toast(reportMode ? "Mode rapport activé — les réponses seront structurées automatiquement" : "Mode rapport désactivé", "info");
   });
+  // Export rapport: export latest structured answer as text
+  if ($("btn-export-rapport")) {
+    $("btn-export-rapport").addEventListener("click", () => {
+      if (!latestAssistantText.trim()) {
+        toast("Aucun rapport à exporter. Posez d'abord une question.", "info");
+        return;
+      }
+      const header = `=== RAPPORT CONFIDOC ===\nDate: ${new Date().toLocaleDateString("fr-FR")}\nDocument: ${currentDocName || "-"}\n\n`;
+      const blob = new Blob([header + latestAssistantText], { type: "text/plain;charset=utf-8" });
+      triggerDownload(blob, `rapport_${currentDocName?.replace(/[^a-zA-Z0-9]/g, "_")?.slice(0, 30) || "doc"}_${new Date().toISOString().slice(0, 10)}.txt`);
+      toast("Rapport exporté", "success");
+    });
+  }
   if ($("btn-copilot-mode")) {
     $("btn-copilot-mode").addEventListener("click", () => {
       copilotMode = !copilotMode;

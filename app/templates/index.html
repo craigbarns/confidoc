@@ -442,12 +442,13 @@
         </div>
 
         <div class="quick-actions">
-          <button class="quick-btn" data-q="Fais un résumé de ce document.">📝 Résumé</button>
-          <button class="quick-btn" data-q="Quels sont les points clés ?">🔑 Points clés</button>
-          <button class="quick-btn" data-q="Y a-t-il des anomalies ou alertes ?">⚠️ Anomalies</button>
-          <button class="quick-btn" data-q="Donne-moi les chiffres principaux.">📊 Chiffres</button>
-          <button id="btn-copilot-mode" class="quick-btn" data-on="false">🤖 Copilot: OFF</button>
-          <button id="btn-report-mode" class="quick-btn" data-on="false">🧱 Mode rapport: OFF</button>
+          <button class="quick-btn" data-q="Fais un résumé structuré de ce document en 4 parties : 1) Objet et contexte, 2) Acteurs ou parties mentionnés, 3) Données clés (montants, dates, références), 4) Actions ou suite à donner. Sois factuel et concis.">📝 Résumé</button>
+          <button class="quick-btn" data-q="Identifie les points clés de ce document. Pour chaque point, donne : le fait constaté, son importance pour un professionnel, et si une action est requise. Classe-les par ordre d'importance décroissante. Maximum 7 points.">🔑 Points clés</button>
+          <button class="quick-btn" data-q="Analyse ce document pour identifier d'éventuelles anomalies, incohérences ou alertes. Pour chaque constat, indique : la nature du problème, la donnée concernée (avec montant si applicable), et le niveau de gravité (critique/attention/information). Ne signale que ce qui est factuel et vérifiable dans le document.">⚠️ Anomalies</button>
+          <button class="quick-btn" data-q="Extrais tous les chiffres et montants significatifs de ce document. Présente-les sous forme de liste structurée avec pour chacun : le libellé exact du document, le montant, et le contexte (actif/passif/charge/produit, exercice N ou N-1 si précisé). Regroupe par catégorie.">📊 Chiffres</button>
+          <button id="btn-copilot-mode" class="quick-btn" data-on="false" title="Mode expert avec citations et score de confiance">🤖 Copilot: OFF</button>
+          <button id="btn-report-mode" class="quick-btn" data-on="false" title="Structure les réponses IA en sections Résumé / Points clés / Risques / Actions">🧱 Mode rapport: OFF</button>
+          <button id="btn-export-rapport" class="quick-btn" style="display:none" title="Exporter le dernier rapport">📥 Exporter rapport</button>
           <button id="btn-review-agent" class="quick-btn quick-btn-accent" title="Anonymise puis synthese en 5 blocs">Analyser ce document</button>
         </div>
         <div id="copilot-insights" class="dash-chart-card" style="display:none; margin-bottom:12px;">
