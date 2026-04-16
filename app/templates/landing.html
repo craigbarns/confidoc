@@ -112,7 +112,6 @@
       background: rgba(108, 92, 231, 0.15); border: 1px solid rgba(108, 92, 231, 0.3);
       color: #a29bfe; padding: 0.4rem 1rem; border-radius: 99px;
       font-size: 0.85rem; font-weight: 600; margin-bottom: 2rem;
-      animation: pulse-glow 3s infinite;
     }
     .hero h1 {
       font-family: 'Outfit', sans-serif;
@@ -269,10 +268,10 @@
     </a>
     <div class="nav-links">
       <a href="#how-it-works">Fonctionnement</a>
-      <a href="#solution">Muraille de Chine</a>
-      <a href="#features">Avantages Métier</a>
+      <a href="#use-cases">Cas d'usage</a>
+      <a href="#features">Bénéfices</a>
     </div>
-    <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Connexion Espace Client</a>
+    <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Espace Client</a>
   </nav>
 
   <!-- HERO -->
@@ -283,12 +282,12 @@
     <h1>Analysez bilans, liasses et contrats avec l’IA, <br><span>sans exposer les données sensibles.</span></h1>
     <p>
       ConfiDoc masque localement les identifiants, noms et SIRET avant toute analyse. 
-      L'Intelligence Artificielle analyse le métier, nous garantissons l'anonymat. 
-      <strong>Gagnez des heures sur l'audit, conservez la confiance de vos clients.</strong>
+      L'Intelligence Artificielle traite l'aspect technique, nous garantissons l'anonymat. 
+      <strong>Gagnez un temps précieux sur vos revues de dossiers, tout en protégeant vos clients.</strong>
     </p>
     <div class="hero-actions">
-      <a href="/ui" class="btn btn-primary">Tester sur un document</a>
-      <a href="/ui" class="btn btn-outline">Voir un exemple de rapport</a>
+      <a href="/ui" class="btn btn-primary">Voir la démo interactive</a>
+      <a href="/ui" class="btn btn-outline">Essayer sur nos documents d'exemple</a>
     </div>
 
     <!-- Supported Docs -->
@@ -297,7 +296,6 @@
       <span class="doc-tag">Liasses Fiscales</span>
       <span class="doc-tag">Baux Commerciaux</span>
       <span class="doc-tag">Contrats de Travail</span>
-      <span class="doc-tag">Fiches de Paie</span>
     </div>
 
     <!-- MOCKUP -->
@@ -313,12 +311,12 @@
          <div style="display:flex; flex:1;">
             <div style="flex:1; padding:30px; display:flex; gap:20px;">
                <div style="flex:1; background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.2); border-radius:8px; padding:20px; text-align:left;">
-                  <h4 style="color:#ef4444; margin-bottom:10px; font-size:12px; text-transform: uppercase; letter-spacing: 1px;">Document Original (Sensible) ⚠️</h4>
+                  <h4 style="color:#ef4444; margin-bottom:10px; font-size:12px; text-transform: uppercase; letter-spacing: 1px;">Document Original (Secret) ⚠️</h4>
                   <p style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#94a3b8; line-height:2.2;">
                      M. <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">Jean Dupont</span><br>
                      SIREN <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">123 456 789</span><br>
                      Capital: <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">450 000 €</span><br>
-                     Validé par CA le <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">12/03/2026</span>
+                     Valable depuis le <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">12/03/2026</span>
                   </p>
                </div>
                <div style="flex:1; background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.2); border-radius:8px; padding:20px; text-align:left;">
@@ -327,7 +325,7 @@
                      M. <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[PERSONNE-1]</span><br>
                      SIREN <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[SIREN-1]</span><br>
                      Capital: <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[MONTANT-1]</span><br>
-                     Validé par CA le <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[DATE-1]</span>
+                     Valable depuis le <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[DATE-1]</span>
                   </p>
                </div>
             </div>
@@ -340,24 +338,49 @@
   <section id="how-it-works" style="padding-top: 4rem;">
      <div class="section-title animate-up">
        <h2>Auditez n'importe quel dossier en 3 étapes.</h2>
-       <p>Divisez par deux votre temps de lecture sans sacrifier le secret professionnel.</p>
+       <p>Un processus transparent pour auditer plus vite, sans sacrifier le risque client.</p>
      </div>
      <div class="workflow-steps animate-up delay-1">
         <div class="step-card">
            <div class="step-number">1</div>
            <h3>Déposez votre Bilan (PDF)</h3>
-           <p>Chargez le document dans notre portail hautement sécurisé.</p>
+           <p>Chargez le document dans votre portail hautement sécurisé de bout en bout.</p>
         </div>
         <div class="step-card">
            <div class="step-number">2</div>
            <h3>L'outil anonymise localement</h3>
-           <p>Tous les identifiants sont caviardés visuellement. Vous gardez la main sur ce qui part.</p>
+           <p>Tous les identifiants sensibles sont caviardés visuellement. Vous gardez la certitude de ce qui sort de vos locaux.</p>
         </div>
         <div class="step-card">
            <div class="step-number">3</div>
-           <h3>L'IA analyse & rédige</h3>
-           <p>L'IA résume, pointe les incohérences ou rédige votre synthèse en format document prêt-à-envoyer.</p>
+           <h3>L'IA analyse & synthétise</h3>
+           <p>L'IA résume, pointe les points clés de conformité et rédige votre synthèse en format prêt à envoyer à vos clients.</p>
         </div>
+     </div>
+  </section>
+
+  <!-- CAS D'USAGE (Concrete Proofs) -->
+  <section id="use-cases" style="padding: 5rem 2rem; background: var(--surface);">
+     <div class="section-title animate-up">
+       <h2>Des analyses taillées pour votre métier</h2>
+       <p>ConfiDoc s'adapte à vos dossiers récurrents et génère des livrables exploitables.</p>
+     </div>
+     <div class="grid-3 animate-up delay-1" style="max-width: 1200px; margin: 0 auto;">
+       <div class="card" style="background: var(--bg);">
+          <div style="font-size: 2.5rem; margin-bottom: 1rem;">📊</div>
+          <h3>Audit d'un Bilan Annuel</h3>
+          <p>Chargez simplement la liasse fiscale et le bilan comptable. Demandez au système de calculer la variation du BFR, le ratio de liquidité, ou d'isoler en 30 secondes les incohérences de trésorerie sur les deux derniers exercices.</p>
+       </div>
+       <div class="card" style="background: var(--bg);">
+          <div style="font-size: 2.5rem; margin-bottom: 1rem;">🏢</div>
+          <h3>Revue d'un Bail Commercial</h3>
+          <p>Générez un résumé exhaustif des obligations du preneur, localisez immédiatement la date de renouvellement du bail ou comparez les clauses d'indexation complexes grâce à une interrogation intuitive.</p>
+       </div>
+       <div class="card" style="background: var(--bg);">
+          <div style="font-size: 2.5rem; margin-bottom: 1rem;">🤝</div>
+          <h3>Vérification d'un Dossier RH</h3>
+          <p>Vérifiez que le contrat de travail d'un collaborateur est parfaitement en phase avec les minimas de la convention collective applicable, tout cela sans que son nom ou ses fiches de paie ne soient lisibles par l'IA.</p>
+       </div>
      </div>
   </section>
 
@@ -366,18 +389,18 @@
     <div class="arch-container animate-up">
       <div class="arch-content">
         <h2>La "Muraille de Chine" Logicielle</h2>
-        <p>L'intelligence artificielle est un atout, mais la transmettre à un prestataire Externe (le Cloud) pose un vrai problème de responsabilité (DPO). Notre solution lève le frein :</p>
+        <p>Transmettre des données sensibles à une IA tierce pose un vrai problème de conformité. Notre architecture lève ce frein cryptographiquement :</p>
         <ul>
-          <li><strong>Extracteur Local :</strong> Vos PDF sont lus intégralement sur votre propre réseau (sans API texte).</li>
-          <li><strong>Filtre Censeur :</strong> 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont masqués et conservés localement.</li>
-          <li><strong>Le Cloud est Aveugle :</strong> L'IA est obligée de rédiger ses réponses sur les données "caviardées" et ne voit que les calculs de ratios et la sémantique.</li>
-          <li><strong>Restauration Automatique :</strong> Lors du téléchargement de vos rapports PDF, le rapport retrouve les vrais noms côté client.</li>
+          <li><strong>Traitement Local :</strong> Vos PDF sont lus intégralement sur l'infrastructure de votre portail, sans envoi direct à l'IA.</li>
+          <li><strong>Filtre Censeur :</strong> 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont masqués et les tables de correspondances restent locales.</li>
+          <li><strong>Hébergement Sécurisé :</strong> L'IA est obligée de travailler et rédiger sur les données "caviardées" : elle ne voit que la logique métier.</li>
+          <li><strong>Restauration Automatique :</strong> Lors du téléchargement de vos rapports, le document retrouve les vrais noms côté client.</li>
         </ul>
       </div>
       <div class="arch-visual">
         <div class="arch-box" style="border-left: 4px solid #ef4444;">
            <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🏢</span>
-           <h4 style="margin-bottom:5px;">Cabinet / Avocat</h4>
+           <h4 style="margin-bottom:5px;">Espace Cabinet / Droit</h4>
            <small style="color:var(--text-muted)">Hébergé en Europe, document original inviolé.</small>
         </div>
         <div class="arch-arrow">↓</div>
@@ -389,7 +412,7 @@
         <div class="arch-arrow">↓</div>
         <div class="arch-box" style="border-left: 4px solid var(--primary);">
            <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🤖</span>
-           <h4 style="margin-bottom:5px;">Moteur LLM (IA)</h4>
+           <h4 style="margin-bottom:5px;">Moteur d'IA</h4>
            <small style="color:var(--text-muted)">Analyse métier sans accès aux données privées.</small>
         </div>
       </div>
@@ -399,40 +422,40 @@
   <!-- FEATURES (Business Value) -->
   <section class="features" id="features">
     <div class="section-title animate-up">
-      <h2>Conçu pour le terrain. Prêt pour l'audit.</h2>
-      <p>Bien plus qu'un chatbot : un outil taillé pour s'insérer dans les procédures des cabinets.</p>
+      <h2>Insérez l'IA dans vos méthodes de travail</h2>
+      <p>Bien plus qu'un chatbot : des fonctionnalités taillées pour sécuriser vos processus d'audit.</p>
     </div>
     
     <div class="grid-3 animate-up delay-1">
       <div class="card">
         <div class="card-icon">🧠</div>
-        <h3>Analyse Automatisée des Dettes & Cap. Propres</h3>
-        <p>Ne vous contentez pas d'un chatbot générique. Pointez les anomalies des bilans grâce à un modèle entraîné sur la norme comptable française.</p>
+        <h3>Détectez plus vite les incohérences</h3>
+        <p>Pointez les anomalies des bilans grâce à un moteur IA adapté aux normes financières et juridiques, conçu pour exceller sur des structures de documents complexes.</p>
       </div>
       <div class="card">
         <div class="card-icon">🎯</div>
-        <h3>Extraction d'informations ciblées (RAG)</h3>
-        <p>Chercher une clause "Force Majeure" dans un contrat de 500 pages prend 5 minutes au lieu de 2 heures grâce au moteur de recherche sémantique.</p>
+        <h3>Retrouvez une référence en 10 secondes</h3>
+        <p>Chercher la définition d'une clause de garantie dans une liasse de 150 pages devient instantané grâce à notre système d'interrogation sémantique ultra-ciblé.</p>
       </div>
       <div class="card">
         <div class="card-icon">⚖️</div>
-        <h3>Garantie Visuelle du Caviardage</h3>
-        <p>Le Comparateur Visuel vous permet de prouver en 1 clic (écran splitté) à vos clients ou DPO que vous maîtrisez la donnée avant envoi au Cloud.</p>
+        <h3>Prouvez la sécurité du caviardage</h3>
+        <p>Le comparateur visuel rouge/vert vous permet de démontrer formellement (écran splitté) à vos clients ou à votre DPO la pertinence du masquage des données.</p>
       </div>
       <div class="card">
-        <div class="card-icon">PDF</div>
-        <h3>Livraison "Prête à Client"</h3>
-        <p>Générez directement des rapports qualitatifs avec cartouche à vos couleurs, sans faire de copié-collé vers Word.</p>
+        <div class="card-icon">📄</div>
+        <h3>Produisez des livrables de qualité</h3>
+        <p>Générez directement des rapports qualitatifs avec un cartouche PDF professionnel à l'entête de votre système, sans faire de laborieux allers-retours vers votre éditeur texte.</p>
       </div>
       <div class="card">
         <div class="card-icon">📉</div>
-        <h3>Détecteur de Risque RGPD</h3>
-        <p>Pour chaque document, le système remonte un score de risque de ré-identification, bloquant l'export si le contenu reste trop compromettant.</p>
+        <h3>Contrôlez les risques avant envoi</h3>
+        <p>Pour chaque document, la plateforme calcule un score d'exposition (risque de ré-identification), ce qui vous laisse le pouvoir de bloquer un export si le risque est trop fort.</p>
       </div>
       <div class="card">
         <div class="card-icon">🔐</div>
-        <h3>Gouvernance stricte</h3>
-        <p>Gérez les suppressions définitives directement via l'outil ou automatisez les purges de rétention via de véritables Webhooks d'entreprise.</p>
+        <h3>Gardez la main sur vos archives</h3>
+        <p>Pilotez l'effacement pérenne et définitif de l'ensemble de vos analyses depuis votre console, pour assurer la totale maîtrise du cycle de vie de vos dossiers clients.</p>
       </div>
     </div>
   </section>
@@ -440,10 +463,10 @@
   <!-- CTA -->
   <section class="cta-section">
     <div class="cta-box animate-up">
-      <h2>Transformez la complexité en opportunité.</h2>
-      <p>Adoptez l'IA sans exposer la responsabilité civile ou professionnelle de votre cabinet.</p>
+      <h2>Transformez la complexité des dossiers en opportunité.</h2>
+      <p>Profitez de l'Intelligence Artificielle sans jamais exposer la responsabilité professionnelle de votre cabinet.</p>
       <div style="display:flex; justify-content:center; gap:16px; margin-top:24px;">
-        <a href="/ui" class="btn btn-primary">Demander une démo</a>
+        <a href="/ui" class="btn btn-primary">Prendre rendez-vous pour une démo</a>
       </div>
     </div>
   </section>
@@ -451,7 +474,7 @@
   <footer>
     <div style="margin-bottom: 10px; font-weight:600; color:white;">🔒 ConfiDoc</div>
     © 2026 ConfiDoc SAS. Tous droits réservés. <br>
-    Conçu pour répondre aux exigences RGPD, CNIL et au secret professionnel.
+    Conçu pour répondre aux exigences du RGPD et du secret professionnel.
   </footer>
 
   <script>
