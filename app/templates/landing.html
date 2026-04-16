@@ -1,180 +1,416 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ConfiDoc — Confidentialité documentaire automatisée</title>
+  <title>ConfiDoc | L'IA Générative Sécurisée pour les Cabinets</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
   <style nonce="{{CSP_NONCE}}">
     :root {
-      --primary: #0ea5e9;
-      --primary-dark: #0284c7;
-      --accent: #10b981;
-      --bg: #0f172a;
-      --surface: #1e293b;
+      --primary: #6c5ce7;
+      --primary-hover: #5a4bcf;
+      --accent: #00d2d3;
+      --bg: #0b0f19;
+      --surface: #151b2b;
+      --surface-border: rgba(255, 255, 255, 0.08);
       --text: #f8fafc;
-      --muted: #94a3b8;
+      --text-muted: #94a3b8;
+      --glow-primary: rgba(108, 92, 231, 0.4);
+      --glow-accent: rgba(0, 210, 211, 0.3);
     }
+    
     * { margin: 0; padding: 0; box-sizing: border-box; }
+    
     body {
-      font-family: 'Inter', system-ui, sans-serif;
+      font-family: 'Inter', sans-serif;
       background: var(--bg);
       color: var(--text);
       line-height: 1.6;
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
     }
+
+    /* ANIMATIONS */
+    @keyframes fadeInUp {
+      from { opacity: 0; transform: translateY(20px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes float {
+      0% { transform: translateY(0px); }
+      50% { transform: translateY(-10px); }
+      100% { transform: translateY(0px); }
+    }
+    @keyframes pulse-glow {
+      0% { box-shadow: 0 0 0 0 var(--glow-primary); }
+      70% { box-shadow: 0 0 20px 10px rgba(108, 92, 231, 0); }
+      100% { box-shadow: 0 0 0 0 rgba(108, 92, 231, 0); }
+    }
+
+    .animate-up { animation: fadeInUp 0.8s cubic-bezier(0.16, 1, 0.3, 1) forwards; opacity: 0; }
+    .delay-1 { animation-delay: 0.1s; }
+    .delay-2 { animation-delay: 0.2s; }
+    .delay-3 { animation-delay: 0.3s; }
+
+    /* NAVBAR */
     .nav {
+      position: fixed; top: 0; width: 100%; z-index: 100;
+      background: rgba(11, 15, 25, 0.8);
+      backdrop-filter: blur(12px);
+      -webkit-backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--surface-border);
+      padding: 1rem 2rem;
       display: flex; justify-content: space-between; align-items: center;
-      padding: 1.5rem 2rem; max-width: 1200px; margin: 0 auto;
     }
-    .logo { font-weight: 800; font-size: 1.5rem; letter-spacing: -0.5px; }
-    .logo span { color: var(--primary); }
-    .nav-links a {
-      color: var(--muted); text-decoration: none; margin-left: 2rem; font-weight: 500;
-      transition: color 0.2s;
+    .logo { 
+      font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.5rem; 
+      color: white; display: flex; align-items: center; gap: 8px;
     }
-    .nav-links a:hover { color: var(--text); }
+    .logo-icon { color: var(--primary); }
+    .nav-links { display: flex; gap: 2rem; align-items: center; }
+    .nav-links a { color: var(--text-muted); text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.2s; }
+    .nav-links a:hover { color: white; }
+    
     .btn {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      padding: 0.875rem 1.75rem; border-radius: 0.5rem; font-weight: 600;
-      text-decoration: none; transition: all 0.2s; border: none; cursor: pointer;
+      display: inline-flex; align-items: center; justify-content: center;
+      gap: 0.5rem; padding: 0.75rem 1.5rem; border-radius: 8px;
+      font-weight: 600; font-size: 0.95rem; text-decoration: none;
+      transition: all 0.3s ease; cursor: pointer; border: none;
     }
     .btn-primary {
-      background: linear-gradient(135deg, var(--primary), var(--primary-dark));
-      color: white; box-shadow: 0 10px 30px -10px rgba(14, 165, 233, 0.4);
+      background: linear-gradient(135deg, var(--primary), #8e7dff);
+      color: white;
+      box-shadow: 0 4px 15px -3px var(--glow-primary);
     }
-    .btn-primary:hover { transform: translateY(-2px); box-shadow: 0 14px 36px -10px rgba(14, 165, 233, 0.5); }
-    .btn-ghost {
-      background: transparent; color: var(--text); border: 1px solid rgba(255,255,255,0.1);
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 8px 25px -5px var(--glow-primary);
+      background: linear-gradient(135deg, var(--primary-hover), #7e6eff);
     }
+    .btn-outline {
+      background: transparent; color: white;
+      border: 1px solid var(--surface-border);
+    }
+    .btn-outline:hover {
+      background: rgba(255, 255, 255, 0.05); border-color: rgba(255, 255, 255, 0.2);
+    }
+
+    /* HERO */
     .hero {
-      text-align: center; padding: 6rem 2rem 4rem; max-width: 900px; margin: 0 auto;
+      padding: 10rem 2rem 5rem;
+      max-width: 1200px; margin: 0 auto;
+      text-align: center; position: relative;
+    }
+    .hero::before {
+      content: ''; position: absolute; top: 0; left: 50%; transform: translateX(-50%);
+      width: 600px; height: 400px; background: var(--primary);
+      filter: blur(150px); border-radius: 50%; opacity: 0.15; z-index: -1;
     }
     .hero-badge {
-      display: inline-flex; align-items: center; gap: 0.5rem;
-      background: rgba(16, 185, 129, 0.1); color: var(--accent);
-      padding: 0.5rem 1rem; border-radius: 999px; font-size: 0.875rem; font-weight: 500;
-      margin-bottom: 1.5rem;
+      display: inline-flex; align-items: center; gap: 8px;
+      background: rgba(108, 92, 231, 0.15); border: 1px solid rgba(108, 92, 231, 0.3);
+      color: #a29bfe; padding: 0.4rem 1rem; border-radius: 99px;
+      font-size: 0.85rem; font-weight: 600; margin-bottom: 2rem;
+      animation: pulse-glow 3s infinite;
     }
     .hero h1 {
-      font-size: clamp(2.5rem, 6vw, 4rem); font-weight: 800; line-height: 1.1;
-      letter-spacing: -1.5px; margin-bottom: 1.5rem;
+      font-family: 'Outfit', sans-serif;
+      font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1;
+      margin-bottom: 1.5rem; letter-spacing: -0.02em;
     }
     .hero h1 span {
-      background: linear-gradient(135deg, var(--primary), #60a5fa);
+      background: linear-gradient(135deg, #a29bfe, var(--accent));
       -webkit-background-clip: text; -webkit-text-fill-color: transparent;
     }
-    .hero p { font-size: 1.25rem; color: var(--muted); max-width: 640px; margin: 0 auto 2.5rem; }
-    .hero-actions { display: flex; gap: 1rem; justify-content: center; flex-wrap: wrap; }
+    .hero p {
+      font-size: 1.125rem; color: var(--text-muted); max-width: 700px;
+      margin: 0 auto 3rem; line-height: 1.8;
+    }
+    .hero-actions { display: flex; gap: 1rem; justify-content: center; }
 
-    .stats {
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
-      gap: 1.5rem; max-width: 1000px; margin: 4rem auto; padding: 0 2rem;
+    /* DASHBOARD MOCKUP */
+    .dashboard-preview {
+      margin: 4rem auto 0; max-width: 1000px;
+      position: relative; animation: float 6s ease-in-out infinite;
     }
-    .stat-card {
-      background: var(--surface); border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 1rem; padding: 1.75rem; text-align: center;
+    .dashboard-preview img {
+      width: 100%; border-radius: 12px;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5), 0 0 0 1px var(--surface-border);
     }
-    .stat-card h3 { font-size: 2rem; font-weight: 800; color: var(--primary); margin-bottom: 0.25rem; }
-    .stat-card p { color: var(--muted); font-size: 0.9375rem; }
+    .dashboard-glow {
+      position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+      width: 100%; height: 100%; background: linear-gradient(45deg, var(--primary), var(--accent));
+      filter: blur(80px); opacity: 0.15; z-index: -1;
+    }
+
+    /* VALUE PROP */
+    .section-title {
+      text-align: center; margin-bottom: 4rem;
+    }
+    .section-title h2 {
+      font-family: 'Outfit', sans-serif; font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem;
+    }
+    .section-title p { color: var(--text-muted); font-size: 1.1rem; }
 
     .features {
-      max-width: 1100px; margin: 5rem auto; padding: 0 2rem;
-      display: grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap: 1.5rem;
+      padding: 5rem 2rem; max-width: 1200px; margin: 0 auto;
     }
-    .feature {
-      background: rgba(30, 41, 59, 0.5); border: 1px solid rgba(255,255,255,0.05);
-      border-radius: 1rem; padding: 1.75rem;
+    .grid-3 {
+      display: grid; grid-template-columns: repeat(auto-fit, minmax(300px, 1fr)); gap: 2rem;
     }
-    .feature-icon { font-size: 2rem; margin-bottom: 1rem; }
-    .feature h4 { font-size: 1.125rem; margin-bottom: 0.5rem; }
-    .feature p { color: var(--muted); font-size: 0.9375rem; }
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--surface-border);
+      border-radius: 16px; padding: 2.5rem 2rem;
+      transition: transform 0.3s ease, border-color 0.3s ease;
+      position: relative; overflow: hidden;
+    }
+    .card::before {
+      content: ''; position: absolute; top: 0; left: 0; width: 100%; height: 4px;
+      background: linear-gradient(90deg, var(--primary), var(--accent)); opacity: 0;
+      transition: opacity 0.3s ease;
+    }
+    .card:hover { transform: translateY(-5px); border-color: rgba(255,255,255,0.15); }
+    .card:hover::before { opacity: 1; }
+    
+    .card-icon {
+      width: 48px; height: 48px; border-radius: 12px;
+      background: rgba(108, 92, 231, 0.1); color: #a29bfe;
+      display: flex; align-items: center; justify-content: center;
+      font-size: 1.5rem; margin-bottom: 1.5rem;
+    }
+    .card h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
+    .card p { color: var(--text-muted); font-size: 0.95rem; }
 
-    .demo-section {
-      text-align: center; padding: 5rem 2rem; max-width: 800px; margin: 0 auto;
+    /* ARCHITECTURE ARCH / MUR DE CHINE */
+    .architecture {
+      background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
+      padding: 6rem 2rem; border-top: 1px solid var(--surface-border); border-bottom: 1px solid var(--surface-border);
     }
-    .demo-section h2 { font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem; }
-    .demo-section p { color: var(--muted); font-size: 1.125rem; margin-bottom: 2rem; }
+    .arch-container {
+      max-width: 1000px; margin: 0 auto; display: flex; align-items: center; gap: 4rem;
+    }
+    .arch-content { flex: 1; }
+    .arch-content h2 { font-family: 'Outfit', sans-serif; font-size: 2.5rem; margin-bottom: 1.5rem; }
+    .arch-content p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: 1.05rem; }
+    .arch-content ul { list-style: none; margin-bottom: 2rem; }
+    .arch-content li { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #e2e8f0; }
+    .arch-content li::before { content: '✓'; color: var(--accent); font-weight: bold; }
+    
+    .arch-visual {
+      flex: 1; display: flex; flex-direction: column; gap: 1rem;
+    }
+    .arch-box {
+      background: var(--bg); border: 1px solid var(--surface-border);
+      padding: 1.5rem; border-radius: 12px; text-align: center;
+      position: relative;
+    }
+    .arch-box.secure { border-color: rgba(16, 185, 129, 0.3); box-shadow: 0 0 20px rgba(16, 185, 129, 0.05); }
+    .arch-arrow { color: var(--text-muted); font-size: 1.5rem; text-align: center; }
+
+    /* CTA */
+    .cta-section {
+      padding: 8rem 2rem; text-align: center;
+    }
+    .cta-box {
+      background: linear-gradient(135deg, var(--surface) 0%, rgba(108, 92, 231, 0.1) 100%);
+      border: 1px solid var(--surface-border);
+      max-width: 800px; margin: 0 auto; padding: 4rem 2rem;
+      border-radius: 24px; position: relative; overflow: hidden;
+    }
+    .cta-box h2 { font-family: 'Outfit', sans-serif; font-size: 2.5rem; margin-bottom: 1rem; }
+    .cta-box p { color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem; }
 
     footer {
-      text-align: center; padding: 3rem 2rem; color: var(--muted); font-size: 0.875rem;
-      border-top: 1px solid rgba(255,255,255,0.05);
+      border-top: 1px solid var(--surface-border); padding: 3rem 2rem;
+      text-align: center; color: var(--text-muted); font-size: 0.9rem;
+    }
+
+    @media (max-width: 768px) {
+      .hero h1 { font-size: 2.5rem; }
+      .arch-container { flex-direction: column; }
+      .nav-links { display: none; }
     }
   </style>
 </head>
 <body>
+
+  <!-- NAVBAR -->
   <nav class="nav">
-    <div class="logo">Confi<span>Doc</span></div>
-    <div class="nav-links">
-      <a href="#features">Fonctionnalités</a>
-      <a href="#demo">Démo</a>
-      <a href="/ui" class="btn btn-primary">Accéder à l'app</a>
+    <div class="logo">
+      <span class="logo-icon">🔒</span> ConfiDoc
     </div>
+    <div class="nav-links">
+      <a href="#solution">La Muraille de Chine</a>
+      <a href="#features">Fonctionnalités</a>
+      <a href="/security">RGPD & Sécurité</a>
+    </div>
+    <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Connexion Espace Client</a>
   </nav>
 
-  <section class="hero">
-    <div class="hero-badge">✨ Levée de fonds en cours</div>
-    <h1>Anonymisez vos documents sensibles en <span>10 secondes</span></h1>
+  <!-- HERO -->
+  <section class="hero animate-up">
+    <div class="hero-badge">
+      <span>🚀</span> Pre-Seed Phase — Solution Enterprise Ready
+    </div>
+    <h1>L'IA Générative pour les Cabinets, <br><span>sans le risque de fuite.</span></h1>
     <p>
-      ConfiDoc protège automatiquement les données personnelles et financières
-      dans vos documents juridiques et comptables. Propulsé par l'IA.
+      ConfiDoc est le premier portail documentaire qui <strong>anonymise déterministiquement</strong> vos bilans, contrats et liasses fiscales en local 
+      avant de les confier à l'Intelligence Artificielle. Le secret professionnel enfin respecté.
     </p>
     <div class="hero-actions">
-      <a href="/ui" class="btn btn-primary">🚀 Essayer la démo live</a>
-      <a href="mailto:investir@confidoc.fr" class="btn btn-ghost">📧 Contacter l'équipe</a>
+      <a href="/ui" class="btn btn-primary">Accéder à la démo live</a>
+      <a href="mailto:invest@confidoc.fr" class="btn btn-outline">Contacter l'équipe fondatrice</a>
+    </div>
+
+    <!-- MOCKUP -->
+    <div class="dashboard-preview animate-up delay-2">
+      <div class="dashboard-glow"></div>
+      <div style="background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:12px; height: 400px; display:flex; flex-direction:column; overflow:hidden;">
+         <!-- Fake Browser Header -->
+         <div style="background:#0f172a; padding:12px; display:flex; gap:8px; border-bottom:1px solid rgba(255,255,255,0.05);">
+            <div style="width:12px; height:12px; border-radius:50%; background:#ef4444;"></div>
+            <div style="width:12px; height:12px; border-radius:50%; background:#f59e0b;"></div>
+            <div style="width:12px; height:12px; border-radius:50%; background:#10b981;"></div>
+         </div>
+         <!-- Fake App Body -->
+         <div style="display:flex; flex:1;">
+            <div style="width:200px; background:#151b2b; border-right:1px solid rgba(255,255,255,0.05); padding:20px;">
+               <div style="height:20px; width:70%; background:rgba(255,255,255,0.1); border-radius:4px; margin-bottom:20px;"></div>
+               <div style="height:12px; width:90%; background:rgba(255,255,255,0.05); border-radius:4px; margin-bottom:12px;"></div>
+               <div style="height:12px; width:60%; background:rgba(255,255,255,0.05); border-radius:4px; margin-bottom:12px;"></div>
+               <div style="height:12px; width:80%; background:rgba(255,255,255,0.05); border-radius:4px;"></div>
+            </div>
+            <div style="flex:1; padding:30px; display:flex; gap:20px;">
+               <div style="flex:1; background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.2); border-radius:8px; padding:20px;">
+                  <h4 style="color:#ef4444; margin-bottom:10px; font-size:12px;">Document Original (Secret)</h4>
+                  <p style="font-family:monospace; font-size:11px; color:#94a3b8; line-height:2;">
+                     Contrat de <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:2px;">Jean Dupont</span><br>
+                     SIRET: <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:2px;">123 456 789</span><br>
+                     Dette: <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:2px;">450 000 €</span>
+                  </p>
+               </div>
+               <div style="flex:1; background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.2); border-radius:8px; padding:20px;">
+                  <h4 style="color:#10b981; margin-bottom:10px; font-size:12px;">Document Caviardé (Prêt pour l'IA)</h4>
+                  <p style="font-family:monospace; font-size:11px; color:#94a3b8; line-height:2;">
+                     Contrat de <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:2px;">[PERSONNE-1]</span><br>
+                     SIRET: <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:2px;">[SIRET-1]</span><br>
+                     Dette: <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:2px;">[MONTANT-1]</span>
+                  </p>
+               </div>
+            </div>
+         </div>
+      </div>
     </div>
   </section>
 
-  <section class="stats">
-    <div class="stat-card"><h3>10s</h3><p>Temps moyen d'anonymisation</p></div>
-    <div class="stat-card"><h3>95%+</h3><p>Précision de détection des entités</p></div>
-    <div class="stat-card"><h3>RGPD</h3><p>Conformité native</p></div>
-    <div class="stat-card"><h3>24/7</h3><p>Traitement automatisé</p></div>
+  <!-- ARCHITECTURE -->
+  <section class="architecture" id="solution">
+    <div class="arch-container animate-up delay-1">
+      <div class="arch-content">
+        <h2>La "Muraille de Chine" Logicielle</h2>
+        <p>L'intelligence artificielle est hébergée sur des serveurs distants. C'est inacceptable pour les professions réglementées. Notre solution ? Une barrière cryptographique locale.</p>
+        <ul>
+          <li><strong>OCR & Extraction Locaux</strong> : Vos PDF sont lus sur votre infrastructure.</li>
+          <li><strong>Anonymisation Déterministe</strong> : 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont transformés en jetons (tokens).</li>
+          <li><strong>Le Cloud est Aveugle</strong> : L'IA ne reçoit que la structure sémantique caviardée. Elle analyse la logique comptable sans jamais voir un nom.</li>
+          <li><strong>Dé-pseudonymisation</strong> : Le rapport généré redescend sur votre serveur, et ConfiDoc remet les noms originaux uniquement sur votre écran.</li>
+        </ul>
+      </div>
+      <div class="arch-visual">
+        <div class="arch-box" style="border-left: 4px solid #ef4444;">
+           <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🏢</span>
+           <h4 style="margin-bottom:5px;">Espace Cabinet (Local)</h4>
+           <small style="color:var(--text-muted)">Bilan Complet & Données Sensibles</small>
+        </div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box secure">
+           <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🛡️</span>
+           <h4 style="margin-bottom:5px; color:#10b981;">Moteur ConfiDoc</h4>
+           <small style="color:var(--text-muted)">Extraction, Anonymisation & Chiffrement de la clé de correspondance.</small>
+        </div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box" style="border-left: 4px solid var(--primary);">
+           <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">☁️</span>
+           <h4 style="margin-bottom:5px;">Mistral AI / OpenAI</h4>
+           <small style="color:var(--text-muted)">Le LLM traite le document sans PII.</small>
+        </div>
+      </div>
+    </div>
   </section>
 
+  <!-- FEATURES -->
   <section class="features" id="features">
-    <div class="feature">
-      <div class="feature-icon">🛡️</div>
-      <h4>Anonymisation IA</h4>
-      <p>Détection automatique des PII, données financières et juridiques avec remplacement intelligent par tokens.</p>
+    <div class="section-title animate-up delay-2">
+      <h2>Conçu pour l'Audit et le Droit</h2>
+      <p>Pas un gadget. Un outil de productivité qui respecte vos obligations légales.</p>
     </div>
-    <div class="feature">
-      <div class="feature-icon">📊</div>
-      <h4>Score de risque RGPD</h4>
-      <p>Évaluez le risque de réidentification de chaque document et recevez des recommandations d'actions.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon">🤖</div>
-      <h4>Agent Compliance</h4>
-      <p>Discutez avec un agent IA spécialisé qui analyse vos documents anonymisés et répond à vos questions.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon">📄</div>
-      <h4>Rapport d'audit</h4>
-      <p>Générez un rapport PDF complet traçant chaque modification pour vos dossiers de conformité.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon">⚡</div>
-      <h4>Pipeline asynchrone</h4>
-      <p>Upload et déposez-vous : notre infrastructure Celery traite vos documents en arrière-plan sans interruption.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon">🔒</div>
-      <h4>Sécurité enterprise</h4>
-      <p>Chiffrement AES-256, authentification JWT, headers de sécurité et isolation des données par organisation.</p>
+    
+    <div class="grid-3 animate-up delay-3">
+      <div class="card">
+        <div class="card-icon">🧠</div>
+        <h3>Review Agent Autonome</h3>
+        <p>Ne vous contentez pas d'un simple chat. Confiez le document à notre pipeline LangGraph qui l'audite étape par étape (classification, extraction, analyse de risques).</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🎯</div>
+        <h3>Mode RAG Copilot</h3>
+        <p>Posez des questions sur une liasse fiscale de 200 pages. L'IA cible uniquement les paragraphes pertinents et réduit les hallucinations grâce aux scores de confiance.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📉</div>
+        <h3>Score de Risque RGPD</h3>
+        <p>Avant d'autoriser l'export externe d'un document, le logiciel scanne toutes les données privées et exige une validation humaine si le niveau de risque est "Critique".</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">⚖️</div>
+        <h3>Comparateur Visuel Preuve</h3>
+        <p>Vérifiez instantanément la qualité de l'anonymisation grâce à l'interface en écran splitté "Rouge vs Vert" : rien ne part sans votre blanc-seing visuel.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📄</div>
+        <h3>Exports Premium Branded</h3>
+        <p>Transformez vos analyses en de magnifiques rapports PDF structurés, prêts à être imprimés pour la plaquette financière de votre client final.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">🔐</div>
+        <h3>Option : 100% On-Premise</h3>
+        <p>Vous souhaitez une étanchéité absolue ? ConfiDoc est compatible avec Ollama pour faire tourner un modèle d'IA localement sur les cartes graphiques de vos serveurs.</p>
+      </div>
     </div>
   </section>
 
-  <section class="demo-section" id="demo">
-    <h2>Prêt à tester ?</h2>
-    <p>Cliquez ci-dessous pour lancer un document de démo et voir l'anonymisation en action.</p>
-    <a href="/ui" class="btn btn-primary" style="font-size:1.125rem;padding:1rem 2.5rem">
-      🚀 Lancer la démo interactive
-    </a>
+  <!-- CTA -->
+  <section class="cta-section">
+    <div class="cta-box animate-up">
+      <h2>Adoptez l'IA sans compromettre la confiance.</h2>
+      <p>L'application est prête, sécurisée et hébergée.</p>
+      <div style="display:flex; justify-content:center; gap:16px; margin-top:24px;">
+        <a href="/ui" class="btn btn-primary">Découvrir le Portail</a>
+      </div>
+    </div>
   </section>
 
   <footer>
-    © 2025 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.
+    <div style="margin-bottom: 10px; font-weight:600; color:white;">🔒 ConfiDoc</div>
+    © 2025 ConfiDoc SAS. Tous droits réservés. Produit conforme DORA & RGPD.
   </footer>
+
+  <script>
+    // Intersection Observer for animations
+    const observer = new IntersectionObserver((entries) => {
+      entries.forEach(entry => {
+        if (entry.isIntersecting) {
+          entry.target.style.animationPlayState = 'running';
+        }
+      });
+    }, { threshold: 0.1 });
+
+    document.querySelectorAll('.animate-up').forEach(el => {
+      el.style.animationPlayState = 'paused';
+      observer.observe(el);
+    });
+  </script>
 </body>
 </html>
