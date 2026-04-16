@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ConfiDoc | L'IA Générative Sécurisée pour les Cabinets</title>
+  <title>ConfiDoc | L'IA Sécurisée pour les Cabinets d'Expertise et d'Avocats</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
@@ -65,7 +65,7 @@
     }
     .logo { 
       font-family: 'Outfit', sans-serif; font-weight: 800; font-size: 1.5rem; 
-      color: white; display: flex; align-items: center; gap: 8px;
+      color: white; display: flex; align-items: center; gap: 8px; text-decoration: none;
     }
     .logo-icon { color: var(--primary); }
     .nav-links { display: flex; gap: 2rem; align-items: center; }
@@ -116,7 +116,7 @@
     }
     .hero h1 {
       font-family: 'Outfit', sans-serif;
-      font-size: clamp(2.5rem, 6vw, 4.5rem); font-weight: 800; line-height: 1.1;
+      font-size: clamp(2.5rem, 5vw, 4rem); font-weight: 800; line-height: 1.1;
       margin-bottom: 1.5rem; letter-spacing: -0.02em;
     }
     .hero h1 span {
@@ -146,12 +146,12 @@
 
     /* VALUE PROP */
     .section-title {
-      text-align: center; margin-bottom: 4rem;
+      text-align: center; margin-bottom: 3.5rem;
     }
     .section-title h2 {
-      font-family: 'Outfit', sans-serif; font-size: 2.5rem; font-weight: 700; margin-bottom: 1rem;
+      font-family: 'Outfit', sans-serif; font-size: 2.25rem; font-weight: 700; margin-bottom: 1rem;
     }
-    .section-title p { color: var(--text-muted); font-size: 1.1rem; }
+    .section-title p { color: var(--text-muted); font-size: 1.1rem; max-width: 600px; margin: 0 auto; }
 
     .features {
       padding: 5rem 2rem; max-width: 1200px; margin: 0 auto;
@@ -183,6 +183,32 @@
     .card h3 { font-size: 1.25rem; font-weight: 600; margin-bottom: 1rem; }
     .card p { color: var(--text-muted); font-size: 0.95rem; }
 
+    /* TAGS SUPPORTED DOCS */
+    .doc-tags {
+      display: flex; gap: 12px; justify-content: center; flex-wrap: wrap; margin-top: 2rem;
+    }
+    .doc-tag {
+      background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1);
+      padding: 6px 16px; border-radius: 99px; font-size: 0.9rem; color: #cbd5e1;
+    }
+
+    /* 3 STEPS WORKFLOW */
+    .workflow-steps {
+       display: grid; grid-template-columns: repeat(auto-fit, minmax(250px, 1fr));
+       gap: 2rem; max-width: 1000px; margin: 0 auto 5rem; padding: 0 2rem;
+    }
+    .step-card {
+       text-align: center; position: relative;
+    }
+    .step-number {
+       width: 40px; height: 40px; margin: 0 auto 1.5rem; background: var(--primary); color: white;
+       display: flex; justify-content: center; align-items: center; border-radius: 50%;
+       font-weight: bold; font-size: 1.2rem; font-family: 'Outfit', sans-serif;
+       box-shadow: 0 0 15px rgba(108, 92, 231, 0.5);
+    }
+    .step-card h3 { font-size: 1.1rem; margin-bottom: 0.5rem; }
+    .step-card p { color: var(--text-muted); font-size: 0.9rem; }
+
     /* ARCHITECTURE ARCH / MUR DE CHINE */
     .architecture {
       background: linear-gradient(180deg, var(--bg) 0%, var(--surface) 100%);
@@ -192,11 +218,11 @@
       max-width: 1000px; margin: 0 auto; display: flex; align-items: center; gap: 4rem;
     }
     .arch-content { flex: 1; }
-    .arch-content h2 { font-family: 'Outfit', sans-serif; font-size: 2.5rem; margin-bottom: 1.5rem; }
+    .arch-content h2 { font-family: 'Outfit', sans-serif; font-size: 2.25rem; margin-bottom: 1.5rem; }
     .arch-content p { color: var(--text-muted); margin-bottom: 1.5rem; font-size: 1.05rem; }
     .arch-content ul { list-style: none; margin-bottom: 2rem; }
-    .arch-content li { display: flex; align-items: center; gap: 10px; margin-bottom: 10px; color: #e2e8f0; }
-    .arch-content li::before { content: '✓'; color: var(--accent); font-weight: bold; }
+    .arch-content li { display: flex; align-items: flex-start; gap: 10px; margin-bottom: 12px; color: #e2e8f0; }
+    .arch-content li::before { content: '✓'; color: var(--accent); font-weight: bold; margin-top: 2px;}
     
     .arch-visual {
       flex: 1; display: flex; flex-direction: column; gap: 1rem;
@@ -219,7 +245,7 @@
       max-width: 800px; margin: 0 auto; padding: 4rem 2rem;
       border-radius: 24px; position: relative; overflow: hidden;
     }
-    .cta-box h2 { font-family: 'Outfit', sans-serif; font-size: 2.5rem; margin-bottom: 1rem; }
+    .cta-box h2 { font-family: 'Outfit', sans-serif; font-size: 2.25rem; margin-bottom: 1rem; }
     .cta-box p { color: var(--text-muted); font-size: 1.1rem; margin-bottom: 2rem; }
 
     footer {
@@ -228,7 +254,7 @@
     }
 
     @media (max-width: 768px) {
-      .hero h1 { font-size: 2.5rem; }
+      .hero h1 { font-size: 2.2rem; }
       .arch-container { flex-direction: column; }
       .nav-links { display: none; }
     }
@@ -238,13 +264,13 @@
 
   <!-- NAVBAR -->
   <nav class="nav">
-    <div class="logo">
+    <a href="/" class="logo">
       <span class="logo-icon">🔒</span> ConfiDoc
-    </div>
+    </a>
     <div class="nav-links">
-      <a href="#solution">La Muraille de Chine</a>
-      <a href="#features">Fonctionnalités</a>
-      <a href="/security">RGPD & Sécurité</a>
+      <a href="#how-it-works">Fonctionnement</a>
+      <a href="#solution">Muraille de Chine</a>
+      <a href="#features">Avantages Métier</a>
     </div>
     <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Connexion Espace Client</a>
   </nav>
@@ -252,51 +278,56 @@
   <!-- HERO -->
   <section class="hero animate-up">
     <div class="hero-badge">
-      <span>🚀</span> Pre-Seed Phase — Solution Enterprise Ready
+      <span>🛡️</span> Conçu pour les experts-comptables et métiers du droit
     </div>
-    <h1>L'IA Générative pour les Cabinets, <br><span>sans le risque de fuite.</span></h1>
+    <h1>Analysez bilans, liasses et contrats avec l’IA, <br><span>sans exposer les données sensibles.</span></h1>
     <p>
-      ConfiDoc est le premier portail documentaire qui <strong>anonymise déterministiquement</strong> vos bilans, contrats et liasses fiscales en local 
-      avant de les confier à l'Intelligence Artificielle. Le secret professionnel enfin respecté.
+      ConfiDoc masque localement les identifiants, noms et SIRET avant toute analyse. 
+      L'Intelligence Artificielle analyse le métier, nous garantissons l'anonymat. 
+      <strong>Gagnez des heures sur l'audit, conservez la confiance de vos clients.</strong>
     </p>
     <div class="hero-actions">
-      <a href="/ui" class="btn btn-primary">Accéder à la démo live</a>
-      <a href="mailto:invest@confidoc.fr" class="btn btn-outline">Contacter l'équipe fondatrice</a>
+      <a href="/ui" class="btn btn-primary">Tester sur un document</a>
+      <a href="/ui" class="btn btn-outline">Voir un exemple de rapport</a>
+    </div>
+
+    <!-- Supported Docs -->
+    <div class="doc-tags animate-up delay-1">
+      <span class="doc-tag">Bilans Annuels</span>
+      <span class="doc-tag">Liasses Fiscales</span>
+      <span class="doc-tag">Baux Commerciaux</span>
+      <span class="doc-tag">Contrats de Travail</span>
+      <span class="doc-tag">Fiches de Paie</span>
     </div>
 
     <!-- MOCKUP -->
     <div class="dashboard-preview animate-up delay-2">
       <div class="dashboard-glow"></div>
-      <div style="background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:12px; height: 400px; display:flex; flex-direction:column; overflow:hidden;">
-         <!-- Fake Browser Header -->
+      <div style="background:#1e293b; border:1px solid rgba(255,255,255,0.1); border-radius:12px; height: 350px; display:flex; flex-direction:column; overflow:hidden;">
          <div style="background:#0f172a; padding:12px; display:flex; gap:8px; border-bottom:1px solid rgba(255,255,255,0.05);">
             <div style="width:12px; height:12px; border-radius:50%; background:#ef4444;"></div>
             <div style="width:12px; height:12px; border-radius:50%; background:#f59e0b;"></div>
             <div style="width:12px; height:12px; border-radius:50%; background:#10b981;"></div>
+            <div style="margin-left: 10px; color: #64748b; font-size: 11px; font-family: monospace;">Comparateur de Conformité (Preuve Visuelle)</div>
          </div>
-         <!-- Fake App Body -->
          <div style="display:flex; flex:1;">
-            <div style="width:200px; background:#151b2b; border-right:1px solid rgba(255,255,255,0.05); padding:20px;">
-               <div style="height:20px; width:70%; background:rgba(255,255,255,0.1); border-radius:4px; margin-bottom:20px;"></div>
-               <div style="height:12px; width:90%; background:rgba(255,255,255,0.05); border-radius:4px; margin-bottom:12px;"></div>
-               <div style="height:12px; width:60%; background:rgba(255,255,255,0.05); border-radius:4px; margin-bottom:12px;"></div>
-               <div style="height:12px; width:80%; background:rgba(255,255,255,0.05); border-radius:4px;"></div>
-            </div>
             <div style="flex:1; padding:30px; display:flex; gap:20px;">
-               <div style="flex:1; background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.2); border-radius:8px; padding:20px;">
-                  <h4 style="color:#ef4444; margin-bottom:10px; font-size:12px;">Document Original (Secret)</h4>
-                  <p style="font-family:monospace; font-size:11px; color:#94a3b8; line-height:2;">
-                     Contrat de <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:2px;">Jean Dupont</span><br>
-                     SIRET: <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:2px;">123 456 789</span><br>
-                     Dette: <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:2px;">450 000 €</span>
+               <div style="flex:1; background:rgba(239, 68, 68, 0.05); border:1px solid rgba(239, 68, 68, 0.2); border-radius:8px; padding:20px; text-align:left;">
+                  <h4 style="color:#ef4444; margin-bottom:10px; font-size:12px; text-transform: uppercase; letter-spacing: 1px;">Document Original (Sensible) ⚠️</h4>
+                  <p style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#94a3b8; line-height:2.2;">
+                     M. <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">Jean Dupont</span><br>
+                     SIREN <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">123 456 789</span><br>
+                     Capital: <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">450 000 €</span><br>
+                     Validé par CA le <span style="background:rgba(239,68,68,0.2); color:#fca5a5; padding:2px 4px; border-radius:4px;">12/03/2026</span>
                   </p>
                </div>
-               <div style="flex:1; background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.2); border-radius:8px; padding:20px;">
-                  <h4 style="color:#10b981; margin-bottom:10px; font-size:12px;">Document Caviardé (Prêt pour l'IA)</h4>
-                  <p style="font-family:monospace; font-size:11px; color:#94a3b8; line-height:2;">
-                     Contrat de <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:2px;">[PERSONNE-1]</span><br>
-                     SIRET: <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:2px;">[SIRET-1]</span><br>
-                     Dette: <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:2px;">[MONTANT-1]</span>
+               <div style="flex:1; background:rgba(16, 185, 129, 0.05); border:1px solid rgba(16, 185, 129, 0.2); border-radius:8px; padding:20px; text-align:left;">
+                  <h4 style="color:#10b981; margin-bottom:10px; font-size:12px; text-transform: uppercase; letter-spacing: 1px;">Document Envoyé à l'IA 🔒</h4>
+                  <p style="font-family:'JetBrains Mono', monospace; font-size:12px; color:#94a3b8; line-height:2.2;">
+                     M. <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[PERSONNE-1]</span><br>
+                     SIREN <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[SIREN-1]</span><br>
+                     Capital: <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[MONTANT-1]</span><br>
+                     Validé par CA le <span style="background:rgba(16,185,129,0.2); color:#6ee7b7; padding:2px 4px; border-radius:4px;">[DATE-1]</span>
                   </p>
                </div>
             </div>
@@ -305,78 +336,103 @@
     </div>
   </section>
 
-  <!-- ARCHITECTURE -->
+  <!-- 3 STEPS WORKFLOW -->
+  <section id="how-it-works" style="padding-top: 4rem;">
+     <div class="section-title animate-up">
+       <h2>Auditez n'importe quel dossier en 3 étapes.</h2>
+       <p>Divisez par deux votre temps de lecture sans sacrifier le secret professionnel.</p>
+     </div>
+     <div class="workflow-steps animate-up delay-1">
+        <div class="step-card">
+           <div class="step-number">1</div>
+           <h3>Déposez votre Bilan (PDF)</h3>
+           <p>Chargez le document dans notre portail hautement sécurisé.</p>
+        </div>
+        <div class="step-card">
+           <div class="step-number">2</div>
+           <h3>L'outil anonymise localement</h3>
+           <p>Tous les identifiants sont caviardés visuellement. Vous gardez la main sur ce qui part.</p>
+        </div>
+        <div class="step-card">
+           <div class="step-number">3</div>
+           <h3>L'IA analyse & rédige</h3>
+           <p>L'IA résume, pointe les incohérences ou rédige votre synthèse en format document prêt-à-envoyer.</p>
+        </div>
+     </div>
+  </section>
+
+  <!-- ARCHITECTURE (Business Value) -->
   <section class="architecture" id="solution">
-    <div class="arch-container animate-up delay-1">
+    <div class="arch-container animate-up">
       <div class="arch-content">
         <h2>La "Muraille de Chine" Logicielle</h2>
-        <p>L'intelligence artificielle est hébergée sur des serveurs distants. C'est inacceptable pour les professions réglementées. Notre solution ? Une barrière cryptographique locale.</p>
+        <p>L'intelligence artificielle est un atout, mais la transmettre à un prestataire Externe (le Cloud) pose un vrai problème de responsabilité (DPO). Notre solution lève le frein :</p>
         <ul>
-          <li><strong>OCR & Extraction Locaux</strong> : Vos PDF sont lus sur votre infrastructure.</li>
-          <li><strong>Anonymisation Déterministe</strong> : 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont transformés en jetons (tokens).</li>
-          <li><strong>Le Cloud est Aveugle</strong> : L'IA ne reçoit que la structure sémantique caviardée. Elle analyse la logique comptable sans jamais voir un nom.</li>
-          <li><strong>Dé-pseudonymisation</strong> : Le rapport généré redescend sur votre serveur, et ConfiDoc remet les noms originaux uniquement sur votre écran.</li>
+          <li><strong>Extracteur Local :</strong> Vos PDF sont lus intégralement sur votre propre réseau (sans API texte).</li>
+          <li><strong>Filtre Censeur :</strong> 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont masqués et conservés localement.</li>
+          <li><strong>Le Cloud est Aveugle :</strong> L'IA est obligée de rédiger ses réponses sur les données "caviardées" et ne voit que les calculs de ratios et la sémantique.</li>
+          <li><strong>Restauration Automatique :</strong> Lors du téléchargement de vos rapports PDF, le rapport retrouve les vrais noms côté client.</li>
         </ul>
       </div>
       <div class="arch-visual">
         <div class="arch-box" style="border-left: 4px solid #ef4444;">
            <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🏢</span>
-           <h4 style="margin-bottom:5px;">Espace Cabinet (Local)</h4>
-           <small style="color:var(--text-muted)">Bilan Complet & Données Sensibles</small>
+           <h4 style="margin-bottom:5px;">Cabinet / Avocat</h4>
+           <small style="color:var(--text-muted)">Hébergé en Europe, document original inviolé.</small>
         </div>
         <div class="arch-arrow">↓</div>
         <div class="arch-box secure">
            <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🛡️</span>
-           <h4 style="margin-bottom:5px; color:#10b981;">Moteur ConfiDoc</h4>
-           <small style="color:var(--text-muted)">Extraction, Anonymisation & Chiffrement de la clé de correspondance.</small>
+           <h4 style="margin-bottom:5px; color:#10b981;">Filtre ConfiDoc</h4>
+           <small style="color:var(--text-muted)">Isolation des données identifiantes.</small>
         </div>
         <div class="arch-arrow">↓</div>
         <div class="arch-box" style="border-left: 4px solid var(--primary);">
-           <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">☁️</span>
-           <h4 style="margin-bottom:5px;">Mistral AI / OpenAI</h4>
-           <small style="color:var(--text-muted)">Le LLM traite le document sans PII.</small>
+           <span style="font-size: 24px; position:absolute; top:-15px; left:-15px; background:var(--surface); border-radius:50%; padding:5px;">🤖</span>
+           <h4 style="margin-bottom:5px;">Moteur LLM (IA)</h4>
+           <small style="color:var(--text-muted)">Analyse métier sans accès aux données privées.</small>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- FEATURES -->
+  <!-- FEATURES (Business Value) -->
   <section class="features" id="features">
-    <div class="section-title animate-up delay-2">
-      <h2>Conçu pour l'Audit et le Droit</h2>
-      <p>Pas un gadget. Un outil de productivité qui respecte vos obligations légales.</p>
+    <div class="section-title animate-up">
+      <h2>Conçu pour le terrain. Prêt pour l'audit.</h2>
+      <p>Bien plus qu'un chatbot : un outil taillé pour s'insérer dans les procédures des cabinets.</p>
     </div>
     
-    <div class="grid-3 animate-up delay-3">
+    <div class="grid-3 animate-up delay-1">
       <div class="card">
         <div class="card-icon">🧠</div>
-        <h3>Review Agent Autonome</h3>
-        <p>Ne vous contentez pas d'un simple chat. Confiez le document à notre pipeline LangGraph qui l'audite étape par étape (classification, extraction, analyse de risques).</p>
+        <h3>Analyse Automatisée des Dettes & Cap. Propres</h3>
+        <p>Ne vous contentez pas d'un chatbot générique. Pointez les anomalies des bilans grâce à un modèle entraîné sur la norme comptable française.</p>
       </div>
       <div class="card">
         <div class="card-icon">🎯</div>
-        <h3>Mode RAG Copilot</h3>
-        <p>Posez des questions sur une liasse fiscale de 200 pages. L'IA cible uniquement les paragraphes pertinents et réduit les hallucinations grâce aux scores de confiance.</p>
-      </div>
-      <div class="card">
-        <div class="card-icon">📉</div>
-        <h3>Score de Risque RGPD</h3>
-        <p>Avant d'autoriser l'export externe d'un document, le logiciel scanne toutes les données privées et exige une validation humaine si le niveau de risque est "Critique".</p>
+        <h3>Extraction d'informations ciblées (RAG)</h3>
+        <p>Chercher une clause "Force Majeure" dans un contrat de 500 pages prend 5 minutes au lieu de 2 heures grâce au moteur de recherche sémantique.</p>
       </div>
       <div class="card">
         <div class="card-icon">⚖️</div>
-        <h3>Comparateur Visuel Preuve</h3>
-        <p>Vérifiez instantanément la qualité de l'anonymisation grâce à l'interface en écran splitté "Rouge vs Vert" : rien ne part sans votre blanc-seing visuel.</p>
+        <h3>Garantie Visuelle du Caviardage</h3>
+        <p>Le Comparateur Visuel vous permet de prouver en 1 clic (écran splitté) à vos clients ou DPO que vous maîtrisez la donnée avant envoi au Cloud.</p>
       </div>
       <div class="card">
-        <div class="card-icon">📄</div>
-        <h3>Exports Premium Branded</h3>
-        <p>Transformez vos analyses en de magnifiques rapports PDF structurés, prêts à être imprimés pour la plaquette financière de votre client final.</p>
+        <div class="card-icon">PDF</div>
+        <h3>Livraison "Prête à Client"</h3>
+        <p>Générez directement des rapports qualitatifs avec cartouche à vos couleurs, sans faire de copié-collé vers Word.</p>
+      </div>
+      <div class="card">
+        <div class="card-icon">📉</div>
+        <h3>Détecteur de Risque RGPD</h3>
+        <p>Pour chaque document, le système remonte un score de risque de ré-identification, bloquant l'export si le contenu reste trop compromettant.</p>
       </div>
       <div class="card">
         <div class="card-icon">🔐</div>
-        <h3>Option : 100% On-Premise</h3>
-        <p>Vous souhaitez une étanchéité absolue ? ConfiDoc est compatible avec Ollama pour faire tourner un modèle d'IA localement sur les cartes graphiques de vos serveurs.</p>
+        <h3>Gouvernance stricte</h3>
+        <p>Gérez les suppressions définitives directement via l'outil ou automatisez les purges de rétention via de véritables Webhooks d'entreprise.</p>
       </div>
     </div>
   </section>
@@ -384,17 +440,18 @@
   <!-- CTA -->
   <section class="cta-section">
     <div class="cta-box animate-up">
-      <h2>Adoptez l'IA sans compromettre la confiance.</h2>
-      <p>L'application est prête, sécurisée et hébergée.</p>
+      <h2>Transformez la complexité en opportunité.</h2>
+      <p>Adoptez l'IA sans exposer la responsabilité civile ou professionnelle de votre cabinet.</p>
       <div style="display:flex; justify-content:center; gap:16px; margin-top:24px;">
-        <a href="/ui" class="btn btn-primary">Découvrir le Portail</a>
+        <a href="/ui" class="btn btn-primary">Demander une démo</a>
       </div>
     </div>
   </section>
 
   <footer>
     <div style="margin-bottom: 10px; font-weight:600; color:white;">🔒 ConfiDoc</div>
-    © 2025 ConfiDoc SAS. Tous droits réservés. Produit conforme DORA & RGPD.
+    © 2026 ConfiDoc SAS. Tous droits réservés. <br>
+    Conçu pour répondre aux exigences RGPD, CNIL et au secret professionnel.
   </footer>
 
   <script>
