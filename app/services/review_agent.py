@@ -65,7 +65,7 @@ QUALITE:
 
 
 def _build_docling_context(state: dict) -> str:
-    """Build extra context from Docling structured extraction (tables, sections)."""
+    """Construit le contexte à partir des tables/sections (optionnel, souvent vide)."""
     parts: list[str] = []
     tables = state.get("docling_tables") or []
     sections = state.get("docling_sections") or []
@@ -197,7 +197,7 @@ async def extract_node(state: ReviewState) -> ReviewState:
 
     prompt = f"""Tu analyses un document de type: {doc_type}
 Entites detectees: {json.dumps(entity_summary, ensure_ascii=False)}
-{f"DONNEES STRUCTUREES (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
+{f"DONNEES STRUCTUREES (tableaux / sections):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Extrais les donnees structurees cles de ce document.
 
@@ -255,7 +255,7 @@ async def analyze_node(state: ReviewState) -> ReviewState:
 
     prompt = f"""Tu analyses un document de type: {doc_type}
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:4000]}
-{f"DONNEES STRUCTUREES (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
+{f"DONNEES STRUCTUREES (tableaux / sections):{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Effectue une analyse metier factuelle:
 1. Verifie la coherence des montants entre eux
@@ -307,7 +307,7 @@ async def findings_node(state: ReviewState) -> ReviewState:
     prompt = f"""Document de type: {doc_type}
 Donnees extraites: {json.dumps(extracted, ensure_ascii=False)[:1500]}
 Analyse precedente: {json.dumps(analysis, ensure_ascii=False)[:3000]}
-{f"TABLEAUX ET STRUCTURE (Docling):{chr(10)}{docling_ctx}" if docling_ctx else ""}
+{f"TABLEAUX ET STRUCTURE:{chr(10)}{docling_ctx}" if docling_ctx else ""}
 
 Tu dois produire des constats structures selon EXACTEMENT 4 categories.
 
