@@ -374,7 +374,7 @@
             </div>
           </div>
           <div class="text-preview">
-            <div id="anon-split-view" class="split">
+            <div id="anon-split-view" class="split" style="display: none;">
               <div class="split-pane">
                 <h4>Original ⚠️</h4>
                 <div id="original-loading" class="loading-state" style="display:none">
@@ -386,18 +386,18 @@
               <div class="split-pane">
                 <div class="split-pane-header">
                   <h4>Anonymisé</h4>
-                  <button id="btn-copy-anonymized" class="btn btn-ghost btn-sm">Copier anonymisé</button>
                 </div>
                 <pre id="preview-anon-text" class="preview-text"></pre>
               </div>
             </div>
             <div id="entity-legend" class="entity-legend"></div>
-            <div id="tab-diff" class="tab-content">
-              <div class="diff-legend">
-                <span class="diff-legend-item"><span class="diff-dot diff-dot-del"></span> Original</span>
-                <span class="diff-legend-item"><span class="diff-dot diff-dot-ins"></span> Anonymisé</span>
+            <div id="tab-diff" class="tab-content" style="display: block; margin-top: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
+              <div class="diff-legend" style="margin: 0; padding: 12px 16px; background: var(--bg-hover); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px;">
+                <span class="diff-legend-item" style="font-weight: 600; font-size: 13px;"><span class="diff-dot diff-dot-del"></span> Document Original ⚠️</span>
+                <span class="diff-legend-item" style="font-weight: 600; font-size: 13px;"><span class="diff-dot diff-dot-ins"></span> Document Anonymisé 🔒</span>
+                <button id="btn-copy-anonymized" class="btn btn-ghost btn-sm" style="margin-left: auto;">Copier texte anonymisé</button>
               </div>
-              <div id="preview-diff-text" class="preview-text" style="max-height:420px;overflow-y:auto;"></div>
+              <div id="preview-diff-text" class="preview-text diff-premium-view" style="max-height: 480px; overflow-y: auto; padding: 0; margin: 0; background: var(--bg);"></div>
             </div>
           </div>
         </div>
