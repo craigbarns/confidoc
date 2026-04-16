@@ -2450,8 +2450,9 @@ async function startReview() {
       buffer = lines.pop();
 
       for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const raw = line.slice(5).trim();
+        const cleanLine = line.replace(/\r/g, "");
+        if (!cleanLine.startsWith("data:")) continue;
+        const raw = cleanLine.slice(5).trim();
         if (raw === "[DONE]") break;
 
         try {

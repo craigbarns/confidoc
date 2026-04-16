@@ -663,12 +663,10 @@ async def run_review_streaming(
     }
 
     def _iter_chunks(raw: object) -> dict[str, Any]:
-        """Normalize LangGraph stream chunks to {node_name: update_dict}.
+        """Normalise les chunks LangGraph en {nom_nœud: sortie}.
 
-        Default astream() uses stream_mode='values' (full state per step): keys are
-        state fields (doc_type, findings, …), NOT node names — so SSE never matched
-        classify/extract/… and only accidentally collided with the state key 'findings'.
-        We use stream_mode='updates' so each chunk is {node_name: node_output}.
+        - Mode classique : ``{"classify": {...}}``.
+        - LangGraph v2 / enveloppes : ``{"type": "updates", "data": {"classify": {...}}}``.
         """
         if isinstance(raw, tuple) and len(raw) >= 2:
             mode, payload = raw[0], raw[1]
@@ -678,11 +676,17 @@ async def run_review_streaming(
                 return payload
             return {}
         if isinstance(raw, dict):
+            if raw.get("type") == "updates" and isinstance(raw.get("data"), dict):
+                return dict(raw["data"])
             return raw
         return {}
 
     try:
-        async for raw_chunk in graph.astream(initial_state, stream_mode="updates"):
+        async for raw_chunk in graph.astream(
+            initial_state,
+            stream_mode="updates",
+            version="v1",
+        ):
             state = _iter_chunks(raw_chunk)
             for node_name, node_output in state.items():
                 if node_name not in steps_order:
