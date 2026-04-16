@@ -2918,17 +2918,87 @@ document.addEventListener("DOMContentLoaded", () => {
     if ($("btn-export-rapport")) $("btn-export-rapport").style.display = reportMode ? "" : "none";
     toast(reportMode ? "Mode rapport activé — les réponses seront structurées automatiquement" : "Mode rapport désactivé", "info");
   });
-  // Export rapport: export latest structured answer as text
+  // Export rapport: export latest structured answer as Premium Branded PDF
   if ($("btn-export-rapport")) {
     $("btn-export-rapport").addEventListener("click", () => {
       if (!latestAssistantText.trim()) {
         toast("Aucun rapport à exporter. Posez d'abord une question.", "info");
         return;
       }
-      const header = `=== RAPPORT CONFIDOC ===\nDate: ${new Date().toLocaleDateString("fr-FR")}\nDocument: ${currentDocName || "-"}\n\n`;
-      const blob = new Blob([header + latestAssistantText], { type: "text/plain;charset=utf-8" });
-      triggerDownload(blob, `rapport_${currentDocName?.replace(/[^a-zA-Z0-9]/g, "_")?.slice(0, 30) || "doc"}_${new Date().toISOString().slice(0, 10)}.txt`);
-      toast("Rapport exporté", "success");
+      
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast("Veuillez autoriser les pop-ups pour exporter le PDF.", "error");
+        return;
+      }
+      
+      // Get the structured HTML content from the chat
+      const msgBodies = document.querySelectorAll("#chat-messages .msg-body.structured");
+      const lastAnswerHtml = msgBodies.length > 0 ? msgBodies[msgBodies.length - 1].innerHTML : latestAssistantText.replace(/\n/g, '<br>');
+      
+      const docName = escapeHtml(currentDocName || "Document inconnu");
+      const dateStr = new Date().toLocaleDateString("fr-FR");
+      
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+          <meta charset="UTF-8">
+          <title>Rapport d'Analyse IA — ${docName}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            @page { margin: 20mm; size: A4; }
+            body { font-family: 'Inter', sans-serif; color: #1a1a2e; line-height: 1.6; margin: 0; padding: 0; }
+            .header { border-bottom: 3px solid #6c5ce7; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .logo { font-size: 28px; font-weight: 700; color: #6c5ce7; display: flex; align-items: center; gap: 8px; }
+            .meta { text-align: right; font-size: 12px; color: #64748b; }
+            .meta p { margin: 4px 0; }
+            .doc-title { font-size: 18px; font-weight: 600; margin-bottom: 24px; color: #0f172a; padding: 12px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #6c5ce7; }
+            
+            /* Styles for the structured sections (imported from main css) */
+            .ai-section { margin-bottom: 24px; page-break-inside: avoid; }
+            .ai-section-title { font-size: 16px; font-weight: 700; color: #6c5ce7; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+            .ai-section-risk .ai-section-title { color: #d97706; border-color: #fef08a; }
+            .ai-section-action .ai-section-title { color: #059669; border-color: #a7f3d0; }
+            .ai-section-data .ai-section-title { color: #0284c7; border-color: #bae6fd; }
+            .ai-section ul { padding-left: 20px; margin: 0; }
+            .ai-section li { margin-bottom: 8px; color: #334155; }
+            
+            .footer { margin-top: 50px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+            
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .header { border-bottom: 3px solid #6c5ce7 !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">🔒 ConfiDoc</div>
+            <div class="meta">
+              <p><strong>Date d'analyse :</strong> ${dateStr}</p>
+              <p><strong>Modèle d'IA :</strong> Mistral-Large (Contexte Anonymisé)</p>
+            </div>
+          </div>
+          <div class="doc-title">Document analysé : ${docName}</div>
+          <div class="content">
+            ${lastAnswerHtml}
+          </div>
+          <div class="footer">
+            Rapport confidentiel généré par ConfiDoc. Les données personnelles et financières ont été anonymisées par un système déterministe avant soumission à l'Intelligence Artificielle afin de garantir le strict respect du RGPD et du secret professionnel.
+          </div>
+          <script>
+            window.onload = function() { 
+              setTimeout(() => {
+                window.print(); 
+              }, 300);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      toast("Préparation du PDF Premium...", "success");
     });
   }
   if ($("btn-copilot-mode")) {
