@@ -6,11 +6,25 @@
   <title id="page-title">ConfiDoc — Documents confidentiels anonymisés</title>
   <link rel="stylesheet" href="/static/css/style.css" />
   <link rel="manifest" href="/static/manifest.json" />
-  <meta name="theme-color" content="#0f1117" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>" type="image/svg+xml" />
+  <meta name="theme-color" content="#070c1b" />
+  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'><defs><linearGradient id='g' x1='0' y1='0' x2='1' y2='1'><stop offset='0%25' stop-color='%236366f1'/><stop offset='100%25' stop-color='%23a78bfa'/></linearGradient></defs><rect width='32' height='32' rx='8' fill='url(%23g)'/><path d='M16 6L8 10v7c0 5 3.5 9.5 8 11 4.5-1.5 8-6 8-11v-7z' fill='white' opacity='.9'/><rect x='13' y='14' width='6' height='5' rx='1' fill='url(%23g)'/><circle cx='16' cy='13.5' r='2' stroke='url(%23g)' stroke-width='1.5' fill='none'/></svg>" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+
+  <!-- SVG defs for GDPR ring gradient -->
+  <svg width="0" height="0" style="position:absolute">
+    <defs>
+      <linearGradient id="gdprGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#6366f1"/>
+        <stop offset="100%" stop-color="#a78bfa"/>
+      </linearGradient>
+      <linearGradient id="logoGrad" x1="0%" y1="0%" x2="100%" y2="100%">
+        <stop offset="0%" stop-color="#6366f1"/>
+        <stop offset="100%" stop-color="#a78bfa"/>
+      </linearGradient>
+    </defs>
+  </svg>
 </head>
 <body>
 
@@ -18,42 +32,79 @@
 
 <header class="app-header">
   <div class="header-inner">
-    <div class="logo" id="logo-btn" title="Retour au dashboard" style="cursor:pointer">
-      <span class="logo-icon" role="img" aria-label="Cadenas">🔒</span>
+    <div class="logo" id="logo-btn" title="Retour au dashboard">
+      <div class="logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L5 5.5V11C5 15.55 8.08 19.74 12 21C15.92 19.74 19 15.55 19 11V5.5L12 2Z" fill="white" opacity="0.92"/>
+          <rect x="9.5" y="12" width="5" height="4" rx="0.8" fill="url(#logoGrad)"/>
+          <path d="M14 12V10.5C14 9.4 13.1 8.5 12 8.5C10.9 8.5 10 9.4 10 10.5V12" stroke="url(#logoGrad)" stroke-width="1.5" stroke-linecap="round"/>
+        </svg>
+      </div>
       <span class="logo-text">ConfiDoc</span>
     </div>
-    <div class="header-tagline">Courriers, contrats, pieces sensibles — anonymises, puis synthese cabinet.</div>
+    <div class="header-tagline">Anonymisez vos documents sensibles avant toute utilisation IA</div>
     <div class="header-actions">
-      <button id="btn-sidebar-toggle" class="sidebar-toggle" aria-label="Menu documents">☰</button>
+      <button id="btn-sidebar-toggle" class="sidebar-toggle" aria-label="Menu documents">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+          <line x1="3" y1="6" x2="21" y2="6"/><line x1="3" y1="12" x2="21" y2="12"/><line x1="3" y1="18" x2="21" y2="18"/>
+        </svg>
+      </button>
       <button id="btn-theme" class="btn-theme-toggle theme-switch" aria-label="Changer le thème" role="switch" aria-checked="false"></button>
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
-      <a href="/security" target="_blank" class="btn btn-ghost btn-sm" id="btn-security" style="display:none" title="Securite &amp; Conformite RGPD" role="img" aria-label="Bouclier securite">🛡️</a>
-      <button id="btn-dashboard" class="btn btn-ghost btn-sm" style="display:none" title="Dashboard" role="img" aria-label="Dashboard">📊</button>
+      <a href="/security" target="_blank" class="btn btn-ghost btn-sm" id="btn-security" style="display:none" title="Securité & Conformité RGPD" aria-label="Conformité RGPD">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+        </svg>
+        RGPD
+      </a>
+      <button id="btn-dashboard" class="btn btn-ghost btn-sm" style="display:none" title="Dashboard">
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+          <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+        </svg>
+      </button>
       <span id="user-info" class="user-info"></span>
-      <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">Deconnexion</button>
+      <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Déconnexion
+      </button>
     </div>
   </div>
 </header>
 
-<!-- AUTH -->
+<!-- ════════════ AUTH ════════════ -->
 <div id="screen-auth" class="screen">
   <div class="auth-card">
     <div class="auth-logo">
-      <span class="auth-logo-icon" role="img" aria-label="Cadenas">🔒</span>
+      <div class="auth-logo-icon">
+        <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+          <path d="M12 2L5 5.5V11C5 15.55 8.08 19.74 12 21C15.92 19.74 19 15.55 19 11V5.5L12 2Z" fill="white" opacity="0.95"/>
+          <rect x="9.5" y="12" width="5" height="4.5" rx="0.8" fill="url(#logoGrad)"/>
+          <path d="M14.2 12V10.2C14.2 8.98 13.2 8 12 8C10.8 8 9.8 8.98 9.8 10.2V12" stroke="url(#logoGrad)" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </div>
     </div>
     <h1>ConfiDoc</h1>
     <p class="auth-subtitle">Anonymisez vos documents avant toute utilisation IA</p>
+
     <form id="form-login" autocomplete="off">
       <div class="field">
-        <label for="email">Email</label>
-        <input id="email" type="email" placeholder="vous@exemple.com" required />
+        <label for="email">Adresse email</label>
+        <input id="email" type="email" placeholder="vous@cabinet.com" required autocomplete="email" />
       </div>
       <div class="field">
         <label for="password">Mot de passe</label>
         <div class="field-password-wrap">
-          <input id="password" type="password" placeholder="••••••••" required aria-describedby="password-requirements" />
-          <button type="button" id="btn-toggle-password" class="btn-password-toggle" aria-label="Afficher le mot de passe" aria-pressed="false" title="Afficher">👁️<span class="sr-only">Afficher</span></button>
+          <input id="password" type="password" placeholder="••••••••" required aria-describedby="password-requirements" autocomplete="current-password" />
+          <button type="button" id="btn-toggle-password" class="btn-password-toggle" aria-label="Afficher le mot de passe" aria-pressed="false">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
         </div>
         <span id="password-requirements" class="sr-only">Minimum 8 caractères, 1 majuscule, 1 chiffre</span>
       </div>
@@ -61,42 +112,60 @@
         <a href="#" id="link-forgot-password" class="forgot-link">Mot de passe oublié ?</a>
       </div>
       <button type="submit" class="btn btn-primary btn-full" id="btn-login">
+        <svg width="15" height="15" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M15 3h4a2 2 0 0 1 2 2v14a2 2 0 0 1-2 2h-4"/>
+          <polyline points="10 17 15 12 10 7"/><line x1="15" y1="12" x2="3" y2="12"/>
+        </svg>
         <span id="btn-login-text">Se connecter</span>
       </button>
       <p id="auth-error" class="error-msg" style="display:none"></p>
     </form>
-    <!-- RESET PASSWORD (depuis lien email ?reset_token=) -->
+
+    <!-- RESET PASSWORD -->
     <div id="reset-section" style="display:none">
       <p class="auth-subtitle" style="margin-bottom:20px">Choisissez un nouveau mot de passe (min. 8 caractères, 1 majuscule, 1 chiffre).</p>
       <div class="field">
         <label for="reset-password-new">Nouveau mot de passe</label>
         <div class="field-password-wrap">
-          <input id="reset-password-new" type="password" placeholder="Nouveau mot de passe…" />
-          <button type="button" id="btn-toggle-reset-password" class="btn-password-toggle" title="Afficher">👁</button>
+          <input id="reset-password-new" type="password" placeholder="Nouveau mot de passe…" autocomplete="new-password" />
+          <button type="button" id="btn-toggle-reset-password" class="btn-password-toggle">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/><circle cx="12" cy="12" r="3"/>
+            </svg>
+          </button>
         </div>
       </div>
       <button id="btn-reset-submit" class="btn btn-primary btn-full">Enregistrer le mot de passe</button>
       <p id="reset-msg" class="error-msg" style="display:none"></p>
     </div>
+
     <!-- FORGOT PASSWORD -->
     <div id="forgot-section" style="display:none">
       <p class="auth-subtitle" style="margin-bottom:20px">Entrez votre email pour recevoir un lien de réinitialisation.</p>
       <div class="field">
         <label for="forgot-email">Email</label>
-        <input id="forgot-email" type="email" placeholder="vous@exemple.com" />
+        <input id="forgot-email" type="email" placeholder="vous@cabinet.com" autocomplete="email" />
       </div>
       <button id="btn-forgot-submit" class="btn btn-primary btn-full">Envoyer le lien</button>
       <p id="forgot-msg" class="error-msg" style="display:none"></p>
-      <a href="#" id="link-back-login" class="forgot-link" style="display:block;text-align:center;margin-top:16px">← Retour à la connexion</a>
+      <a href="#" id="link-back-login" class="forgot-link" style="display:block;text-align:center;margin-top:16px">
+        ← Retour à la connexion
+      </a>
     </div>
-    <p class="auth-footer">Vos données restent confidentielles et ne quittent pas votre organisation.</p>
+
+    <p class="auth-footer">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;opacity:.5">
+        <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+      </svg>
+      Vos données restent confidentielles et ne quittent pas votre organisation.
+    </p>
   </div>
 </div>
 
-<!-- APP -->
+<!-- ════════════ APP ════════════ -->
 <div id="screen-app" class="screen" style="display:none">
 
-  <!-- STEPS -->
+  <!-- PIPELINE STEPS -->
   <div class="pipeline">
     <button class="step active" id="step-1" type="button">
       <div class="step-num">1</div>
@@ -116,31 +185,47 @@
 
   <div class="app-body">
 
-    <!-- Bouton d'expansion sidebar (visible quand sidebar collapsée sur desktop) -->
-    <button id="btn-sidebar-expand" class="sidebar-expand-btn" aria-label="Afficher la liste des documents" title="Afficher la liste" style="display:none">☰</button>
+    <button id="btn-sidebar-expand" class="sidebar-expand-btn" aria-label="Afficher la liste des documents" title="Afficher" style="display:none">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+        <polyline points="9 18 15 12 9 6"/>
+      </svg>
+    </button>
 
     <div id="sidebar-backdrop" class="sidebar-backdrop"></div>
 
-    <!-- SIDEBAR -->
+    <!-- ── SIDEBAR ── -->
     <aside class="sidebar">
       <div class="sidebar-header">
-        <h2>Documents <span id="doc-count" class="doc-count"></span></h2>
+        <h2>
+          <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
+          Documents
+          <span id="doc-count" class="doc-count"></span>
+        </h2>
         <div class="sidebar-header-actions">
           <button id="btn-home" class="btn btn-ghost btn-sm">Accueil</button>
           <button id="btn-new-doc" class="btn btn-primary btn-sm">+ Nouveau</button>
-          <button id="btn-sidebar-collapse" class="sidebar-collapse-btn" aria-label="Réduire la sidebar" title="Réduire/Agrandir">◀</button>
-        </div>
-        <div class="sidebar-batch-row">
-          <button id="btn-batch-toggle" class="btn-batch-toggle-inline" title="Sélection multiple pour actions groupées">☑ Sélectionner</button>
+          <button id="btn-sidebar-collapse" class="sidebar-collapse-btn" aria-label="Réduire la sidebar" title="Réduire">
+            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
+              <polyline points="15 18 9 12 15 6"/>
+            </svg>
+          </button>
         </div>
       </div>
+
+      <div class="sidebar-batch-row">
+        <button id="btn-batch-toggle" class="btn-batch-toggle-inline">☑ Sélectionner</button>
+      </div>
+
       <div class="sidebar-filters">
         <input id="filter-client" list="clients-suggestions" class="input-sm" type="text" placeholder="Filtrer par client…" />
         <input id="filter-search" class="input-sm mt-8" type="text" placeholder="Rechercher un document…" />
         <select id="filter-status" class="input-sm mt-8">
-          <option value="">Tous statuts</option>
+          <option value="">Tous les statuts</option>
           <option value="ready">Prêt IA</option>
-          <option value="processing">Traitement</option>
+          <option value="processing">En traitement</option>
           <option value="uploaded">Uploadé</option>
           <option value="failed">Erreur</option>
           <option value="deleted">Corbeille</option>
@@ -152,57 +237,98 @@
         </label>
         <div id="sidebar-stats" class="sidebar-stats" style="display:none"></div>
       </div>
+
       <div id="doc-list" class="doc-list">
-        <div class="empty-state">Aucun document.<br>Uploadez-en un.</div>
+        <div class="empty-state">
+          <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="opacity:.3;margin:0 auto 12px;display:block">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+            <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
+          </svg>
+          Aucun document.<br>Uploadez-en un.
+        </div>
       </div>
+
       <div id="batch-bar" class="batch-bar">
         <span id="batch-count" class="batch-count">0 sélectionné(s)</span>
-        <button id="btn-batch-anonymize" class="btn btn-primary btn-sm">🔒 Anonymiser</button>
-        <button id="btn-batch-delete" class="btn btn-sm" style="color:var(--danger);border-color:var(--danger)">🗑 Supprimer</button>
+        <button id="btn-batch-anonymize" class="btn btn-primary btn-sm">Anonymiser</button>
+        <button id="btn-batch-delete" class="btn btn-sm" style="color:var(--danger);border-color:rgba(248,113,113,.3)">Supprimer</button>
         <button id="btn-batch-cancel" class="btn btn-ghost btn-sm">Annuler</button>
       </div>
     </aside>
 
-    <!-- MAIN -->
+    <!-- ── MAIN ── -->
     <main id="main-content" class="main-panel">
 
-      <!-- PANEL 0: DASHBOARD -->
+      <!-- DASHBOARD -->
       <div id="panel-dashboard" class="panel">
         <div class="panel-header">
           <h2>Dashboard</h2>
           <div class="panel-actions">
-            <button id="btn-dash-upload" class="btn btn-primary btn-sm">Uploader</button>
+            <button id="btn-dash-upload" class="btn btn-primary btn-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              Uploader
+            </button>
             <button id="btn-dash-list" class="btn btn-ghost btn-sm">Voir la liste</button>
-            <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">Actualiser</button>
+            <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
+              </svg>
+              Actualiser
+            </button>
           </div>
         </div>
+
         <div id="dash-loading" class="loading-state" style="display:none">
           <div class="spinner"></div>
-          <p>Chargement des statistiques...</p>
+          <p>Chargement des statistiques…</p>
         </div>
+
         <div id="dash-content" style="display:none">
           <div class="dash-kpi-grid">
             <div class="dash-kpi-card">
-              <div class="dash-kpi-icon">📄</div>
+              <div class="dash-kpi-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)">
+                  <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                  <polyline points="14 2 14 8 20 8"/>
+                </svg>
+              </div>
               <div class="dash-kpi-num" id="dash-total-docs">0</div>
               <div class="dash-kpi-label">Documents</div>
             </div>
             <div class="dash-kpi-card">
-              <div class="dash-kpi-icon">🔒</div>
+              <div class="dash-kpi-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
               <div class="dash-kpi-num" id="dash-total-entities">0</div>
-              <div class="dash-kpi-label">Entites masquees</div>
+              <div class="dash-kpi-label">Entités masquées</div>
             </div>
             <div class="dash-kpi-card">
-              <div class="dash-kpi-icon">✅</div>
+              <div class="dash-kpi-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--success)">
+                  <polyline points="20 6 9 17 4 12"/>
+                </svg>
+              </div>
               <div class="dash-kpi-num" id="dash-ready-count">0</div>
-              <div class="dash-kpi-label">Prets IA</div>
+              <div class="dash-kpi-label">Prêts IA</div>
             </div>
             <div class="dash-kpi-card">
-              <div class="dash-kpi-icon">🗑️</div>
+              <div class="dash-kpi-icon">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-dim)">
+                  <polyline points="3 6 5 6 21 6"/><path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v2"/>
+                </svg>
+              </div>
               <div class="dash-kpi-num" id="dash-trashed">0</div>
               <div class="dash-kpi-label">Corbeille</div>
             </div>
           </div>
+
           <div class="dash-buckets">
             <div class="dash-bucket"><span>Prêts IA</span><strong id="dash-bucket-ready">0</strong></div>
             <div class="dash-bucket"><span>Traitement</span><strong id="dash-bucket-processing">0</strong></div>
@@ -210,6 +336,7 @@
             <div class="dash-bucket"><span>Échecs</span><strong id="dash-bucket-failed">0</strong></div>
             <div class="dash-bucket"><span>Uploads 24h</span><strong id="dash-uploads-24h">0</strong></div>
           </div>
+
           <div class="dash-ready-progress">
             <div class="dash-ready-progress-head">
               <span>Prêts / Total</span>
@@ -218,7 +345,7 @@
             <div class="progress-bar"><div id="dash-ready-fill" class="progress-fill"></div></div>
           </div>
 
-          <!-- GDPR Score Section -->
+          <!-- GDPR Score -->
           <div class="dash-gdpr-section">
             <div class="dash-gdpr-card" id="dash-gdpr-card">
               <div class="dash-gdpr-score-ring">
@@ -232,7 +359,7 @@
                 </div>
               </div>
               <div class="dash-gdpr-info">
-                <div class="dash-gdpr-grade" id="dash-gdpr-grade">-</div>
+                <div class="dash-gdpr-grade" id="dash-gdpr-grade">—</div>
                 <div class="dash-gdpr-status" id="dash-gdpr-status">En attente</div>
                 <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown"></div>
               </div>
@@ -241,7 +368,7 @@
           </div>
 
           <div class="dash-trend">
-            <h3>Tendance docs créés (7 jours)</h3>
+            <h3>Tendance — 7 derniers jours</h3>
             <div id="dash-trend-7d" class="dash-activity-bars"></div>
           </div>
 
@@ -251,7 +378,7 @@
               <div id="dash-risk-chart" class="dash-risk-bars"></div>
             </div>
             <div class="dash-chart-card">
-              <h3>Entites par type</h3>
+              <h3>Entités par type</h3>
               <div id="dash-entity-chart" class="dash-entity-list"></div>
             </div>
           </div>
@@ -263,60 +390,76 @@
             </div>
           </div>
 
-          <div id="dash-activity-section" class="dash-chart-card" style="margin-top:16px;display:none">
-            <h3>Activite recente (7 jours)</h3>
+          <div id="dash-activity-section" class="dash-chart-card" style="margin-top:12px;display:none">
+            <h3>Activité récente</h3>
             <div id="dash-activity-chart" class="dash-activity-bars"></div>
           </div>
         </div>
       </div>
 
-      <!-- PANEL 1: UPLOAD -->
+      <!-- UPLOAD -->
       <div id="panel-upload" class="panel active">
         <h2>Uploader un document</h2>
         <div class="field-inline">
           <label for="upload-client-name">Client (obligatoire)</label>
           <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" />
         </div>
-        <div class="field-inline" style="margin-top:8px">
-          <label style="display:flex;align-items:center;gap:8px;cursor:pointer">
-            <input id="upload-auto-anonymize" type="checkbox" checked />
-            <span>Anonymiser automatiquement</span>
+        <div class="field-inline" style="margin-top:4px">
+          <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;font-size:13px;letter-spacing:0;color:var(--text-muted);font-weight:500">
+            <input id="upload-auto-anonymize" type="checkbox" checked style="accent-color:var(--accent)" />
+            Anonymiser automatiquement après upload
           </label>
         </div>
-        <div style="margin: 12px 0; text-align: center">
-          <button id="btn-demo" class="btn btn-primary" type="button" title="Démo instantanée pour les investisseurs">
-            🚀 Essayer avec un document de démo
+
+        <div style="margin: 16px 0; max-width: 560px;">
+          <button id="btn-demo" class="btn btn-secondary" type="button" title="Démo instantanée">
+            <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Essayer avec un document de démo
           </button>
         </div>
+
         <div class="upload-zone" id="upload-zone">
-          <div class="upload-icon" role="img" aria-label="Document">📄</div>
+          <div class="upload-icon">
+            <svg width="44" height="44" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent);opacity:.7;display:block;margin:0 auto">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+          </div>
           <p class="upload-main">Glissez votre fichier ici ou</p>
-          <label class="btn btn-secondary" for="file-input">Choisir un fichier</label>
+          <label class="btn btn-secondary" for="file-input" style="cursor:pointer">Choisir un fichier</label>
           <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
           <p class="upload-hint">PDF, PNG, JPG, TIFF — max 50 MB</p>
         </div>
+
         <div id="upload-progress" style="display:none">
           <div class="progress-bar"><div id="progress-fill" class="progress-fill"></div></div>
           <p id="upload-status">Envoi en cours…</p>
         </div>
+
         <div class="upload-formats">
-          <span class="format-badge">📄 PDF</span>
-          <span class="format-badge">🖼 PNG</span>
-          <span class="format-badge">🖼 JPG</span>
-          <span class="format-badge">🖼 TIFF</span>
+          <span class="format-badge">PDF</span>
+          <span class="format-badge">PNG</span>
+          <span class="format-badge">JPG</span>
+          <span class="format-badge">TIFF</span>
         </div>
         <div id="upload-queue" class="upload-queue" style="display:none"></div>
       </div>
 
-      <!-- PANEL 2: ANONYMISATION -->
+      <!-- ANONYMISATION -->
       <div id="panel-anon" class="panel">
 
-        <!-- Doc info bar (shown when a doc is selected) -->
         <div id="anon-doc-bar" class="anon-doc-bar" style="display:none">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent);flex-shrink:0">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
           <span id="anon-doc-name" class="anon-doc-name"></span>
           <span id="anon-doc-size" class="anon-doc-size"></span>
           <span id="anon-doc-status" class="doc-stage-badge"></span>
         </div>
+
         <div id="pipeline-timeline" class="pipeline-timeline" style="display:none">
           <div class="pipe-step" data-step="upload"><span>1</span> Upload</div>
           <div class="pipe-link"></div>
@@ -331,25 +474,37 @@
           <h2>Anonymisation</h2>
           <div class="panel-actions">
             <select id="anon-mode" class="select-sm" title="Mode RGPD">
-              <option value="pseudonymization">Pseudonymisation (interne)</option>
-              <option value="anonymization">Anonymisation forte (export)</option>
+              <option value="pseudonymization">Pseudonymisation</option>
+              <option value="anonymization">Anonymisation forte</option>
             </select>
             <select id="anon-profile" class="select-sm">
               <option value="moderate">Modéré</option>
               <option value="strict">Strict</option>
             </select>
-            <button id="btn-anonymize" class="btn btn-primary">Anonymiser</button>
+            <button id="btn-anonymize" class="btn btn-primary">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+              </svg>
+              Anonymiser
+            </button>
           </div>
         </div>
 
-        <!-- Empty state: no doc selected -->
         <div id="anon-empty" class="panel-empty-hint">
-          <div class="hint-icon">👈</div>
+          <div class="hint-icon">
+            <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-dim);display:block">
+              <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+              <polyline points="14 2 14 8 20 8"/>
+              <line x1="16" y1="13" x2="8" y2="13"/><line x1="16" y1="17" x2="8" y2="17"/>
+              <polyline points="10 9 9 9 8 9"/>
+            </svg>
+          </div>
           <p>Sélectionnez un document dans la liste<br>ou uploadez-en un nouveau.</p>
         </div>
 
         <div id="anon-loading" class="loading-state" style="display:none">
-          <div class="spinner"></div>
+          <div class="spinner spinner-lg"></div>
           <p id="anon-loading-msg">Anonymisation en cours…</p>
         </div>
 
@@ -359,8 +514,8 @@
               <span id="stat-count" class="stat-num">0</span>
               <span class="stat-label">entités masquées</span>
             </div>
-            <div id="anon-summary-chips" class="sidebar-stats" style="margin-left: 16px; border-left: 1px solid var(--border); padding-left: 16px;"></div>
-            <div id="risk-indicator" class="risk-indicator" style="display:none; margin-left: 16px; border-left: 1px solid var(--border); padding-left: 16px;">
+            <div id="anon-summary-chips" class="sidebar-stats" style="margin-left:14px;border-left:1px solid var(--border);padding-left:14px;"></div>
+            <div id="risk-indicator" class="risk-indicator" style="display:none;margin-left:14px;border-left:1px solid var(--border);padding-left:14px;">
               <div class="risk-score-badge" id="risk-badge">
                 <span class="risk-label">Risque</span>
                 <span id="risk-score" class="risk-score">—</span>
@@ -369,17 +524,18 @@
               <p id="risk-recommendation" class="risk-recommendation"></p>
             </div>
             <div class="stat-actions">
-              <button id="btn-go-ai" class="btn btn-ghost btn-sm">💬 Discussion directe</button>
+              <button id="btn-go-ai" class="btn btn-ghost btn-sm">Discussion IA</button>
               <button id="btn-validate" class="btn btn-success">Valider et continuer →</button>
             </div>
           </div>
+
           <div class="text-preview">
-            <div id="anon-split-view" class="split" style="display: none;">
+            <div id="anon-split-view" class="split" style="display:none">
               <div class="split-pane">
                 <h4>Original ⚠️</h4>
                 <div id="original-loading" class="loading-state" style="display:none">
                   <div class="spinner spinner-sm"></div>
-                  <p>Chargement du texte original…</p>
+                  <p>Chargement…</p>
                 </div>
                 <pre id="preview-original-text" class="preview-text"></pre>
               </div>
@@ -391,32 +547,55 @@
               </div>
             </div>
             <div id="entity-legend" class="entity-legend"></div>
-            <div id="tab-diff" class="tab-content" style="display: block; margin-top: 16px; border: 1px solid var(--border); border-radius: 8px; overflow: hidden;">
-              <div class="diff-legend" style="margin: 0; padding: 12px 16px; background: var(--bg-hover); border-bottom: 1px solid var(--border); display: flex; align-items: center; gap: 16px;">
-                <span class="diff-legend-item" style="font-weight: 600; font-size: 13px;"><span class="diff-dot diff-dot-del"></span> Document Original ⚠️</span>
-                <span class="diff-legend-item" style="font-weight: 600; font-size: 13px;"><span class="diff-dot diff-dot-ins"></span> Document Anonymisé 🔒</span>
-                <button id="btn-copy-anonymized" class="btn btn-ghost btn-sm" style="margin-left: auto;">Copier texte anonymisé</button>
+            <div id="tab-diff" class="tab-content" style="display:block;margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+              <div class="diff-legend">
+                <span class="diff-legend-item"><span class="diff-dot diff-dot-del"></span> Document Original ⚠️</span>
+                <span class="diff-legend-item"><span class="diff-dot diff-dot-ins"></span> Document Anonymisé</span>
+                <button id="btn-copy-anonymized" class="btn btn-ghost btn-sm" style="margin-left:auto">
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+                  </svg>
+                  Copier
+                </button>
               </div>
-              <div id="preview-diff-text" class="preview-text diff-premium-view" style="max-height: 480px; overflow-y: auto; padding: 0; margin: 0; background: var(--bg);"></div>
+              <div id="preview-diff-text" class="preview-text diff-premium-view" style="max-height:500px;overflow-y:auto;padding:0;margin:0;background:var(--bg)"></div>
             </div>
           </div>
         </div>
       </div>
 
-      <!-- PANEL 3: DISCUSSION IA -->
+      <!-- DISCUSSION IA -->
       <div id="panel-ai" class="panel">
-        <div id="ai-doc-bar" class="anon-doc-bar" style="display:none; margin-bottom:12px;">
+        <div id="ai-doc-bar" class="anon-doc-bar" style="display:none;margin-bottom:12px">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent);flex-shrink:0">
+            <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+            <polyline points="14 2 14 8 20 8"/>
+          </svg>
           <span id="ai-doc-name" class="anon-doc-name"></span>
           <span id="ai-doc-size" class="anon-doc-size"></span>
           <span id="ai-doc-status" class="doc-stage-badge"></span>
         </div>
+
         <div class="panel-header">
           <h2>Discussion IA</h2>
           <div class="panel-actions">
-            <button id="btn-export-txt" class="btn btn-ghost btn-sm">⬇ Texte</button>
-            <button id="btn-export-pdf" class="btn btn-ghost btn-sm">⬇ PDF redacté</button>
-            <button id="btn-audit-report" class="btn btn-ghost btn-sm">📋 Audit RGPD</button>
-            <button id="btn-compliance-report" class="btn btn-ghost btn-sm">📊 Conformite</button>
+            <button id="btn-export-txt" class="btn btn-ghost btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Texte
+            </button>
+            <button id="btn-export-pdf" class="btn btn-ghost btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+              </svg>
+              PDF
+            </button>
+            <button id="btn-audit-report" class="btn btn-ghost btn-sm">Audit RGPD</button>
+            <button id="btn-compliance-report" class="btn btn-ghost btn-sm">Conformité</button>
           </div>
         </div>
 
@@ -424,17 +603,17 @@
           <h3>Outils cabinet</h3>
           <div class="cabinet-tools-row">
             <label class="cabinet-label" for="cabinet-doc-type">Type de pièce</label>
-            <select id="cabinet-doc-type" class="select-sm cabinet-select" title="Adapte le contexte métier des questions IA">
+            <select id="cabinet-doc-type" class="select-sm cabinet-select">
               <option value="generique">Générique</option>
               <option value="bilan">Bilan / comptes annuels</option>
               <option value="liasse">Liasse fiscale</option>
               <option value="urssaf">URSSAF / social</option>
               <option value="banque">Relevé bancaire</option>
-              <option value="paie">Paie / DS</option>
+              <option value="paie">Paie / bulletin</option>
             </select>
-            <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm" title="Synthèse multi-étapes (LangGraph)">Revue associé</button>
+            <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm">Revue associé</button>
           </div>
-          <p class="cabinet-hint">Le type de pièce enrichit le contexte envoyé à l’IA (chat et Copilot).</p>
+          <p class="cabinet-hint">Le type de pièce enrichit le contexte envoyé à l'IA (chat et Copilot).</p>
           <div class="cabinet-tools-row cabinet-compare">
             <label class="cabinet-label" for="compare-doc-select">Comparaison N / N-1</label>
             <select id="compare-doc-select" class="select-sm cabinet-select cabinet-select-wide">
@@ -445,20 +624,21 @@
         </div>
 
         <div class="quick-actions">
-          <button class="quick-btn" data-q="Fais un résumé structuré de ce document en 4 parties : 1) Objet et contexte, 2) Acteurs ou parties mentionnés, 3) Données clés (montants, dates, références), 4) Actions ou suite à donner. Sois factuel et concis.">📝 Résumé</button>
-          <button class="quick-btn" data-q="Identifie les points clés de ce document. Pour chaque point, donne : le fait constaté, son importance pour un professionnel, et si une action est requise. Classe-les par ordre d'importance décroissante. Maximum 7 points.">🔑 Points clés</button>
-          <button class="quick-btn" data-q="Analyse ce document pour identifier d'éventuelles anomalies, incohérences ou alertes. Pour chaque constat, indique : la nature du problème, la donnée concernée (avec montant si applicable), et le niveau de gravité (critique/attention/information). Ne signale que ce qui est factuel et vérifiable dans le document.">⚠️ Anomalies</button>
-          <button class="quick-btn" data-q="Extrais tous les chiffres et montants significatifs de ce document. Présente-les sous forme de liste structurée avec pour chacun : le libellé exact du document, le montant, et le contexte (actif/passif/charge/produit, exercice N ou N-1 si précisé). Regroupe par catégorie.">📊 Chiffres</button>
-          <button id="btn-copilot-mode" class="quick-btn" data-on="false" title="Mode expert avec citations et score de confiance">🤖 Copilot: OFF</button>
-          <button id="btn-report-mode" class="quick-btn" data-on="false" title="Structure les réponses IA en sections Résumé / Points clés / Risques / Actions">🧱 Mode rapport: OFF</button>
-          <button id="btn-export-rapport" class="quick-btn" style="display:none" title="Exporter le dernier rapport">📥 Exporter rapport</button>
-          <button id="btn-review-agent" class="quick-btn quick-btn-accent" title="Anonymise puis synthese en 5 blocs">Analyser ce document</button>
+          <button class="quick-btn" data-q="Fais un résumé structuré de ce document en 4 parties : 1) Objet et contexte, 2) Acteurs ou parties mentionnés, 3) Données clés (montants, dates, références), 4) Actions ou suite à donner. Sois factuel et concis.">Résumé</button>
+          <button class="quick-btn" data-q="Identifie les points clés de ce document. Pour chaque point, donne : le fait constaté, son importance pour un professionnel, et si une action est requise. Classe-les par ordre d'importance décroissante. Maximum 7 points.">Points clés</button>
+          <button class="quick-btn" data-q="Analyse ce document pour identifier d'éventuelles anomalies, incohérences ou alertes. Pour chaque constat, indique : la nature du problème, la donnée concernée (avec montant si applicable), et le niveau de gravité (critique/attention/information). Ne signale que ce qui est factuel et vérifiable dans le document.">Anomalies</button>
+          <button class="quick-btn" data-q="Extrais tous les chiffres et montants significatifs de ce document. Présente-les sous forme de liste structurée avec pour chacun : le libellé exact du document, le montant, et le contexte (actif/passif/charge/produit, exercice N ou N-1 si précisé). Regroupe par catégorie.">Chiffres</button>
+          <button id="btn-copilot-mode" class="quick-btn" data-on="false" title="Mode expert avec citations et score de confiance">Copilot: OFF</button>
+          <button id="btn-report-mode" class="quick-btn" data-on="false" title="Structure les réponses IA en sections">Mode rapport: OFF</button>
+          <button id="btn-export-rapport" class="quick-btn" style="display:none">Exporter rapport</button>
+          <button id="btn-review-agent" class="quick-btn quick-btn-accent">Analyser ce document</button>
         </div>
-        <div id="copilot-insights" class="dash-chart-card" style="display:none; margin-bottom:12px;">
+
+        <div id="copilot-insights" class="dash-chart-card" style="display:none;margin-bottom:12px">
           <h3>ConfiDoc Copilot</h3>
-          <div><strong>Confiance:</strong> <span id="copilot-confidence">—</span></div>
+          <div><strong>Confiance :</strong> <span id="copilot-confidence">—</span></div>
           <div id="copilot-warnings" class="sidebar-stats"></div>
-          <div id="copilot-citations" class="dash-entity-list" style="margin-top:10px;"></div>
+          <div id="copilot-citations" class="dash-entity-list" style="margin-top:10px"></div>
         </div>
 
         <div class="ai-insights">
@@ -482,22 +662,38 @@
 
         <div id="chat-messages" class="chat-messages">
           <div class="chat-intro">
-            <div class="chat-intro-icon" role="img" aria-label="Cadenas">🔒</div>
+            <div class="chat-intro-icon">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent)">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              </svg>
+            </div>
             <p>Document anonymisé. Posez vos questions en toute sécurité.</p>
           </div>
         </div>
 
-        <!-- REVIEW AGENT RESULTS -->
+        <!-- REVIEW AGENT -->
         <div id="review-panel" class="review-panel" style="display:none">
           <div class="review-header">
-            <h3>Analyse securisee du dossier</h3>
+            <h3>Analyse sécurisée du dossier</h3>
             <button id="btn-review-close" class="btn btn-ghost btn-sm">Fermer</button>
           </div>
           <div id="review-steps" class="review-steps"></div>
           <div id="review-result" class="review-result" style="display:none"></div>
           <div class="review-actions" id="review-actions" style="display:none">
-            <button id="btn-review-copy" class="btn btn-ghost btn-sm">📋 Copier</button>
-            <button id="btn-review-export" class="btn btn-ghost btn-sm">⬇ Exporter</button>
+            <button id="btn-review-copy" class="btn btn-ghost btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"/>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/>
+              </svg>
+              Copier
+            </button>
+            <button id="btn-review-export" class="btn btn-ghost btn-sm">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/>
+              </svg>
+              Exporter
+            </button>
           </div>
         </div>
 
@@ -505,9 +701,14 @@
           <textarea id="chat-input" class="chat-input" placeholder="Posez une question sur le document…" rows="2"></textarea>
           <div class="chat-controls">
             <span class="input-hint">Entrée pour envoyer · Maj+Entrée pour saut de ligne</span>
-            <button id="btn-copy-answer" class="btn btn-ghost btn-sm" disabled>📋 Copier</button>
+            <button id="btn-copy-answer" class="btn btn-ghost btn-sm" disabled>Copier</button>
             <button id="btn-stop-stream" class="btn btn-ghost btn-sm" style="display:none">⏹ Stop</button>
-            <button id="btn-send" class="btn btn-primary">Envoyer</button>
+            <button id="btn-send" class="btn btn-primary btn-sm">
+              <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/>
+              </svg>
+              Envoyer
+            </button>
           </div>
         </div>
       </div>
@@ -516,7 +717,7 @@
   </div>
 </div>
 
-<!-- DELETE CONFIRM DIALOG -->
+<!-- ════════════ CONFIRM DIALOG ════════════ -->
 <div id="confirm-overlay" class="confirm-overlay" role="dialog" aria-modal="true" aria-label="Confirmation" style="display:none">
   <div class="confirm-card">
     <h3 id="confirm-title">Confirmer</h3>
@@ -528,13 +729,39 @@
   </div>
 </div>
 
-<!-- TOAST -->
+<!-- ════════════ TOAST ════════════ -->
 <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
-<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Navigation principale mobile">
-  <button class="mobile-nav-btn" data-nav="dashboard">Accueil</button>
-  <button class="mobile-nav-btn" data-nav="list">Docs</button>
-  <button class="mobile-nav-btn" data-nav="upload">Upload</button>
-  <button class="mobile-nav-btn" data-nav="ai">IA</button>
+
+<!-- ════════════ MOBILE NAV ════════════ -->
+<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Navigation principale">
+  <button class="mobile-nav-btn" data-nav="dashboard">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
+      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
+    </svg>
+    Accueil
+  </button>
+  <button class="mobile-nav-btn" data-nav="list">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
+      <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
+      <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
+    </svg>
+    Docs
+  </button>
+  <button class="mobile-nav-btn" data-nav="upload">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
+    </svg>
+    Upload
+  </button>
+  <button class="mobile-nav-btn" data-nav="ai">
+    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+    </svg>
+    IA
+  </button>
 </nav>
 
 <script src="/static/js/app.js"></script>
