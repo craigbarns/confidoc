@@ -122,17 +122,7 @@ body {
   font-feature-settings: "cv02","cv03","cv04","cv11";
 }
 
-/* Background texture */
-body::before {
-  content: "";
-  position: fixed;
-  inset: 0;
-  background:
-    radial-gradient(ellipse 80% 50% at 10% 0%, rgba(99,102,241,0.08) 0%, transparent 60%),
-    radial-gradient(ellipse 60% 40% at 90% 100%, rgba(167,139,250,0.06) 0%, transparent 60%);
-  pointer-events: none;
-  z-index: 0;
-}
+/* No body::before overlay — keep backgrounds simple and non-interfering */
 
 /* ─── SCROLLBAR ────────────────────────────────────────────────── */
 ::-webkit-scrollbar { width: 6px; height: 6px; }
@@ -331,8 +321,6 @@ body::before {
 
 /* ─── SCREENS ──────────────────────────────────────────────────── */
 .screen {
-  position: relative;
-  z-index: 1;
   min-height: calc(100vh - 58px);
 }
 
@@ -352,31 +340,9 @@ body::before {
   position: absolute;
   inset: 0;
   background:
-    radial-gradient(ellipse 70% 55% at 20% 10%, rgba(99,102,241,0.14) 0%, transparent 55%),
-    radial-gradient(ellipse 50% 40% at 80% 90%, rgba(167,139,250,0.10) 0%, transparent 55%),
-    radial-gradient(ellipse 35% 30% at 60% 40%, rgba(59,130,246,0.06) 0%, transparent 50%);
-  animation: glow-pulse 6s ease-in-out infinite;
+    radial-gradient(ellipse 60% 50% at 20% 0%, rgba(99,102,241,0.1) 0%, transparent 60%),
+    radial-gradient(ellipse 50% 40% at 80% 100%, rgba(167,139,250,0.08) 0%, transparent 60%);
   pointer-events: none;
-}
-
-/* Floating orbs */
-#screen-auth::after {
-  content: "";
-  position: absolute;
-  width: 400px;
-  height: 400px;
-  border-radius: 50%;
-  background: radial-gradient(circle, rgba(99,102,241,0.06) 0%, transparent 70%);
-  top: -100px;
-  right: -100px;
-  animation: float-orb 12s ease-in-out infinite;
-  pointer-events: none;
-}
-
-@keyframes float-orb {
-  0%, 100% { transform: translate(0, 0) scale(1); }
-  33% { transform: translate(-20px, 15px) scale(1.05); }
-  66% { transform: translate(10px, -10px) scale(0.97); }
 }
 
 .auth-card {
@@ -721,13 +687,12 @@ body::before {
 .app-body {
   display: flex;
   height: calc(100vh - 58px - 46px);
-  position: relative;
-  z-index: 1;
+  overflow: hidden;
 }
 
 /* ─── SIDEBAR ──────────────────────────────────────────────────── */
 .sidebar {
-  width: 264px;
+  width: 240px;
   background: var(--bg-sidebar);
   border-right: 1px solid var(--border);
   display: flex;
@@ -1496,12 +1461,11 @@ body::before {
 /* ─── DASHBOARD ────────────────────────────────────────────────── */
 .dash-kpi-grid {
   display: grid;
-  grid-template-columns: repeat(4, 1fr);
+  grid-template-columns: repeat(2, 1fr);
   gap: 12px;
   margin-bottom: 20px;
 }
-@media (max-width: 900px) { .dash-kpi-grid { grid-template-columns: repeat(2, 1fr); } }
-@media (max-width: 540px) { .dash-kpi-grid { grid-template-columns: 1fr; } }
+@media (min-width: 1100px) { .dash-kpi-grid { grid-template-columns: repeat(4, 1fr); } }
 
 .dash-kpi-card {
   background: var(--bg-card);
@@ -1552,28 +1516,25 @@ body::before {
 }
 
 .dash-buckets {
-  display: flex;
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
   gap: 8px;
   margin-bottom: 16px;
-  flex-wrap: wrap;
 }
 .dash-bucket {
   background: var(--bg-card);
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  padding: 10px 16px;
+  padding: 10px 12px;
   display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 16px;
-  flex: 1;
-  min-width: 100px;
+  flex-direction: column;
+  gap: 4px;
   font-size: 12px;
   color: var(--text-muted);
   transition: all var(--t);
 }
 .dash-bucket:hover { border-color: var(--border-accent); }
-.dash-bucket strong { font-size: 18px; font-weight: 700; color: var(--text); }
+.dash-bucket strong { font-size: 20px; font-weight: 700; color: var(--text); line-height: 1; }
 
 .dash-ready-progress {
   background: var(--bg-card);
