@@ -192,6 +192,14 @@ async def build_anonymization_llm(
     if registry:
         registry_raw_mapping = registry.export_raw_mapping()
 
+    # ── RAG: embed the anonymized text for semantic search ──
+    # Non-blocking: if embedding fails, the document is still usable.
+    try:
+        from app.services.rag_service import embed_document
+        await embed_document(db, document.id, preview_text)
+    except Exception as exc:
+        logger.warning("rag_embed_failed", doc_id=str(document.id), error=str(exc))
+
     meta = {
         "method": method,
         "detections_count": len(detections),

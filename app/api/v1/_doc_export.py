@@ -17,7 +17,7 @@ from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
 
-from fastapi import APIRouter, status
+from fastapi import APIRouter, Body, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import select
 
@@ -554,4 +554,48 @@ async def get_compliance_report(
             "risk_scoring_enabled": True,
             "human_validation_gate": True,
         },
+    }
+
+
+@router.post(
+    "/{document_id}/compare",
+    status_code=status.HTTP_200_OK,
+    summary="Comparer le document avec une version N-1",
+)
+async def compare_with_previous(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    previous_document_id: str = Body(..., embed=True),
+) -> dict:
+    """Compare deux documents (N vs N-1) pour détecter les variations.
+
+    Body: {"previous_document_id": "uuid"}
+    """
+    from app.services.comparison_service import compare_documents
+
+    current_doc = await _get_user_document_or_404(db, document_id, current_user.id)
+    prev_doc = await _get_user_document_or_404(db, previous_document_id, current_user.id)
+
+    current_text = await _get_anonymized_text(db, current_doc)
+    prev_text = await _get_anonymized_text(db, prev_doc)
+
+    if not current_text:
+        raise http_400("Document courant non anonymisé. Lancez /anonymize d'abord.")
+    if not prev_text:
+        raise http_400("Document précédent non anonymisé. Lancez /anonymize d'abord.")
+
+    result = await compare_documents(
+        db=db,
+        current_text=current_text,
+        previous_text=prev_text,
+        doc_type=current_doc.doc_type or "bilan",
+    )
+
+    return {
+        "comparison_id": str(uuid.uuid4()),
+        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "current_document_id": str(current_doc.id),
+        "previous_document_id": str(prev_doc.id),
+        **result,
     }

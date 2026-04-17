@@ -183,6 +183,50 @@ async def get_dashboard_stats(
     trashed = trash_result.scalar() or 0
     total_entities = sum(entity_distribution.values())
 
+    # ── KPIs Investor-Ready ──
+    # Processing time median (uploaded → ready)
+    processing_stats = {"avg_seconds": None, "median_seconds": None}
+    try:
+        from sqlalchemy import func as sa_func
+        time_result = await db.execute(
+            select(
+                sa_func.avg(
+                    sa_func.extract("epoch", Document.updated_at - Document.created_at)
+                ),
+                sa_func.percentile_cont(0.5).within_group(
+                    sa_func.extract("epoch", Document.updated_at - Document.created_at)
+                ),
+            )
+            .where(
+                Document.uploaded_by_user_id == user_id,
+                Document.is_deleted.is_(False),
+                Document.status == DocumentStatus.READY,
+                Document.updated_at > Document.created_at,
+            )
+        )
+        row = time_result.one_or_none()
+        if row:
+            processing_stats["avg_seconds"] = round(row[0], 1) if row[0] else None
+            processing_stats["median_seconds"] = round(row[1], 1) if row[1] else None
+    except Exception:
+        pass
+
+    # Document type distribution
+    doc_type_dist: dict[str, int] = {}
+    try:
+        type_result = await db.execute(
+            select(Document.doc_type, func.count())
+            .where(
+                Document.uploaded_by_user_id == user_id,
+                Document.is_deleted.is_(False),
+                Document.doc_type.isnot(None),
+            )
+            .group_by(Document.doc_type)
+        )
+        doc_type_dist = {row[0] or "unknown": row[1] for row in type_result.all()}
+    except Exception:
+        pass
+
     return {
         "total_documents": total_docs,
         "status_counts": status_counts,
@@ -191,6 +235,8 @@ async def get_dashboard_stats(
         "total_entities_masked": total_entities,
         "recent_activity": recent_activity,
         "trashed_documents": trashed,
+        "processing_time": processing_stats,
+        "document_type_distribution": doc_type_dist,
         "gdpr_score": _calculate_gdpr_score(total_docs, status_counts, risk_distribution, recent_activity),
     }
 

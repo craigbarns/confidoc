@@ -126,9 +126,26 @@ async def ai_summary(
     if mode == "question" and not question.strip():
         raise http_400("Paramètre question requis quand mode=question.")
 
+    # ── RAG enrichment for question mode ──
+    rag_context = ""
+    if mode == "question" and question.strip():
+        try:
+            from app.services.rag_service import build_rag_context
+            rag_context = await build_rag_context(db, question, document.id, top_k=5)
+        except Exception:
+            pass
+
+    text_for_llm = anonymized_text[:14000]
+    if rag_context:
+        # Prepend RAG context so the LLM can ground its answer
+        text_for_llm = (
+            f"[Contexte pertinent extrait du document]\n{rag_context}\n\n"
+            f"[Document complet]\n{text_for_llm}"
+        )[:16000]
+
     ai_payload = {
         "document_id": str(document.id),
-        "anonymized_text": anonymized_text[:14000],
+        "anonymized_text": text_for_llm,
         "user_question": question.strip() or None,
     }
 
@@ -407,4 +424,46 @@ async def ai_review_sync(
     return JSONResponse({
         "document_id": str(document.id),
         "review": result,
+    })
+
+
+# ──────────────────────────────────────────────────────────────────────
+# RAG SEMANTIC SEARCH
+# ──────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/rag-search/{document_id}",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recherche sémantique dans le document (RAG)",
+)
+async def rag_search(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    q: str = Query(..., min_length=2, description="Question ou mots-clés"),
+    top_k: int = Query(default=5, ge=1, le=20),
+) -> JSONResponse:
+    """Semantic search across document chunks using PGvector.
+
+    Returns the most relevant text snippets with similarity scores.
+    """
+    document = await _get_document_or_404(db, document_id, current_user.id)
+
+    from app.services.rag_service import search_similar
+
+    chunks = await search_similar(db, q, top_k=top_k, document_filter=document.id)
+
+    return JSONResponse({
+        "document_id": str(document.id),
+        "query": q,
+        "results": [
+            {
+                "chunk_index": c.chunk_index,
+                "text": c.chunk_text,
+                "source_section": c.source_section,
+            }
+            for c in chunks
+        ],
+        "total": len(chunks),
     })

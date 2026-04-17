@@ -48,6 +48,9 @@ dependencies = [
 
     # LangGraph agent
     "langgraph>=0.2.0",
+
+    # Vector search (PGvector adapter — lightweight)
+    "pgvector>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -63,6 +66,11 @@ dev = [
     # Import runtime (anonymization_service -> fitz) requis pour charger app.main dans les tests.
     "pymupdf>=1.23.0",
     "jsonschema>=4.22.0",
+]
+
+rag = [
+    # Semantic search (local embeddings — heavy, optional for Railway)
+    "sentence-transformers>=3.0.0",
 ]
 
 processing = [
