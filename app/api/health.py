@@ -1,6 +1,10 @@
 """ConfiDoc Backend — Health check & readiness endpoints."""
 
+import time
+from datetime import datetime, timezone
+
 from fastapi import APIRouter, status
+from fastapi.responses import JSONResponse
 from sqlalchemy import text
 
 from app.config import get_settings
@@ -45,37 +49,55 @@ async def health_check() -> dict:
 
 @router.get(
     "/readiness",
-    status_code=status.HTTP_200_OK,
     summary="Readiness check",
     description="Vérifie que l'application et ses dépendances sont prêtes.",
 )
-async def readiness_check() -> dict:
-    """Readiness probe — toutes les dépendances sont accessibles."""
-    checks: dict[str, str] = {}
+async def readiness_check() -> JSONResponse:
+    """Readiness probe — toutes les dépendances critiques sont accessibles.
+
+    Retourne HTTP 200 si tout est OK, 503 si une dépendance critique est KO.
+    Railway utilise ce code pour redémarrer automatiquement le service.
+    """
+    t0 = time.perf_counter()
+    checks: dict[str, dict] = {}
     settings = get_settings()
 
-    # Check PostgreSQL
+    # ── PostgreSQL (critique) ──
     try:
+        pg_t0 = time.perf_counter()
         async with async_session_factory() as session:
             await session.execute(text("SELECT 1"))
-        checks["database"] = "ok"
+        checks["database"] = {"status": "ok", "latency_ms": round((time.perf_counter() - pg_t0) * 1000, 2)}
     except Exception as e:
         logger.error("database_readiness_failed", error=str(e))
-        checks["database"] = f"error: {str(e)}"
+        checks["database"] = {"status": "error", "detail": str(e)}
 
-    # Check Redis
+    # ── Redis (critique) ──
     try:
+        redis_t0 = time.perf_counter()
         import redis.asyncio as aioredis
 
-        r = aioredis.from_url(settings.REDIS_URL)
+        r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
         await r.ping()
-        await r.aclose()
-        checks["redis"] = "ok"
+        await r.close()
+        checks["redis"] = {"status": "ok", "latency_ms": round((time.perf_counter() - redis_t0) * 1000, 2)}
     except Exception as e:
         logger.error("redis_readiness_failed", error=str(e))
-        checks["redis"] = f"error: {str(e)}"
+        checks["redis"] = {"status": "error", "detail": str(e)}
 
-    # Check object storage only when MinIO/S3 backend is configured.
+    # ── Celery workers (informationnel) ──
+    try:
+        from app.workers.celery_app import celery_app
+        inspect = celery_app.control.inspect(timeout=2.0)
+        workers = inspect.ping()
+        if workers:
+            checks["celery"] = {"status": "ok", "workers_online": len(workers)}
+        else:
+            checks["celery"] = {"status": "warning", "detail": "No workers responding"}
+    except Exception as e:
+        checks["celery"] = {"status": "warning", "detail": str(e)}
+
+    # ── Object storage (optionnel selon config) ──
     if settings.STORAGE_BACKEND == "minio":
         try:
             from minio import Minio
@@ -87,17 +109,27 @@ async def readiness_check() -> dict:
                 secure=settings.MINIO_USE_SSL,
             )
             client.bucket_exists(settings.MINIO_BUCKET)
-            checks["storage"] = "ok"
+            checks["storage"] = {"status": "ok"}
         except Exception as e:
             logger.error("minio_readiness_failed", error=str(e))
-            checks["storage"] = f"error: {str(e)}"
+            checks["storage"] = {"status": "error", "detail": str(e)}
     else:
-        checks["storage"] = f"skipped: storage_backend={settings.STORAGE_BACKEND}"
+        checks["storage"] = {"status": "skipped", "detail": f"backend={settings.STORAGE_BACKEND}"}
 
-    all_ok = all(v == "ok" or v.startswith("skipped:") for v in checks.values())
+    # ── Déterminer le statut global ──
+    critical_services = ["database", "redis"]
+    critical_ok = all(checks.get(s, {}).get("status") == "ok" for s in critical_services)
+    storage_ok = checks.get("storage", {}).get("status") in ("ok", "skipped")
+    all_ok = critical_ok and storage_ok
 
-    return {
+    status_code = status.HTTP_200_OK if all_ok else status.HTTP_503_SERVICE_UNAVAILABLE
+
+    body = {
         "status": "ready" if all_ok else "degraded",
         "service": "confidoc-backend",
+        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "total_latency_ms": round((time.perf_counter() - t0) * 1000, 2),
         "checks": checks,
     }
+
+    return JSONResponse(status_code=status_code, content=body)
