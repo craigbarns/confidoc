@@ -9,18 +9,15 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import DbSession
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
-from app.models.document import Document, DocumentStatus
+from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
-from app.models.entity_detection import EntityDetection
 from app.schemas.document import DetectionResponse
 
 logger = get_logger(__name__)
@@ -112,14 +109,11 @@ async def _get_user_document_or_404(
 
 
 def _read_file_or_404(document: Document) -> bytes:
-    from app.services.storage_service import read_bytes
+    from app.services.storage_service import read_document_bytes
     try:
-        return read_bytes(document.storage_backend, document.storage_key)
+        return read_document_bytes(document)
     except Exception as exc:
-        logger.warning("storage_read_fallback", doc_id=str(document.id), error=str(exc))
-
-    if document.raw_content:
-        return document.raw_content
+        logger.warning("document_source_read_failed", doc_id=str(document.id), error=str(exc))
 
     raise http_404("Fichier source introuvable. Ré-uploadez le document.")
 

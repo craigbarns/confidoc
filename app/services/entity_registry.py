@@ -5,11 +5,11 @@ au sein d'un document (et optionnellement entre documents d'un même lot).
 
 Usage:
     registry = EntityRegistry()
-    token = registry.get_or_create("BARANES GREGORY", "PERSONNE")
+    token = registry.get_or_create("DUPONT ALICE", "PERSONNE")
     # → "[PERSONNE_1]"
-    token2 = registry.get_or_create("BARANES GREGORY", "PERSONNE")
+    token2 = registry.get_or_create("DUPONT ALICE", "PERSONNE")
     # → "[PERSONNE_1]"  (même valeur = même token)
-    token3 = registry.get_or_create("DUPONT JEAN", "PERSONNE")
+    token3 = registry.get_or_create("MARTIN JEAN", "PERSONNE")
     # → "[PERSONNE_2]"  (nouvelle valeur = nouveau token)
 """
 
@@ -17,7 +17,6 @@ from __future__ import annotations
 
 import re
 import unicodedata
-from typing import Any
 
 
 class EntityRegistry:
@@ -58,7 +57,7 @@ class EntityRegistry:
         key = self._normalize(raw_value)
 
         # Fuzzy-match: also check if a very similar key already exists
-        # (handles OCR variants like "BARANES" vs "BARANES ")
+        # (handles OCR variants like trailing/leading characters)
         if key not in self._map:
             similar = self._find_similar(key, prefix)
             if similar:

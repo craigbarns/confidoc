@@ -1,10 +1,10 @@
 """ConfiDoc — One-click demo endpoint for investor pitches."""
 
+import hashlib
 import io
 import time
 from pathlib import Path
 from typing import Any
-from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
@@ -15,6 +15,7 @@ from app.config import get_settings
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
+from app.services.storage_service import store_bytes
 from app.workers.tasks import anonymize_document_task
 
 router = APIRouter()
@@ -139,6 +140,7 @@ async def create_demo_document(
         )
 
     content = DEMO_DOC_PATH.read_bytes()
+    storage_backend, storage_key = store_bytes(content=content, extension="pdf")
 
     membership_res = await db.execute(
         select(Membership).where(
@@ -156,11 +158,11 @@ async def create_demo_document(
         content_type="application/pdf",
         extension="pdf",
         size_bytes=len(content),
-        sha256="demo_sha256_not_used",
-        storage_backend="database",
-        storage_key=f"db://demo_{uuid4().hex}",
+        sha256=hashlib.sha256(content).hexdigest(),
+        storage_backend=storage_backend,
+        storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
-        raw_content=content,
+        raw_content=content if storage_backend == "database" else None,
         tags=["Démonstration"],
     )
     db.add(document)
@@ -170,7 +172,6 @@ async def create_demo_document(
     # Launch background Celery task immediately
     anonymize_document_task.delay(
         doc_id=str(document.id),
-        content=content,
         profile="strict",
         document_type="auto",
     )

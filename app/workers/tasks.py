@@ -2,6 +2,7 @@
 
 import asyncio
 import contextlib
+import time
 import uuid
 from typing import Any
 
@@ -16,6 +17,7 @@ from app.services.document_processing_service import (
     build_anonymization_preview,
     build_extraction_ocr,
 )
+from app.services.storage_service import read_document_bytes
 
 logger = get_logger(__name__)
 
@@ -25,41 +27,46 @@ def _run_async(coro):
     return asyncio.run(coro)
 
 
-async def _reset_document_status(doc_id: str) -> None:
-    """Reset document status to UPLOADED after a background failure."""
+async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
+    """Set document status after a background failure."""
     try:
         async with async_session_factory() as db:
             await db.execute(
                 update(Document)
                 .where(Document.id == uuid.UUID(doc_id))
-                .values(status=DocumentStatus.UPLOADED)
+                .values(status=status)
             )
             await db.commit()
     except Exception as exc:
-        logger.error("reset_document_status_failed", doc_id=doc_id, error=str(exc))
+        logger.error(
+            "set_document_status_failed",
+            doc_id=doc_id,
+            status=status.value,
+            error=str(exc),
+        )
 
 
 @shared_task(bind=True, max_retries=2, default_retry_delay=30, time_limit=1800, soft_time_limit=900)
 def anonymize_document_task(
     self,
     doc_id: str,
-    content: bytes,
     profile: str,
     document_type: str,
 ) -> None:
     """Background task: run OCR + anonymization preview after upload."""
     try:
-        _run_async(_anonymize_document_async(doc_id, content, profile, document_type))
+        _run_async(_anonymize_document_async(doc_id, profile, document_type))
     except Exception as exc:
         logger.error("celery_anonymize_failed", doc_id=doc_id, error=str(exc))
         with contextlib.suppress(Exception):
-            _run_async(_reset_document_status(doc_id))
+            final_failure = getattr(self.request, "retries", 0) >= self.max_retries
+            next_status = DocumentStatus.FAILED if final_failure else DocumentStatus.UPLOADED
+            _run_async(_set_document_status(doc_id, next_status))
         raise self.retry(exc=exc) from exc
 
 
 async def _anonymize_document_async(
     doc_id: str,
-    content: bytes,
     profile: str,
     document_type: str,
 ) -> None:
@@ -69,6 +76,7 @@ async def _anonymize_document_async(
         if not document:
             logger.warning("background_anon_doc_not_found", doc_id=doc_id)
             return
+        content = read_document_bytes(document)
         await build_anonymization_preview(
             db=db,
             document=document,
@@ -90,23 +98,23 @@ async def _anonymize_document_async(
 def process_document_legacy_task(
     self,
     doc_id: str,
-    file_content: bytes,
     profile: str,
     document_type: str,
 ) -> None:
     """Background task: legacy full pipeline (OCR + LLM anonymization)."""
     try:
-        _run_async(_process_document_legacy_async(doc_id, file_content, profile, document_type))
+        _run_async(_process_document_legacy_async(doc_id, profile, document_type))
     except Exception as exc:
         logger.error("celery_process_legacy_failed", doc_id=doc_id, error=str(exc))
         with contextlib.suppress(Exception):
-            _run_async(_reset_document_status(doc_id))
+            final_failure = getattr(self.request, "retries", 0) >= self.max_retries
+            next_status = DocumentStatus.FAILED if final_failure else DocumentStatus.UPLOADED
+            _run_async(_set_document_status(doc_id, next_status))
         raise self.retry(exc=exc) from exc
 
 
 async def _process_document_legacy_async(
     doc_id: str,
-    file_content: bytes,
     profile: str,
     document_type: str,
 ) -> None:
@@ -115,6 +123,7 @@ async def _process_document_legacy_async(
         document = result.scalar_one_or_none()
         if not document:
             return
+        file_content = read_document_bytes(document)
         original_text, _ = await build_extraction_ocr(db, document, file_content)
         await build_anonymization_llm(db, document, original_text)
         await db.commit()
@@ -122,9 +131,6 @@ async def _process_document_legacy_async(
 
 
 # ── Scheduled tasks (called by Celery Beat) ─────────────────────────────
-
-import time
-
 
 @shared_task(bind=True, max_retries=1, default_retry_delay=60, time_limit=600)
 def run_retention_purge_task(self) -> dict[str, Any]:
@@ -169,10 +175,8 @@ def run_retention_purge_task(self) -> dict[str, Any]:
         except Exception:
             pass  # Non bloquant
 
-    try:
+    with contextlib.suppress(Exception):
         _run_async(_update_redis_ts())
-    except Exception:
-        pass
 
     logger.info("scheduled_retention_purge_complete", deleted=counts)
     return counts

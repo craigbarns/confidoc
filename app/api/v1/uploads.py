@@ -3,7 +3,6 @@
 import hashlib
 import re
 from typing import Literal
-from uuid import UUID
 
 from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
 from sqlalchemy import select
@@ -152,7 +151,7 @@ async def _upload_document_body(
         storage_backend=storage_backend,
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
-        raw_content=content,
+        raw_content=content if storage_backend == "database" else None,
         tags=[normalized_client_name],
     )
     db.add(document)
@@ -182,7 +181,6 @@ async def _upload_document_body(
         try:
             anonymize_document_task.delay(
                 doc_id=str(document.id),
-                content=content,
                 profile=profile,
                 document_type=document_type,
             )
@@ -309,4 +307,3 @@ async def upload_batch(
         "failed": failed,
         "results": results,
     }
-

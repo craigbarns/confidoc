@@ -1,8 +1,9 @@
-"""ConfiDoc Backend — Storage service (local / MinIO) — v2."""
+"""ConfiDoc Backend — Storage service (local / MinIO / database marker) — v2."""
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
+from typing import Any, cast
 from uuid import uuid4
 
 from app.config import get_settings
@@ -12,7 +13,7 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 
-def _get_minio_client():
+def _get_minio_client() -> Any:
     """Create a MinIO client instance."""
     from minio import Minio
     return Minio(
@@ -26,7 +27,7 @@ def _get_minio_client():
 def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
     """Store file bytes and return (storage_backend, storage_key)."""
     extension = extension.lower().strip(".")
-    object_key = f"raw/{datetime.now(timezone.utc).strftime('%Y/%m/%d')}/{uuid4()}.{extension}"
+    object_key = f"raw/{datetime.now(UTC).strftime('%Y/%m/%d')}/{uuid4()}.{extension}"
 
     if settings.STORAGE_BACKEND == "minio":
         client = _get_minio_client()
@@ -69,20 +70,26 @@ def read_bytes(storage_backend: str, storage_key: str) -> bytes:
     """
     if storage_backend == "database":
         # La lecture réelle se fait via Document.raw_content dans les endpoints/services.
-        raise FileNotFoundError(f"Database-backed content must be read from raw_content: {storage_key}")
+        raise FileNotFoundError(
+            f"Database-backed content must be read from raw_content: {storage_key}"
+        )
 
     if storage_backend == "minio":
         try:
             client = _get_minio_client()
             response = client.get_object(settings.MINIO_BUCKET, storage_key)
             try:
-                return response.read()
+                return cast(bytes, response.read())
             finally:
                 response.close()
                 response.release_conn()
         except Exception as exc:
             error_str = str(exc).lower()
-            if "nosuchkey" in error_str or "not found" in error_str or "does not exist" in error_str:
+            if (
+                "nosuchkey" in error_str
+                or "not found" in error_str
+                or "does not exist" in error_str
+            ):
                 raise FileNotFoundError(f"Object not found in MinIO: {storage_key}") from exc
             logger.error("minio_read_error", key=storage_key, error=str(exc))
             raise FileNotFoundError(f"Cannot read from MinIO: {storage_key}") from exc
@@ -92,6 +99,33 @@ def read_bytes(storage_backend: str, storage_key: str) -> bytes:
     if not path.exists():
         raise FileNotFoundError(f"Local file not found: {storage_key}")
     return path.read_bytes()
+
+
+def read_document_bytes(document: Any) -> bytes:
+    """Read source bytes for a document with DB fallback.
+
+    Background workers use this helper so sensitive file bytes never need to
+    travel through Redis/Celery messages.
+    """
+    try:
+        return read_bytes(document.storage_backend, document.storage_key)
+    except FileNotFoundError:
+        raw_content = getattr(document, "raw_content", None)
+        if isinstance(raw_content, bytes) and raw_content:
+            return raw_content
+        raise
+    except Exception as exc:
+        logger.warning(
+            "storage_read_fallback",
+            doc_id=str(getattr(document, "id", "")),
+            error=str(exc),
+        )
+        raw_content = getattr(document, "raw_content", None)
+        if isinstance(raw_content, bytes) and raw_content:
+            return raw_content
+        raise FileNotFoundError(
+            f"Cannot read document source: {getattr(document, 'storage_key', '')}"
+        ) from exc
 
 
 def delete_bytes(storage_backend: str, storage_key: str) -> None:

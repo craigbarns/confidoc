@@ -251,6 +251,11 @@ class Settings(BaseSettings):
                     f"Production blocked: insecure default values found for: "
                     f"{', '.join(insecure)}. Set these via environment variables!"
                 )
+            if self.STORAGE_BACKEND == "local":
+                raise ValueError(
+                    "Production blocked: STORAGE_BACKEND=local is ephemeral. "
+                    "Use minio/S3 or database-backed storage."
+                )
         return self
 
     @property

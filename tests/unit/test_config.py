@@ -26,14 +26,14 @@ def test_settings_environment_flags():
     assert dev.is_development is True
     assert dev.is_production is False
 
-    prod = Settings(APP_ENV="production")
+    prod = Settings(APP_ENV="production", STORAGE_BACKEND="database")
     assert prod.is_production is True
     assert prod.is_development is False
 
 
 def test_settings_env_aliases():
     """APP_ENV accepts common aliases."""
-    assert Settings(APP_ENV="prod").APP_ENV == "production"
+    assert Settings(APP_ENV="prod", STORAGE_BACKEND="database").APP_ENV == "production"
     assert Settings(APP_ENV="dev").APP_ENV == "development"
     assert Settings(APP_ENV="stage").APP_ENV == "staging"
     assert Settings(APP_ENV="local").APP_ENV == "development"
@@ -130,5 +130,4 @@ def test_ocr_lang_override():
     """OCR_LANG can be overridden."""
     s = Settings(OCR_LANG="fra")
     assert s.OCR_LANG == "fra"
-
 

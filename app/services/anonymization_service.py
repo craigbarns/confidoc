@@ -192,7 +192,7 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
         ),
         TOKEN_PERSONNE,
     ),
-    # All-caps person names (e.g. "BARANES GREGORY")
+    # All-caps person names (e.g. "DUPONT ALICE")
     (
         "person_uppercase",
         re.compile(r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:[ \t]+[A-ZÀ-ÖØ-Ý]{2,}){1,3}\b"),

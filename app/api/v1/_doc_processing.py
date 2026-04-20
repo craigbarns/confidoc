@@ -7,9 +7,7 @@ Routes : /status, extract, extracted-text, anonymize, process (legacy),
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timezone
-from io import BytesIO
-from types import SimpleNamespace
+from datetime import UTC, datetime
 from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Query, status
@@ -17,22 +15,18 @@ from sqlalchemy import delete, func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import (
-    _check_export_gate,
     _get_anonymized_text,
-    _get_or_create_final_version,
     _get_user_document_or_404,
     _infer_semantic_type,
     _read_file_or_404,
 )
-from app.core.database import async_session_factory
 from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
-from app.models.document import Document, DocumentStatus
+from app.models.document import DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.schemas.document import (
-    AnonymizeResponse,
     DocumentPreviewResponse,
     EntityMappingItem,
     StructuredDocumentResponse,
@@ -189,13 +183,16 @@ async def _anonymize_inner(
     profile: str,
     mode: str,
 ) -> dict:
-    from app.services.document_processing_service import build_anonymization_llm, build_extraction_ocr
+    from app.services.document_processing_service import (
+        build_anonymization_llm,
+        build_extraction_ocr,
+    )
     from app.services.reidentification_risk_service import analyze_reidentification_risk
 
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     _doc_id = str(document.id)
     _user_id = current_user.id
-    _org_id = getattr(current_user, "org_id", None)
+    _org_id = document.org_id
 
     result = await db.execute(
         select(DocumentVersion).where(
@@ -251,15 +248,16 @@ async def _anonymize_inner(
 
     if mode == "pseudonymization":
         try:
-            from app.services.crypto_service import encrypt_mapping
-            from app.models.pseudonym_mapping import PseudonymMapping
-            from app.config import get_settings
             from datetime import timedelta
+
+            from app.config import get_settings
+            from app.models.pseudonym_mapping import PseudonymMapping
+            from app.services.crypto_service import encrypt_mapping
             settings = get_settings()
             raw_mapping = meta.get("registry_raw_mapping", {})
             if raw_mapping:
                 encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
-                expiry = datetime.now(timezone.utc) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
+                expiry = datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
                 db.add(PseudonymMapping(
                     document_id=uuid.UUID(_doc_id),
                     user_id=_user_id,
@@ -299,13 +297,11 @@ async def process_document_legacy(
     document_type: str = Query(default="auto"),
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    file_content = _read_file_or_404(document)
     document.status = DocumentStatus.PROCESSING
     await db.commit()
     from app.workers.tasks import process_document_legacy_task
     process_document_legacy_task.delay(
         doc_id=str(document.id),
-        file_content=file_content,
         profile=profile,
         document_type=document_type,
     )
@@ -485,12 +481,13 @@ async def approve_export(
 
         mapping.human_validated = True
         mapping.validated_by_user_id = current_user.id
-        mapping.validated_at = datetime.now(timezone.utc)
+        mapping.validated_at = datetime.now(UTC)
         await db.commit()
     except Exception as exc:
         if hasattr(exc, "status_code"):
             raise
         logger.warning("approve_export_failed", error=str(exc))
         await db.rollback()
+        raise http_500("Impossible d'approuver l'export pour le moment.") from exc
 
     return {"status": "approved", "document_id": str(document.id)}

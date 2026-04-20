@@ -12,7 +12,7 @@ from __future__ import annotations
 import asyncio
 import io
 import uuid
-from datetime import datetime, timezone
+from datetime import UTC, datetime
 from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
@@ -32,7 +32,6 @@ from app.api.v1._doc_shared import (
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
-from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 
 router = APIRouter()
@@ -52,7 +51,7 @@ async def export_document(
         document = await _get_user_document_or_404(db, document_id, current_user.id)
         _doc_id = str(document.id)
         _user_id = current_user.id
-        _org_id = getattr(current_user, "org_id", None)
+        _org_id = document.org_id
 
         await _check_export_gate(db, document, current_user)
         final = await _get_or_create_final_version(db, document)
@@ -109,7 +108,10 @@ async def export_redacted_pdf(
         if not detections:
             source_text = await _get_anonymized_text(db, document)
             if source_text:
-                from app.services.anonymization_service import anonymize_text, classify_document_type
+                from app.services.anonymization_service import (
+                    anonymize_text,
+                    classify_document_type,
+                )
                 effective_type = classify_document_type(source_text, document.original_filename)
                 _anon_text, regenerated, _registry = anonymize_text(
                     source_text, profile="strict", document_type=effective_type
@@ -508,6 +510,7 @@ async def get_compliance_report(
                 f"Ne renvoie que le JSON."
             )
             import json
+
             from app.services.mistral_service import chat_completion
             raw = await chat_completion(prompt, temperature=0.3)
             parsed = json.loads(raw)
@@ -522,7 +525,7 @@ async def get_compliance_report(
 
     return {
         "report_id": str(uuid.uuid4()),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "document": {
             "document_id": str(document.id),
             "filename": document.original_filename,
@@ -594,7 +597,7 @@ async def compare_with_previous(
 
     return {
         "comparison_id": str(uuid.uuid4()),
-        "generated_at": datetime.now(timezone.utc).isoformat(),
+        "generated_at": datetime.now(UTC).isoformat(),
         "current_document_id": str(current_doc.id),
         "previous_document_id": str(prev_doc.id),
         **result,

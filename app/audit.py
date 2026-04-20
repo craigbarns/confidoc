@@ -7,7 +7,6 @@ for full RGPD traceability.
 from __future__ import annotations
 
 import re
-import uuid
 
 from starlette.middleware.base import BaseHTTPMiddleware, RequestResponseEndpoint
 from starlette.requests import Request
@@ -55,6 +54,8 @@ _RESOURCE_PATTERNS = [
     (re.compile(r"/api/v1/feedback"), "feedback"),
     (re.compile(r"/api/v1/kb"), "kb"),
     (re.compile(r"/api/v1/ai"), "ai"),
+    (re.compile(r"/api/v1/copilot"), "copilot"),
+    (re.compile(r"/api/v1/leads"), "lead"),
     (re.compile(r"/api/v1/users"), "user"),
 ]
 
