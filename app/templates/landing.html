@@ -257,6 +257,75 @@
     .plan-card li { margin-bottom: 0.65rem; }
     .plan-card li::before { content: '✓'; color: var(--accent); font-weight: 800; margin-right: 0.5rem; }
 
+    /* BETA ACCESS */
+    .beta-section {
+      padding: 5rem 2rem;
+      border-top: 1px solid var(--surface-border);
+      border-bottom: 1px solid var(--surface-border);
+      background: #0f1422;
+    }
+    .beta-layout {
+      max-width: 1120px; margin: 0 auto;
+      display: grid; grid-template-columns: minmax(0, 0.9fr) minmax(320px, 1.1fr);
+      gap: 2rem; align-items: start;
+    }
+    .beta-copy h2 {
+      font-family: 'Outfit', sans-serif; font-size: 2.25rem; line-height: 1.1;
+      margin-bottom: 1rem;
+    }
+    .beta-copy p { color: var(--text-muted); font-size: 1rem; line-height: 1.75; }
+    .beta-proof-list { margin-top: 1.5rem; list-style: none; }
+    .beta-proof-list li {
+      color: #dbeafe; margin-bottom: 0.8rem; display: flex; gap: 0.7rem;
+      align-items: flex-start;
+    }
+    .beta-proof-list li::before {
+      content: '✓'; color: var(--accent); font-weight: 800; margin-top: 0.05rem;
+    }
+    .beta-form {
+      background: var(--bg); border: 1px solid var(--surface-border);
+      border-radius: 8px; padding: 1.25rem;
+    }
+    .beta-form-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 0.9rem;
+    }
+    .beta-field { display: flex; flex-direction: column; gap: 0.4rem; }
+    .beta-field-full { grid-column: 1 / -1; }
+    .beta-field label {
+      color: #e2e8f0; font-size: 0.78rem; font-weight: 700;
+      text-transform: uppercase; letter-spacing: 0.05em;
+    }
+    .beta-field input, .beta-field select, .beta-field textarea {
+      width: 100%; background: rgba(255,255,255,0.04);
+      border: 1px solid var(--surface-border); color: var(--text);
+      border-radius: 8px; padding: 0.8rem 0.85rem; font: inherit;
+      min-height: 44px; outline: none;
+    }
+    .beta-field textarea { min-height: 120px; resize: vertical; }
+    .beta-field input:focus, .beta-field select:focus, .beta-field textarea:focus {
+      border-color: rgba(0,210,211,0.45); box-shadow: 0 0 0 3px rgba(0,210,211,0.1);
+    }
+    .beta-consent {
+      grid-column: 1 / -1; display: flex; gap: 0.7rem; align-items: flex-start;
+      color: var(--text-muted); font-size: 0.85rem; line-height: 1.5;
+    }
+    .beta-consent input { margin-top: 0.2rem; width: 16px; height: 16px; flex-shrink: 0; }
+    .beta-submit-row {
+      grid-column: 1 / -1; display: flex; gap: 1rem; align-items: center; flex-wrap: wrap;
+    }
+    .beta-form-message {
+      display: none; border-radius: 8px; padding: 0.75rem 0.85rem;
+      font-size: 0.9rem; margin-top: 1rem;
+    }
+    .beta-form-message.success {
+      display: block; color: #bbf7d0; background: rgba(16,185,129,0.12);
+      border: 1px solid rgba(16,185,129,0.25);
+    }
+    .beta-form-message.error {
+      display: block; color: #fecaca; background: rgba(239,68,68,0.12);
+      border: 1px solid rgba(239,68,68,0.25);
+    }
+
     /* VALUE PROP */
     .section-title {
       text-align: center; margin-bottom: 3.5rem;
@@ -370,7 +439,9 @@
       .hero h1 { font-size: 2.2rem; }
       .arch-container { flex-direction: column; }
       .nav-links { display: none; }
-      .proof-strip, .demo-grid, .demo-metrics, .demo-proof-card, .pricing-grid { grid-template-columns: 1fr; }
+      .proof-strip, .demo-grid, .demo-metrics, .demo-proof-card, .pricing-grid,
+      .beta-layout, .beta-form-grid { grid-template-columns: 1fr; }
+      .beta-field-full, .beta-consent, .beta-submit-row { grid-column: auto; }
       .hero-actions { flex-direction: column; }
     }
   </style>
@@ -394,6 +465,7 @@
       <a href="#pricing">Tarifs</a>
       <a href="#features">Bénéfices</a>
       <a href="/trust">Trust Center</a>
+      <a href="#beta-access">Accès beta</a>
     </div>
     <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Espace Client</a>
   </nav>
@@ -503,7 +575,7 @@
         <div style="margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap">
           <a href="/ui" class="btn btn-primary">Traiter vos propres documents</a>
           <button id="demo-proof-btn" class="btn btn-outline" type="button">Télécharger la preuve DPO</button>
-          <a href="mailto:gregory@superhome.fr?subject=Démo%20ConfiDoc" class="btn btn-outline">Demander un accès beta</a>
+          <a href="#beta-access" class="btn btn-outline">Demander un accès beta</a>
         </div>
       </div>
     </div>
@@ -672,13 +744,82 @@
     </div>
   </section>
 
+  <!-- BETA ACCESS -->
+  <section id="beta-access" class="beta-section">
+    <div class="beta-layout animate-up">
+      <div class="beta-copy">
+        <h2>Ouvrir la beta aux bons cabinets</h2>
+        <p>ConfiDoc est pensé pour les équipes qui manipulent des dossiers clients sensibles et veulent industrialiser l'IA sans exposer leur responsabilité professionnelle.</p>
+        <ul class="beta-proof-list">
+          <li>Qualification des cas d'usage avant activation.</li>
+          <li>Priorité aux cabinets avec volume documentaire récurrent.</li>
+          <li>Preuve DPO et politique d'export intégrées dès le pilote.</li>
+          <li>Accompagnement sur les premiers dossiers sensibles.</li>
+        </ul>
+      </div>
+      <form id="beta-form" class="beta-form">
+        <div class="beta-form-grid">
+          <div class="beta-field">
+            <label for="beta-full-name">Nom</label>
+            <input id="beta-full-name" name="full_name" required autocomplete="name" />
+          </div>
+          <div class="beta-field">
+            <label for="beta-email">Email pro</label>
+            <input id="beta-email" name="email" type="email" required autocomplete="email" />
+          </div>
+          <div class="beta-field">
+            <label for="beta-company">Cabinet / société</label>
+            <input id="beta-company" name="company" required autocomplete="organization" />
+          </div>
+          <div class="beta-field">
+            <label for="beta-role">Rôle</label>
+            <input id="beta-role" name="role" autocomplete="organization-title" />
+          </div>
+          <div class="beta-field">
+            <label for="beta-team-size">Équipe</label>
+            <select id="beta-team-size" name="team_size">
+              <option value="">Sélectionner</option>
+              <option value="1-5">1-5 personnes</option>
+              <option value="6-20">6-20 personnes</option>
+              <option value="21-100">21-100 personnes</option>
+              <option value="100+">100+ personnes</option>
+            </select>
+          </div>
+          <div class="beta-field">
+            <label for="beta-volume">Volume mensuel</label>
+            <select id="beta-volume" name="document_volume">
+              <option value="">Sélectionner</option>
+              <option value="1-50">1-50 documents</option>
+              <option value="51-250">51-250 documents</option>
+              <option value="251-1000">251-1000 documents</option>
+              <option value="1000+">1000+ documents</option>
+            </select>
+          </div>
+          <div class="beta-field beta-field-full">
+            <label for="beta-use-case">Cas d'usage prioritaire</label>
+            <textarea id="beta-use-case" name="use_case" required placeholder="Ex : revue de bilans clients, baux commerciaux, contrats RH, liasses fiscales..."></textarea>
+          </div>
+          <label class="beta-consent" for="beta-consent">
+            <input id="beta-consent" name="consent_to_contact" type="checkbox" required />
+            <span>J'accepte d'être contacté au sujet de la beta ConfiDoc.</span>
+          </label>
+          <div class="beta-submit-row">
+            <button id="beta-submit-btn" class="btn btn-primary" type="submit">Demander l'accès beta</button>
+            <span class="demo-status">Réponse prioritaire pour les dossiers métier qualifiés.</span>
+          </div>
+        </div>
+        <div id="beta-form-message" class="beta-form-message"></div>
+      </form>
+    </div>
+  </section>
+
   <!-- CTA -->
   <section class="cta-section">
     <div class="cta-box animate-up">
       <h2>Transformez la complexité des dossiers en opportunité.</h2>
       <p>Profitez de l'Intelligence Artificielle sans jamais exposer la responsabilité professionnelle de votre cabinet.</p>
       <div style="display:flex; justify-content:center; gap:16px; margin-top:24px;">
-        <a href="mailto:gregory@superhome.fr?subject=Démo%20ConfiDoc" class="btn btn-primary">Prendre rendez-vous pour une démo</a>
+        <a href="#beta-access" class="btn btn-primary">Demander un accès beta</a>
       </div>
     </div>
   </section>
@@ -695,6 +836,9 @@
     const demoProofButton = document.getElementById('demo-proof-btn');
     const demoResult = document.getElementById('demo-result');
     const demoError = document.getElementById('demo-error');
+    const betaForm = document.getElementById('beta-form');
+    const betaSubmitButton = document.getElementById('beta-submit-btn');
+    const betaMessage = document.getElementById('beta-form-message');
 
     function triggerDownload(blob, filename) {
       const url = URL.createObjectURL(blob);
@@ -828,6 +972,43 @@
 
     demoButton?.addEventListener('click', () => launchDemo());
     demoProofButton?.addEventListener('click', downloadDemoProof);
+
+    async function submitBetaLead(event) {
+      event.preventDefault();
+      betaMessage.className = 'beta-form-message';
+      betaMessage.textContent = '';
+      betaSubmitButton.disabled = true;
+      betaSubmitButton.textContent = 'Envoi...';
+
+      const formData = new FormData(betaForm);
+      const payload = Object.fromEntries(formData.entries());
+      payload.consent_to_contact = formData.get('consent_to_contact') === 'on';
+      payload.source = 'landing_beta_form';
+
+      try {
+        const response = await fetch('/api/v1/leads/beta', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
+          body: JSON.stringify(payload),
+        });
+        const data = await response.json().catch(() => ({}));
+        if (!response.ok) {
+          const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
+          throw new Error(detail || 'Impossible d’enregistrer la demande.');
+        }
+        betaMessage.textContent = data.message || 'Demande reçue. Nous revenons vers vous rapidement.';
+        betaMessage.className = 'beta-form-message success';
+        betaForm.reset();
+      } catch (error) {
+        betaMessage.textContent = error.message || 'Impossible d’enregistrer la demande.';
+        betaMessage.className = 'beta-form-message error';
+      } finally {
+        betaSubmitButton.disabled = false;
+        betaSubmitButton.textContent = 'Demander l’accès beta';
+      }
+    }
+
+    betaForm?.addEventListener('submit', submitBetaLead);
 
     // Intersection Observer for animations
     const observer = new IntersectionObserver((entries) => {

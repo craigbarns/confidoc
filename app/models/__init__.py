@@ -1,17 +1,18 @@
 """ConfiDoc Backend — Models package."""
 
+from app.models.audit_log import AuditLog
 from app.models.base import Base, BaseModel, TenantModel, TimestampMixin
-from app.models.organization import Organization, ProfessionType, PlanType
-from app.models.user import User
-from app.models.role import Role
-from app.models.membership import Membership
-from app.models.refresh_token import RefreshToken
+from app.models.beta_lead import BetaLead
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.llm_request import LlmRequest
-from app.models.audit_log import AuditLog
+from app.models.membership import Membership
+from app.models.organization import Organization, PlanType, ProfessionType
 from app.models.password_reset_token import PasswordResetToken
+from app.models.refresh_token import RefreshToken
+from app.models.role import Role
+from app.models.user import User
 
 __all__ = [
     "Base", "BaseModel", "TenantModel", "TimestampMixin",
@@ -23,4 +24,5 @@ __all__ = [
     "LlmRequest",
     "AuditLog",
     "PasswordResetToken",
+    "BetaLead",
 ]

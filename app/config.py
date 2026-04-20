@@ -1,6 +1,5 @@
 """ConfiDoc Backend — Configuration centralisée via pydantic-settings."""
 
-import warnings
 from functools import lru_cache
 from typing import Annotated, Literal
 
@@ -147,6 +146,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@confidoc.fr"
     SMTP_TLS: bool = True
+    # Recipient for public beta access requests. Falls back to SMTP_FROM if empty.
+    BETA_LEAD_RECIPIENT_EMAIL: str = ""
     # URL de base de l'interface (ex: https://app.confidoc.fr) pour les liens de reset.
     APP_BASE_URL: str = "http://localhost:3000"
     # Durée de validité du token de reset (en minutes)

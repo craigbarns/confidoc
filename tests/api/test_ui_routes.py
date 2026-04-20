@@ -23,3 +23,5 @@ async def test_landing_links_to_trust_center(client):
     assert resp.status_code == 200
     assert 'href="/trust"' in resp.text
     assert "Télécharger la preuve DPO" in resp.text
+    assert 'id="beta-form"' in resp.text
+    assert "/api/v1/leads/beta" in resp.text
