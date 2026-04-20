@@ -195,7 +195,7 @@
       padding: 0 0.22rem; margin: 0 0.05rem; font-weight: 700;
     }
     .demo-metrics {
-      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem;
+      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem;
       margin-top: 1rem;
     }
     .demo-metric {
@@ -210,6 +210,31 @@
       color: #99f6e4; border-radius: 999px; padding: 0.32rem 0.7rem;
       font-size: 0.78rem; font-weight: 700;
     }
+    .demo-proof-card {
+      margin-top: 1rem; background: var(--bg); border: 1px solid var(--surface-border);
+      border-radius: 8px; padding: 1rem; display: grid;
+      grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr); gap: 1rem;
+    }
+    .demo-policy {
+      display: inline-flex; align-items: center; justify-content: center;
+      min-height: 34px; border-radius: 999px; padding: 0.25rem 0.75rem;
+      font-size: 0.8rem; font-weight: 800; border: 1px solid var(--surface-border);
+      background: rgba(255,255,255,0.04); color: #e2e8f0;
+    }
+    .demo-metric strong.demo-policy { display: inline-flex; font-size: 0.8rem; line-height: 1.2; }
+    .demo-policy.success {
+      color: #bbf7d0; background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25);
+    }
+    .demo-policy.warning {
+      color: #fde68a; background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.28);
+    }
+    .demo-policy.danger, .demo-policy.critical {
+      color: #fecaca; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.28);
+    }
+    .demo-proof-card h3 { font-size: 1rem; margin-bottom: 0.35rem; }
+    .demo-proof-card p { color: var(--text-muted); font-size: 0.88rem; }
+    .demo-proof-list { color: #cbd5e1; font-size: 0.84rem; margin-left: 1rem; }
+    .demo-proof-list li { margin: 0.25rem 0; }
     .demo-error {
       color: #fecaca; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
       border-radius: 8px; padding: 0.8rem 1rem; margin-top: 1rem; display: none;
@@ -345,7 +370,7 @@
       .hero h1 { font-size: 2.2rem; }
       .arch-container { flex-direction: column; }
       .nav-links { display: none; }
-      .proof-strip, .demo-grid, .demo-metrics, .pricing-grid { grid-template-columns: 1fr; }
+      .proof-strip, .demo-grid, .demo-metrics, .demo-proof-card, .pricing-grid { grid-template-columns: 1fr; }
       .hero-actions { flex-direction: column; }
     }
   </style>
@@ -368,6 +393,7 @@
       <a href="#use-cases">Cas d'usage</a>
       <a href="#pricing">Tarifs</a>
       <a href="#features">Bénéfices</a>
+      <a href="/trust">Trust Center</a>
     </div>
     <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Espace Client</a>
   </nav>
@@ -464,10 +490,19 @@
           <div class="demo-metric"><strong id="demo-entities">0</strong><span>entités masquées</span></div>
           <div class="demo-metric"><strong id="demo-risk">0%</strong><span>risque de ré-identification</span></div>
           <div class="demo-metric"><strong id="demo-method">—</strong><span>méthode d'extraction</span></div>
+          <div class="demo-metric"><strong id="demo-policy">—</strong><span>politique d'export</span></div>
         </div>
         <div id="demo-chips" class="demo-chips"></div>
+        <div id="demo-proof-card" class="demo-proof-card" style="display:none">
+          <div>
+            <h3>Preuve DPO générée</h3>
+            <p id="demo-proof-message">Chaque étape critique est tracée dans un rapport téléchargeable.</p>
+          </div>
+          <ul id="demo-proof-points" class="demo-proof-list"></ul>
+        </div>
         <div style="margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap">
           <a href="/ui" class="btn btn-primary">Traiter vos propres documents</a>
+          <button id="demo-proof-btn" class="btn btn-outline" type="button">Télécharger la preuve DPO</button>
           <a href="mailto:gregory@superhome.fr?subject=Démo%20ConfiDoc" class="btn btn-outline">Demander un accès beta</a>
         </div>
       </div>
@@ -657,8 +692,21 @@
   <script nonce="{{CSP_NONCE}}">
     const demoStatus = document.getElementById('demo-status');
     const demoButton = document.getElementById('demo-launch-btn');
+    const demoProofButton = document.getElementById('demo-proof-btn');
     const demoResult = document.getElementById('demo-result');
     const demoError = document.getElementById('demo-error');
+
+    function triggerDownload(blob, filename) {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = filename;
+      a.style.display = 'none';
+      document.body.appendChild(a);
+      a.click();
+      a.remove();
+      setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
 
     function renderTaggedText(target, text) {
       target.textContent = '';
@@ -688,6 +736,11 @@
       const risk = data.risk || {};
       document.getElementById('demo-risk').textContent = `${Math.round((risk.score || 0) * 100)}%`;
       document.getElementById('demo-method').textContent = data.extraction_method || 'local';
+      const proof = data.proof || {};
+      const policy = proof.export_policy || {};
+      const policyEl = document.getElementById('demo-policy');
+      policyEl.textContent = policy.label || 'Export autorisé';
+      policyEl.className = `demo-policy ${policy.severity || 'success'}`;
 
       const chips = document.getElementById('demo-chips');
       chips.textContent = '';
@@ -701,8 +754,46 @@
           chips.appendChild(chip);
         });
 
+      const proofCard = document.getElementById('demo-proof-card');
+      const proofMessage = document.getElementById('demo-proof-message');
+      const proofPoints = document.getElementById('demo-proof-points');
+      proofMessage.textContent = policy.message || 'Le rapport reprend méthode, entités, score et décision d’export.';
+      proofPoints.textContent = '';
+      (proof.control_points || []).slice(0, 5).forEach(point => {
+        const item = document.createElement('li');
+        item.textContent = point;
+        proofPoints.appendChild(item);
+      });
+      proofCard.style.display = '';
+
       demoResult.style.display = '';
       demoStatus.textContent = 'Démo prête : le document original est filtré avant toute utilisation IA.';
+    }
+
+    async function downloadDemoProof() {
+      demoError.style.display = 'none';
+      demoProofButton.disabled = true;
+      demoProofButton.textContent = 'Génération...';
+      try {
+        const response = await fetch('/api/v1/demo/public/audit-report-pdf', { headers: { 'Accept': 'application/pdf' } });
+        if (response.status === 202) {
+          demoStatus.textContent = 'La preuve DPO se prépare. Relancez la démo dans quelques secondes.';
+          return;
+        }
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.detail || 'Impossible de générer la preuve DPO.');
+        }
+        const blob = await response.blob();
+        triggerDownload(blob, 'preuve_dpo_confidoc_demo.pdf');
+        demoStatus.textContent = 'Preuve DPO téléchargée.';
+      } catch (error) {
+        demoError.textContent = error.message || 'Impossible de générer la preuve DPO.';
+        demoError.style.display = 'block';
+      } finally {
+        demoProofButton.disabled = false;
+        demoProofButton.textContent = 'Télécharger la preuve DPO';
+      }
     }
 
     async function launchDemo(attempt = 0) {
@@ -736,6 +827,7 @@
     }
 
     demoButton?.addEventListener('click', () => launchDemo());
+    demoProofButton?.addEventListener('click', downloadDemoProof);
 
     // Intersection Observer for animations
     const observer = new IntersectionObserver((entries) => {

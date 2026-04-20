@@ -61,3 +61,9 @@ async def security_page(request: Request) -> HTMLResponse:
             "Pragma": "no-cache",
         },
     )
+
+
+@router.get("/trust", response_class=HTMLResponse, include_in_schema=False)
+async def trust_center_page(request: Request) -> HTMLResponse:
+    """Alias public du Trust Center ConfiDoc."""
+    return await security_page(request)

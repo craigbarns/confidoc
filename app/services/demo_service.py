@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import asyncio
 import json
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -21,6 +22,32 @@ logger = get_logger(__name__)
 DEMO_DOC_PATH = Path(__file__).resolve().parent.parent / "static" / "demo_doc.pdf"
 DEMO_CACHE_KEY = "confidoc:demo:public_result:v1"
 _memory_demo_cache: dict[str, Any] | None = None
+
+
+_EXPORT_POLICIES = {
+    "low": {
+        "label": "Export autorise",
+        "severity": "success",
+        "message": (
+            "Risque residuel faible. Document exploitable pour une demonstration IA securisee."
+        ),
+    },
+    "medium": {
+        "label": "Revue conseillee",
+        "severity": "warning",
+        "message": "Usage interne acceptable. Revue humaine recommandee avant partage externe.",
+    },
+    "high": {
+        "label": "Validation obligatoire",
+        "severity": "danger",
+        "message": "Risque eleve. Validation humaine obligatoire avant export ou partage.",
+    },
+    "critical": {
+        "label": "Export bloque",
+        "severity": "critical",
+        "message": "Risque critique. Renforcer l'anonymisation avant toute diffusion.",
+    },
+}
 
 
 def _summarize_entities(detections: list[dict[str, Any]]) -> dict[str, int]:
@@ -39,6 +66,35 @@ def _excerpt(text: str, max_chars: int = 1800) -> str:
     if len(clean) <= max_chars:
         return clean
     return clean[:max_chars].rstrip() + "\n..."
+
+
+def _export_policy_for_risk(level: str | None) -> dict[str, str]:
+    return _EXPORT_POLICIES.get(str(level or "low").lower(), _EXPORT_POLICIES["low"])
+
+
+def _build_demo_proof(result: dict[str, Any]) -> dict[str, Any]:
+    risk = result.get("risk") if isinstance(result.get("risk"), dict) else {}
+    policy = _export_policy_for_risk(str(risk.get("level") or "low"))
+    signals = risk.get("signals") if isinstance(risk.get("signals"), list) else []
+    signal_count = sum(
+        int(item.get("occurrences", 1))
+        for item in signals
+        if isinstance(item, dict)
+    )
+
+    return {
+        "title": "Preuve DPO ConfiDoc",
+        "generated_at": datetime.now(UTC).isoformat(),
+        "export_policy": policy,
+        "residual_signals_count": signal_count,
+        "control_points": [
+            "Document de demonstration traite en lecture seule, sans upload utilisateur.",
+            "Extraction texte puis anonymisation avant tout usage IA.",
+            "Entites sensibles remplacees par des tokens explicites et auditables.",
+            "Score de risque de reidentification calcule avant export.",
+            "Rapport PDF generable pour tracer la methode, les entites et la politique d'export.",
+        ],
+    }
 
 
 def _compute_demo_result() -> dict[str, Any]:
@@ -60,8 +116,9 @@ def _compute_demo_result() -> dict[str, Any]:
     )
     entity_summary = _summarize_entities(detections)
     risk = analyze_reidentification_risk(anonymized_text, entity_summary)
+    risk_payload = risk.to_dict()
 
-    return {
+    result = {
         "status": "ready",
         "source": "bundled_demo_doc",
         "filename": DEMO_DOC_PATH.name,
@@ -73,8 +130,104 @@ def _compute_demo_result() -> dict[str, Any]:
         "detections": detections[:80],
         "detections_count": len(detections),
         "entity_summary": entity_summary,
-        "risk": risk.to_dict(),
+        "risk": risk_payload,
     }
+    result["proof"] = _build_demo_proof(result)
+    return result
+
+
+def build_demo_audit_pdf(result: dict[str, Any]) -> bytes:
+    """Generate a downloadable DPO proof PDF from the public demo payload."""
+    from app.services.pdf_audit_report_service import generate_audit_pdf
+
+    proof = result.get("proof")
+    if not isinstance(proof, dict):
+        proof = _build_demo_proof(result)
+
+    risk_info = result.get("risk") if isinstance(result.get("risk"), dict) else {}
+    risk_info = {
+        "score": float(risk_info.get("score") or 0.0),
+        "level": str(risk_info.get("level") or "low"),
+        "recommendation": str(
+            risk_info.get("recommendation")
+            or proof.get("export_policy", {}).get("message", "")
+        ),
+        "human_validated": False,
+    }
+
+    entity_summary_raw = result.get("entity_summary")
+    entity_summary: dict[str, int] = {}
+    if isinstance(entity_summary_raw, dict):
+        for key, value in entity_summary_raw.items():
+            try:
+                entity_summary[str(key)] = int(value)
+            except (TypeError, ValueError):
+                continue
+
+    generated_at = str(proof.get("generated_at") or datetime.now(UTC).isoformat())
+    audit_entries = [
+        {
+            "timestamp": generated_at,
+            "action": "public_demo:extract",
+            "method": "GET",
+            "status_code": 200,
+            "details": {
+                "filename": result.get("filename", "demo_doc.pdf"),
+                "pages": result.get("pages", 0),
+                "method": result.get("extraction_method", "unknown"),
+            },
+        },
+        {
+            "timestamp": generated_at,
+            "action": "public_demo:anonymize",
+            "method": "LOCAL",
+            "status_code": 200,
+            "details": {
+                "entities": result.get("detections_count", 0),
+                "profile": "dataset_accounting_pseudo",
+            },
+        },
+        {
+            "timestamp": generated_at,
+            "action": "public_demo:risk_score",
+            "method": "LOCAL",
+            "status_code": 200,
+            "details": {
+                "risk_level": risk_info["level"],
+                "risk_score": risk_info["score"],
+            },
+        },
+        {
+            "timestamp": generated_at,
+            "action": "public_demo:export_policy",
+            "method": "LOCAL",
+            "status_code": 200,
+            "details": {
+                "policy": proof.get("export_policy", {}).get("label", "Export autorise"),
+            },
+        },
+    ]
+
+    document_info = {
+        "document_id": "public-demo",
+        "filename": str(result.get("filename") or "demo_doc.pdf"),
+        "created_at": generated_at,
+        "doc_type": str(result.get("document_type") or "auto"),
+        "status": "demo_ready",
+    }
+
+    pdf_output = generate_audit_pdf(
+        document_info=document_info,
+        risk_info=risk_info,
+        entity_summary=entity_summary,
+        audit_entries=audit_entries,
+        anonymized_text_preview=str(result.get("anonymized_excerpt") or ""),
+    )
+    if isinstance(pdf_output, bytes):
+        return pdf_output
+    if isinstance(pdf_output, bytearray):
+        return bytes(pdf_output)
+    return str(pdf_output).encode("latin-1")
 
 
 async def _get_redis() -> Any | None:

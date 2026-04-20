@@ -1,12 +1,13 @@
 """ConfiDoc — One-click demo endpoint for investor pitches."""
 
+import io
 import time
 from pathlib import Path
 from typing import Any
 from uuid import uuid4
 
 from fastapi import APIRouter, HTTPException, Request, status
-from fastapi.responses import JSONResponse
+from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -85,6 +86,37 @@ async def get_public_demo(request: Request) -> Any:
             },
         )
     return result
+
+
+@router.get(
+    "/public/audit-report-pdf",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Preuve DPO PDF de la démo publique",
+)
+async def get_public_demo_audit_report_pdf(request: Request) -> Any:
+    """Return a no-auth PDF proof generated from the public demo result."""
+    from app.services.demo_service import build_demo_audit_pdf, get_demo_result
+
+    client_ip = request.client.host if request.client else "unknown"
+    await _check_public_demo_rate_limit(f"pdf:{client_ip}")
+
+    result = await get_demo_result()
+    if result is None:
+        return JSONResponse(
+            status_code=status.HTTP_202_ACCEPTED,
+            content={
+                "status": "warming_up",
+                "message": "La preuve DPO se prépare. Réessayez dans quelques secondes.",
+            },
+        )
+
+    pdf_bytes = build_demo_audit_pdf(result)
+    return StreamingResponse(
+        io.BytesIO(pdf_bytes),
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="preuve_dpo_confidoc_demo.pdf"'},
+    )
 
 
 @router.post(

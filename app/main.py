@@ -161,8 +161,8 @@ def create_app() -> FastAPI:
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # ---- Routers ----
-    app.include_router(health_router)
     app.include_router(ui_router)
+    app.include_router(health_router)
     app.include_router(v1_router, prefix=settings.API_V1_PREFIX)
 
     return app

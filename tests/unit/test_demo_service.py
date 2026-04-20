@@ -58,6 +58,30 @@ def test_compute_demo_result_returns_public_payload(tmp_path):
     assert result["entity_summary"] == {"EMAIL": 1, "PERSONNE": 1}
     assert result["risk"]["level"] == "low"
     assert "[EMAIL]" in result["anonymized_excerpt"]
+    assert result["proof"]["export_policy"]["label"] == "Export autorise"
+
+
+def test_build_demo_audit_pdf_returns_pdf_bytes():
+    payload = {
+        "filename": "demo.pdf",
+        "document_type": "generic",
+        "pages": 1,
+        "extraction_method": "pymupdf",
+        "anonymized_excerpt": "Client: [PERSONNE_1]\nEmail: [EMAIL]",
+        "detections_count": 2,
+        "entity_summary": {"PERSONNE": 1, "EMAIL": 1},
+        "risk": {
+            "score": 0.0,
+            "level": "low",
+            "recommendation": "Anonymisation forte.",
+            "signals": [],
+        },
+    }
+
+    pdf = demo_service.build_demo_audit_pdf(payload)
+
+    assert pdf.startswith(b"%PDF")
+    assert len(pdf) > 1000
 
 
 @pytest.mark.asyncio

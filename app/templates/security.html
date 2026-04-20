@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ConfiDoc — Securite &amp; Conformite RGPD</title>
+  <title>ConfiDoc — Trust Center &amp; Conformite RGPD</title>
   <link rel="stylesheet" href="/static/css/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>" type="image/svg+xml" />
 </head>
@@ -15,30 +15,36 @@
       <span class="logo-icon">🔒</span>
       <span class="logo-text">ConfiDoc</span>
     </div>
-    <div class="header-tagline">Securite & Conformite RGPD</div>
+    <div class="header-tagline">Trust Center & Conformite RGPD</div>
     <div class="header-actions">
-      <a href="/ui" class="btn btn-ghost btn-sm">← Retour a l'app</a>
+      <a href="/" class="btn btn-ghost btn-sm">Landing</a>
+      <a href="/ui" class="btn btn-ghost btn-sm">Retour a l'app</a>
     </div>
   </div>
 </header>
 
 <div class="sec-page">
-  <a href="/ui" class="sec-back">← Retour a ConfiDoc</a>
+  <a href="/" class="sec-back">Retour a ConfiDoc</a>
 
   <div class="sec-hero">
-    <h1>Securite & Conformite</h1>
-    <p>ConfiDoc est concu selon les principes du RGPD et du privacy by design, avec des mecanismes de pseudonymisation, d'anonymisation forte, de scoring du risque et de tracabilite.</p>
+    <span class="sec-eyebrow">Trust Center</span>
+    <h1>Securite, gouvernance IA et preuves RGPD</h1>
+    <p>ConfiDoc est concu pour permettre aux cabinets d'utiliser l'IA sur des dossiers sensibles avec pseudonymisation, anonymisation forte, scoring du risque residuel, validation humaine et tracabilite exportable.</p>
+    <div class="sec-hero-actions">
+      <a href="/api/v1/demo/public/audit-report-pdf" class="btn btn-primary">Telecharger une preuve DPO</a>
+      <a href="/#demo-section" class="btn btn-ghost">Voir la demo publique</a>
+    </div>
   </div>
 
   <div class="sec-grid">
     <div class="sec-metric">
       <div class="metric-icon">🔐</div>
-      <div class="metric-value">AES-256</div>
-      <div class="metric-label">Chiffrement des mappings</div>
+      <div class="metric-value">Fernet</div>
+      <div class="metric-label">AES-128-CBC + HMAC-SHA256</div>
     </div>
     <div class="sec-metric">
       <div class="metric-icon">📋</div>
-      <div class="metric-value">100%</div>
+      <div class="metric-value">Audit</div>
       <div class="metric-label">Actions journalisees</div>
     </div>
     <div class="sec-metric">
@@ -48,8 +54,30 @@
     </div>
     <div class="sec-metric">
       <div class="metric-icon">⚖️</div>
-      <div class="metric-value">RGPD</div>
-      <div class="metric-label">Privacy by design</div>
+      <div class="metric-value">Export gate</div>
+      <div class="metric-label">Blocage des risques eleves</div>
+    </div>
+  </div>
+
+  <div class="sec-section">
+    <h2><span class="sec-icon">✅</span> Engagements acheteurs</h2>
+    <div class="sec-grid">
+      <div class="sec-card">
+        <h3>IA de discussion sur texte filtre</h3>
+        <p>Le moteur de discussion travaille sur le texte anonymise. Les noms, coordonnees, identifiants et references sensibles sont remplaces avant l'analyse metier.</p>
+      </div>
+      <div class="sec-card">
+        <h3>OCR separe et configurable</h3>
+        <p>L'extraction OCR est une etape distincte, tracable et configurable selon votre politique : fournisseur externe active ou moteur local lorsque l'environnement le permet.</p>
+      </div>
+      <div class="sec-card">
+        <h3>Preuve DPO exportable</h3>
+        <p>Chaque document peut produire un rapport PDF avec score de risque, categories masquees, journal d'audit et decision d'export.</p>
+      </div>
+      <div class="sec-card">
+        <h3>Validation humaine integree</h3>
+        <p>Les exports a risque eleve sont bloques tant qu'un utilisateur habilite n'a pas confirme la revue humaine.</p>
+      </div>
     </div>
   </div>
 
@@ -69,7 +97,7 @@
       <div class="sec-flow-step">💬 Discussion IA</div>
     </div>
     <div class="sec-card">
-      <p>Le document original ne quitte jamais votre infrastructure. Seul le texte anonymise est transmis au LLM pour la discussion IA. Le mapping reversible est chiffre et stocke separement.</p>
+      <p>Le document original n'est jamais transmis au moteur de discussion IA. L'etape OCR est separee et configurable; seul le texte anonymise est utilise pour l'analyse conversationnelle. Le mapping reversible est chiffre et stocke separement.</p>
     </div>
   </div>
 
@@ -111,6 +139,7 @@
         <li>Combinaisons de quasi-identifiants (effet croisement)</li>
         <li>References d'emprunts, pourcentages de detention</li>
       </ul>
+      <p style="margin-top:12px;">La politique d'export est lisible par tous : risque faible export autorise, risque moyen avertissement, risque eleve validation obligatoire, risque critique export bloque.</p>
     </div>
     <table class="sec-table">
       <thead>
@@ -179,9 +208,9 @@
     <h2><span class="sec-icon">🤖</span> LLM & Donnees</h2>
     <div class="sec-card">
       <h3>Separation stricte</h3>
-      <p>Le LLM (Mistral Large) ne recoit <strong>jamais</strong> le texte original. Seul le texte anonymise est transmis pour la discussion IA. Les donnees sensibles restent sur votre infrastructure.</p>
+      <p>Le LLM de discussion ne recoit <strong>jamais</strong> le texte original. Seul le texte anonymise est transmis pour la discussion IA. L'OCR, lorsqu'il utilise un fournisseur externe, reste une etape distincte documentee dans le flux de traitement.</p>
       <ul>
-        <li>OCR : Mistral OCR (extraction uniquement)</li>
+        <li>OCR : fournisseur configure ou extraction locale selon deploiement</li>
         <li>Anonymisation : dictionnaire local + LLM second pass</li>
         <li>Discussion : texte anonymise uniquement</li>
         <li>Aucun entrainement sur vos donnees</li>
