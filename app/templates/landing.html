@@ -128,6 +128,17 @@
     }
     .hero-actions { display: flex; gap: 1rem; justify-content: center; }
 
+    .proof-strip {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr));
+      gap: 1rem; max-width: 760px; margin: 2rem auto 0;
+    }
+    .proof-item {
+      border: 1px solid var(--surface-border); background: rgba(255,255,255,0.04);
+      border-radius: 8px; padding: 0.9rem 1rem; text-align: left;
+    }
+    .proof-item strong { display: block; font-size: 1.35rem; color: #fff; line-height: 1; }
+    .proof-item span { display: block; margin-top: 0.35rem; color: var(--text-muted); font-size: 0.82rem; }
+
     /* DASHBOARD MOCKUP */
     .dashboard-preview {
       margin: 4rem auto 0; max-width: 1000px;
@@ -142,6 +153,84 @@
       width: 100%; height: 100%; background: linear-gradient(45deg, var(--primary), var(--accent));
       filter: blur(80px); opacity: 0.15; z-index: -1;
     }
+
+    /* LIVE DEMO */
+    .demo-section {
+      padding: 5rem 2rem;
+      border-top: 1px solid var(--surface-border);
+      border-bottom: 1px solid var(--surface-border);
+      background: #0f1422;
+    }
+    .demo-shell { max-width: 1120px; margin: 0 auto; }
+    .demo-toolbar {
+      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
+      margin-bottom: 1.25rem; flex-wrap: wrap;
+    }
+    .demo-status { color: var(--text-muted); font-size: 0.92rem; }
+    .demo-grid {
+      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem;
+    }
+    .demo-panel {
+      background: var(--bg); border: 1px solid var(--surface-border);
+      border-radius: 8px; overflow: hidden; min-height: 320px;
+    }
+    .demo-panel-header {
+      display: flex; justify-content: space-between; gap: 1rem; align-items: center;
+      padding: 0.85rem 1rem; border-bottom: 1px solid var(--surface-border);
+      color: #e2e8f0; font-weight: 700; font-size: 0.92rem;
+    }
+    .demo-panel-header span {
+      color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
+      letter-spacing: 0.08em;
+    }
+    .demo-text {
+      margin: 0; min-height: 270px; max-height: 360px; overflow: auto;
+      padding: 1rem; white-space: pre-wrap; word-break: break-word;
+      color: #cbd5e1; font-size: 0.86rem; line-height: 1.75;
+      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    }
+    .demo-token {
+      display: inline-block; color: #b7f7dc; background: rgba(16,185,129,0.18);
+      border: 1px solid rgba(16,185,129,0.25); border-radius: 5px;
+      padding: 0 0.22rem; margin: 0 0.05rem; font-weight: 700;
+    }
+    .demo-metrics {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem;
+      margin-top: 1rem;
+    }
+    .demo-metric {
+      background: var(--bg); border: 1px solid var(--surface-border);
+      border-radius: 8px; padding: 1rem;
+    }
+    .demo-metric strong { display: block; font-size: 1.4rem; color: #fff; line-height: 1; }
+    .demo-metric span { display: block; margin-top: 0.45rem; color: var(--text-muted); font-size: 0.82rem; }
+    .demo-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; min-height: 32px; }
+    .demo-chip {
+      background: rgba(0,210,211,0.1); border: 1px solid rgba(0,210,211,0.22);
+      color: #99f6e4; border-radius: 999px; padding: 0.32rem 0.7rem;
+      font-size: 0.78rem; font-weight: 700;
+    }
+    .demo-error {
+      color: #fecaca; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
+      border-radius: 8px; padding: 0.8rem 1rem; margin-top: 1rem; display: none;
+    }
+
+    /* PRICING */
+    .pricing { padding: 5rem 2rem; max-width: 1120px; margin: 0 auto; }
+    .pricing-grid {
+      display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem;
+    }
+    .plan-card {
+      background: var(--surface); border: 1px solid var(--surface-border);
+      border-radius: 8px; padding: 1.5rem;
+    }
+    .plan-card.featured { border-color: rgba(0,210,211,0.35); box-shadow: 0 0 0 1px rgba(0,210,211,0.1); }
+    .plan-card h3 { font-size: 1.1rem; margin-bottom: 0.7rem; }
+    .plan-price { font-family: 'Outfit', sans-serif; font-size: 2rem; font-weight: 800; color: #fff; }
+    .plan-price small { color: var(--text-muted); font-size: 0.9rem; font-weight: 500; }
+    .plan-card ul { margin-top: 1.25rem; list-style: none; color: var(--text-muted); }
+    .plan-card li { margin-bottom: 0.65rem; }
+    .plan-card li::before { content: '✓'; color: var(--accent); font-weight: 800; margin-right: 0.5rem; }
 
     /* VALUE PROP */
     .section-title {
@@ -256,6 +345,8 @@
       .hero h1 { font-size: 2.2rem; }
       .arch-container { flex-direction: column; }
       .nav-links { display: none; }
+      .proof-strip, .demo-grid, .demo-metrics, .pricing-grid { grid-template-columns: 1fr; }
+      .hero-actions { flex-direction: column; }
     }
   </style>
 </head>
@@ -272,8 +363,10 @@
       ConfiDoc
     </a>
     <div class="nav-links">
+      <a href="#demo-section">Démo</a>
       <a href="#how-it-works">Fonctionnement</a>
       <a href="#use-cases">Cas d'usage</a>
+      <a href="#pricing">Tarifs</a>
       <a href="#features">Bénéfices</a>
     </div>
     <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Espace Client</a>
@@ -291,8 +384,13 @@
       <strong>Gagnez un temps précieux sur vos revues de dossiers, tout en protégeant vos clients.</strong>
     </p>
     <div class="hero-actions">
-      <a href="/ui" class="btn btn-primary">Voir la démo interactive</a>
-      <a href="/ui" class="btn btn-outline">Essayer sur nos documents d'exemple</a>
+      <a href="#demo-section" class="btn btn-primary">Tester maintenant</a>
+      <a href="/ui" class="btn btn-outline">Espace client</a>
+    </div>
+    <div class="proof-strip animate-up delay-1">
+      <div class="proof-item"><strong>5</strong><span>familles de données détectées sur le document de démo</span></div>
+      <div class="proof-item"><strong>&lt; 12s</strong><span>objectif de traitement par document standard</span></div>
+      <div class="proof-item"><strong>RGPD</strong><span>score de risque avant tout usage IA</span></div>
     </div>
 
     <!-- Supported Docs -->
@@ -339,6 +437,43 @@
     </div>
   </section>
 
+  <!-- LIVE DEMO -->
+  <section id="demo-section" class="demo-section">
+    <div class="demo-shell">
+      <div class="section-title animate-up">
+        <h2>Voyez le filtre ConfiDoc en action</h2>
+        <p>Un vrai document de démonstration est traité en lecture seule, sans compte et sans upload utilisateur.</p>
+      </div>
+      <div class="demo-toolbar animate-up delay-1">
+        <div class="demo-status" id="demo-status">Prêt à lancer la démonstration publique.</div>
+        <button id="demo-launch-btn" class="btn btn-primary" type="button">Lancer la démo</button>
+      </div>
+      <div id="demo-error" class="demo-error"></div>
+      <div id="demo-result" style="display:none">
+        <div class="demo-grid">
+          <div class="demo-panel">
+            <div class="demo-panel-header">Document original <span>Données sensibles</span></div>
+            <pre id="demo-original" class="demo-text"></pre>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">Document envoyé à l'IA <span>Anonymisé</span></div>
+            <pre id="demo-anonymized" class="demo-text"></pre>
+          </div>
+        </div>
+        <div class="demo-metrics">
+          <div class="demo-metric"><strong id="demo-entities">0</strong><span>entités masquées</span></div>
+          <div class="demo-metric"><strong id="demo-risk">0%</strong><span>risque de ré-identification</span></div>
+          <div class="demo-metric"><strong id="demo-method">—</strong><span>méthode d'extraction</span></div>
+        </div>
+        <div id="demo-chips" class="demo-chips"></div>
+        <div style="margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap">
+          <a href="/ui" class="btn btn-primary">Traiter vos propres documents</a>
+          <a href="mailto:gregory@superhome.fr?subject=Démo%20ConfiDoc" class="btn btn-outline">Demander un accès beta</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
   <!-- 3 STEPS WORKFLOW -->
   <section id="how-it-works" style="padding-top: 4rem;">
      <div class="section-title animate-up">
@@ -362,6 +497,43 @@
            <p>L'IA résume, pointe les points clés de conformité et rédige votre synthèse en format prêt à envoyer à vos clients.</p>
         </div>
      </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" class="pricing">
+    <div class="section-title animate-up">
+      <h2>Un modèle lisible dès la beta</h2>
+      <p>Des offres simples pour tester, équiper une équipe, puis intégrer ConfiDoc au SI du cabinet.</p>
+    </div>
+    <div class="pricing-grid animate-up delay-1">
+      <div class="plan-card">
+        <h3>Starter</h3>
+        <div class="plan-price">0€ <small>/ mois</small></div>
+        <ul>
+          <li>10 documents de test</li>
+          <li>Démo anonymisation</li>
+          <li>Export texte anonymisé</li>
+        </ul>
+      </div>
+      <div class="plan-card featured">
+        <h3>Pro</h3>
+        <div class="plan-price">49€ <small>/ mois</small></div>
+        <ul>
+          <li>200 documents par mois</li>
+          <li>Discussion IA sécurisée</li>
+          <li>Rapports RGPD et PDF</li>
+        </ul>
+      </div>
+      <div class="plan-card">
+        <h3>Cabinet</h3>
+        <div class="plan-price">Sur devis</div>
+        <ul>
+          <li>Volumes étendus</li>
+          <li>Intégration stockage et SI</li>
+          <li>Accompagnement conformité</li>
+        </ul>
+      </div>
+    </div>
   </section>
 
   <!-- CAS D'USAGE (Concrete Proofs) -->
@@ -471,7 +643,7 @@
       <h2>Transformez la complexité des dossiers en opportunité.</h2>
       <p>Profitez de l'Intelligence Artificielle sans jamais exposer la responsabilité professionnelle de votre cabinet.</p>
       <div style="display:flex; justify-content:center; gap:16px; margin-top:24px;">
-        <a href="/ui" class="btn btn-primary">Prendre rendez-vous pour une démo</a>
+        <a href="mailto:gregory@superhome.fr?subject=Démo%20ConfiDoc" class="btn btn-primary">Prendre rendez-vous pour une démo</a>
       </div>
     </div>
   </section>
@@ -482,7 +654,89 @@
     Conçu pour répondre aux exigences du RGPD et du secret professionnel.
   </footer>
 
-  <script>
+  <script nonce="{{CSP_NONCE}}">
+    const demoStatus = document.getElementById('demo-status');
+    const demoButton = document.getElementById('demo-launch-btn');
+    const demoResult = document.getElementById('demo-result');
+    const demoError = document.getElementById('demo-error');
+
+    function renderTaggedText(target, text) {
+      target.textContent = '';
+      const source = String(text || '');
+      const tokenRe = /\[[A-Z_]+(?:_\d+)?\]/g;
+      let last = 0;
+      let match;
+      while ((match = tokenRe.exec(source)) !== null) {
+        if (match.index > last) {
+          target.appendChild(document.createTextNode(source.slice(last, match.index)));
+        }
+        const span = document.createElement('span');
+        span.className = 'demo-token';
+        span.textContent = match[0];
+        target.appendChild(span);
+        last = match.index + match[0].length;
+      }
+      if (last < source.length) {
+        target.appendChild(document.createTextNode(source.slice(last)));
+      }
+    }
+
+    function renderDemo(data) {
+      document.getElementById('demo-original').textContent = data.original_excerpt || '';
+      renderTaggedText(document.getElementById('demo-anonymized'), data.anonymized_excerpt || '');
+      document.getElementById('demo-entities').textContent = data.detections_count || 0;
+      const risk = data.risk || {};
+      document.getElementById('demo-risk').textContent = `${Math.round((risk.score || 0) * 100)}%`;
+      document.getElementById('demo-method').textContent = data.extraction_method || 'local';
+
+      const chips = document.getElementById('demo-chips');
+      chips.textContent = '';
+      Object.entries(data.entity_summary || {})
+        .sort((a, b) => b[1] - a[1])
+        .slice(0, 10)
+        .forEach(([type, count]) => {
+          const chip = document.createElement('span');
+          chip.className = 'demo-chip';
+          chip.textContent = `${type}: ${count}`;
+          chips.appendChild(chip);
+        });
+
+      demoResult.style.display = '';
+      demoStatus.textContent = 'Démo prête : le document original est filtré avant toute utilisation IA.';
+    }
+
+    async function launchDemo(attempt = 0) {
+      demoError.style.display = 'none';
+      demoButton.disabled = true;
+      demoButton.textContent = attempt ? 'Préparation...' : 'Analyse...';
+      demoStatus.textContent = 'Chargement du résultat anonymisé...';
+      try {
+        const response = await fetch('/api/v1/demo/public', { headers: { 'Accept': 'application/json' } });
+        const data = await response.json();
+        if (response.status === 202 || data.status === 'warming_up') {
+          if (attempt < 4) {
+            demoStatus.textContent = 'Préparation de la démo, nouvel essai dans quelques secondes...';
+            setTimeout(() => launchDemo(attempt + 1), 2500);
+            return;
+          }
+          throw new Error('La démo est encore en préparation. Réessayez dans quelques secondes.');
+        }
+        if (!response.ok) {
+          throw new Error(data.detail || 'Impossible de charger la démo.');
+        }
+        renderDemo(data);
+      } catch (error) {
+        demoError.textContent = error.message || 'Impossible de charger la démo.';
+        demoError.style.display = 'block';
+        demoStatus.textContent = 'Démo indisponible temporairement.';
+      } finally {
+        demoButton.disabled = false;
+        demoButton.textContent = 'Relancer la démo';
+      }
+    }
+
+    demoButton?.addEventListener('click', () => launchDemo());
+
     // Intersection Observer for animations
     const observer = new IntersectionObserver((entries) => {
       entries.forEach(entry => {

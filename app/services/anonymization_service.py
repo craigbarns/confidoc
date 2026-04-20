@@ -175,6 +175,14 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
         ),
         TOKEN_SOCIETE,
     ),
+    (
+        "company_legal_suffix",
+        re.compile(
+            r"\b[A-Z0-9][A-Z0-9 \t\-'&]{1,60}"
+            r"\s+(?:SAS|SARL|EURL|SCI|SELARL|SCP|SA|SNC|EI|EIRL|SASU|SEL|GIE)\b"
+        ),
+        TOKEN_SOCIETE,
+    ),
     # Person names (two+ capitalized words)
     (
         "person_name",
@@ -187,7 +195,7 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     # All-caps person names (e.g. "BARANES GREGORY")
     (
         "person_uppercase",
-        re.compile(r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:\s+[A-ZÀ-ÖØ-Ý]{2,}){1,3}\b"),
+        re.compile(r"\b[A-ZÀ-ÖØ-Ý]{2,}(?:[ \t]+[A-ZÀ-ÖØ-Ý]{2,}){1,3}\b"),
         TOKEN_PERSONNE,
     ),
     # Country
@@ -1041,7 +1049,16 @@ def _infer_business_prefix(
             return "CLIENT"
         return "PERSONNE"
 
-    if entity_type in {"company_legal_name", "invoice_identity_block"}:
+    if entity_type == "invoice_identity_block":
+        if any(k in value_excerpt.lower() for k in ("dirigeant", "contact", "gérant", "gerant")):
+            return "PERSONNE"
+        if "adresse" in value_excerpt.lower():
+            return "ADRESSE"
+        if any(k in value_excerpt.lower() for k in ("societe", "société", "entreprise")):
+            return "SOCIETE"
+        return "SOCIETE"
+
+    if entity_type in {"company_legal_name", "company_legal_suffix"}:
         if "fournisseur" in ctx:
             return "FOURNISSEUR"
         if "client" in ctx:
