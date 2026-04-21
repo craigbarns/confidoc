@@ -256,7 +256,7 @@ function toast(msg, type = "info") {
   const container = $("toast-container");
   if (!container) return;
   const el = document.createElement("div");
-  el.className = `toast${type === "success" ? " success" : type === "error" ? " error" : ""}`;
+  el.className = `toast${type === "success" ? " success" : type === "error" ? " error" : type === "warning" ? " warning" : ""}`;
   el.textContent = String(msg || "");
   container.prepend(el);
   while (container.children.length > 5) container.removeChild(container.lastElementChild);
@@ -2074,6 +2074,32 @@ function triggerDownload(blob, filename) {
 
 let dashboardLoaded = false;
 
+function emptyDashboardData() {
+  return {
+    total_documents: 0,
+    total_entities_masked: 0,
+    trashed_documents: 0,
+    status_counts: {},
+    gdpr_score: {
+      score: 0,
+      color: "warning",
+      grade: "-",
+      status: "Indisponible",
+      recommendations: ["Les statistiques completes n'ont pas pu etre chargees."],
+      breakdown: {},
+    },
+    risk_distribution: {},
+    entity_distribution: {},
+    recent_activity: [],
+  };
+}
+
+function dashboardErrorMessage(err) {
+  const msg = String(err?.message || err || "");
+  if (!msg) return "Statistiques indisponibles.";
+  return msg.replace(/https?:\/\/\S+/g, "").slice(0, 220);
+}
+
 function showDashboard() {
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   const dash = $("panel-dashboard");
@@ -2093,17 +2119,33 @@ async function loadDashboard() {
   if (content) content.style.display = "none";
 
   try {
-    const [data, summary] = await Promise.all([
+    const [statsResult, summaryResult] = await Promise.allSettled([
       apiFetch("/documents/stats/dashboard"),
       apiFetch("/documents/status-summary?days=30"),
     ]);
-    dashboardLoaded = true;
+
+    if (statsResult.status === "rejected" && summaryResult.status === "rejected") {
+      throw new Error(
+        `${dashboardErrorMessage(statsResult.reason)} ${dashboardErrorMessage(summaryResult.reason)}`.trim()
+      );
+    }
+
+    const data = statsResult.status === "fulfilled" ? statsResult.value : emptyDashboardData();
+    const summary = summaryResult.status === "fulfilled" ? summaryResult.value : {};
+
+    dashboardLoaded = statsResult.status === "fulfilled" && summaryResult.status === "fulfilled";
     renderDashboard(data, summary);
+
+    if (!dashboardLoaded) {
+      const failed = statsResult.status === "rejected" ? statsResult.reason : summaryResult.reason;
+      console.warn("loadDashboard partial:", failed);
+      toast(`Dashboard partiel: ${dashboardErrorMessage(failed)}`, "warning");
+    }
   } catch (e) {
     console.warn("loadDashboard failed:", e);
     if (content) {
       content.style.display = "";
-      content.innerHTML = '<div class="empty-state">Impossible de charger les statistiques.</div>';
+      content.innerHTML = `<div class="empty-state">Impossible de charger les statistiques. ${escapeHtml(dashboardErrorMessage(e))}</div>`;
     }
   } finally {
     if (loading) loading.style.display = "none";
@@ -2254,7 +2296,7 @@ function renderDashboard(data, summary = {}) {
   const actSection = $("dash-activity-section");
   const actEl = $("dash-activity-chart");
   if (actEl && data.recent_activity && data.recent_activity.length) {
-    actSection.style.display = "";
+    if (actSection) actSection.style.display = "";
     const maxAct = Math.max(1, ...data.recent_activity.map(a => a.count));
     actEl.innerHTML = data.recent_activity.map(a => {
       const h = Math.max(2, (a.count / maxAct) * 80);
@@ -2264,6 +2306,9 @@ function renderDashboard(data, summary = {}) {
         <span class="dash-activity-label">${day}</span>
       </div>`;
     }).join("");
+  } else {
+    if (actSection) actSection.style.display = "none";
+    if (actEl) actEl.innerHTML = "";
   }
   const trendEl = $("dash-trend-7d");
   const trendData = summary.created_last_7_days || [];
@@ -2299,10 +2344,10 @@ let reviewResult = null;
 
 const REVIEW_STEPS = [
   { id: "classify", icon: "1", label: "Classification du document" },
-  { id: "extract", icon: "2", label: "Extraction des donnees cles" },
-  { id: "analyze", icon: "3", label: "Analyse metier" },
+  { id: "extract", icon: "2", label: "Extraction des données clés" },
+  { id: "analyze", icon: "3", label: "Analyse métier" },
   { id: "findings", icon: "4", label: "Identification des constats" },
-  { id: "filter", icon: "5", label: "Controle qualite" },
+  { id: "filter", icon: "5", label: "Contrôle qualité" },
   { id: "synthesize", icon: "6", label: "Note de revue" },
 ];
 
@@ -2409,6 +2454,34 @@ function renderReviewResult(data) {
   $("review-actions").style.display = "";
 }
 
+function formatReviewError(message) {
+  const raw = String(message || "").trim();
+  if (!raw) return "Analyse indisponible. Relancez dans quelques instants.";
+  const lower = raw.toLowerCase();
+  if (raw.includes("429") || lower.includes("too many requests") || lower.includes("rate limit")) {
+    return "Mistral limite temporairement les analyses. Le document reste pret; relancez dans quelques minutes.";
+  }
+  return raw.replace(/https?:\/\/\S+/g, "").slice(0, 260);
+}
+
+function renderReviewError(message, detail = {}) {
+  const el = $("review-result");
+  if (!el) return;
+  const retry = detail?.retry_after_seconds
+    ? `<p class="review-cabinet-empty">Nouvel essai conseille dans ${escapeHtml(String(detail.retry_after_seconds))} secondes.</p>`
+    : "";
+  el.style.display = "";
+  el.innerHTML = `<div class="review-section review-cabinet-block">
+    <div class="review-section-title">Analyse indisponible</div>
+    <div class="review-section-body">
+      <p>${escapeHtml(formatReviewError(message))}</p>
+      ${retry}
+    </div>
+  </div>`;
+  const actions = $("review-actions");
+  if (actions) actions.style.display = "none";
+}
+
 async function startReview() {
   if (!currentDocId || reviewRunning) return;
   reviewRunning = true;
@@ -2477,10 +2550,12 @@ async function startReview() {
             renderReviewSteps(null, completedSteps);
             reviewResult = allData;
             renderReviewResult(allData);
-            toast("Synthese cabinet terminee", "success");
+            toast(allData.degraded ? "Analyse limitee disponible" : "Synthese cabinet terminee", allData.degraded ? "warning" : "success");
           } else if (status === "error") {
             renderReviewSteps(null, completedSteps);
-            toast(`Erreur analyse: ${event.data?.error || "inconnue"}`, "error");
+            const msg = event.data?.message || event.data?.error || "Analyse indisponible.";
+            renderReviewError(msg, event.data || {});
+            toast(`Analyse interrompue: ${formatReviewError(msg)}`, "error");
           }
         } catch (e) {
           console.warn("Review SSE parse error:", e);
@@ -2489,7 +2564,9 @@ async function startReview() {
     }
   } catch (e) {
     console.error("startReview error:", e);
-    toast(`Erreur analyse: ${e.message}`, "error");
+    const msg = formatReviewError(e.message);
+    renderReviewError(msg);
+    toast(`Erreur analyse: ${msg}`, "error");
   } finally {
     reviewRunning = false;
   }

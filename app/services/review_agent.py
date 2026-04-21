@@ -21,7 +21,7 @@ import json
 from typing import Any, TypedDict
 
 import httpx
-from langgraph.graph import StateGraph, END
+from langgraph.graph import END, StateGraph
 
 from app.config import get_settings
 from app.core.logging import get_logger
@@ -106,6 +106,34 @@ class ReviewState(TypedDict, total=False):
     current_step: str
     steps_completed: list[str]
     error: str | None
+    error_code: str | None
+    degraded: bool
+
+
+_STEPS_ORDER = ["classify", "extract", "analyze", "findings", "filter", "synthesize"]
+_STEP_LABELS = {
+    "classify": "Classification du document",
+    "extract": "Extraction des donnees cles",
+    "analyze": "Analyse metier",
+    "findings": "Identification des constats",
+    "filter": "Controle qualite des constats",
+    "synthesize": "Synthese cabinet (5 blocs)",
+}
+
+
+class ReviewAgentTransientError(RuntimeError):
+    """Provider-side issue that should not expose raw HTTP details to users."""
+
+    def __init__(
+        self,
+        message: str,
+        *,
+        code: str = "llm_unavailable",
+        retry_after_seconds: int | None = None,
+    ) -> None:
+        super().__init__(message)
+        self.code = code
+        self.retry_after_seconds = retry_after_seconds
 
 
 # ── LLM Call Helper ─────────────────────────────────────────────────────
@@ -131,17 +159,83 @@ async def _llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) 
     }
     timeout = float(settings.MISTRAL_TIMEOUT_SECONDS)
 
-    async with httpx.AsyncClient(timeout=timeout) as client:
-        resp = await client.post(
-            f"{settings.MISTRAL_BASE_URL.rstrip('/')}/v1/chat/completions",
-            headers=headers,
-            json=body,
-        )
-    resp.raise_for_status()
+    try:
+        async with httpx.AsyncClient(timeout=timeout) as client:
+            resp = await client.post(
+                f"{settings.MISTRAL_BASE_URL.rstrip('/')}/v1/chat/completions",
+                headers=headers,
+                json=body,
+            )
+    except httpx.TimeoutException as exc:
+        raise ReviewAgentTransientError(
+            "Le moteur d'analyse n'a pas repondu dans le delai imparti. "
+            "Relancez l'analyse dans quelques instants.",
+            code="llm_timeout",
+        ) from exc
+    except httpx.RequestError as exc:
+        raise ReviewAgentTransientError(
+            "Le moteur d'analyse est momentanement inaccessible. "
+            "Relancez l'analyse dans quelques instants.",
+            code="llm_network_error",
+        ) from exc
+
+    _raise_for_llm_status(resp)
     choices = (resp.json() or {}).get("choices") or []
     if not choices:
         return ""
     return str((choices[0] or {}).get("message", {}).get("content") or "")
+
+
+def _retry_after_seconds(resp: httpx.Response) -> int | None:
+    value = resp.headers.get("retry-after")
+    if not value:
+        return None
+    try:
+        return max(0, int(float(value)))
+    except ValueError:
+        return None
+
+
+def _raise_for_llm_status(resp: httpx.Response) -> None:
+    if resp.status_code < 400:
+        return
+
+    retry_after = _retry_after_seconds(resp)
+    if resp.status_code == 429:
+        raise ReviewAgentTransientError(
+            "Mistral limite temporairement les analyses. "
+            "Le document reste pret; relancez dans quelques minutes.",
+            code="mistral_rate_limited",
+            retry_after_seconds=retry_after,
+        )
+    if resp.status_code in {401, 403}:
+        raise ReviewAgentTransientError(
+            "La configuration Mistral refuse la requete. "
+            "Verifiez la cle API avant une nouvelle analyse.",
+            code="mistral_auth_error",
+        )
+    if resp.status_code == 400:
+        raise ReviewAgentTransientError(
+            "Le fournisseur IA a refuse la requete d'analyse. "
+            "Essayez un document plus court ou relancez apres reanonymisation.",
+            code="llm_bad_request",
+        )
+    if resp.status_code >= 500:
+        raise ReviewAgentTransientError(
+            "Le fournisseur IA est temporairement indisponible. "
+            "Relancez l'analyse dans quelques instants.",
+            code="llm_provider_error",
+            retry_after_seconds=retry_after,
+        )
+
+    try:
+        resp.raise_for_status()
+    except httpx.HTTPStatusError as exc:
+        raise ReviewAgentTransientError(
+            "L'analyse IA n'a pas pu aboutir. Relancez l'analyse ou effectuez une revue manuelle.",
+            code="llm_http_error",
+            retry_after_seconds=retry_after,
+        ) from exc
 
 
 def _parse_json(raw: str) -> dict[str, Any]:
@@ -153,6 +247,140 @@ def _parse_json(raw: str) -> dict[str, Any]:
         return json.loads(raw[start : end + 1])
     except json.JSONDecodeError:
         return {}
+
+
+def _initial_review_state(
+    anonymized_text: str,
+    entity_summary: dict[str, int] | None = None,
+    **kwargs: Any,
+) -> ReviewState:
+    return {
+        "anonymized_text": anonymized_text,
+        "entity_summary": entity_summary or {},
+        "docling_tables": kwargs.get("docling_tables", []),
+        "docling_sections": kwargs.get("docling_sections", []),
+        "doc_type": "",
+        "doc_type_confidence": 0.0,
+        "extracted_data": {},
+        "analysis": {},
+        "findings": {},
+        "review_note": "",
+        "sections": {},
+        "confidence": 0.0,
+        "verdict": "",
+        "prochaines_actions": [],
+        "demandes_formelles": [],
+        "pieces_a_verifier": [],
+        "review_complement": {},
+        "current_step": "init",
+        "steps_completed": [],
+        "error": None,
+        "error_code": None,
+        "degraded": False,
+    }
+
+
+def _fallback_findings(reason: str) -> dict[str, list[dict[str, Any]]]:
+    return {
+        "anomalies_confirmees": [],
+        "points_attention": [
+            {
+                "description": "Analyse automatique complete indisponible",
+                "detail": reason,
+            }
+        ],
+        "informations_manquantes": [
+            {
+                "description": "Les donnees cles n'ont pas pu etre confirmees automatiquement",
+                "detail": (
+                    "Le document doit etre relu manuellement ou relance quand le fournisseur IA "
+                    "redevient disponible."
+                ),
+            }
+        ],
+        "verifications_recommandees": [
+            {
+                "description": "Relancer l'analyse IA avant toute decision definitive",
+                "detail": (
+                    "La note ci-dessous est une synthese de secours, pas une revue cabinet "
+                    "complete."
+                ),
+            }
+        ],
+    }
+
+
+def _fallback_review_state(
+    state: ReviewState,
+    *,
+    reason: str,
+    code: str = "llm_unavailable",
+) -> ReviewState:
+    text_len = len(state.get("anonymized_text") or "")
+    entity_summary = state.get("entity_summary") or {}
+    entity_count = sum(v for v in entity_summary.values() if isinstance(v, int))
+    current_findings = state.get("findings") or {}
+    findings = current_findings if any(current_findings.values()) else _fallback_findings(reason)
+
+    return {
+        **state,
+        "doc_type": state.get("doc_type") or "analyse_limitee",
+        "doc_type_confidence": float(state.get("doc_type_confidence") or 0.0),
+        "extracted_data": state.get("extracted_data") or {
+            "objet": "Analyse IA limitee par indisponibilite temporaire",
+            "references": [],
+            "montants_cles": {},
+            "entites_detectees": entity_summary,
+        },
+        "analysis": state.get("analysis") or {
+            "completude": {
+                "score": 0.0,
+                "elements_manquants": ["Revue IA complete non executee"],
+            },
+            "coherence": {"score": 0.0, "observations": [reason]},
+            "points_attention": ["Relance necessaire avant conclusion metier"],
+            "conformite": {"observations": []},
+            "qualite_globale": 0.0,
+        },
+        "findings": findings,
+        "review_note": (
+            "Analyse complete temporairement indisponible: le fournisseur IA limite ou refuse "
+            "les requetes. Le document anonymise reste exploitable dans ConfiDoc, mais cette "
+            "note doit etre consideree "
+            "comme une synthese de secours. Relancez l'analyse avant toute conclusion definitive."
+        ),
+        "demandes_formelles": state.get("demandes_formelles") or [],
+        "pieces_a_verifier": state.get("pieces_a_verifier") or [
+            "Document anonymise source",
+            "Pieces justificatives mentionnees dans le document",
+            "Donnees cles a valider manuellement",
+        ],
+        "review_complement": state.get("review_complement") or {
+            "identification": (
+                f"Document anonymise disponible ({text_len} caracteres, "
+                f"{entity_count} entites detectees)."
+            ),
+            "chiffres_cles": (
+                "Extraction automatique limitee pendant l'indisponibilite du fournisseur IA."
+            ),
+        },
+        "confidence": min(float(state.get("confidence") or 0.2), 0.35),
+        "verdict": state.get("verdict") or "reserve",
+        "prochaines_actions": state.get("prochaines_actions") or [
+            "Relancer l'analyse IA dans quelques minutes.",
+            "Effectuer une revue manuelle des montants, dates et parties avant decision.",
+            "Verifier la configuration et le quota Mistral si l'erreur persiste.",
+        ],
+        "current_step": "synthesize",
+        "steps_completed": list(_STEPS_ORDER),
+        "error": reason,
+        "error_code": code,
+        "degraded": True,
+    }
+
+
+def _stream_payload(state: ReviewState) -> dict[str, Any]:
+    return {k: v for k, v in state.items() if k not in {"anonymized_text"}}
 
 
 # ── Node 1: Classify ────────────────────────────────────────────────────
@@ -585,38 +813,29 @@ async def run_review(
     **kwargs: Any,
 ) -> dict[str, Any]:
     graph = get_review_graph()
-
-    initial_state: ReviewState = {
-        "anonymized_text": anonymized_text,
-        "entity_summary": entity_summary or {},
-        "docling_tables": kwargs.get("docling_tables", []),
-        "docling_sections": kwargs.get("docling_sections", []),
-        "doc_type": "",
-        "doc_type_confidence": 0.0,
-        "extracted_data": {},
-        "analysis": {},
-        "findings": {},
-        "review_note": "",
-        "sections": {},
-        "confidence": 0.0,
-        "verdict": "",
-        "prochaines_actions": [],
-        "demandes_formelles": [],
-        "pieces_a_verifier": [],
-        "review_complement": {},
-        "current_step": "init",
-        "steps_completed": [],
-        "error": None,
-    }
+    initial_state = _initial_review_state(anonymized_text, entity_summary, **kwargs)
 
     try:
         final_state = await graph.ainvoke(initial_state)
         return dict(final_state)
+    except ReviewAgentTransientError as exc:
+        logger.warning("review_agent_degraded", error=str(exc), code=exc.code)
+        return dict(
+            _fallback_review_state(
+                initial_state,
+                reason=str(exc),
+                code=exc.code,
+            )
+        )
     except Exception as exc:
         logger.error("review_agent_failed", error=str(exc))
         return {
             **initial_state,
-            "error": f"{type(exc).__name__}: {str(exc)[:300]}",
+            "error": (
+                "L'analyse n'a pas pu aboutir. Relancez l'analyse ou contactez le support "
+                "si le probleme persiste."
+            ),
+            "error_code": "review_agent_error",
             "current_step": "error",
         }
 
@@ -628,39 +847,9 @@ async def run_review_streaming(
 ):
     """Yield step updates as they complete (SSE-friendly)."""
     graph = get_review_graph()
-
-    initial_state: ReviewState = {
-        "anonymized_text": anonymized_text,
-        "entity_summary": entity_summary or {},
-        "docling_tables": kwargs.get("docling_tables", []),
-        "docling_sections": kwargs.get("docling_sections", []),
-        "doc_type": "",
-        "doc_type_confidence": 0.0,
-        "extracted_data": {},
-        "analysis": {},
-        "findings": {},
-        "review_note": "",
-        "sections": {},
-        "confidence": 0.0,
-        "verdict": "",
-        "prochaines_actions": [],
-        "demandes_formelles": [],
-        "pieces_a_verifier": [],
-        "review_complement": {},
-        "current_step": "init",
-        "steps_completed": [],
-        "error": None,
-    }
-
-    steps_order = ["classify", "extract", "analyze", "findings", "filter", "synthesize"]
-    step_labels = {
-        "classify": "Classification du document",
-        "extract": "Extraction des donnees cles",
-        "analyze": "Analyse metier",
-        "findings": "Identification des constats",
-        "filter": "Controle qualite des constats",
-        "synthesize": "Synthese cabinet (5 blocs)",
-    }
+    initial_state = _initial_review_state(anonymized_text, entity_summary, **kwargs)
+    latest_state: ReviewState = dict(initial_state)
+    completed_steps: set[str] = set()
 
     def _iter_chunks(raw: object) -> dict[str, Any]:
         """Normalise les chunks LangGraph en {nom_nœud: sortie}.
@@ -689,13 +878,15 @@ async def run_review_streaming(
         ):
             state = _iter_chunks(raw_chunk)
             for node_name, node_output in state.items():
-                if node_name not in steps_order:
+                if node_name not in _STEPS_ORDER:
                     continue
                 if not isinstance(node_output, dict):
                     continue
+                latest_state.update(node_output)
+                completed_steps.add(node_name)
                 yield {
                     "step": node_name,
-                    "label": step_labels.get(node_name, node_name),
+                    "label": _STEP_LABELS.get(node_name, node_name),
                     "status": "done",
                     "data": {
                         k: v
@@ -704,17 +895,42 @@ async def run_review_streaming(
                     },
                 }
 
-                idx = steps_order.index(node_name)
-                if idx + 1 < len(steps_order):
-                    next_step = steps_order[idx + 1]
+                idx = _STEPS_ORDER.index(node_name)
+                if idx + 1 < len(_STEPS_ORDER):
+                    next_step = _STEPS_ORDER[idx + 1]
                     yield {
                         "step": next_step,
-                        "label": step_labels.get(next_step, next_step),
+                        "label": _STEP_LABELS.get(next_step, next_step),
                         "status": "running",
                         "data": {},
                     }
 
         yield {"step": "complete", "label": "Analyse terminee", "status": "complete", "data": {}}
+
+    except ReviewAgentTransientError as exc:
+        logger.warning("review_agent_stream_degraded", error=str(exc), code=exc.code)
+        fallback = _fallback_review_state(latest_state, reason=str(exc), code=exc.code)
+        for step in _STEPS_ORDER:
+            if step in completed_steps:
+                continue
+            yield {
+                "step": step,
+                "label": _STEP_LABELS.get(step, step),
+                "status": "running",
+                "data": {},
+            }
+            yield {
+                "step": step,
+                "label": _STEP_LABELS.get(step, step),
+                "status": "done",
+                "data": _stream_payload(fallback),
+            }
+        yield {
+            "step": "complete",
+            "label": "Analyse terminee en mode degrade",
+            "status": "complete",
+            "data": {"degraded": True, "error_code": exc.code},
+        }
 
     except Exception as exc:
         logger.error("review_agent_stream_failed", error=str(exc))
@@ -722,5 +938,11 @@ async def run_review_streaming(
             "step": "error",
             "label": "Erreur",
             "status": "error",
-            "data": {"error": f"{type(exc).__name__}: {str(exc)[:300]}"},
+            "data": {
+                "error": (
+                    "L'analyse n'a pas pu aboutir. Relancez l'analyse ou contactez le "
+                    "support si le probleme persiste."
+                ),
+                "code": "review_agent_error",
+            },
         }

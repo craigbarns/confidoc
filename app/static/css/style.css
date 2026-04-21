@@ -2006,6 +2006,7 @@ body {
 }
 .toast.success { border-left-color: var(--success); color: var(--success); }
 .toast.error { border-left-color: var(--danger); color: var(--danger); }
+.toast.warning { border-left-color: var(--warning); color: var(--warning); }
 .toast.hide { animation: toast-out 0.2s ease forwards; }
 
 /* ─── CONFIRM DIALOG ───────────────────────────────────────────── */
