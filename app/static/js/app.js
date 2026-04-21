@@ -2511,7 +2511,9 @@ function renderReviewResult(data) {
   if (verdict) {
     const verdictIcons = { favorable: "\u2705", reserve: "\u26A0\uFE0F", defavorable: "\u274C" };
     const verdictLabels = { favorable: "Favorable", reserve: "Reserve", defavorable: "Defavorable" };
-    html += `<div class="review-verdict ${verdict}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)${docType ? ` — <span class="review-doc-type">${escapeHtml(docType)}</span>` : ""}</div>`;
+    const verdictClasses = { favorable: "good", reserve: "warning", defavorable: "critical" };
+    const verdictClass = verdictClasses[verdict] || "neutral";
+    html += `<div class="review-verdict ${verdictClass}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)${docType ? ` — <span class="review-doc-type">${escapeHtml(docType)}</span>` : ""}</div>`;
   }
 
   html += block("1", "Résumé exécutif", reviewNote ? escapeHtml(reviewNote) : "Aucun resume disponible.");
