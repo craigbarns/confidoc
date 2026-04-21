@@ -85,6 +85,79 @@ def test_anonymize_with_dictionary_partial_and_post_cleanup():
     assert "421 [PERSONNE]" in anonymized
     assert "[ADRESSE]" in anonymized
 
+def test_anonymize_with_dictionary_masks_labeled_identity_fields():
+    text = (
+        "Nom: Gregory Baranes\n"
+        "Prénom: Gregory\n"
+        "Raison sociale: ConfiDoc SAS\n"
+        "N° client: C2024-001\n"
+        "BIC: SOGEFRPP\n"
+        "Date de naissance: 01/01/1985 à Lyon"
+    )
+    res = anonymize_with_dictionary(text)
+
+    anonymized = res["anonymized_text"]
+    assert "Gregory" not in anonymized
+    assert "Baranes" not in anonymized
+    assert "ConfiDoc" not in anonymized
+    assert "C2024-001" not in anonymized
+    assert "SOGEFRPP" not in anonymized
+    assert "01/01/1985" not in anonymized
+    assert "Lyon" not in anonymized
+    assert "Nom: [PERSONNE]" in anonymized
+    assert "Raison sociale: [SOCIETE]" in anonymized
+    assert "N° client: [ID]" in anonymized
+    assert "BIC: [BIC]" in anonymized
+    assert "Date de naissance: [DATE_NAISSANCE] à [VILLE]" in anonymized
+
+def test_anonymize_with_dictionary_preserves_siret_and_vat_boundaries():
+    text = (
+        "Client: Alice Dupont\n"
+        "Société: ACME Conseil SAS\n"
+        "SIRET: 832 419 428 00038\n"
+        "TVA: FR 12 832419428\n"
+        "IBAN: FR76 3000 6000 0112 3456 7890 189\n"
+        "Adresse: 12 rue Exemple 75008 Paris\n"
+        "Téléphone: 06 12 34 56 78\n"
+        "Email: alice.dupont@example.com"
+    )
+    res = anonymize_with_dictionary(text)
+
+    anonymized = res["anonymized_text"]
+    assert "Alice" not in anonymized
+    assert "Dupont" not in anonymized
+    assert "ACME" not in anonymized
+    assert "832 419 428 00038" not in anonymized
+    assert "FR 12 832419428" not in anonymized
+    assert "FR76 3000 6000 0112 3456 7890 189" not in anonymized
+    assert "06 12 34 56 78" not in anonymized
+    assert "alice.dupont@example.com" not in anonymized
+    assert "SIRET: [SIRET]" in anonymized
+    assert "TVA: [TVA]" in anonymized
+    assert "IBAN: [IBAN]" in anonymized
+
+def test_anonymize_with_dictionary_masks_accounting_name_lines_without_amount_false_positive():
+    text = (
+        "DUPONT ALICE\n"
+        "421 DUPONT ALICE\n"
+        "51210000 QONTO\n"
+        "COMPTE DE RESULTAT\n"
+        "CHIFFRE D AFFAIRES 120000 EUR\n"
+        "RESULTAT NET 45000 EUR"
+    )
+    res = anonymize_with_dictionary(text)
+
+    anonymized = res["anonymized_text"]
+    assert "DUPONT" not in anonymized
+    assert "ALICE" not in anonymized
+    assert "QONTO" not in anonymized
+    assert "[PERSONNE]" in anonymized
+    assert "421 [PERSONNE]" in anonymized
+    assert "512 [BANQUE]" in anonymized
+    assert "120000 EUR" in anonymized
+    assert "45000 EUR" in anonymized
+    assert "[ADRESSE_VILLE]" not in anonymized
+
 @pytest.mark.asyncio
 async def test_anonymize_document_dictionary():
     # 354-355

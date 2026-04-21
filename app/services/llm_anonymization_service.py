@@ -89,7 +89,14 @@ def _clean_json_response(raw: str) -> dict[str, Any] | None:
 
 
 def _fallback_anonymize(text: str) -> str:
-    """Anonymisation fallback basique si LLM échoue."""
+    """Anonymisation fallback deterministe si LLM echoue."""
+    try:
+        from app.services.dictionary_anonymization_service import anonymize_with_dictionary
+
+        return str(anonymize_with_dictionary(text).get("anonymized_text") or "")
+    except Exception as exc:
+        logger.warning("llm_anonymization_dictionary_fallback_failed", error=str(exc))
+
     patterns = [
         (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', TOKEN_EMAIL),
         (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', TOKEN_TELEPHONE),

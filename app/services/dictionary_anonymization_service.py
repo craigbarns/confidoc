@@ -52,6 +52,65 @@ def _load_external_rules() -> ExternalRules | None:
 _external = _load_external_rules()
 
 REPLACEMENT_RULES: list[Rule] = [
+    # === VALEURS LIBELLEES ===
+    (
+        r'(?im)^((?:nom|pr[ée]nom|contact|dirigeant|g[ée]rant|titulaire|b[ée]n[ée]ficiaire)'
+        r'\s*[:\-]\s*)[^\n;]{2,100}$',
+        r'\1[PERSONNE]',
+        True,
+    ),
+    (
+        r'(?im)^((?:client|destinataire|interlocuteur)\s*[:\-]\s*)[^\n;]{2,120}$',
+        r'\1[CLIENT]',
+        True,
+    ),
+    (
+        r'(?im)^((?:raison\s+sociale|soci[ée]t[ée]|fournisseur|prestataire)'
+        r'\s*[:\-]\s*)[^\n;]{2,140}$',
+        r'\1[SOCIETE]',
+        True,
+    ),
+    (
+        r'(?im)^((?:n[°o]\s*(?:client|compte|dossier|contrat)|num[ée]ro\s+(?:client|compte|dossier|contrat))'
+        r'\s*[:\-]?\s*)[A-Z0-9][A-Z0-9\-_/]{2,40}$',
+        r'\1[ID]',
+        True,
+    ),
+
+    # === IDENTIFIANTS GENERIQUES ===
+    (
+        r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?'
+        r'(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b',
+        '[IBAN]',
+        False,
+    ),
+    (r'(?i)\bFR\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{3}\b', '[TVA]', False),
+    (r'\[SIRET\]', '[SIRET_SOCIETE_1]', False),  # Deja tokenise
+    (r'\b\d{3}\s*\d{3}\s*\d{3}\s*\d{5}\b', '[SIRET]', False),  # SIRET generique
+    (r'\b\d{9}\b', '[SIREN]', False),
+    (r'\b[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2}\b', '[NIR]', False),
+    (r'(?im)\b(BIC\s*[:\-]?\s*)[A-Z]{6}[A-Z0-9]{2}(?:[A-Z0-9]{3})?\b', r'\1[BIC]', True),
+    (
+        r'(?im)\b((?:date\s+de\s+naissance|n[ée]e?\s+le)\s*[:\-]?\s*)'
+        r'\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4}\b',
+        r'\1[DATE_NAISSANCE]',
+        True,
+    ),
+
+    # === SOCIETES / TIERS GENERIQUES ===
+    (
+        r'(?i)\b(?:SASU?|SARL|EURL|SCI|SA|SNC|SELARL|SCP|Association|GIE|EI|EIRL)\s+'
+        r'[A-Z0-9][A-Z0-9À-ÿ &\'’.\-]{1,80}\b',
+        '[SOCIETE]',
+        False,
+    ),
+    (
+        r'(?i)\b[A-Z0-9][A-Z0-9À-ÿ &\'’.\-]{1,80}\s+'
+        r'(?:SASU?|SARL|EURL|SCI|SA|SNC|SELARL|SCP|Association|GIE|EI|EIRL)\b',
+        '[SOCIETE]',
+        False,
+    ),
+
     # === ADRESSES / LOCALISATION ===
     (
         r'(?i)\b\d{1,4}\s*[,.]?\s*(?:bis|ter)?\s*'
@@ -60,22 +119,21 @@ REPLACEMENT_RULES: list[Rule] = [
         '[ADRESSE]',
         False,
     ),
-    (r'\b\d{5}\s+[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
+    (r'\b\d{5}\s+(?!(?:EUR|EUROS?)\b)[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
 
     # === PERSONNES ===
     (
         r'(?i)\b(?:M|Mme|Madame|Monsieur|Dr|Me)\.?\s+'
-        r'[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}\b',
+        r'[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}(?:\s+[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-]{1,40}){0,2}\b',
         '[PERSONNE]',
         False,
     ),
-
-    # === SOCIÉTÉS / TIERS GÉNÉRIQUES ===
     (
-        r'(?i)\b(?:SASU?|SARL|EURL|SCI|SA|SNC|SELARL|SCP|Association)\s+'
-        r'[A-Z0-9][A-Z0-9 &\'’.\-]{1,80}\b',
-        '[SOCIETE]',
-        False,
+        r'(?m)^(?!(?:COMPTE|CHIFFRE|RESULTAT|R[ÉE]SULTAT|TOTAL|BILAN|ACTIF|PASSIF|'
+        r'GRAND|LIVRE|BALANCE|JOURNAL|EXERCICE|PERIODE|P[ÉE]RIODE)\b)'
+        r'[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}(?:\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}){1,3}$',
+        '[PERSONNE]',
+        True,
     ),
 
     # === BANQUES / TIERS COURANTS ===
@@ -88,19 +146,7 @@ REPLACEMENT_RULES: list[Rule] = [
     (r'(?i)\bAXA\b', '[ASSUREUR_2]', False),
     (r'(?i)\bAG2R\b', '[ORGANISME_1]', False),
 
-    # === IDENTIFIANTS GÉNÉRIQUES ===
-    (r'\[SIRET\]', '[SIRET_SOCIETE_1]', False),  # Déjà tokenisé
-    (r'\b\d{3}\s*\d{3}\s*\d{3}\s*\d{5}\b', '[SIRET]', False),  # SIRET générique
-    (r'\b\d{9}\b', '[SIREN]', False),
-    (
-        r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?'
-        r'(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b',
-        '[IBAN]',
-        False,
-    ),
-    (r'\b[12]\s?\d{2}\s?\d{2}\s?\d{2}\s?\d{3}\s?\d{3}\s?\d{2}\b', '[NIR]', False),
-
-    # === DONNÉES PERSONNELLES ===
+    # === DONNEES PERSONNELLES ===
     (r'(?i)N°\s*D[ée]partement\s+\d{1,3}', 'N° Département [DEPT_NAISSANCE]', False),
     (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', '[EMAIL]', False),
     (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', '[TELEPHONE]', False),
@@ -108,9 +154,10 @@ REPLACEMENT_RULES: list[Rule] = [
 
 # Remplacements dans les libellés comptables (partiels)
 PARTIAL_REPLACEMENTS: list[Rule] = [
-    (r'(?i)\b421\w*\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}\b', '421 [PERSONNE]', False),
-    (r'(?i)\b455\w*\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}\b', '455 [PERSONNE]', False),
-    (r'(?i)\b451\w*\s+[A-Z0-9][A-Z0-9 &\'’.\-]{2,80}\b', '451 [SOCIETE]', False),
+    (r'(?i)\b421\w*\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}(?:\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}){0,3}\b', '421 [PERSONNE]', False),
+    (r'(?i)\b455\w*\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}(?:\s+[A-ZÀ-Ÿ][A-ZÀ-Ÿ\'\-]{2,40}){0,3}\b', '455 [PERSONNE]', False),
+    (r'(?i)\b451\w*\s+[A-Z0-9][A-Z0-9À-ÿ &\'’.\-]{2,80}\b', '451 [SOCIETE]', False),
+    (r'(?i)\b512\w*\s+(?:QONTO|REVOLUT|BNP|BRED|LCL|CIC|CAISSE\s+D[\'’]EPARGNE|CR[ÉE]DIT\s+AGRICOLE)\b', '512 [BANQUE]', False),
 ]
 
 # Nettoyage RGPD final: éliminer les fuites résiduelles après remplacements principaux.
@@ -141,10 +188,13 @@ POST_CLEANUP_RULES = [
     (r'(?i)\bLot\s+\d[\d\s]{2,20}[-–]?\s*(?:Bât|Bat|B[aâ]timent)?[^\n]{0,100}', '[ADRESSE]', False),
 
     # 4) CP + ville (5 chiffres + mot majuscule)
-    (r'\b\d{5}\s+[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
+    (r'\b\d{5}\s+(?!(?:EUR|EUROS?)\b)[A-ZÀ-ÿ][A-ZÀ-ÿ\'\-\s]{1,40}\b', '[ADRESSE_VILLE]', False),
 
-    # 4b) Standalone French postal codes
-    (r'\b\d{5}\b', '[CODE_POSTAL]', False),
+    # 4b) Standalone postal code only when explicitly labelled.
+    (r'(?i)\b((?:code\s*postal|cp)\s*[:\-]?\s*)\d{5}\b', r'\1[CODE_POSTAL]', False),
+
+    # 4c) Birth place that remains after a labelled birth date.
+    (r'(?i)(\[DATE_NAISSANCE\]\s+[àa]\s+)[A-ZÀ-ÿ][A-Za-zÀ-ÿ\'\-\s]{1,40}', r'\1[VILLE]', False),
 
     # 5) Prénom ou nom partiellement visible avant/après token personne
     #    ex: "Gregory [PERSONNE_1]" ou "M [PERSONNE_1]"
