@@ -3182,3 +3182,32 @@ body {
     white-space: nowrap;
   }
 }
+
+/* ─── NEW FEATURES STYLES ───────────────────────────────────────── */
+.audit-finding {
+  padding: 8px 12px;
+  border-radius: var(--radius);
+  margin-bottom: 8px;
+  font-size: 0.85rem;
+  border-left: 3px solid transparent;
+}
+.severity-low { background: var(--bg-hover); border-color: var(--success); }
+.severity-medium { background: var(--warning-dim); border-color: var(--warning); }
+.severity-high { background: var(--danger-dim); border-color: var(--danger); }
+.severity-critical { background: var(--danger); color: white; border-color: #fff; }
+
+.header-pills { display: flex; gap: 8px; align-items: center; }
+.header-pill {
+  padding: 4px 10px;
+  border-radius: 99px;
+  font-size: 0.75rem;
+  font-weight: 600;
+  display: inline-flex;
+  align-items: center;
+  gap: 5px;
+}
+.info-icon-group {
+  display: inline-flex;
+  align-items: center;
+  margin: 0 8px;
+}

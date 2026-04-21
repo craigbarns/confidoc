@@ -28,6 +28,12 @@ migrate-new: ## Créer une nouvelle migration (usage: make migrate-new msg="desc
 test: ## Lancer les tests
 	pytest -v --cov=app --cov-report=term-missing
 
+golden: ## Lancer les tests de régression Golden Sets (actifs uniquement)
+	PYTHONPATH=. python3 scripts/run_golden_v2.py --json-report
+
+golden-all: ## Lancer TOUS les tests Golden Sets (y compris drafts)
+	PYTHONPATH=. python3 scripts/run_golden_v2.py --include-inactive --json-report
+
 lint: ## Vérifier le code
 	ruff check app/ tests/
 	mypy app/

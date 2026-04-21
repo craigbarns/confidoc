@@ -1,0 +1,47 @@
+<h2>Section 1 — Démo publique sans login</h2>
+<p class="subtitle">Comment un investor peut tester le produit en 60 secondes, sans créer de compte</p>
+
+<div class="section">
+  <h3>Architecture proposée</h3>
+  <p>Ajouter un endpoint <strong>GET /api/v1/demo/public</strong> qui retourne un résultat de démo pré-calculé. Pas d'authentification, pas de Celery, pas de risque. Le document de démo est déjà dans <code>/static/demo_doc.pdf</code> — on pré-calcule son résultat une fois et on le cache en Redis.</p>
+</div>
+
+<div style="display:flex; flex-direction:column; gap:12px; max-width:700px; margin:0 auto;">
+  <div class="mock-nav" style="background:#1e1b4b; border-radius:8px; padding:12px 16px; color:#a29bfe; font-size:0.85rem; text-align:center;">
+    🌐 Landing page (public, sans login)
+  </div>
+  <div style="text-align:center; color:#64748b; font-size:1.2rem;">↓ clic sur "Tester maintenant"</div>
+  <div style="display:flex; gap:12px;">
+    <div class="mock-content" style="flex:1; background:#0f172a; border:1px solid rgba(99,102,241,0.3); border-radius:8px; padding:16px; font-size:0.85rem;">
+      <div style="color:#6366f1; font-weight:600; margin-bottom:8px;">GET /api/v1/demo/public</div>
+      <div style="color:#94a3b8;">• Aucune auth requise</div>
+      <div style="color:#94a3b8;">• Rate-limit: 10 req/min/IP</div>
+      <div style="color:#94a3b8;">• Retourne résultat pré-calculé</div>
+      <div style="color:#94a3b8;">• Cached Redis 1h</div>
+    </div>
+    <div style="display:flex; align-items:center; color:#64748b;">→</div>
+    <div class="mock-content" style="flex:1; background:#0f172a; border:1px solid rgba(16,185,129,0.3); border-radius:8px; padding:16px; font-size:0.85rem;">
+      <div style="color:#10b981; font-weight:600; margin-bottom:8px;">Résultat en direct dans la page</div>
+      <div style="color:#94a3b8;">• Texte original ↔ anonymisé</div>
+      <div style="color:#94a3b8;">• Entités détectées surlignées</div>
+      <div style="color:#94a3b8;">• Score RGPD affiché</div>
+      <div style="color:#94a3b8;">• Champs extraits (bilan)</div>
+    </div>
+  </div>
+  <div style="text-align:center; color:#64748b; font-size:1.2rem;">↓</div>
+  <div class="mock-nav" style="background:#1e1b4b; border-radius:8px; padding:12px 16px; color:#a29bfe; font-size:0.85rem; text-align:center;">
+    CTA: "Créer un compte pour traiter vos propres documents" → /ui
+  </div>
+</div>
+
+<div class="section" style="margin-top:2rem;">
+  <h3>Ce qui change dans le code</h3>
+  <ul style="list-style:none; padding:0; display:flex; flex-direction:column; gap:8px;">
+    <li style="display:flex; gap:10px; align-items:flex-start;"><span style="color:#10b981;">+</span> <span><strong>app/api/v1/demo.py</strong> — nouveau endpoint GET /public (pas de CurrentUser)</span></li>
+    <li style="display:flex; gap:10px; align-items:flex-start;"><span style="color:#10b981;">+</span> <span><strong>app/services/demo_service.py</strong> — calcule et cache le résultat de démo</span></li>
+    <li style="display:flex; gap:10px; align-items:flex-start;"><span style="color:#10b981;">+</span> <span><strong>landing.html</strong> — section "Live Demo" avec viewer inline</span></li>
+    <li style="display:flex; gap:10px; align-items:flex-start;"><span style="color:#f59e0b;">~</span> <span><strong>app/rate_limit.py</strong> — règle spécifique pour /demo/public</span></li>
+  </ul>
+</div>
+
+<p style="text-align:center; color:#64748b; margin-top:2rem; font-size:0.9rem;">Section 1/3 — Est-ce que cette approche pour la démo publique te convient ?</p>

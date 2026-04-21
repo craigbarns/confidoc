@@ -6,6 +6,7 @@ Ces routes sont statiques et doivent être déclarées AVANT /{document_id}.
 
 from __future__ import annotations
 
+import json
 from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query, Response, status
@@ -95,6 +96,38 @@ def _calculate_gdpr_score(
         },
         "recommendations": recommendations,
     }
+
+
+@router.get(
+    "/golden-report",
+    status_code=status.HTTP_200_OK,
+    summary="Récupérer le dernier rapport de non-régression (Golden Sets)",
+)
+async def get_golden_report(current_user: CurrentUser) -> dict:
+    """Sert le rapport JSON généré par scripts/run_golden_v2.py."""
+    import os
+    # On cherche golden/latest_quality_report.json dans le root du projet
+    root = os.getcwd()
+    report_path = os.path.join(root, "golden", "latest_quality_report.json")
+    
+    if not os.path.exists(report_path):
+        return {
+            "status": "no_report",
+            "message": "Aucun rapport généré. Lancez 'make golden' d'abord.",
+            "metrics": {
+                "pass_rate": 0,
+                "total": 0,
+                "passed": 0,
+                "failed": 0
+            }
+        }
+        
+    try:
+        with open(report_path, "r", encoding="utf-8") as f:
+            return json.load(f)
+    except Exception as exc:
+        logger.error("golden_report_read_failed", error=str(exc))
+        return {"status": "error", "message": str(exc)}
 
 
 @router.get(

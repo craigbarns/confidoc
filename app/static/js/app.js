@@ -1184,11 +1184,14 @@ function hideAnonLoading() {
   $("btn-anonymize").disabled = false;
 }
 
-function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization") {
+function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization", fullData = {}) {
   hideAnonLoading();
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+
+  // Render audit insights if available
+  renderAuditInsights(fullData);
 
   // Render summary chips
   const chips = $("anon-summary-chips");
@@ -1267,7 +1270,7 @@ async function anonymize() {
       updatePipelineTimeline({ status: "processing", extractDone: true, anonymDone: false });
     } else if (res.ok) {
       const data = await res.json();
-      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {}, data.risk || null, data.mode || mode);
+      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {}, data.risk || null, data.mode || mode, data);
       toast(`${data.detections_count ?? 0} entité(s) anonymisée(s) (${mode === "anonymization" ? "anonymisation forte" : "pseudonymisation"})`, "success");
       currentDocStatus = "ready";
       updateHeaderContext();
@@ -2017,6 +2020,60 @@ async function exportPdf() {
   }
 }
 
+
+async function exportFec() {
+  if (!currentDocId) return;
+  try {
+    const resp = await apiRequest(`/documents/${currentDocId}/export-fec`);
+    const blob = new Blob([await resp.text()], { type: "text/plain;charset=utf-8" });
+    triggerDownload(blob, `FEC_${currentDocId.slice(0, 8)}.txt`);
+    toast("Export FEC terminé", "success");
+  } catch (e) {
+    console.error("exportFec error:", e);
+    toast(`Erreur export FEC: ${e.message}`, "error");
+  }
+}
+
+async function loadGoldenReport() {
+  try {
+    const data = await apiFetch("/stats/golden-report");
+    if (data && data.pass_rate !== undefined) {
+      const badge = document.createElement("div");
+      badge.className = "header-pill";
+      badge.style.background = "rgba(16,185,129,0.15)";
+      badge.style.color = "#10b981";
+      badge.style.border = "1px solid rgba(16,185,129,0.3)";
+      badge.innerHTML = `🛡️ Qualité Corpus: <strong>${Math.round(data.pass_rate)}%</strong>`;
+      badge.title = `Taux de succès sur ${data.total} cas de référence métiers`;
+      $("header-pills")?.appendChild(badge);
+    }
+  } catch (_e) {}
+}
+
+function renderAuditInsights(data) {
+  const panel = $("audit-insights");
+  if (!panel) return;
+  
+  const score = data.audit_risk_score ?? 0;
+  const findings = data.audit_findings || [];
+  
+  if (findings.length === 0 && score === 0) {
+    panel.style.display = "none";
+    return;
+  }
+  
+  panel.style.display = "";
+  $("audit-risk-score").textContent = score;
+  
+  const findingsEl = $("audit-findings");
+  if (findingsEl) {
+    findingsEl.innerHTML = findings.map(f => `
+      <div class="audit-finding severity-${f.severity}">
+        <strong>${escapeHtml(f.label)}</strong>: ${escapeHtml(f.detail)}
+      </div>
+    `).join("");
+  }
+}
 
 async function showApproveExportPrompt() {
   if (!currentDocId) return;
@@ -3201,8 +3258,12 @@ document.addEventListener("DOMContentLoaded", () => {
   // Export
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
+  if ($("btn-export-fec")) $("btn-export-fec").addEventListener("click", exportFec);
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
   if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
+
+  // Load Global Quality on startup
+  loadGoldenReport();
 
   // Logo → dashboard
   if ($("logo-btn")) $("logo-btn").addEventListener("click", showDashboard);

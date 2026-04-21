@@ -1,0 +1,79 @@
+<h2>Section 3 — L'app elle-même</h2>
+<p class="subtitle">Ce que voit l'investor quand il se connecte — et ce qu'il devrait voir</p>
+
+<div class="section">
+  <h3>Problème actuel</h3>
+  <p>Un investor qui se connecte aujourd'hui arrive sur un dashboard avec <strong>0 docs, 0 entités, RGPD score à 0</strong>. C'est l'effet "app vide". L'app est puissante mais ça ne se voit pas si rien n'est chargé.</p>
+</div>
+
+<div class="split">
+  <div class="mockup">
+    <div class="mockup-header" style="background:#7f1d1d; color:#fca5a5;">❌ Aujourd'hui — Investor se connecte</div>
+    <div class="mockup-body" style="padding:16px; font-size:0.8rem;">
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px; margin-bottom:12px;">
+        <div style="background:#0f172a; border:1px solid #1e293b; border-radius:6px; padding:10px; text-align:center;">
+          <div style="font-size:1.4rem; font-weight:700; color:#6366f1;">0</div>
+          <div style="color:#475569; font-size:0.75rem;">Documents</div>
+        </div>
+        <div style="background:#0f172a; border:1px solid #1e293b; border-radius:6px; padding:10px; text-align:center;">
+          <div style="font-size:1.4rem; font-weight:700; color:#6366f1;">0</div>
+          <div style="color:#475569; font-size:0.75rem;">Entités masquées</div>
+        </div>
+      </div>
+      <div style="background:#0f172a; border:1px dashed #334155; border-radius:6px; padding:20px; text-align:center; color:#475569;">
+        Aucun document.<br>Uploadez-en un.
+      </div>
+    </div>
+  </div>
+
+  <div class="mockup">
+    <div class="mockup-header" style="background:#14532d; color:#86efac;">✓ Proposé — Onboarding guidé</div>
+    <div class="mockup-body" style="padding:16px; font-size:0.8rem;">
+      <div style="background:rgba(99,102,241,0.1); border:1px solid rgba(99,102,241,0.3); border-radius:8px; padding:12px; margin-bottom:12px;">
+        <div style="color:#a5b4fc; font-weight:600; margin-bottom:4px;">👋 Bienvenue sur ConfiDoc</div>
+        <div style="color:#94a3b8; font-size:0.75rem; margin-bottom:8px;">Testez en 1 clic avec un vrai document comptable anonymisé.</div>
+        <button style="background:#6366f1; color:white; border:none; border-radius:6px; padding:6px 14px; font-size:0.75rem; cursor:pointer;">▶ Lancer la démo maintenant</button>
+      </div>
+      <div style="display:grid; grid-template-columns:1fr 1fr; gap:8px;">
+        <div style="background:#0f172a; border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:10px; text-align:center;">
+          <div style="font-size:1.4rem; font-weight:700; color:#10b981;">1</div>
+          <div style="color:#475569; font-size:0.75rem;">Bilan_Social_2025</div>
+        </div>
+        <div style="background:#0f172a; border:1px solid rgba(16,185,129,0.3); border-radius:6px; padding:10px; text-align:center;">
+          <div style="font-size:1.4rem; font-weight:700; color:#10b981;">34</div>
+          <div style="color:#475569; font-size:0.75rem;">Entités masquées</div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<div class="section" style="margin-top:2rem;">
+  <h3>4 améliorations concrètes de l'app</h3>
+</div>
+
+<div style="display:flex; flex-direction:column; gap:10px; max-width:680px; margin:0 auto;">
+
+  <div style="background:#0f172a; border:1px solid rgba(99,102,241,0.3); border-radius:10px; padding:14px 18px;">
+    <div style="color:#a5b4fc; font-weight:600; margin-bottom:6px;">1 · Onboarding guidé au premier login</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Banner "Lancer la démo" qui appelle automatiquement POST /demo, attend le résultat, puis ouvre le doc dans l'app. L'investor est dans le flow anonymisation en 10 secondes.</div>
+  </div>
+
+  <div style="background:#0f172a; border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:14px 18px;">
+    <div style="color:#fcd34d; font-weight:600; margin-bottom:6px;">2 · Page /investor — métriques plateforme</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Page dédiée (accessible depuis le dashboard) avec KPIs globaux : total documents traités, taux Full Ready moyen, entités masquées cumulées, temps moyen. Non-auth ou token partageable.</div>
+  </div>
+
+  <div style="background:#0f172a; border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:14px 18px;">
+    <div style="color:#86efac; font-weight:600; margin-bottom:6px;">3 · Split-view anonymisation plus mise en avant</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Le split original/anonymisé et le diff existent déjà — mais sont montrés après validation. Les afficher immédiatement avec les entités colorées dès que l'anonymisation est terminée. C'est le "wow moment".</div>
+  </div>
+
+  <div style="background:#0f172a; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px;">
+    <div style="color:#e2e8f0; font-weight:600; margin-bottom:6px;">4 · Score RGPD + "Ready for AI" badge plus visible</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">L'anneau RGPD existe dans le dashboard mais pas dans la vue document. L'ajouter directement dans la barre du document anonymisé : "Score RGPD : 94 · Full Ready ✓".</div>
+  </div>
+
+</div>
+
+<p style="text-align:center; color:#64748b; margin-top:2rem; font-size:0.9rem;">Section 3/3 — Est-ce que ces améliorations app te conviennent ?</p>

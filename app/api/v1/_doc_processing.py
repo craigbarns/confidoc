@@ -439,6 +439,52 @@ async def validate_document(
     ))
     await db.commit()
 
+    # --- Auto-Golden Webhook ---
+    if args.corrected_data and args.doc_type:
+        try:
+            import os
+            import json
+            from pathlib import Path
+            from datetime import datetime, UTC
+            
+            root_dir = Path(os.getcwd())
+            draft_dir = root_dir / "golden" / "cases" / "draft" / f"{args.doc_type}_auto_{document.id}"
+            draft_dir.mkdir(parents=True, exist_ok=True)
+            
+            # Save input text
+            (draft_dir / "input.txt").write_text(final_text, encoding="utf-8")
+            
+            # Save expected minimal JSON
+            expected_data = {
+                "doc_type": args.doc_type,
+                "extractor_name": f"extractor_{args.doc_type}",
+                "critical_fields": args.corrected_data,
+                "quality": {
+                    "critical_missing_fields": [],
+                    "quality_flags_must_include": [],
+                    "quality_flags_must_exclude": ["critical_fields_missing"],
+                    "needs_review": False,
+                    "ready_for_ai": True
+                }
+            }
+            (draft_dir / "expected.min.json").write_text(json.dumps(expected_data, indent=2), encoding="utf-8")
+            
+            # Save meta.json
+            meta_data = {
+                "active": False,
+                "description": "Auto-generated from user manual correction in UI",
+                "source_filename": document.original_filename,
+                "requested_doc_type": args.doc_type,
+                "created_at": datetime.now(UTC).isoformat(),
+                "created_by": str(current_user.id)
+            }
+            (draft_dir / "meta.json").write_text(json.dumps(meta_data, indent=2), encoding="utf-8")
+            
+            logger.info("auto_golden_draft_created", document_id=str(document.id), doc_type=args.doc_type)
+        except Exception as exc:
+            logger.error("auto_golden_draft_failed", error=str(exc))
+    # ---------------------------
+
     from app.config import get_settings
     from app.services.webhook_notify import notify_document_validated
     settings = get_settings()

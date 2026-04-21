@@ -85,6 +85,73 @@ async def export_document(
 
 
 @router.get(
+    "/{document_id}/export-fec",
+    response_class=PlainTextResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Exporter au format FEC (Fichier des Écritures Comptables)",
+)
+async def export_fec(
+    document_id: str, current_user: CurrentUser, db: DbSession
+):
+    """Génère un fichier FEC simplifié pour intégration logicielle comptable."""
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    await _check_export_gate(db, document, current_user)
+
+    # Récupération des données structurées (LLM extraction)
+    from app.models.document_version import DocumentVersion, DocumentVersionType
+    result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.STRUCTURED_DATA,
+        )
+    )
+    structured_version = result.scalar_one_or_none()
+    if not structured_version:
+        raise http_404("Données structurées non disponibles. Lancez l'analyse IA d'abord.")
+
+    import json
+    data = json.loads(structured_version.content_text)
+    
+    # Construction du FEC (format tab-separated standard)
+    header = "JournalCode\tJournalLib\tEcritureNum\tEcritureDate\tCompteNum\tCompteLib\tCompteAuxNum\tCompteAuxLib\tPieceRef\tPieceDate\tEcritureLib\tDebit\tCredit\tEcritureLet\tDateLet\tValidDate\tMontantdevise\tIdevise"
+    lines = [header]
+    
+    journal = "HA" if "facture" in str(data.get("type_document", "")).lower() else "OD"
+    date_fec = datetime.now(UTC).strftime("%Y%m%d")
+    
+    # On crée une ligne pour chaque montant clé extrait
+    for i, m in enumerate(data.get("montants_cles", [])):
+        code = m.get("pcg_code") or "471000"
+        lib = m.get("libelle") or "Ecriture ConfiDoc"
+        val = m.get("montant") or 0
+        debit = f"{val:.2f}".replace(".", ",") if val > 0 else "0,00"
+        credit = f"{abs(val):.2f}".replace(".", ",") if val < 0 else "0,00"
+        
+        line = f"{journal}\tCONFILOG\t{i+1}\t{date_fec}\t{code}\t{lib}\t\t\t\t{date_fec}\t{lib}\t{debit}\t{credit}\t\t\t{date_fec}\t\t"
+        lines.append(line)
+        
+    fec_content = "\n".join(lines)
+    
+    # Audit log
+    try:
+        from app.models.audit_log import AuditLog
+        db.add(AuditLog(
+            user_id=current_user.id, org_id=document.org_id,
+            action="export:fec", resource_type="document",
+            resource_id=str(document.id), method="GET",
+            path=f"/api/v1/documents/{document_id}/export-fec", status_code=200,
+        ))
+        await db.commit()
+    except Exception:
+        pass
+
+    return PlainTextResponse(
+        fec_content, 
+        headers={"Content-Disposition": f"attachment; filename=FEC_{document.id}.txt"}
+    )
+
+
+@router.get(
     "/{document_id}/export-pdf",
     response_class=StreamingResponse,
     status_code=status.HTTP_200_OK,

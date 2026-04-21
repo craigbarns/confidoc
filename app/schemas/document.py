@@ -63,6 +63,14 @@ class ValidateDocumentRequest(BaseModel):
         default=None,
         description="Texte final validé, s'il a été édité manuellement.",
     )
+    doc_type: str | None = Field(
+        default=None,
+        description="Le type de document validé (ex: bilan, compte_resultat).",
+    )
+    corrected_data: dict[str, Any] | None = Field(
+        default=None,
+        description="Les données structurées après correction humaine (pour Golden Sets).",
+    )
 
 
 class EntityMappingItem(BaseModel):
@@ -70,6 +78,14 @@ class EntityMappingItem(BaseModel):
     placeholder: str = Field(description="Le token anonymisé, ex: [PERSONNE_1]")
     entity_type: str = Field(description="Type sémantique: PERSON, COMPANY, ADDRESS...")
     occurrences: int = Field(ge=0, description="Nombre d'occurrences dans le document")
+
+
+class KeyAmountItem(BaseModel):
+    libelle: str
+    montant: float
+    nature: str = Field(default="autre")
+    pcg_code: str | None = Field(default=None)
+    source_snippet: str | None = Field(default=None)
 
 
 class StructuredDocumentResponse(BaseModel):
@@ -98,6 +114,14 @@ class StructuredDocumentResponse(BaseModel):
 
     # Detections count
     detections_count: int = Field(ge=0, default=0)
+
+    # New Business and Audit fields
+    montants_cles: list[KeyAmountItem] = Field(default_factory=list)
+    totaux: dict[str, Any] = Field(default_factory=dict)
+    business_rules: dict[str, Any] = Field(default_factory=dict)
+    audit_risk_score: int = Field(default=0)
+    audit_findings: list[dict[str, Any]] = Field(default_factory=list)
+    requires_investigation: bool = Field(default=False)
 
     # Metadata
     anonymization_method: str | None = Field(
