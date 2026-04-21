@@ -2094,6 +2094,21 @@ function emptyDashboardData() {
   };
 }
 
+function emptyDossier360() {
+  return {
+    portfolio: {
+      clients_count: 0,
+      documents_count: 0,
+      average_score: 0,
+      ready_dossiers: 0,
+      at_risk_dossiers: 0,
+      critical_actions: 0,
+      top_missing_documents: [],
+    },
+    dossiers: [],
+  };
+}
+
 function dashboardErrorMessage(err) {
   const msg = String(err?.message || err || "");
   if (!msg) return "Statistiques indisponibles.";
@@ -2119,12 +2134,17 @@ async function loadDashboard() {
   if (content) content.style.display = "none";
 
   try {
-    const [statsResult, summaryResult] = await Promise.allSettled([
+    const [statsResult, summaryResult, dossierResult] = await Promise.allSettled([
       apiFetch("/documents/stats/dashboard"),
       apiFetch("/documents/status-summary?days=30"),
+      apiFetch("/documents/stats/dossier-360"),
     ]);
 
-    if (statsResult.status === "rejected" && summaryResult.status === "rejected") {
+    if (
+      statsResult.status === "rejected" &&
+      summaryResult.status === "rejected" &&
+      dossierResult.status === "rejected"
+    ) {
       throw new Error(
         `${dashboardErrorMessage(statsResult.reason)} ${dashboardErrorMessage(summaryResult.reason)}`.trim()
       );
@@ -2132,12 +2152,21 @@ async function loadDashboard() {
 
     const data = statsResult.status === "fulfilled" ? statsResult.value : emptyDashboardData();
     const summary = summaryResult.status === "fulfilled" ? summaryResult.value : {};
+    const dossier360 = dossierResult.status === "fulfilled" ? dossierResult.value : emptyDossier360();
 
-    dashboardLoaded = statsResult.status === "fulfilled" && summaryResult.status === "fulfilled";
-    renderDashboard(data, summary);
+    dashboardLoaded =
+      statsResult.status === "fulfilled" &&
+      summaryResult.status === "fulfilled" &&
+      dossierResult.status === "fulfilled";
+    renderDashboard(data, summary, dossier360);
 
     if (!dashboardLoaded) {
-      const failed = statsResult.status === "rejected" ? statsResult.reason : summaryResult.reason;
+      const failed =
+        statsResult.status === "rejected"
+          ? statsResult.reason
+          : summaryResult.status === "rejected"
+            ? summaryResult.reason
+            : dossierResult.reason;
       console.warn("loadDashboard partial:", failed);
       toast(`Dashboard partiel: ${dashboardErrorMessage(failed)}`, "warning");
     }
@@ -2152,7 +2181,7 @@ async function loadDashboard() {
   }
 }
 
-function renderDashboard(data, summary = {}) {
+function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const content = $("dash-content");
   if (!content) return;
   content.style.display = "";
@@ -2172,6 +2201,8 @@ function renderDashboard(data, summary = {}) {
   const ready = Math.max(0, summary.ready ?? sc.ready ?? 0);
   if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
   if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
+
+  renderDossier360(dossier360);
 
   // GDPR Score
   const gdpr = data.gdpr_score || {};
@@ -2320,6 +2351,68 @@ function renderDashboard(data, summary = {}) {
       return `<div class="dash-activity-col"><div class="dash-activity-bar" style="height:${h}px"></div><span class="dash-activity-label">${day}</span></div>`;
     }).join("");
   }
+}
+
+function riskLabel(level) {
+  const labels = { low: "Faible", medium: "Moyen", high: "Eleve", critical: "Critique" };
+  return labels[level] || level || "Inconnu";
+}
+
+function renderDossier360(payload = emptyDossier360()) {
+  const section = $("dash-dossier360");
+  const list = $("dash-d360-list");
+  if (!section || !list) return;
+
+  const portfolio = payload.portfolio || {};
+  const dossiers = payload.dossiers || [];
+  const clients = portfolio.clients_count || 0;
+
+  if ($("dash-d360-clients")) {
+    $("dash-d360-clients").textContent = `${clients} client${clients > 1 ? "s" : ""}`;
+  }
+  animateNumber($("dash-d360-score"), portfolio.average_score || 0);
+  animateNumber($("dash-d360-ready"), portfolio.ready_dossiers || 0);
+  animateNumber($("dash-d360-risk"), portfolio.at_risk_dossiers || 0);
+  animateNumber($("dash-d360-actions"), portfolio.critical_actions || 0);
+
+  if (!dossiers.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:16px">Aucun dossier client à analyser.</div>';
+    return;
+  }
+
+  list.innerHTML = dossiers.map((dossier) => {
+    const score = Math.max(0, Math.min(100, Math.round(dossier.score || 0)));
+    const risk = dossier.risk_level || "low";
+    const missing = (dossier.missing_documents || []).slice(0, 2);
+    const actions = (dossier.next_actions || []).slice(0, 2);
+    const blockers = (dossier.blockers || []).slice(0, 2);
+    const readyCount = dossier.ready_count || 0;
+    const docCount = dossier.document_count || 0;
+    return `<div class="dash-d360-card">
+      <div class="dash-d360-top">
+        <div>
+          <strong>${escapeHtml(dossier.client_name || "Sans client")}</strong>
+          <span>${readyCount}/${docCount} prêts · ${escapeHtml(dossier.readiness || "")}</span>
+        </div>
+        <span class="dash-risk-chip risk-${escapeHtml(risk)}">${escapeHtml(riskLabel(risk))}</span>
+      </div>
+      <div class="dash-d360-scoreline">
+        <div class="dash-d360-scorebar"><div style="width:${score}%"></div></div>
+        <strong>${score}</strong>
+      </div>
+      <div class="dash-d360-tags">
+        ${missing.length
+          ? missing.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+          : '<span class="good">Pieces clés couvertes</span>'}
+      </div>
+      ${blockers.length
+        ? `<ul class="dash-d360-alerts">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+        : ""}
+      <ul class="dash-d360-actions">
+        ${actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </div>`;
+  }).join("");
 }
 
 function animateNumber(el, target) {

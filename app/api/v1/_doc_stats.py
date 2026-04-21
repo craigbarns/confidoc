@@ -6,16 +6,17 @@ Ces routes sont statiques et doivent être déclarées AVANT /{document_id}.
 
 from __future__ import annotations
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy import func, select
+from sqlalchemy import desc, func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.database import async_session_factory
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.entity_detection import EntityDetection
+from app.services.dossier_360_service import build_dossier_360
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -66,7 +67,9 @@ def _calculate_gdpr_score(
 
     recommendations = []
     if failure_rate > 0.1:
-        recommendations.append("Plusieurs documents sont en échec. Vérifiez la qualité des fichiers sources.")
+        recommendations.append(
+            "Plusieurs documents sont en échec. Vérifiez la qualité des fichiers sources."
+        )
     if pending > 3:
         recommendations.append(f"{pending} documents sont en attente. Lancez l'analyse.")
     if risk_distribution.get("high", 0) + risk_distribution.get("critical", 0) > total_risks * 0.2:
@@ -74,7 +77,9 @@ def _calculate_gdpr_score(
     if ready == 0 and total_docs > 0:
         recommendations.append("Aucun document anonymisé. Lancez le traitement IA.")
     if not recommendations:
-        recommendations.append("Votre posture RGPD est bonne. Continuez à valider les exports à risque élevé.")
+        recommendations.append(
+            "Votre posture RGPD est bonne. Continuez à valider les exports à risque élevé."
+        )
 
     return {
         "score": total,
@@ -156,7 +161,7 @@ async def get_dashboard_stats(
     recent_activity: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
-        since = datetime.now(timezone.utc) - timedelta(days=7)
+        since = datetime.now(UTC) - timedelta(days=7)
         async with async_session_factory() as db2:
             activity_result = await db2.execute(
                 select(
@@ -237,8 +242,91 @@ async def get_dashboard_stats(
         "trashed_documents": trashed,
         "processing_time": processing_stats,
         "document_type_distribution": doc_type_dist,
-        "gdpr_score": _calculate_gdpr_score(total_docs, status_counts, risk_distribution, recent_activity),
+        "gdpr_score": _calculate_gdpr_score(
+            total_docs,
+            status_counts,
+            risk_distribution,
+            recent_activity,
+        ),
     }
+
+
+@router.get(
+    "/stats/dossier-360",
+    status_code=status.HTTP_200_OK,
+    summary="Vue Dossier 360 par client",
+)
+async def get_dossier_360_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=6, ge=1, le=20),
+) -> dict:
+    user_id = current_user.id
+    result = await db.execute(
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+        )
+        .order_by(desc(Document.updated_at))
+        .limit(500)
+    )
+    docs = list(result.scalars().all())
+    doc_ids = [doc.id for doc in docs]
+
+    risk_by_document: dict[str, float] = {}
+    if doc_ids:
+        try:
+            from app.models.pseudonym_mapping import PseudonymMapping
+
+            risk_result = await db.execute(
+                select(PseudonymMapping.document_id, func.max(PseudonymMapping.risk_score))
+                .where(
+                    PseudonymMapping.user_id == user_id,
+                    PseudonymMapping.document_id.in_(doc_ids),
+                )
+                .group_by(PseudonymMapping.document_id)
+            )
+            risk_by_document = {
+                str(row[0]): float(row[1] or 0.0)
+                for row in risk_result.all()
+            }
+        except Exception as exc:
+            logger.warning("dossier_360_risk_failed", error=str(exc))
+
+    entity_counts_by_document: dict[str, int] = {}
+    if doc_ids:
+        try:
+            entity_result = await db.execute(
+                select(EntityDetection.document_id, func.count())
+                .where(EntityDetection.document_id.in_(doc_ids))
+                .group_by(EntityDetection.document_id)
+            )
+            entity_counts_by_document = {
+                str(row[0]): int(row[1] or 0)
+                for row in entity_result.all()
+            }
+        except Exception as exc:
+            logger.warning("dossier_360_entities_failed", error=str(exc))
+
+    payload = [
+        {
+            "id": doc.id,
+            "original_filename": doc.original_filename,
+            "status": doc.status,
+            "doc_type": doc.doc_type,
+            "tags": doc.tags or [],
+            "created_at": doc.created_at.isoformat() if doc.created_at else "",
+            "updated_at": doc.updated_at.isoformat() if doc.updated_at else "",
+        }
+        for doc in docs
+    ]
+    return build_dossier_360(
+        payload,
+        risk_by_document=risk_by_document,
+        entity_counts_by_document=entity_counts_by_document,
+        limit=limit,
+    )
 
 
 @router.get(
@@ -252,7 +340,7 @@ async def get_documents_status_summary(
     days: int = Query(default=30, ge=1, le=365),
 ) -> dict:
     user_id = current_user.id
-    now = datetime.now(timezone.utc)
+    now = datetime.now(UTC)
     since = now - timedelta(days=days)
     last_24h = now - timedelta(hours=24)
 
