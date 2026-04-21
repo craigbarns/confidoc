@@ -8,7 +8,7 @@ from __future__ import annotations
 
 from datetime import UTC, datetime, timedelta
 
-from fastapi import APIRouter, Query, status
+from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import desc, func, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -251,15 +251,10 @@ async def get_dashboard_stats(
     }
 
 
-@router.get(
-    "/stats/dossier-360",
-    status_code=status.HTTP_200_OK,
-    summary="Vue Dossier 360 par client",
-)
-async def get_dossier_360_stats(
+async def _load_dossier_360_payload(
     current_user: CurrentUser,
     db: DbSession,
-    limit: int = Query(default=6, ge=1, le=20),
+    limit: int,
 ) -> dict:
     user_id = current_user.id
     result = await db.execute(
@@ -326,6 +321,40 @@ async def get_dossier_360_stats(
         risk_by_document=risk_by_document,
         entity_counts_by_document=entity_counts_by_document,
         limit=limit,
+    )
+
+
+@router.get(
+    "/stats/dossier-360",
+    status_code=status.HTTP_200_OK,
+    summary="Vue Dossier 360 par client",
+)
+async def get_dossier_360_stats(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=6, ge=1, le=20),
+) -> dict:
+    return await _load_dossier_360_payload(current_user, db, limit)
+
+
+@router.get(
+    "/stats/dossier-360/report",
+    status_code=status.HTTP_200_OK,
+    summary="Rapport PDF Dossier 360",
+)
+async def get_dossier_360_report_pdf(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=8, ge=1, le=30),
+) -> Response:
+    from app.services.pdf_dossier_360_report_service import generate_dossier_360_pdf
+
+    payload = await _load_dossier_360_payload(current_user, db, limit)
+    pdf_bytes = generate_dossier_360_pdf(payload)
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="rapport_dossier_360.pdf"'},
     )
 
 

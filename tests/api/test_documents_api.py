@@ -46,6 +46,10 @@ class TestDocumentsRouterStructure:
         paths = self._get_paths()
         assert "/stats/dossier-360" in paths
 
+    def test_dossier_360_report_route_exists(self):
+        paths = self._get_paths()
+        assert "/stats/dossier-360/report" in paths
+
     def test_status_summary_route_exists(self):
         paths = self._get_paths()
         assert "/status-summary" in paths
@@ -124,6 +128,7 @@ class TestDocumentsRouterStructure:
             "/all",
             "/stats/dashboard",
             "/stats/dossier-360",
+            "/stats/dossier-360/report",
             "/status-summary",
         )
         for static in static_routes:
@@ -165,6 +170,11 @@ class TestDocumentsAuthRequired:
     @pytest.mark.asyncio
     async def test_dossier_360_requires_auth(self, client):
         resp = await client.get("/api/v1/documents/stats/dossier-360")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_dossier_360_report_requires_auth(self, client):
+        resp = await client.get("/api/v1/documents/stats/dossier-360/report")
         assert resp.status_code == 401
 
     @pytest.mark.asyncio

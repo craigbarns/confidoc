@@ -2058,6 +2058,17 @@ async function downloadComplianceReport() {
   }
 }
 
+async function downloadDossier360Report() {
+  try {
+    const resp = await apiRequest("/documents/stats/dossier-360/report");
+    const blob = await resp.blob();
+    triggerDownload(blob, "rapport_dossier_360.pdf");
+    toast("Rapport Dossier 360 telecharge", "success");
+  } catch (e) {
+    toast(`Erreur rapport Dossier 360: ${e.message}`, "error");
+  }
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -2950,6 +2961,7 @@ document.addEventListener("DOMContentLoaded", () => {
     dashboardLoaded = false;
     loadDashboard();
   });
+  if ($("btn-d360-pdf")) $("btn-d360-pdf").addEventListener("click", downloadDossier360Report);
   [1, 2, 3].forEach((n) => {
     const stepBtn = $(`step-${n}`);
     if (stepBtn) stepBtn.addEventListener("click", () => setStep(n));
