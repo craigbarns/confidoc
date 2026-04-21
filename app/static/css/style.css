@@ -719,10 +719,9 @@ body {
 .sidebar-header {
   padding: 12px 14px;
   border-bottom: 1px solid var(--border);
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 8px;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr);
+  gap: 10px;
   flex-shrink: 0;
 }
 
@@ -735,13 +734,29 @@ body {
   display: flex;
   align-items: center;
   gap: 6px;
+  min-width: 0;
+  overflow: hidden;
 }
 
 .sidebar-header-actions {
-  display: flex;
+  width: 100%;
+  display: grid;
+  grid-template-columns: minmax(0, 0.9fr) minmax(0, 1.15fr) 24px;
   align-items: center;
-  gap: 5px;
-  flex-shrink: 0;
+  gap: 6px;
+  min-width: 0;
+}
+
+.sidebar-header-actions .btn {
+  width: 100%;
+  padding-left: 8px;
+  padding-right: 8px;
+  text-overflow: ellipsis;
+}
+
+.sidebar-header-actions .sidebar-collapse-btn {
+  width: 24px;
+  height: 24px;
 }
 
 .sidebar-batch-row {
