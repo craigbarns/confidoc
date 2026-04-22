@@ -15,6 +15,18 @@ from app.core.logging import get_logger
 logger = get_logger(__name__)
 settings = get_settings()
 
+DOCUMENT_STATUS_ENUM_VALUES = (
+    "UPLOADED",
+    "PROCESSING",
+    "EXTRACTING",
+    "EXTRACTED",
+    "ANONYMIZING",
+    "ANONYMIZED",
+    "REVIEWING",
+    "READY",
+    "FAILED",
+)
+
 engine = create_async_engine(
     settings.async_database_url,
     echo=settings.DEBUG and not settings.is_production,
@@ -44,14 +56,21 @@ async def init_database() -> None:
 
         # 2. Ajout manuel des colonnes manquantes
         manual_migrations = [
+            *[
+                f"ALTER TYPE documentstatus ADD VALUE IF NOT EXISTS '{status}';"
+                for status in DOCUMENT_STATUS_ENUM_VALUES
+            ],
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS raw_content bytea;",
-            "ALTER TABLE documents ADD COLUMN IF NOT EXISTS is_deleted boolean NOT NULL DEFAULT false;",
+            (
+                "ALTER TABLE documents ADD COLUMN IF NOT EXISTS "
+                "is_deleted boolean NOT NULL DEFAULT false;"
+            ),
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS deleted_at timestamp with time zone;",
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS tags text[];",
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_type varchar(40);",
             "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS siret varchar(200);",
         ]
-        
+
         for sql in manual_migrations:
             try:
                 await conn.execute(text(sql))
@@ -61,14 +80,23 @@ async def init_database() -> None:
         # 3. Composite indexes (idempotent)
         indexes = [
             "CREATE INDEX IF NOT EXISTS ix_documents_is_deleted ON documents (is_deleted);",
-            "CREATE INDEX IF NOT EXISTS ix_documents_user_created ON documents (uploaded_by_user_id, created_at);",
-            "CREATE INDEX IF NOT EXISTS ix_documents_org_created ON documents (org_id, created_at);",
-            "CREATE INDEX IF NOT EXISTS ix_documents_user_active ON documents (uploaded_by_user_id, is_deleted);",
+            (
+                "CREATE INDEX IF NOT EXISTS ix_documents_user_created "
+                "ON documents (uploaded_by_user_id, created_at);"
+            ),
+            (
+                "CREATE INDEX IF NOT EXISTS ix_documents_org_created "
+                "ON documents (org_id, created_at);"
+            ),
+            (
+                "CREATE INDEX IF NOT EXISTS ix_documents_user_active "
+                "ON documents (uploaded_by_user_id, is_deleted);"
+            ),
             "CREATE INDEX IF NOT EXISTS ix_documents_org_status ON documents (org_id, status);",
             "CREATE INDEX IF NOT EXISTS ix_documents_doc_type ON documents (doc_type);",
             "CREATE INDEX IF NOT EXISTS ix_documents_tags ON documents USING GIN (tags);",
         ]
-        
+
         for idx_sql in indexes:
             try:
                 await conn.execute(text(idx_sql))
