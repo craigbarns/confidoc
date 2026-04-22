@@ -580,17 +580,17 @@ async def get_compliance_report(
                 f"risque={risk_score_val}/100 ({risk_level}), texte={anonymized_preview[:1500]}\n"
                 f"Ne renvoie que le JSON."
             )
-            import json
-
+            from app.core.json_utils import extract_json
             from app.services.mistral_service import chat_completion
             raw = await chat_completion(prompt, temperature=0.3)
-            parsed = json.loads(raw)
-            llm_report = {
-                "summary": parsed.get("summary", llm_report["summary"]),
-                "findings": parsed.get("findings", llm_report["findings"]),
-                "recommendations": parsed.get("recommendations", llm_report["recommendations"]),
-                "conclusion": parsed.get("conclusion", llm_report["conclusion"]),
-            }
+            parsed = extract_json(raw)
+            if parsed:
+                llm_report = {
+                    "summary": parsed.get("summary", llm_report["summary"]),
+                    "findings": parsed.get("findings", llm_report["findings"]),
+                    "recommendations": parsed.get("recommendations", llm_report["recommendations"]),
+                    "conclusion": parsed.get("conclusion", llm_report["conclusion"]),
+                }
         except Exception as exc:
             logger.warning("compliance_llm_failed", error=str(exc))
 
