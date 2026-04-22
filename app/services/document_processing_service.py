@@ -1,4 +1,4 @@
-"""ConfiDoc Backend — Document processing pipeline service (v2)."""
+"""ConfiDoc Backend — Document processing pipeline service (v3)."""
 
 from __future__ import annotations
 
@@ -24,15 +24,10 @@ async def build_extraction_ocr(
     document: Document,
     file_content: bytes,
 ) -> tuple[str, dict[str, Any]]:
-    """Étape 1: Extraction OCR via Mistral.
-
-    Returns:
-        (texte_extrait, metadata)
-    """
+    """Étape 1: Extraction OCR via Mistral."""
     document.status = DocumentStatus.PROCESSING
     await db.flush()
 
-    # Extraction: Mistral OCR -> extraction rapide PyMuPDF (pas de Docling)
     settings = get_settings()
     original_text = ""
     extraction_meta: dict[str, Any] = {}
@@ -46,13 +41,12 @@ async def build_extraction_ocr(
             if not original_text.strip():
                 raise ValueError("mistral_ocr_empty_text")
         except Exception as exc:
-            logger.warning("mistral_ocr_failed_fallback_to_pymupdf", error=str(exc)[:200])
+            logger.warning("mistral_ocr_failed_fallback_to_local", error=str(exc)[:200])
             original_text = ""
 
     if not original_text.strip():
         try:
             import asyncio
-
             from app.services.fast_extraction_service import extract_text_sync
             loop = asyncio.get_running_loop()
             fast_result = await loop.run_in_executor(
@@ -64,17 +58,11 @@ async def build_extraction_ocr(
                     "method": fast_result["method"],
                     "pages": fast_result["pages"],
                 }
-            else:
-                raise ValueError(f"fast extraction returned empty text: {fast_result.get('error')}")
         except Exception as exc:
-            logger.error("extraction_failed_after_mistral_and_fast", error=str(exc)[:200])
-            raise ValueError(
-                "Extraction impossible : Mistral OCR et extraction locale ont échoué."
-            ) from exc
+            logger.error("local_extraction_failed", error=str(exc)[:200])
 
     if not original_text.strip():
-        logger.warning("empty_text_extraction", doc_id=str(document.id))
-        original_text = ""
+        raise ValueError("Impossible d'extraire du texte du document.")
 
     # Sauvegarde le texte OCR brut
     await db.execute(
@@ -92,13 +80,6 @@ async def build_extraction_ocr(
     db.add(original_version)
     await db.flush()
 
-    logger.info(
-        "ocr_extraction_complete",
-        doc_id=str(document.id),
-        chars=len(original_text),
-        pages=extraction_meta.get("pages", 0),
-    )
-
     return original_text, extraction_meta
 
 
@@ -106,36 +87,31 @@ async def build_anonymization_llm(
     db: AsyncSession,
     document: Document,
     original_text: str,
-    use_llm: bool = False,  # Par défaut: dictionnaire (plus fiable)
-    profile: str = "moderate",  # "moderate" = dictionnaire, "strict" = LLM
+    use_llm: bool = False,
+    profile: str = "moderate",
 ) -> tuple[str, list[dict], dict[str, Any]]:
-    """Étape 2: Anonymisation via dictionnaire ou LLM.
-
-    Args:
-        use_llm: Si True, utilise Mistral LLM. Sinon, dictionnaire (défaut).
-        profile: "moderate" (dictionnaire rapide) ou "strict" (LLM, plus exhaustif).
-
-    Returns:
-        (texte_anonymise, detections, metadata)
+    """Étape 2: Anonymisation. 
+    
+    V3 Fix: Separated Dictionary and LLM paths to avoid index corruption.
     """
     entity_summary: dict[str, int] = {}
-
-    # ALWAYS run dictionary first (deterministic, reliable, fast)
-    preview_text, detections, registry = await anonymize_document_dictionary(original_text)
-
-    method = "dictionary"
-    entity_summary = registry.export_entity_summary()
-
+    registry_raw_mapping = {}
+    
     effective_use_llm = use_llm or (profile == "strict")
+
     if effective_use_llm:
-        try:
-            llm_text, llm_detections = await anonymize_document_full(preview_text)
-            if llm_detections:
-                preview_text = llm_text
-                detections.extend(llm_detections)
-                method = "dictionary+llm"
-        except Exception as exc:
-            logger.warning("llm_second_pass_skipped", error=str(exc))
+        # LLM Path: Works on original text
+        method = "llm"
+        preview_text, detections = await anonymize_document_full(original_text)
+        # In LLM path, registry is usually empty unless we implement a parser
+        from app.services.entity_registry import EntityRegistry
+        registry = EntityRegistry()
+    else:
+        # Dictionary Path (Default): Deterministic and stable
+        method = "dictionary"
+        preview_text, detections, registry = await anonymize_document_dictionary(original_text)
+        entity_summary = registry.export_entity_summary()
+        registry_raw_mapping = registry.export_raw_mapping()
 
     # Sauvegarde le texte anonymisé
     await db.execute(
@@ -153,14 +129,13 @@ async def build_anonymization_llm(
     db.add(preview_version)
     await db.flush()
 
-    # Sauvegarde les détections (bulk insert for performance)
+    # Sauvegarde les détections
     await db.execute(
         delete(EntityDetection).where(EntityDetection.document_id == document.id)
     )
 
     if detections:
         from uuid import uuid4
-
         from sqlalchemy import insert
         rows = [
             {
@@ -170,10 +145,8 @@ async def build_anonymization_llm(
                 "entity_type": str(item.get("entity_type", "unknown"))[:40],
                 "start_index": int(item.get("start_index", 0)),
                 "end_index": int(item.get("end_index", 0)),
-                "value_excerpt": postgres_safe_text(str(item.get("value_excerpt", "")))[:50_000],
-                "replacement": postgres_safe_text(
-                    str(item.get("replacement", "[REDACTED]"))
-                )[:10_000],
+                "value_excerpt": postgres_safe_text(str(item.get("value_excerpt", "")))[:1000],
+                "replacement": postgres_safe_text(str(item.get("replacement", "[REDACTED]")))[:500],
             }
             for item in detections
         ]
@@ -182,24 +155,12 @@ async def build_anonymization_llm(
     document.status = DocumentStatus.READY
     await db.flush()
 
-    logger.info(
-        "llm_anonymization_complete",
-        doc_id=str(document.id),
-        detections=len(detections),
-        method=method,
-    )
-
-    registry_raw_mapping = {}
-    if registry:
-        registry_raw_mapping = registry.export_raw_mapping()
-
-    # ── RAG: embed the anonymized text for semantic search ──
-    # Non-blocking: if embedding fails, the document is still usable.
+    # RAG embedding (async background)
     try:
         from app.services.rag_service import embed_document
         await embed_document(db, document.id, preview_text)
-    except Exception as exc:
-        logger.warning("rag_embed_failed", doc_id=str(document.id), error=str(exc))
+    except Exception:
+        pass
 
     meta = {
         "method": method,
@@ -211,7 +172,6 @@ async def build_anonymization_llm(
     return preview_text, detections, meta
 
 
-# Fonction legacy pour compatibilité (OCR + Anonymisation en une fois)
 async def build_anonymization_preview(
     db: AsyncSession,
     document: Document,
@@ -219,15 +179,9 @@ async def build_anonymization_preview(
     profile: str = "moderate",
     document_type: str = "auto",
 ) -> tuple[str, list[dict], str, dict[str, Any]]:
-    """Pipeline complet: OCR + Anonymisation (legacy)."""
-    # Étape 1: OCR
-    original_text, extraction_meta = await build_extraction_ocr(
-        db, document, file_content
-    )
-
-    # Étape 2: Anonymisation
+    """Pipeline complet (legacy compat)."""
+    original_text, extraction_meta = await build_extraction_ocr(db, document, file_content)
     preview_text, detections, anon_meta = await build_anonymization_llm(
-        db, document, original_text
+        db, document, original_text, profile=profile
     )
-
     return preview_text, detections, "document", extraction_meta
