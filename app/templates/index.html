@@ -539,6 +539,27 @@
         <div id="anon-loading" class="loading-state" style="display:none">
           <div class="spinner spinner-lg"></div>
           <p id="anon-loading-msg">Anonymisation en cours…</p>
+          <div id="processing-console" class="processing-console" style="display:none">
+            <div class="processing-console-top">
+              <span id="processing-phase-label">Initialisation</span>
+              <strong id="processing-elapsed">00:00</strong>
+            </div>
+            <div class="processing-track" aria-hidden="true">
+              <div id="processing-track-fill"></div>
+            </div>
+            <div class="processing-steps">
+              <span data-phase="upload">Upload</span>
+              <span data-phase="ocr">Mistral OCR</span>
+              <span data-phase="detect">Détection</span>
+              <span data-phase="mask">Masquage</span>
+              <span data-phase="ready">Prêt IA</span>
+            </div>
+            <div class="processing-metrics">
+              <span id="processing-ocr-metric">OCR —</span>
+              <span id="processing-entity-metric">Entités —</span>
+              <span id="processing-backend-metric">API</span>
+            </div>
+          </div>
         </div>
 
         <div id="anon-results" style="display:none">

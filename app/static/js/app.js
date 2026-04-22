@@ -40,6 +40,8 @@ let uploadQueue = [];
 let isUploadProcessing = false;
 let batchMode = false;
 let selectedDocIds = new Set();
+let processingStartedAt = null;
+let processingElapsedTimer = null;
 
 const $ = id => document.getElementById(id);
 const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
@@ -54,6 +56,11 @@ function isReadyStatus(status) {
 
 function isProcessingStatus(status) {
   return PROCESSING_STATUSES.has((status || "").toLowerCase());
+}
+
+function formatElapsed(seconds) {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
 }
 
 function documentStatusLabel(status) {
@@ -561,6 +568,84 @@ function updatePipelineTimeline(payload = {}) {
     if (key === "ai" && isReadyStatus(st)) el.classList.add("done");
     if (key === currentStep) el.classList.add("current");
   });
+}
+
+function processingPhaseFromStatus(status, extractionDone = false, anonymDone = false) {
+  const st = (status || "").toLowerCase();
+  if (isReadyStatus(st) || anonymDone) return "ready";
+  if (st === "failed") return "failed";
+  if (st === "extracted") return "detect";
+  if (st === "anonymizing" || extractionDone) return "mask";
+  if (st === "extracting" || st === "processing") return "ocr";
+  return "upload";
+}
+
+function updateProcessingConsole(payload = {}) {
+  const el = $("processing-console");
+  if (!el) return;
+  el.style.display = "";
+
+  const phase = processingPhaseFromStatus(
+    payload.status || currentDocStatus,
+    payload.extractDone,
+    payload.anonymDone
+  );
+  const order = ["upload", "ocr", "detect", "mask", "ready"];
+  const activeIndex = phase === "failed" ? 0 : Math.max(0, order.indexOf(phase));
+  const widths = { upload: 12, ocr: 38, detect: 58, mask: 78, ready: 100, failed: 100 };
+  const labels = {
+    upload: "Upload sécurisé",
+    ocr: "Mistral OCR en cours",
+    detect: "Détection des données sensibles",
+    mask: "Masquage RGPD",
+    ready: "Document prêt pour l'IA",
+    failed: "Traitement interrompu",
+  };
+
+  el.classList.toggle("failed", phase === "failed");
+  const spinner = document.querySelector("#anon-loading .spinner-lg");
+  if (spinner) spinner.style.display = phase === "failed" ? "none" : "";
+  const label = $("processing-phase-label");
+  if (label) label.textContent = labels[phase] || labels.upload;
+  const fill = $("processing-track-fill");
+  if (fill) fill.style.width = `${widths[phase] || 12}%`;
+
+  el.querySelectorAll(".processing-steps span").forEach((step) => {
+    const idx = order.indexOf(step.dataset.phase);
+    step.classList.toggle("done", phase !== "failed" && idx >= 0 && idx < activeIndex);
+    step.classList.toggle("current", phase !== "failed" && idx === activeIndex);
+  });
+
+  const ocrMetric = $("processing-ocr-metric");
+  if (ocrMetric) {
+    const len = payload.ocrLength;
+    ocrMetric.textContent = Number.isFinite(len) ? `OCR ${len.toLocaleString("fr-FR")} car.` : "OCR —";
+  }
+  const entityMetric = $("processing-entity-metric");
+  if (entityMetric) {
+    const count = payload.detections;
+    entityMetric.textContent = Number.isFinite(count) ? `Entités ${count}` : "Entités —";
+  }
+  const backendMetric = $("processing-backend-metric");
+  if (backendMetric) backendMetric.textContent = payload.backend || "API";
+}
+
+function startProcessingTimer() {
+  processingStartedAt = processingStartedAt || Date.now();
+  if (processingElapsedTimer) clearInterval(processingElapsedTimer);
+  const tick = () => {
+    const target = $("processing-elapsed");
+    if (target && processingStartedAt) {
+      target.textContent = formatElapsed((Date.now() - processingStartedAt) / 1000);
+    }
+  };
+  tick();
+  processingElapsedTimer = setInterval(tick, 1000);
+}
+
+function stopProcessingTimer() {
+  if (processingElapsedTimer) clearInterval(processingElapsedTimer);
+  processingElapsedTimer = null;
 }
 
 // ── Document list ──────────────────────────────────────────────────────
@@ -1107,7 +1192,7 @@ async function uploadFile(file) {
     const data = await uploadWithProgress(fd, `/uploads?auto_anonymize=${autoAnon}${clientQp}`, fill, statusEl);
     currentDocId = data.document_id;
     currentDocName = file.name;
-    currentDocStatus = "uploaded";
+    currentDocStatus = data.processing?.status || data.status || "uploaded";
     currentDocSize = file.size || 0;
     updateHeaderContext();
     await loadClientSuggestions();
@@ -1126,7 +1211,11 @@ async function uploadFile(file) {
       if (autoAnon) {
         $("anon-empty").querySelector("p").innerHTML =
           `<strong>${file.name}</strong> uploadé.<br>Anonymisation en cours en arrière-plan…`;
-        showAnonLoading("Anonymisation en cours…");
+        showAnonLoading("Mistral OCR et anonymisation en cours…");
+        updateProcessingConsole({
+          status: currentDocStatus,
+          backend: (data.processing?.background_processing || "api").toUpperCase(),
+        });
         pollDocStatus(currentDocId);
       } else {
         $("anon-empty").querySelector("p").innerHTML =
@@ -1180,6 +1269,8 @@ async function createDemoDocument() {
 // ── Anonymisation ──────────────────────────────────────────────────────
 
 function resetAnonPanel() {
+  stopProcessingTimer();
+  processingStartedAt = null;
   hideAnonLoading();
   $("anon-results").style.display = "none";
   $("anon-empty").style.display = "none";
@@ -1200,15 +1291,24 @@ function showAnonLoading(msg) {
   $("anon-results").style.display = "none";
   $("anon-empty").style.display = "none";
   $("btn-anonymize").disabled = true;
+  startProcessingTimer();
+  updateProcessingConsole({ status: currentDocStatus || "processing" });
 }
 
 function hideAnonLoading() {
   $("anon-loading").style.display = "none";
   $("btn-anonymize").disabled = false;
+  stopProcessingTimer();
+  const processingConsole = $("processing-console");
+  if (processingConsole) processingConsole.style.display = "none";
+  const spinner = document.querySelector("#anon-loading .spinner-lg");
+  if (spinner) spinner.style.display = "";
 }
 
 function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization", fullData = {}) {
   hideAnonLoading();
+  const processingConsole = $("processing-console");
+  if (processingConsole) processingConsole.style.display = "none";
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
@@ -1323,8 +1423,30 @@ function pollDocStatus(docId) {
       return;
     }
     try {
-      const doc = await apiFetch(`/documents/${docId}`);
-      if (isReadyStatus(doc.status)) {
+      const st = await apiFetch(`/documents/${docId}/status`);
+      const status = (st.status || "").toLowerCase();
+      const extractDone = !!st.extraction?.done;
+      const anonymDone = !!st.anonymization?.done;
+      const ocrLength = Number(st.extraction?.text_length ?? NaN);
+      const detections = Number(st.anonymization?.detections_count ?? NaN);
+      currentDocStatus = status || currentDocStatus;
+      updateAnonDocBar(currentDocName, currentDocSize);
+      updatePipelineTimeline({ status, extractDone, anonymDone });
+      updateProcessingConsole({
+        status,
+        extractDone,
+        anonymDone,
+        ocrLength,
+        detections,
+      });
+      renderAIDocInsights({
+        status: status || "—",
+        ocrLength: Number.isFinite(ocrLength) ? ocrLength : "—",
+        detections: Number.isFinite(detections) ? detections : "—",
+        nextAction: anonymDone ? "Discussion IA" : "Anonymisation",
+      });
+
+      if (isReadyStatus(status) || anonymDone) {
         clearInterval(interval);
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
@@ -1339,11 +1461,13 @@ function pollDocStatus(docId) {
         updateHeaderContext();
         updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });
         await loadDocList();
-      } else if (doc.status === "failed") {
+      } else if (status === "failed") {
         clearInterval(interval);
-        hideAnonLoading();
+        updateProcessingConsole({ status: "failed", ocrLength, detections });
+        stopProcessingTimer();
+        $("btn-anonymize").disabled = false;
         toast("L'anonymisation a échoué. Veuillez réessayer.", "error");
-        updatePipelineTimeline({ status: "failed", extractDone: true, anonymDone: false });
+        updatePipelineTimeline({ status: "failed", extractDone, anonymDone: false });
         await loadDocList();
       }
       // sinon: toujours "processing", on continue à poller

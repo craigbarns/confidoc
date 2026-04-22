@@ -1075,7 +1075,13 @@ body {
   text-transform: uppercase;
 }
 .doc-stage-badge.uploaded { border-color: rgba(251,191,36,0.35); color: var(--warning); }
-.doc-stage-badge.processing { border-color: var(--border-accent); color: var(--accent); }
+.doc-stage-badge.processing,
+.doc-stage-badge.extracting,
+.doc-stage-badge.extracted,
+.doc-stage-badge.anonymizing {
+  border-color: var(--border-accent);
+  color: var(--accent);
+}
 .doc-stage-badge.ready { border-color: rgba(52,211,153,0.35); color: var(--success); }
 .doc-stage-badge.failed { border-color: rgba(248,113,113,0.35); color: var(--danger); }
 
@@ -1169,6 +1175,77 @@ body {
 }
 .spinner-sm { width: 18px; height: 18px; border-width: 2px; }
 .spinner-lg { width: 44px; height: 44px; border-width: 3px; }
+
+.processing-console {
+  width: min(620px, 100%);
+  margin-top: 10px;
+  border: 1px solid var(--border);
+  border-radius: var(--radius);
+  background: var(--bg-surface);
+  padding: 14px;
+  text-align: left;
+}
+.processing-console-top,
+.processing-metrics,
+.processing-steps {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+}
+.processing-console-top span {
+  color: var(--text);
+  font-size: 13px;
+  font-weight: 700;
+}
+.processing-console-top strong {
+  color: var(--accent);
+  font-size: 12px;
+  font-variant-numeric: tabular-nums;
+}
+.processing-track {
+  height: 7px;
+  background: var(--border);
+  border-radius: 999px;
+  overflow: hidden;
+  margin: 12px 0 10px;
+}
+.processing-track > div {
+  height: 100%;
+  width: 8%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, var(--accent), var(--success));
+  transition: width 0.35s ease;
+}
+.processing-steps span {
+  color: var(--text-dim);
+  font-size: 10px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+.processing-steps span.done { color: var(--success); }
+.processing-steps span.current { color: var(--accent); }
+.processing-metrics {
+  justify-content: flex-start;
+  flex-wrap: wrap;
+  margin-top: 12px;
+}
+.processing-metrics span {
+  border: 1px solid var(--border);
+  border-radius: 999px;
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 700;
+  padding: 4px 8px;
+}
+.processing-console.failed {
+  border-color: rgba(248,113,113,0.35);
+  background: var(--danger-dim);
+}
+.processing-console.failed .processing-console-top span,
+.processing-console.failed .processing-console-top strong {
+  color: var(--danger);
+}
 
 /* ─── UPLOAD PANEL ─────────────────────────────────────────────── */
 .field-inline {
@@ -2412,6 +2489,17 @@ body {
   .dash-kpi-grid { grid-template-columns: 1fr 1fr; }
   .anon-stats { flex-direction: column; align-items: flex-start; }
   .stat-actions { margin-left: 0; width: 100%; }
+  .processing-console { padding: 12px; }
+  .processing-console-top,
+  .processing-steps {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+  .processing-steps {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    width: 100%;
+  }
   .anon-doc-bar { flex-wrap: wrap; }
   .anon-doc-name { min-width: 0; flex-basis: 100%; }
   .pipeline { gap: 6px; padding: 8px 12px; }
