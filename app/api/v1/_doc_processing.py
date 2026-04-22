@@ -90,8 +90,8 @@ async def document_status(
 
 @router.post(
     "/{document_id}/extract",
-    status_code=status.HTTP_200_OK,
-    summary="Étape 1 : Extraire le texte via Mistral OCR",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Étape 1 : Extraire le texte via Mistral OCR (Async)",
 )
 async def extract_document(
     document_id: str,
@@ -99,19 +99,17 @@ async def extract_document(
     db: DbSession,
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    file_content = _read_file_or_404(document)
-
-    from app.services.document_processing_service import build_extraction_ocr
-    original_text, meta = await build_extraction_ocr(db, document, file_content)
+    
+    document.status = DocumentStatus.PROCESSING
     await db.commit()
+
+    from app.workers.tasks import extract_document_task
+    task = extract_document_task.delay(doc_id=str(document.id))
 
     return {
         "document_id": str(document.id),
-        "status": "extracted",
-        "text": original_text,
-        "text_length": len(original_text),
-        "pages": meta.get("pages", 0),
-        "model": meta.get("model", "unknown"),
+        "job_id": task.id,
+        "status": "processing",
     }
 
 
@@ -147,8 +145,8 @@ async def get_extracted_text(
 
 @router.post(
     "/{document_id}/anonymize",
-    status_code=status.HTTP_200_OK,
-    summary="Étape 2 : Anonymiser le texte extrait",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Étape 2 : Anonymiser le texte extrait (Async)",
 )
 async def anonymize_document(
     document_id: str,
@@ -159,128 +157,23 @@ async def anonymize_document(
     profile: str = Query(default="moderate", description="moderate | strict"),
     mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
 ) -> dict:
-    """Anonymisation du texte.
-
-    - **pseudonymization** : tokens réversibles, usage interne.
-    - **anonymization** : masquage fort, export/IA.
-    """
-    import traceback as _tb
-    try:
-        return await _anonymize_inner(document_id, current_user, db, auto_extract, use_llm, profile, mode)
-    except Exception as exc:
-        if hasattr(exc, "status_code"):
-            raise
-        logger.error("anonymize_unhandled", error=str(exc), tb=_tb.format_exc())
-        raise http_500(f"Anonymization failed: {type(exc).__name__}: {str(exc)[:200]}")
-
-
-async def _anonymize_inner(
-    document_id: str,
-    current_user: Any,
-    db: Any,
-    auto_extract: bool,
-    use_llm: bool,
-    profile: str,
-    mode: str,
-) -> dict:
-    from app.services.document_processing_service import (
-        build_anonymization_llm,
-        build_extraction_ocr,
-    )
-    from app.services.reidentification_risk_service import analyze_reidentification_risk
-
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    _doc_id = str(document.id)
-    _user_id = current_user.id
-    _org_id = document.org_id
-
-    result = await db.execute(
-        select(DocumentVersion).where(
-            DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
-        )
-    )
-    original_version = result.scalar_one_or_none()
-    original_text = None
-    extracted_on_demand = False
-
-    if original_version and original_version.content_text is not None:
-        original_text = original_version.content_text
-    elif auto_extract:
-        file_content = _read_file_or_404(document)
-        original_text, _ = await build_extraction_ocr(db, document, file_content)
-        extracted_on_demand = True
-        await db.commit()
-
-    if original_text is None:
-        raise http_400("Texte non extrait. Lancez /extract d'abord ou activez auto_extract.")
-    if len(original_text.strip()) == 0:
-        raise http_400("Document vide ou illisible.")
-
-    effective_profile = "strict" if mode == "anonymization" else profile
-    effective_use_llm = True if mode == "anonymization" else use_llm
-
-    preview_text, detections, meta = await build_anonymization_llm(
-        db, document, original_text, use_llm=effective_use_llm, profile=effective_profile
-    )
+    
+    document.status = DocumentStatus.PROCESSING
     await db.commit()
 
-    risk_report = analyze_reidentification_risk(preview_text, meta.get("entity_summary", {}))
-
-    try:
-        from app.models.audit_log import AuditLog
-        db.add(AuditLog(
-            user_id=_user_id, org_id=_org_id,
-            action=f"anonymize:{mode}", resource_type="document",
-            resource_id=_doc_id, method="POST",
-            path=f"/api/v1/documents/{document_id}/anonymize", status_code=200,
-            details={
-                "mode": mode, "profile": effective_profile,
-                "method": meta.get("method", "unknown"),
-                "detections_count": len(detections),
-                "risk_score": risk_report.score, "risk_level": risk_report.level,
-            },
-        ))
-        await db.commit()
-    except Exception as exc:
-        logger.warning("audit_log_save_failed", error=str(exc))
-        await db.rollback()
-
-    if mode == "pseudonymization":
-        try:
-            from datetime import timedelta
-
-            from app.config import get_settings
-            from app.models.pseudonym_mapping import PseudonymMapping
-            from app.services.crypto_service import encrypt_mapping
-            settings = get_settings()
-            raw_mapping = meta.get("registry_raw_mapping", {})
-            if raw_mapping:
-                encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
-                expiry = datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
-                db.add(PseudonymMapping(
-                    document_id=uuid.UUID(_doc_id),
-                    user_id=_user_id,
-                    encrypted_mapping=encrypted,
-                    expires_at=expiry,
-                    risk_score=risk_report.score,
-                    risk_level=risk_report.level,
-                ))
-                await db.commit()
-        except Exception as exc:
-            logger.warning("pseudo_mapping_save_failed", error=str(exc))
-            await db.rollback()
+    from app.workers.tasks import anonymize_document_task
+    task = anonymize_document_task.delay(
+        doc_id=str(document.id),
+        use_llm=use_llm,
+        profile=profile,
+        mode=mode,
+    )
 
     return {
-        "document_id": _doc_id,
-        "status": "anonymized",
-        "mode": mode,
-        "preview_text": preview_text,
-        "detections_count": len(detections),
-        "entity_summary": meta.get("entity_summary", {}),
-        "method": meta.get("method", "llm"),
-        "auto_extracted": extracted_on_demand,
-        "risk": risk_report.to_dict(),
+        "document_id": str(document.id),
+        "job_id": task.id,
+        "status": "processing",
     }
 
 
@@ -300,12 +193,12 @@ async def process_document_legacy(
     document.status = DocumentStatus.PROCESSING
     await db.commit()
     from app.workers.tasks import process_document_legacy_task
-    process_document_legacy_task.delay(
+    task = process_document_legacy_task.delay(
         doc_id=str(document.id),
         profile=profile,
         document_type=document_type,
     )
-    return {"document_id": str(document.id), "status": "processing"}
+    return {"document_id": str(document.id), "job_id": task.id, "status": "processing"}
 
 
 @router.get(

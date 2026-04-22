@@ -13,6 +13,11 @@ from app.models.base import BaseModel, SoftDeleteMixin
 class DocumentStatus(str, PyEnum):
     UPLOADED = "uploaded"
     PROCESSING = "processing"
+    EXTRACTING = "extracting"
+    EXTRACTED = "extracted"
+    ANONYMIZING = "anonymizing"
+    ANONYMIZED = "anonymized"
+    REVIEWING = "reviewing"
     READY = "ready"
     FAILED = "failed"
 

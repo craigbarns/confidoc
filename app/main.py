@@ -163,6 +163,12 @@ def create_app() -> FastAPI:
     # ---- Routers ----
     app.include_router(ui_router)
     app.include_router(health_router)
+    
+    @app.get("/metrics", include_in_schema=False)
+    def metrics():
+        from app.core.metrics import get_metrics_response
+        return get_metrics_response()
+
     app.include_router(v1_router, prefix=settings.API_V1_PREFIX)
 
     return app

@@ -30,16 +30,17 @@ async def test_streaming_review_degrades_when_llm_is_rate_limited(monkeypatch) -
             retry_after_seconds=45,
         )
 
-    monkeypatch.setattr(review_agent, "_llm_call", rate_limited_call)
-    review_agent._reset_graph()
-
-    events = [
-        event
-        async for event in review_agent.run_review_streaming(
-            "Contrat anonymise entre CLIENT_1 et CLIENT_2.",
-            {"PERSON": 2},
-        )
-    ]
+    from unittest.mock import patch
+    with patch("app.services.review.llm.llm_call", side_effect=rate_limited_call):
+        review_agent._reset_graph()
+    
+        events = [
+            event
+            async for event in review_agent.run_review_streaming(
+                "Contrat anonymise entre CLIENT_1 et CLIENT_2.",
+                {"PERSON": 2},
+            )
+        ]
 
     assert events[-1]["status"] == "complete"
     assert not any(event["status"] == "error" for event in events)

@@ -56,6 +56,9 @@ class Settings(BaseSettings):
 
     # ---- JWT ----
     JWT_SECRET_KEY: str = "CHANGE-ME"
+    JWT_PRIVATE_KEY: str | None = None
+    JWT_PUBLIC_KEY: str | None = None
+    JWT_KID: str = "confidoc-default-v1"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -246,6 +249,10 @@ class Settings(BaseSettings):
             ):
                 if getattr(self, key) == "CHANGE-ME":
                     insecure.append(key)
+            
+            if self.JWT_ALGORITHM.startswith("RS"):
+                if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
+                    insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")
             if insecure:
                 raise ValueError(
                     f"Production blocked: insecure default values found for: "

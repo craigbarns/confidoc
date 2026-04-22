@@ -125,7 +125,7 @@ async def get_golden_report(current_user: CurrentUser) -> dict:
     try:
         with open(report_path, "r", encoding="utf-8") as f:
             return json.load(f)
-    except Exception as exc:
+    except (IOError, ValueError, json.JSONDecodeError) as exc:
         logger.error("golden_report_read_failed", error=str(exc))
         return {"status": "error", "message": str(exc)}
 
@@ -168,7 +168,7 @@ async def get_dashboard_stats(
                 level = row[0] or "low"
                 if level in risk_distribution:
                     risk_distribution[level] = row[1]
-    except Exception:
+    except __import__("sqlalchemy").exc.SQLAlchemyError:
         pass
 
     entity_distribution: dict[str, int] = {}
@@ -188,7 +188,7 @@ async def get_dashboard_stats(
                     .group_by(EntityDetection.entity_type)
                 )
                 entity_distribution = {(row[0] or "unknown"): row[1] for row in ent_result.all()}
-    except Exception:
+    except __import__("sqlalchemy").exc.SQLAlchemyError:
         pass
 
     recent_activity: list[dict] = []
@@ -209,7 +209,7 @@ async def get_dashboard_stats(
                 {"date": row[0].isoformat() if row[0] else "", "count": row[1]}
                 for row in activity_result.all()
             ]
-    except Exception:
+    except __import__("sqlalchemy").exc.SQLAlchemyError:
         pass
 
     trash_result = await db.execute(
@@ -246,7 +246,7 @@ async def get_dashboard_stats(
         if row:
             processing_stats["avg_seconds"] = round(row[0], 1) if row[0] else None
             processing_stats["median_seconds"] = round(row[1], 1) if row[1] else None
-    except Exception:
+    except __import__("sqlalchemy").exc.SQLAlchemyError:
         pass
 
     # Document type distribution
@@ -262,7 +262,7 @@ async def get_dashboard_stats(
             .group_by(Document.doc_type)
         )
         doc_type_dist = {row[0] or "unknown": row[1] for row in type_result.all()}
-    except Exception:
+    except __import__("sqlalchemy").exc.SQLAlchemyError:
         pass
 
     return {
@@ -319,7 +319,7 @@ async def _load_dossier_360_payload(
                 str(row[0]): float(row[1] or 0.0)
                 for row in risk_result.all()
             }
-        except Exception as exc:
+        except __import__("sqlalchemy").exc.SQLAlchemyError as exc:
             logger.warning("dossier_360_risk_failed", error=str(exc))
 
     entity_counts_by_document: dict[str, int] = {}
@@ -334,7 +334,7 @@ async def _load_dossier_360_payload(
                 str(row[0]): int(row[1] or 0)
                 for row in entity_result.all()
             }
-        except Exception as exc:
+        except __import__("sqlalchemy").exc.SQLAlchemyError as exc:
             logger.warning("dossier_360_entities_failed", error=str(exc))
 
     payload = [

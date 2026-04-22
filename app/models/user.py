@@ -7,6 +7,7 @@ from sqlalchemy import Boolean, DateTime, String
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
+from app.services.crypto_service import EncryptedString
 
 
 class User(BaseModel):
@@ -14,8 +15,8 @@ class User(BaseModel):
 
     email: Mapped[str] = mapped_column(String(255), unique=True, index=True, nullable=False)
     password_hash: Mapped[str] = mapped_column(String(255), nullable=False)
-    first_name: Mapped[str] = mapped_column(String(100), nullable=False)
-    last_name: Mapped[str] = mapped_column(String(100), nullable=False)
+    first_name: Mapped[str] = mapped_column(EncryptedString(500), nullable=False)
+    last_name: Mapped[str] = mapped_column(EncryptedString(500), nullable=False)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, index=True)
     is_platform_admin: Mapped[bool] = mapped_column(Boolean, default=False)
     last_login_at: Mapped[Optional[datetime]] = mapped_column(DateTime(timezone=True), nullable=True)
@@ -24,6 +25,7 @@ class User(BaseModel):
     memberships = relationship("Membership", back_populates="user", cascade="all, delete-orphan")
     refresh_tokens = relationship("RefreshToken", back_populates="user", cascade="all, delete-orphan")
     documents = relationship("Document", cascade="all, delete-orphan")
+    consents = relationship("GDPRConsent", back_populates="user", cascade="all, delete-orphan")
 
     @property
     def full_name(self) -> str:

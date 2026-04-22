@@ -310,7 +310,7 @@ async def permanent_delete_document(
         from app.models.pseudonym_mapping import PseudonymMapping
 
         await db.execute(delete(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid))
-    except Exception:
+    except __import__("sqlalchemy").exc.SQLAlchemyError:
         pass
     await db.execute(delete(Document).where(Document.id == doc_uuid))
     await db.commit()
@@ -320,7 +320,7 @@ async def permanent_delete_document(
             from app.services.storage_service import delete_bytes
 
             delete_bytes(_storage_backend, _storage_key)
-    except Exception as exc:
+    except (IOError, OSError) as exc:
         logger.warning("permanent_delete_storage_failed", doc_id=_doc_id_str, error=str(exc))
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

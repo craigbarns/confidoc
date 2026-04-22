@@ -1,5 +1,6 @@
 """ConfiDoc Backend — Storage service (local / MinIO / database marker) — v2."""
 
+import os
 from datetime import UTC, datetime
 from io import BytesIO
 from pathlib import Path
@@ -45,10 +46,7 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
         return ("minio", object_key)
 
     if settings.STORAGE_BACKEND == "database":
-        # Les octets sont persistés via Document.raw_content.
-        # storage_key doit être UNIQUE par ligne : ajouter un suffixe (même fichier ré-uploadé).
         from hashlib import sha256
-
         db_key = f"db://{sha256(content).hexdigest()}.{uuid4().hex}.{extension}"
         logger.info("file_stored_database_marker", key=db_key, size=len(content))
         return ("database", db_key)
@@ -62,14 +60,52 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
     return ("local", str(target))
 
 
-def read_bytes(storage_backend: str, storage_key: str) -> bytes:
-    """Read file bytes from storage backend.
-
-    Raises:
-        FileNotFoundError: if the file cannot be found.
+def store_file(file_path: str | Path, extension: str) -> tuple[str, str]:
+    """Store file from local path and return (storage_backend, storage_key).
+    
+    Used for streaming large files without keeping them in memory.
     """
+    path = Path(file_path)
+    if not path.exists():
+        raise FileNotFoundError(f"File to store not found: {file_path}")
+    
+    file_size = path.stat().st_size
+    extension = extension.lower().strip(".")
+    object_key = f"raw/{datetime.now(UTC).strftime('%Y/%m/%d')}/{uuid4()}.{extension}"
+
+    if settings.STORAGE_BACKEND == "minio":
+        client = _get_minio_client()
+        if not client.bucket_exists(settings.MINIO_BUCKET):
+            client.make_bucket(settings.MINIO_BUCKET)
+
+        client.fput_object(
+            bucket_name=settings.MINIO_BUCKET,
+            object_name=object_key,
+            file_path=str(path),
+        )
+        logger.info("file_stored_minio_stream", key=object_key, size=file_size)
+        return ("minio", object_key)
+
+    if settings.STORAGE_BACKEND == "database":
+        # Database backend requires the full content in memory to store in a column.
+        # This backend should be avoided for very large files.
+        return store_bytes(path.read_bytes(), extension)
+
+    # Local storage (move or copy)
+    local_dir = Path(settings.LOCAL_UPLOAD_DIR)
+    local_dir.mkdir(parents=True, exist_ok=True)
+    target = local_dir / f"{uuid4()}.{extension}"
+    
+    import shutil
+    shutil.copy2(path, target)
+    
+    logger.info("file_stored_local_stream", path=str(target), size=file_size)
+    return ("local", str(target))
+
+
+def read_bytes(storage_backend: str, storage_key: str) -> bytes:
+    """Read file bytes from storage backend."""
     if storage_backend == "database":
-        # La lecture réelle se fait via Document.raw_content dans les endpoints/services.
         raise FileNotFoundError(
             f"Database-backed content must be read from raw_content: {storage_key}"
         )
@@ -102,11 +138,7 @@ def read_bytes(storage_backend: str, storage_key: str) -> bytes:
 
 
 def read_document_bytes(document: Any) -> bytes:
-    """Read source bytes for a document with DB fallback.
-
-    Background workers use this helper so sensitive file bytes never need to
-    travel through Redis/Celery messages.
-    """
+    """Read source bytes for a document with DB fallback."""
     try:
         return read_bytes(document.storage_backend, document.storage_key)
     except FileNotFoundError:
@@ -129,9 +161,8 @@ def read_document_bytes(document: Any) -> bytes:
 
 
 def delete_bytes(storage_backend: str, storage_key: str) -> None:
-    """Delete file from storage backend (best effort, never raises)."""
+    """Delete file from storage backend."""
     if storage_backend == "database":
-        # Rien à supprimer côté objet externe.
         logger.info("file_deleted_database_marker", key=storage_key)
         return
 

@@ -67,11 +67,9 @@ async def export_document(
                 path=f"/api/v1/documents/{document_id}/export", status_code=200,
             ))
             await db.commit()
-        except Exception:
-            try:
-                await db.rollback()
-            except Exception:
-                pass
+        except __import__("sqlalchemy").exc.SQLAlchemyError as db_err:
+            logger.warning("export_audit_log_failed", error=str(db_err))
+            await db.rollback()
 
         return PlainTextResponse(text_content)
     except Exception as exc:
@@ -202,8 +200,14 @@ async def export_redacted_pdf(
             logger.error("pdf_redaction_failed", doc_id=str(document.id), error=str(exc))
             raise http_400("Impossible de générer le PDF redacté.")
 
+        def iterfile():
+            chunk_size = 8192
+            with io.BytesIO(redacted_bytes) as f:
+                while chunk := f.read(chunk_size):
+                    yield chunk
+
         headers = {"Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'}
-        return StreamingResponse(BytesIO(redacted_bytes), media_type="application/pdf", headers=headers)
+        return StreamingResponse(iterfile(), media_type="application/pdf", headers=headers)
     except Exception as exc:
         if hasattr(exc, "status_code"):
             raise
@@ -247,7 +251,7 @@ async def get_audit_report(
             }
             for log in logs
         ]
-    except Exception as exc:
+    except __import__("sqlalchemy").exc.SQLAlchemyError as exc:
         logger.warning("audit_report_query_failed", error=str(exc))
 
     risk_info = None
@@ -267,8 +271,8 @@ async def get_audit_report(
                 "validated_at": mapping.validated_at.isoformat() if mapping.validated_at else None,
                 "expires_at": mapping.expires_at.isoformat() if mapping.expires_at else None,
             }
-    except Exception:
-        pass
+    except (__import__("sqlalchemy").exc.SQLAlchemyError, ValueError) as exc:
+        logger.warning("risk_info_query_failed", error=str(exc))
 
     return {
         "document_id": str(document.id),

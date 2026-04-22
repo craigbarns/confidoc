@@ -37,7 +37,7 @@ async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
                 .values(status=status)
             )
             await db.commit()
-    except Exception as exc:
+    except __import__("sqlalchemy").exc.SQLAlchemyError as exc:
         logger.error(
             "set_document_status_failed",
             doc_id=doc_id,
@@ -46,46 +46,160 @@ async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
         )
 
 
-@shared_task(bind=True, max_retries=2, default_retry_delay=30, time_limit=1800, soft_time_limit=900)
-def anonymize_document_task(
-    self,
-    doc_id: str,
-    profile: str,
-    document_type: str,
-) -> None:
-    """Background task: run OCR + anonymization preview after upload."""
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, acks_late=True)
+def extract_document_task(self, doc_id: str) -> dict[str, Any]:
+    """Background task: Step 1 - OCR Extraction."""
+    from app.core.metrics import PIPELINE_LATENCY, PIPELINE_STEPS
+    start_time = time.time()
     try:
-        _run_async(_anonymize_document_async(doc_id, profile, document_type))
+        res = _run_async(_extract_document_async(doc_id))
+        PIPELINE_STEPS.labels(step="extract", status="success").inc()
+        return res
+    except (FileNotFoundError, ValueError) as exc:
+        PIPELINE_STEPS.labels(step="extract", status="error_unrecoverable").inc()
+        logger.error("celery_extract_unrecoverable", doc_id=doc_id, error=str(exc))
+        _run_async(_set_document_status(doc_id, DocumentStatus.FAILED))
+        return {"error": str(exc)}
     except Exception as exc:
-        logger.error("celery_anonymize_failed", doc_id=doc_id, error=str(exc))
-        with contextlib.suppress(Exception):
-            final_failure = getattr(self.request, "retries", 0) >= self.max_retries
-            next_status = DocumentStatus.FAILED if final_failure else DocumentStatus.UPLOADED
-            _run_async(_set_document_status(doc_id, next_status))
+        PIPELINE_STEPS.labels(step="extract", status="error_retry").inc()
+        logger.error("celery_extract_failed_retrying", doc_id=doc_id, error=str(exc))
         raise self.retry(exc=exc) from exc
+    finally:
+        PIPELINE_LATENCY.labels(step="extract").observe(time.time() - start_time)
 
 
-async def _anonymize_document_async(
-    doc_id: str,
-    profile: str,
-    document_type: str,
-) -> None:
+async def _extract_document_async(doc_id: str) -> dict[str, Any]:
     async with async_session_factory() as db:
         result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
         document = result.scalar_one_or_none()
         if not document:
-            logger.warning("background_anon_doc_not_found", doc_id=doc_id)
-            return
-        content = read_document_bytes(document)
-        await build_anonymization_preview(
-            db=db,
-            document=document,
-            file_content=content,
-            profile=profile,
-            document_type=document_type,
-        )
+            return {"error": "document_not_found"}
+        
+        # Checkpoint: EXTRACTING
+        document.status = DocumentStatus.EXTRACTING
         await db.commit()
-        logger.info("background_anonymization_complete", doc_id=doc_id)
+            
+        content = read_document_bytes(document)
+        text, meta = await build_extraction_ocr(db, document, content)
+        
+        # Checkpoint: EXTRACTED
+        document.status = DocumentStatus.EXTRACTED
+        await db.commit()
+        
+        return {
+            "document_id": doc_id,
+            "status": "extracted",
+            "text_length": len(text),
+            "pages": meta.get("pages", 0),
+        }
+
+
+@shared_task(bind=True, max_retries=3, default_retry_delay=60, acks_late=True)
+def anonymize_document_task(
+    self,
+    doc_id: str,
+    use_llm: bool = False,
+    profile: str = "moderate",
+    mode: str = "pseudonymization",
+) -> dict[str, Any]:
+    """Background task: Step 2 - Anonymization/Pseudonymization."""
+    from app.core.metrics import PIPELINE_LATENCY, PIPELINE_STEPS
+    start_time = time.time()
+    try:
+        res = _run_async(_anonymize_document_async_v2(doc_id, use_llm, profile, mode))
+        PIPELINE_STEPS.labels(step="anonymize", status="success").inc()
+        return res
+    except Exception as exc:
+        PIPELINE_STEPS.labels(step="anonymize", status="error").inc()
+        logger.error("celery_anonymize_failed", doc_id=doc_id, error=str(exc))
+        _run_async(_set_document_status(doc_id, DocumentStatus.FAILED))
+        raise self.retry(exc=exc) from exc
+    finally:
+        PIPELINE_LATENCY.labels(step="anonymize").observe(time.time() - start_time)
+
+
+async def _anonymize_document_async_v2(
+    doc_id: str,
+    use_llm: bool,
+    profile: str,
+    mode: str,
+) -> dict[str, Any]:
+    from app.models.document_version import DocumentVersion, DocumentVersionType
+    from app.services.reidentification_risk_service import analyze_reidentification_risk
+
+    async with async_session_factory() as db:
+        result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
+        document = result.scalar_one_or_none()
+        if not document:
+            return {"error": "document_not_found"}
+
+        # Checkpoint: ANONYMIZING
+        document.status = DocumentStatus.ANONYMIZING
+        await db.commit()
+
+        # Check if original text exists
+        result = await db.execute(
+            select(DocumentVersion).where(
+                DocumentVersion.document_id == document.id,
+                DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+            )
+        )
+        original_version = result.scalar_one_or_none()
+        if not original_version or not original_version.content_text:
+            # Fallback: extract first
+            document.status = DocumentStatus.EXTRACTING
+            await db.commit()
+            content = read_document_bytes(document)
+            original_text, _ = await build_extraction_ocr(db, document, content)
+            document.status = DocumentStatus.ANONYMIZING
+            await db.commit()
+        else:
+            original_text = original_version.content_text
+
+        effective_profile = "strict" if mode == "anonymization" else profile
+        effective_use_llm = True if mode == "anonymization" else use_llm
+
+        preview_text, detections, meta = await build_anonymization_llm(
+            db, document, original_text, use_llm=effective_use_llm, profile=effective_profile
+        )
+        
+        # Risk analysis
+        risk_report = analyze_reidentification_risk(preview_text, meta.get("entity_summary", {}))
+        
+        # Pseudonym mapping if needed
+        if mode == "pseudonymization":
+            try:
+                from datetime import UTC, datetime, timedelta
+                from app.config import get_settings
+                from app.models.pseudonym_mapping import PseudonymMapping
+                from app.services.crypto_service import encrypt_mapping
+                
+                settings = get_settings()
+                raw_mapping = meta.get("registry_raw_mapping", {})
+                if raw_mapping:
+                    encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
+                    expiry = datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
+                    db.add(PseudonymMapping(
+                        document_id=document.id,
+                        user_id=document.user_id,
+                        encrypted_mapping=encrypted,
+                        expires_at=expiry,
+                        risk_score=risk_report.score,
+                        risk_level=risk_report.level,
+                    ))
+            except Exception as exc:
+                logger.warning("pseudo_mapping_save_failed_in_task", error=str(exc))
+
+        # Checkpoint: ANONYMIZED
+        document.status = DocumentStatus.ANONYMIZED
+        await db.commit()
+        
+        return {
+            "document_id": doc_id,
+            "status": "anonymized",
+            "detections_count": len(detections),
+            "risk_score": risk_report.score,
+        }
 
 
 @shared_task(
@@ -94,6 +208,7 @@ async def _anonymize_document_async(
     default_retry_delay=30,
     time_limit=1800,
     soft_time_limit=900,
+    acks_late=True,
 )
 def process_document_legacy_task(
     self,
@@ -132,13 +247,9 @@ async def _process_document_legacy_async(
 
 # ── Scheduled tasks (called by Celery Beat) ─────────────────────────────
 
-@shared_task(bind=True, max_retries=1, default_retry_delay=60, time_limit=600)
+@shared_task(bind=True, max_retries=1, default_retry_delay=60, time_limit=600, acks_late=True)
 def run_retention_purge_task(self) -> dict[str, Any]:
-    """Purge RGPD planifiée — appelée par Celery Beat tous les jours à 2h.
-
-    Remplace le _periodic_retention_purge() du lifespan de l'API
-    pour une fiabilité supérieure (persistance indépendante du redémarrage).
-    """
+    """Purge RGPD planifiée — appelée par Celery Beat tous les jours à 2h."""
     from app.config import get_settings
     from app.services.retention_service import purge_expired_data
 
@@ -162,18 +273,16 @@ def run_retention_purge_task(self) -> dict[str, Any]:
         logger.error("scheduled_retention_purge_failed", error=str(exc))
         raise self.retry(exc=exc) from exc
 
-    # Met à jour le timestamp Redis pour le check de rattrapage au démarrage
     async def _update_redis_ts() -> None:
         try:
             import redis.asyncio as aioredis
-
             r = aioredis.from_url(
                 settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1
             )
             async with r:
                 await r.set("confidoc:retention:last_purge_ts", str(int(time.time())))
         except Exception:
-            pass  # Non bloquant
+            pass
 
     with contextlib.suppress(Exception):
         _run_async(_update_redis_ts())
@@ -182,13 +291,9 @@ def run_retention_purge_task(self) -> dict[str, Any]:
     return counts
 
 
-@shared_task(time_limit=300)
+@shared_task(time_limit=300, acks_late=True)
 def cleanup_stale_celery_results() -> int:
-    """Nettoie les résultats Celery obsolètes dans Redis (évite la fuite mémoire).
-
-    Celery avec backend Redis ne nettoie pas auto les résultats.
-    Cette tâche supprime les clés celery-task-meta-* de plus de 7 jours.
-    """
+    """Nettoie les résultats Celery obsolètes dans Redis."""
     from app.config import get_settings
 
     settings = get_settings()
@@ -198,14 +303,11 @@ def cleanup_stale_celery_results() -> int:
         async def _cleanup() -> int:
             r = aioredis.from_url(settings.CELERY_RESULT_BACKEND, decode_responses=True)
             async with r:
-                # Pattern celery-task-meta-*
-                # On utilise scan_iter pour éviter de bloquer Redis
                 deleted = 0
                 cursor = 0
                 while True:
                     cursor, keys = await r.scan(cursor, match="celery-task-meta-*", count=500)
                     if keys:
-                        # Vérifier le TTL — si pas de TTL ou TTL > 7j, on supprime
                         for key in keys:
                             ttl = await r.ttl(key)
                             if ttl < 0 or ttl > 60 * 60 * 24 * 7:
