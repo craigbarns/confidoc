@@ -19,7 +19,7 @@ from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
-from app.services.storage_service import store_bytes, store_file
+from app.services.storage_service import store_file
 from app.workers.tasks import anonymize_document_task
 
 router = APIRouter()
@@ -29,6 +29,13 @@ logger = get_logger(__name__)
 # Maximum number of files in a single batch upload
 MAX_BATCH_SIZE = 20
 CHUNK_SIZE = 8192  # 8KB
+AnonymizationProfile = Literal[
+    "moderate",
+    "strict",
+    "dataset_strict",
+    "dataset_accounting",
+    "dataset_accounting_pseudo",
+]
 
 
 def _normalize_client_name(value: str | None) -> str:
@@ -50,7 +57,7 @@ async def upload_document(
     db: DbSession,
     file: UploadFile = File(...),
     auto_anonymize: bool = Query(default=True),
-    profile: Literal["moderate", "strict"] = Query(default="moderate"),
+    profile: AnonymizationProfile = Query(default="moderate"),
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
 ) -> dict:
@@ -66,12 +73,12 @@ async def upload_document(
         )
 
     # SEC-014 Sandbox/Antivirus could be triggered here
-    
+
     # Streaming save to temp file
     temp_fd, temp_path = tempfile.mkstemp(suffix=f".{extension}")
     sha256_hash = hashlib.sha256()
     size = 0
-    
+
     try:
         with os.fdopen(temp_fd, "wb") as tmp:
             while chunk := await file.read(CHUNK_SIZE):
@@ -82,7 +89,7 @@ async def upload_document(
                     )
                 tmp.write(chunk)
                 sha256_hash.update(chunk)
-        
+
         if size == 0:
             raise http_400("Fichier vide")
 
@@ -233,7 +240,7 @@ async def upload_batch(
     db: DbSession,
     files: list[UploadFile] = File(...),
     auto_anonymize: bool = Query(default=True),
-    profile: Literal["moderate", "strict"] = Query(default="moderate"),
+    profile: AnonymizationProfile = Query(default="moderate"),
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
 ) -> dict:
@@ -262,15 +269,17 @@ async def upload_batch(
             temp_fd, temp_path = tempfile.mkstemp(suffix=f".{extension}")
             sha256_hash = hashlib.sha256()
             size = 0
-            
+
             with os.fdopen(temp_fd, "wb") as tmp:
                 while chunk := await file.read(CHUNK_SIZE):
                     size += len(chunk)
                     if size > settings.max_upload_size_bytes:
-                        raise ValueError(f"Fichier trop volumineux. Maximum: {settings.MAX_UPLOAD_SIZE_MB} MB")
+                        raise ValueError(
+                            f"Fichier trop volumineux. Maximum: {settings.MAX_UPLOAD_SIZE_MB} MB"
+                        )
                     tmp.write(chunk)
                     sha256_hash.update(chunk)
-            
+
             if size == 0:
                 raise ValueError("Fichier vide")
 

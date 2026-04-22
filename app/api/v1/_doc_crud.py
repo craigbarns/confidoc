@@ -18,7 +18,7 @@ from app.api.v1._doc_shared import (
 )
 from app.core.exceptions import http_404
 from app.core.logging import get_logger
-from app.models.document import Document
+from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion
 from app.models.entity_detection import EntityDetection
 from app.schemas.document import DocumentResponse
@@ -56,20 +56,38 @@ async def list_documents(
     query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
-    
+
     if status_norm and status_norm != "deleted":
-        # Note: this might need adjustment depending on how your Enum is stored
-        query = query.where(func.cast(Document.status, __import__("sqlalchemy").String).ilike(status_norm))
+        if status_norm == "ready":
+            query = query.where(
+                Document.status.in_([DocumentStatus.READY, DocumentStatus.ANONYMIZED])
+            )
+        elif status_norm == "processing":
+            query = query.where(
+                Document.status.in_(
+                    [
+                        DocumentStatus.PROCESSING,
+                        DocumentStatus.EXTRACTING,
+                        DocumentStatus.EXTRACTED,
+                        DocumentStatus.ANONYMIZING,
+                    ]
+                )
+            )
+        else:
+            # Note: this might need adjustment depending on how your Enum is stored
+            query = query.where(
+                func.cast(Document.status, __import__("sqlalchemy").String).ilike(status_norm)
+            )
     elif status_norm == "deleted":
         query = query.where(Document.is_deleted.is_(True))
 
     # Apply database pagination early
     query = query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
-    
+
     result = await db.execute(query)
     documents_all = list(result.scalars().all())
 
-    # Filter by client_name (tags) and search query in memory for now 
+    # Filter by client_name (tags) and search query in memory for now
     # unless we move them to SQL (requires more complex GIN index queries)
     if client_norm:
         filtered: list[Document] = []

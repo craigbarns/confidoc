@@ -18,8 +18,7 @@ from sqlalchemy import desc, func, select
 from app.api.deps import CurrentUser, DbSession
 from app.core.database import async_session_factory
 from app.core.logging import get_logger
-from app.models.document import Document, DocumentStatus
-from app.models.entity_detection import EntityDetection
+from app.models.document import Document
 from app.services.dossier_360_service import build_dossier_360
 
 router = APIRouter()
@@ -33,9 +32,14 @@ def _calculate_gdpr_score(
     recent_activity: list,
 ) -> dict:
     """Calcule un score de readiness RGPD (0–100) avec recommandations."""
-    ready = status_counts.get("ready", 0)
+    ready = status_counts.get("ready", 0) + status_counts.get("anonymized", 0)
     failed = status_counts.get("failed", 0)
-    processing = status_counts.get("processing", 0)
+    processing = (
+        status_counts.get("processing", 0)
+        + status_counts.get("extracting", 0)
+        + status_counts.get("extracted", 0)
+        + status_counts.get("anonymizing", 0)
+    )
     uploaded = status_counts.get("uploaded", 0)
 
     success_rate = (ready / total_docs * 40) if total_docs else 0
@@ -115,14 +119,14 @@ async def get_golden_report(current_user: CurrentUser) -> dict:
     import os
     root = os.getcwd()
     report_path = os.path.join(root, "golden", "latest_quality_report.json")
-    
+
     if not os.path.exists(report_path):
         return {
             "status": "no_report",
             "message": "Aucun rapport généré.",
             "metrics": {"pass_rate": 0, "total": 0, "passed": 0, "failed": 0}
         }
-        
+
     try:
         with open(report_path, "r", encoding="utf-8") as f:
             return json.load(f)
@@ -240,6 +244,28 @@ async def get_dossier_360_stats(
 
 
 @router.get(
+    "/stats/dossier-360/report",
+    status_code=status.HTTP_200_OK,
+    summary="Rapport PDF Dossier 360",
+)
+async def get_dossier_360_report(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = Query(default=20, ge=1, le=50),
+) -> Response:
+    payload = await _load_dossier_360_payload(current_user, db, limit)
+
+    from app.services.pdf_dossier_360_report_service import generate_dossier_360_pdf
+
+    pdf = generate_dossier_360_pdf(payload)
+    return Response(
+        content=pdf,
+        media_type="application/pdf",
+        headers={"Content-Disposition": 'attachment; filename="dossier-360.pdf"'},
+    )
+
+
+@router.get(
     "/status-summary",
     status_code=status.HTTP_200_OK,
     summary="Résumé des statuts",
@@ -285,4 +311,14 @@ async def _load_dossier_360_payload(current_user, db, limit):
         .limit(50)
     )
     docs = result.scalars().all()
-    return build_dossier_360([{"id": d.id, "original_filename": d.original_filename, "status": d.status} for d in docs], limit=limit)
+    return build_dossier_360(
+        [
+            {
+                "id": d.id,
+                "original_filename": d.original_filename,
+                "status": d.status,
+            }
+            for d in docs
+        ],
+        limit=limit,
+    )

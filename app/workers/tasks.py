@@ -14,7 +14,6 @@ from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.services.document_processing_service import (
     build_anonymization_llm,
-    build_anonymization_preview,
     build_extraction_ocr,
 )
 from app.services.storage_service import read_document_bytes
@@ -79,18 +78,18 @@ async def _extract_document_async(doc_id: str) -> dict[str, Any]:
         document = result.scalar_one_or_none()
         if not document:
             return {"error": "document_not_found"}
-        
+
         # Checkpoint: EXTRACTING
         document.status = DocumentStatus.EXTRACTING
         await db.commit()
-            
+
         content = read_document_bytes(document)
         text, meta = await build_extraction_ocr(db, document, content)
-        
+
         # Checkpoint: EXTRACTED
         document.status = DocumentStatus.EXTRACTED
         await db.commit()
-        
+
         return {
             "document_id": doc_id,
             "status": "extracted",
@@ -112,7 +111,9 @@ def anonymize_document_task(
     from app.core.metrics import PIPELINE_LATENCY, PIPELINE_STEPS
     start_time = time.time()
     try:
-        res = _run_async(_anonymize_document_async_v2(doc_id, use_llm, profile, mode, document_type))
+        res = _run_async(
+            _anonymize_document_async_v2(doc_id, use_llm, profile, mode, document_type)
+        )
         PIPELINE_STEPS.labels(step="anonymize", status="success").inc()
         return res
     except Exception as exc:
@@ -174,10 +175,10 @@ async def _anonymize_document_async_v2(
             profile=effective_profile,
             document_type=document_type,
         )
-        
+
         # Risk analysis
         risk_report = analyze_reidentification_risk(preview_text, meta.get("entity_summary", {}))
-        
+
         # Pseudonym mapping if needed
         if mode == "pseudonymization":
             try:
@@ -185,7 +186,7 @@ async def _anonymize_document_async_v2(
                 from app.config import get_settings
                 from app.models.pseudonym_mapping import PseudonymMapping
                 from app.services.crypto_service import encrypt_mapping
-                
+
                 settings = get_settings()
                 raw_mapping = meta.get("registry_raw_mapping", {})
                 if raw_mapping:
@@ -202,13 +203,14 @@ async def _anonymize_document_async_v2(
             except Exception as exc:
                 logger.warning("pseudo_mapping_save_failed_in_task", error=str(exc))
 
-        # Checkpoint: ANONYMIZED
-        document.status = DocumentStatus.ANONYMIZED
+        # Checkpoint: READY. The UI and downstream export gates use "ready"
+        # as the terminal state for documents with an available preview.
+        document.status = DocumentStatus.READY
         await db.commit()
-        
+
         return {
             "document_id": doc_id,
-            "status": "anonymized",
+            "status": "ready",
             "detections_count": len(detections),
             "risk_score": risk_report.score,
         }

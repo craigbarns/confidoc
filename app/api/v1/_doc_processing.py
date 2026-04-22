@@ -155,6 +155,7 @@ async def anonymize_document(
     auto_extract: bool = Query(default=True),
     use_llm: bool = Query(default=False),
     profile: str = Query(default="moderate", description="moderate | strict"),
+    document_type: str = Query(default="auto"),
     mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
@@ -168,6 +169,7 @@ async def anonymize_document(
         use_llm=use_llm,
         profile=profile,
         mode=mode,
+        document_type=document_type,
     )
 
     return {

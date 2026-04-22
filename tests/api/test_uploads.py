@@ -19,6 +19,15 @@ class TestUploadValidation:
         )
         assert resp.status_code in (401, 422)
 
+    def test_upload_profile_allows_railway_smoke_profiles(self):
+        from typing import get_args
+
+        from app.api.v1.uploads import AnonymizationProfile
+
+        profiles = set(get_args(AnonymizationProfile))
+        assert "dataset_accounting" in profiles
+        assert "dataset_accounting_pseudo" in profiles
+
 
 class TestUploadExtension:
     """Test extension validation."""

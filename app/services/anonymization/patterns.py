@@ -156,7 +156,10 @@ STRICT_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     # Bank account code + label  (e.g. "51210000 QONTO")
     (
         "bank_account_code_label",
-        re.compile(r"\b(512\d{5})\s+([A-Z0-9][A-Z0-9\s\&/\\\'\-]{1,40})\b", re.IGNORECASE),
+        re.compile(
+            r"\b(512\d{5})[^\S\r\n]+([A-Z0-9][A-Z0-9 \t\&/\\\'\-]{1,40})\b",
+            re.IGNORECASE,
+        ),
         TOKEN_REDACTED,
     ),
 ]

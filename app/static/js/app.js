@@ -45,6 +45,30 @@ const $ = id => document.getElementById(id);
 const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
 const CHAT_STORAGE_PREFIX = "confidoc_chat_";
 const ONBOARDING_KEY = "confidoc_onboarding_done";
+const READY_STATUSES = new Set(["ready", "anonymized"]);
+const PROCESSING_STATUSES = new Set(["processing", "extracting", "extracted", "anonymizing"]);
+
+function isReadyStatus(status) {
+  return READY_STATUSES.has((status || "").toLowerCase());
+}
+
+function isProcessingStatus(status) {
+  return PROCESSING_STATUSES.has((status || "").toLowerCase());
+}
+
+function documentStatusLabel(status) {
+  const map = {
+    uploaded: "Uploadé",
+    processing: "Traitement",
+    extracting: "OCR",
+    extracted: "OCR terminé",
+    anonymizing: "Anonymisation",
+    anonymized: "Prêt IA",
+    ready: "Prêt IA",
+    failed: "Erreur",
+  };
+  return map[(status || "").toLowerCase()] || status || "—";
+}
 
 function saveFilterState() {
   const payload = {
@@ -438,8 +462,7 @@ function updateHeaderContext() {
   const docPill = $("header-doc-pill");
   const providerPill = $("header-provider-pill");
   if (currentDocId && currentDocName) {
-    const labelMap = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
-    docPill.textContent = `📄 ${currentDocName} · ${labelMap[currentDocStatus] || currentDocStatus || "—"}`;
+    docPill.textContent = `📄 ${currentDocName} · ${documentStatusLabel(currentDocStatus)}`;
     docPill.style.display = "";
   } else {
     docPill.style.display = "none";
@@ -502,7 +525,7 @@ async function refreshAIDocInsights(docId) {
       nextAction: next,
     });
   } catch (_e) {
-    updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: currentDocStatus === "ready" });
+    updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: isReadyStatus(currentDocStatus) });
     renderAIDocInsights({
       status: currentDocStatus || "—",
       ocrLength: "—",
@@ -526,7 +549,7 @@ function updatePipelineTimeline(payload = {}) {
   let currentStep = "extract";
   if (!extractDone) currentStep = "extract";
   else if (!anonymDone) currentStep = "anonymize";
-  else if (st === "ready") currentStep = "ai";
+  else if (isReadyStatus(st)) currentStep = "ai";
   else currentStep = "anonymize";
   tl.querySelectorAll(".pipe-step").forEach((el) => {
     const key = el.dataset.step;
@@ -534,7 +557,7 @@ function updatePipelineTimeline(payload = {}) {
     if (key === "upload") el.classList.add("done");
     if (key === "extract" && extractDone) el.classList.add("done");
     if (key === "anonymize" && anonymDone) el.classList.add("done");
-    if (key === "ai" && st === "ready") el.classList.add("done");
+    if (key === "ai" && isReadyStatus(st)) el.classList.add("done");
     if (key === currentStep) el.classList.add("current");
   });
 }
@@ -574,8 +597,8 @@ function renderSidebarStats(docs = []) {
     return;
   }
   const total = docs.length;
-  const ready = docs.filter((d) => d.status === "ready").length;
-  const processing = docs.filter((d) => d.status === "processing").length;
+  const ready = docs.filter((d) => isReadyStatus(d.status)).length;
+  const processing = docs.filter((d) => isProcessingStatus(d.status)).length;
   const trashed = docs.filter((d) => !!d.is_deleted).length;
   el.innerHTML = [
     `<span class="stat-chip">Total: ${total}</span>`,
@@ -639,17 +662,10 @@ function renderDocList(docs) {
 
   if (count) count.textContent = docs.length;
 
-  const statusLabel = {
-    uploaded: "Uploadé",
-    processing: "En cours",
-    ready: "Prêt",
-    failed: "Erreur",
-  };
-
   list.innerHTML = docs.map(d => {
     const rawName = escapeHtml(d.original_filename || "");
     const name = rawName.length > 26 ? rawName.slice(0, 24) + "…" : rawName;
-    const label = escapeHtml(statusLabel[d.status] || d.status || "");
+    const label = escapeHtml(documentStatusLabel(d.status));
     const selected = d.id === currentDocId ? " selected" : "";
     const size = formatBytes(d.size_bytes);
     const date = formatDate(d.created_at);
@@ -662,13 +678,21 @@ function renderDocList(docs) {
     // Risk dot
     const riskDotClass = {
       ready: "risk-dot-green",
+      anonymized: "risk-dot-green",
       processing: "risk-dot-blue",
+      extracting: "risk-dot-blue",
+      extracted: "risk-dot-blue",
+      anonymizing: "risk-dot-blue",
       uploaded: "risk-dot-orange",
       failed: "risk-dot-red",
     }[d.status] || "risk-dot-orange";
     const riskDotTitle = {
       ready: "Anonymisé — prêt pour l'IA",
+      anonymized: "Anonymisé — prêt pour l'IA",
       processing: "Anonymisation en cours…",
+      extracting: "OCR en cours…",
+      extracted: "OCR terminé",
+      anonymizing: "Anonymisation en cours…",
       uploaded: "Non anonymisé — risque RGPD",
       failed: "Erreur de traitement",
     }[d.status] || "";
@@ -911,16 +935,16 @@ async function selectDoc(id, status, name, sizeBytes) {
 
   // Si le document est prêt, aller directement à l'étape 3 (Discussion IA)
   // pour un flux naturel. Sinon, étape 2 (Anonymisation).
-  const targetStep = status === "ready" ? 3 : 2;
+  const targetStep = isReadyStatus(status) ? 3 : 2;
   setStep(targetStep);
 
   if (targetStep === 2) {
     resetAnonPanel();
     updateAnonDocBar(name, sizeBytes);
-    updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: status === "ready" });
+    updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: isReadyStatus(status) });
     await refreshAIDocInsights(id);
 
-    if (status === "processing") {
+    if (isProcessingStatus(status)) {
       showAnonLoading("Traitement en cours…");
       pollDocStatus(id);
     } else if (status === "uploaded") {
@@ -955,8 +979,7 @@ function updateAnonDocBar(name, sizeBytes) {
   $("anon-doc-size").textContent = formatBytes(sizeBytes);
   const st = $("anon-doc-status");
   const status = currentDocStatus || "uploaded";
-  const map = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
-  st.textContent = map[status] || status;
+  st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
   $("anon-doc-bar").style.display = "";
 }
@@ -967,8 +990,7 @@ function updateAIDocBar(name, sizeBytes) {
   $("ai-doc-size").textContent = formatBytes(sizeBytes);
   const st = $("ai-doc-status");
   const status = currentDocStatus || "uploaded";
-  const map = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
-  st.textContent = map[status] || status;
+  st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
   $("ai-doc-bar").style.display = "";
 }
@@ -1301,7 +1323,7 @@ function pollDocStatus(docId) {
     }
     try {
       const doc = await apiFetch(`/documents/${docId}`);
-      if (doc.status === "ready") {
+      if (isReadyStatus(doc.status)) {
         clearInterval(interval);
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
@@ -1390,12 +1412,12 @@ function renderRiskMeter(score) {
 function startBgPollers(docs) {
   Object.values(bgPollers).forEach(id => clearInterval(id));
   bgPollers = {};
-  const processing = (docs || []).filter(d => d.status === "processing" && !d.is_deleted);
+  const processing = (docs || []).filter(d => isProcessingStatus(d.status) && !d.is_deleted);
   processing.forEach(d => {
     bgPollers[d.id] = setInterval(async () => {
       try {
         const doc = await apiFetch(`/documents/${d.id}`);
-        if (doc.status === "ready") {
+        if (isReadyStatus(doc.status)) {
           clearInterval(bgPollers[d.id]);
           delete bgPollers[d.id];
           notifyDocReady(d.original_filename, d.id);
@@ -2256,17 +2278,24 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
 
   // KPIs
   const sc = data.status_counts || {};
+  const readyCount = (sc.ready || 0) + (sc.anonymized || 0);
+  const summaryReady = (summary.ready ?? sc.ready ?? 0) + (summary.anonymized ?? sc.anonymized ?? 0);
+  const summaryProcessing =
+    (summary.processing ?? sc.processing ?? 0)
+    + (summary.extracting ?? sc.extracting ?? 0)
+    + (summary.extracted ?? sc.extracted ?? 0)
+    + (summary.anonymizing ?? sc.anonymizing ?? 0);
   animateNumber($("dash-total-docs"), data.total_documents || 0);
   animateNumber($("dash-total-entities"), data.total_entities_masked || 0);
-  animateNumber($("dash-ready-count"), sc.ready || 0);
+  animateNumber($("dash-ready-count"), readyCount);
   animateNumber($("dash-trashed"), data.trashed_documents || 0);
-  animateNumber($("dash-bucket-ready"), summary.ready ?? sc.ready ?? 0);
-  animateNumber($("dash-bucket-processing"), summary.processing ?? sc.processing ?? 0);
+  animateNumber($("dash-bucket-ready"), summaryReady);
+  animateNumber($("dash-bucket-processing"), summaryProcessing);
   animateNumber($("dash-bucket-uploaded"), summary.uploaded ?? sc.uploaded ?? 0);
   animateNumber($("dash-bucket-failed"), summary.failed ?? sc.failed ?? 0);
   animateNumber($("dash-uploads-24h"), summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
   const total = Math.max(0, summary.total ?? data.total_documents ?? 0);
-  const ready = Math.max(0, summary.ready ?? sc.ready ?? 0);
+  const ready = Math.max(0, summaryReady);
   if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
   if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
 
