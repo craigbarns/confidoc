@@ -37,6 +37,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = (
         "postgresql+asyncpg://confidoc:confidoc_dev_password@localhost:5432/confidoc"
     )
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 30
 
     # ---- Redis ----
     REDIS_URL: str = "redis://localhost:6379/0"
