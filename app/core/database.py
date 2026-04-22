@@ -59,6 +59,10 @@ async def init_database() -> None:
         await conn.execute(
             text("ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_type varchar(40);")
         )
+        # Organization SIRET (added in v0.5.0)
+        await conn.execute(
+            text("ALTER TABLE organizations ADD COLUMN IF NOT EXISTS siret varchar(200);")
+        )
         # Composite indexes (idempotent — CREATE INDEX IF NOT EXISTS)
         for idx_sql in [
             "CREATE INDEX IF NOT EXISTS ix_documents_is_deleted ON documents (is_deleted);",

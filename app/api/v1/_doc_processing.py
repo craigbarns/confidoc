@@ -72,7 +72,7 @@ async def document_status(
 
     return {
         "document_id": str(document.id),
-        "status": document.status.value,
+        "status": document.status.value if hasattr(document.status, "value") else str(document.status),
         "extraction": {
             "done": original is not None and bool(original.content_text),
             "text_length": len(original.content_text) if original and original.content_text else 0,
@@ -233,7 +233,7 @@ async def preview_document(
 
     return DocumentPreviewResponse(
         document_id=document.id,
-        status=document.status.value,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
         preview_text=preview_version.content_text or "",
         detections_count=len(detections),
         entity_summary=entity_summary,
@@ -280,7 +280,7 @@ async def get_structured_document(
     return StructuredDocumentResponse(
         document_id=document.id,
         doc_type=document.doc_type,
-        status=document.status.value,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
         original_filename=document.original_filename,
         entity_summary=entity_summary,
         entity_tags=entity_tags,
