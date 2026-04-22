@@ -26,7 +26,9 @@ ANONYMIZATION_PROMPT = f"""Tu es un système d'anonymisation de documents confid
 MISSION: Identifie TOUTES les informations personnelles/sensibles et remplace-les par des tokens.
 
 RÈGLES STRICTES:
-1. Remplace par ces tokens EXACTS (orthographe impérative — copie exactement) :
+1. TU NE DOIS JAMAIS REFORMULER LE TEXTE. Tu dois retourner exactement le même texte, mot pour mot, ponctuation comprise, en remplaçant SEULEMENT les entités par les tokens.
+2. Si tu modifies une seule virgule ou un saut de ligne, les index seront faux et le système plantera.
+3. Remplace par ces tokens EXACTS :
    - Noms de personnes → {TOKEN_PERSONNE}
    - Emails → {TOKEN_EMAIL}
    - Téléphones → {TOKEN_TELEPHONE}
