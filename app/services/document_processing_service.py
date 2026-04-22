@@ -122,6 +122,7 @@ async def build_anonymization_llm(
 
     # ALWAYS run dictionary first (deterministic, reliable, fast)
     preview_text, detections, registry = await anonymize_document_dictionary(original_text)
+
     method = "dictionary"
     entity_summary = registry.export_entity_summary()
 

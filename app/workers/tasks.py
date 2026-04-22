@@ -23,8 +23,13 @@ logger = get_logger(__name__)
 
 
 def _run_async(coro):
-    """Run an async coroutine inside a Celery worker thread."""
-    return asyncio.run(coro)
+    """Run an async coroutine inside a Celery worker thread safely."""
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
+    try:
+        return loop.run_until_complete(coro)
+    finally:
+        loop.close()
 
 
 async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:

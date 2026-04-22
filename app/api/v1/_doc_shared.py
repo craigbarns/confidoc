@@ -166,7 +166,7 @@ async def _get_original_text(db: AsyncSession, document: Document) -> str:
         return version.content_text
 
     file_content = _read_file_or_404(document)
-    return extract_text_from_file(file_content, document.extension) or ""
+    return await extract_text_from_file(file_content, document.extension) or ""
 
 
 async def _get_anonymized_text(db: AsyncSession, document: Document) -> str:
