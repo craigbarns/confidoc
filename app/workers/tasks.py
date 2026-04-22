@@ -21,6 +21,34 @@ from app.services.storage_service import read_document_bytes
 logger = get_logger(__name__)
 
 
+def celery_workers_available(timeout: float = 1.0) -> bool:
+    """Return True when at least one Celery worker responds to broker inspection."""
+    try:
+        from app.workers.celery_app import celery_app
+
+        workers = celery_app.control.inspect(timeout=timeout).ping()
+        return bool(workers)
+    except Exception as exc:
+        logger.warning("celery_worker_probe_failed", error=str(exc))
+        return False
+
+
+async def run_anonymize_document_inline(
+    doc_id: str,
+    use_llm: bool = False,
+    profile: str = "moderate",
+    mode: str = "pseudonymization",
+    document_type: str = "auto",
+) -> dict[str, Any]:
+    """Run anonymization without Celery for single-service Railway deployments."""
+    try:
+        return await _anonymize_document_async_v2(doc_id, use_llm, profile, mode, document_type)
+    except Exception as exc:
+        logger.error("inline_anonymize_failed", doc_id=doc_id, error=str(exc))
+        await _set_document_status(doc_id, DocumentStatus.FAILED)
+        return {"error": str(exc)}
+
+
 def _run_async(coro):
     """Run an async coroutine inside a Celery worker thread safely."""
     loop = asyncio.new_event_loop()

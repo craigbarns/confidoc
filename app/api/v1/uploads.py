@@ -7,7 +7,16 @@ import tempfile
 from pathlib import Path
 from typing import Literal
 
-from fastapi import APIRouter, File, HTTPException, Query, Request, UploadFile, status
+from fastapi import (
+    APIRouter,
+    BackgroundTasks,
+    File,
+    HTTPException,
+    Query,
+    Request,
+    UploadFile,
+    status,
+)
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
@@ -20,7 +29,11 @@ from app.models.membership import Membership
 from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
 from app.services.storage_service import store_file
-from app.workers.tasks import anonymize_document_task
+from app.workers.tasks import (
+    anonymize_document_task,
+    celery_workers_available,
+    run_anonymize_document_inline,
+)
 
 router = APIRouter()
 settings = get_settings()
@@ -55,6 +68,7 @@ async def upload_document(
     request: Request,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(...),
     auto_anonymize: bool = Query(default=True),
     profile: AnonymizationProfile = Query(default="moderate"),
@@ -112,6 +126,7 @@ async def upload_document(
             profile=profile,
             document_type=document_type,
             client_name=client_name,
+            background_tasks=background_tasks,
         )
     except HTTPException:
         raise
@@ -140,6 +155,7 @@ async def _upload_document_body(
     profile: str,
     document_type: str,
     client_name: str = "",
+    background_tasks: BackgroundTasks | None = None,
 ) -> dict:
     """Corps métier upload (utilisant le fichier temporaire)."""
     normalized_client_name = _normalize_client_name(client_name)
@@ -199,19 +215,41 @@ async def _upload_document_body(
     }
 
     if auto_anonymize:
-        try:
-            anonymize_document_task.delay(
-                doc_id=str(document.id),
+        doc_id = str(document.id)
+        if celery_workers_available():
+            try:
+                anonymize_document_task.delay(
+                    doc_id=doc_id,
+                    profile=profile,
+                    document_type=document_type,
+                )
+                processing.update({"status": "processing", "background_processing": "celery"})
+            except Exception as exc:
+                logger.warning(
+                    "celery_enqueue_failed_using_inline_background",
+                    doc_id=doc_id,
+                    error=str(exc),
+                )
+                if background_tasks is not None:
+                    background_tasks.add_task(
+                        run_anonymize_document_inline,
+                        doc_id=doc_id,
+                        profile=profile,
+                        document_type=document_type,
+                    )
+                    processing.update({"status": "processing", "background_processing": "api"})
+                else:
+                    processing.update({"status": "uploaded", "background_processing": False})
+        elif background_tasks is not None:
+            logger.warning("celery_workers_unavailable_using_inline_background", doc_id=doc_id)
+            background_tasks.add_task(
+                run_anonymize_document_inline,
+                doc_id=doc_id,
                 profile=profile,
                 document_type=document_type,
             )
-            processing.update({"status": "processing"})
-        except Exception as exc:
-            logger.warning(
-                "celery_unavailable_background_task_skipped",
-                doc_id=str(document.id),
-                error=str(exc),
-            )
+            processing.update({"status": "processing", "background_processing": "api"})
+        else:
             processing.update({"status": "uploaded", "background_processing": False})
 
     return {
@@ -238,6 +276,7 @@ async def upload_batch(
     request: Request,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     files: list[UploadFile] = File(...),
     auto_anonymize: bool = Query(default=True),
     profile: AnonymizationProfile = Query(default="moderate"),
@@ -302,6 +341,7 @@ async def upload_batch(
                 profile=profile,
                 document_type=document_type,
                 client_name=client_name,
+                background_tasks=background_tasks,
             )
             results.append(result)
             succeeded += 1

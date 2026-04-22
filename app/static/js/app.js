@@ -447,6 +447,7 @@ async function initApp(email) {
   }
 
   await loadProviderInfo();
+  await loadGoldenReport();
   updateHeaderContext();
   showDashboard();
   restoreFilterState();
@@ -2057,10 +2058,13 @@ async function exportFec() {
 }
 
 async function loadGoldenReport() {
+  if (!token) return;
   try {
     const data = await apiFetch("/stats/golden-report");
     if (data && data.pass_rate !== undefined) {
+      if ($("golden-quality-badge")) return;
       const badge = document.createElement("div");
+      badge.id = "golden-quality-badge";
       badge.className = "header-pill";
       badge.style.background = "rgba(16,185,129,0.15)";
       badge.style.color = "#10b981";
@@ -3291,7 +3295,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
   if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
 
-  // Load Global Quality on startup
+  // Load Global Quality on startup when a session already exists.
   loadGoldenReport();
 
   // Logo → dashboard

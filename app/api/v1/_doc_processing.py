@@ -6,9 +6,7 @@ Routes : /status, extract, extracted-text, anonymize, process (legacy),
 
 from __future__ import annotations
 
-import uuid
 from datetime import UTC, datetime
-from typing import Any
 
 from fastapi import APIRouter, BackgroundTasks, Body, Query, status
 from sqlalchemy import delete, func, select
@@ -18,7 +16,6 @@ from app.api.v1._doc_shared import (
     _get_anonymized_text,
     _get_user_document_or_404,
     _infer_semantic_type,
-    _read_file_or_404,
 )
 from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
@@ -70,9 +67,12 @@ async def document_status(
     )
     detections_count = count_result.scalar() or 0
 
+    status_value = (
+        document.status.value if hasattr(document.status, "value") else str(document.status)
+    )
     return {
         "document_id": str(document.id),
-        "status": document.status.value if hasattr(document.status, "value") else str(document.status),
+        "status": status_value,
         "extraction": {
             "done": original is not None and bool(original.content_text),
             "text_length": len(original.content_text) if original and original.content_text else 0,
@@ -99,7 +99,7 @@ async def extract_document(
     db: DbSession,
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    
+
     document.status = DocumentStatus.PROCESSING
     await db.commit()
 
@@ -139,7 +139,9 @@ async def get_extracted_text(
         "document_id": str(document.id),
         "text": original_version.content_text,
         "text_length": len(original_version.content_text),
-        "extraction_date": original_version.created_at.isoformat() if original_version.created_at else None,
+        "extraction_date": (
+            original_version.created_at.isoformat() if original_version.created_at else None
+        ),
     }
 
 
@@ -152,6 +154,7 @@ async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     auto_extract: bool = Query(default=True),
     use_llm: bool = Query(default=False),
     profile: str = Query(default="moderate", description="moderate | strict"),
@@ -159,23 +162,44 @@ async def anonymize_document(
     mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    
+
     document.status = DocumentStatus.PROCESSING
     await db.commit()
 
-    from app.workers.tasks import anonymize_document_task
-    task = anonymize_document_task.delay(
-        doc_id=str(document.id),
-        use_llm=use_llm,
-        profile=profile,
-        mode=mode,
-        document_type=document_type,
+    from app.workers.tasks import (
+        anonymize_document_task,
+        celery_workers_available,
+        run_anonymize_document_inline,
     )
 
+    doc_id = str(document.id)
+    if celery_workers_available():
+        task = anonymize_document_task.delay(
+            doc_id=doc_id,
+            use_llm=use_llm,
+            profile=profile,
+            mode=mode,
+            document_type=document_type,
+        )
+        job_id = task.id
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(
+            run_anonymize_document_inline,
+            doc_id=doc_id,
+            use_llm=use_llm,
+            profile=profile,
+            mode=mode,
+            document_type=document_type,
+        )
+        job_id = None
+        background_processing = "api"
+
     return {
-        "document_id": str(document.id),
-        "job_id": task.id,
+        "document_id": doc_id,
+        "job_id": job_id,
         "status": "processing",
+        "background_processing": background_processing,
     }
 
 
@@ -341,14 +365,20 @@ async def validate_document(
             import json
             from pathlib import Path
             from datetime import datetime, UTC
-            
+
             root_dir = Path(os.getcwd())
-            draft_dir = root_dir / "golden" / "cases" / "draft" / f"{args.doc_type}_auto_{document.id}"
+            draft_dir = (
+                root_dir
+                / "golden"
+                / "cases"
+                / "draft"
+                / f"{args.doc_type}_auto_{document.id}"
+            )
             draft_dir.mkdir(parents=True, exist_ok=True)
-            
+
             # Save input text
             (draft_dir / "input.txt").write_text(final_text, encoding="utf-8")
-            
+
             # Save expected minimal JSON
             expected_data = {
                 "doc_type": args.doc_type,
@@ -362,8 +392,11 @@ async def validate_document(
                     "ready_for_ai": True
                 }
             }
-            (draft_dir / "expected.min.json").write_text(json.dumps(expected_data, indent=2), encoding="utf-8")
-            
+            (draft_dir / "expected.min.json").write_text(
+                json.dumps(expected_data, indent=2),
+                encoding="utf-8",
+            )
+
             # Save meta.json
             meta_data = {
                 "active": False,
@@ -373,9 +406,16 @@ async def validate_document(
                 "created_at": datetime.now(UTC).isoformat(),
                 "created_by": str(current_user.id)
             }
-            (draft_dir / "meta.json").write_text(json.dumps(meta_data, indent=2), encoding="utf-8")
-            
-            logger.info("auto_golden_draft_created", document_id=str(document.id), doc_type=args.doc_type)
+            (draft_dir / "meta.json").write_text(
+                json.dumps(meta_data, indent=2),
+                encoding="utf-8",
+            )
+
+            logger.info(
+                "auto_golden_draft_created",
+                document_id=str(document.id),
+                doc_type=args.doc_type,
+            )
         except Exception as exc:
             logger.error("auto_golden_draft_failed", error=str(exc))
     # ---------------------------
