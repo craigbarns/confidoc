@@ -88,10 +88,11 @@ def score_ocr_text_candidate(text: str) -> int:
 def extract_pdf_text_via_ocr_engines(
     content: bytes, *, dpi: int, lang: str, page_markers: bool, engine: str
 ) -> tuple[str, str]:
-    """Extract OCR text with selected strategy (tesseract/doctr/auto)."""
-    candidates: list[tuple[str, str]] = []
-
-    # Tesseract candidate
+    """Extract OCR text with selected strategy. 
+    
+    Optimized: In 'auto' mode, tries Tesseract first and only falls back to docTR if results are poor.
+    """
+    # 1. Try Tesseract first (Fast & Low Resource)
     if engine in ("auto", "tesseract") and HAS_OCR:
         try:
             images = convert_from_bytes(content, dpi=dpi)
@@ -99,21 +100,28 @@ def extract_pdf_text_via_ocr_engines(
             for i, img in enumerate(images):
                 chunk = ocr_image(img, lang=lang)
                 chunks.append(f"---PAGE {i + 1}---\n{chunk}" if page_markers else chunk)
-            candidates.append(("tesseract", "\n".join(chunks).strip()))
+            
+            tesseract_text = "\n".join(chunks).strip()
+            # If auto-mode and we got decent text, don't bother with docTR
+            if engine == "auto" and score_ocr_text_candidate(tesseract_text) > 50:
+                logger.info("document_extraction", method="ocr_tesseract_pdf", extension="pdf", reason="fast_path")
+                return tesseract_text, "tesseract"
+                
+            if engine == "tesseract":
+                return tesseract_text, "tesseract"
         except Exception as exc:
             logger.warning("ocr_tesseract_failed", extension="pdf", error=str(exc))
+            if engine == "tesseract":
+                return "", ""
 
-    # docTR candidate
+    # 2. docTR fallback (Slow & Resource Intensive)
     if engine in ("auto", "doctr") and HAS_DOCTR:
         try:
+            logger.info("ocr_attempting_doctr_fallback", extension="pdf")
             txt = ocr_with_doctr_pdf(content, page_markers=page_markers)
-            candidates.append(("doctr", txt))
+            if txt:
+                return txt, "doctr"
         except Exception as exc:
             logger.warning("ocr_doctr_failed", extension="pdf", error=str(exc))
 
-    if not candidates:
-        return "", ""
-
-    method, best_text = max(candidates, key=lambda c: score_ocr_text_candidate(c[1]))
-    logger.info("document_extraction", method=f"ocr_{method}_pdf", extension="pdf")
-    return best_text, method
+    return "", ""
