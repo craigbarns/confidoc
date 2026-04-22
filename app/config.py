@@ -46,6 +46,10 @@ class Settings(BaseSettings):
     # ---- Celery ----
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    # User-facing document processing. Keep API as the default for single-service
+    # Railway deployments; set to "celery" only when dedicated OCR/NLP workers
+    # are deployed and consuming the expected queues.
+    DOCUMENT_PROCESSING_BACKEND: Literal["api", "celery"] = "api"
 
     # ---- MinIO / S3 ----
     STORAGE_BACKEND: Literal["local", "minio", "database"] = "local"
@@ -251,7 +255,7 @@ class Settings(BaseSettings):
             ):
                 if getattr(self, key) == "CHANGE-ME":
                     insecure.append(key)
-            
+
             if self.JWT_ALGORITHM.startswith("RS"):
                 if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
                     insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")

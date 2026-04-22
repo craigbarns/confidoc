@@ -67,6 +67,22 @@ def celery_workers_available(queue: str | None = None, timeout: float = 1.0) -> 
         return False
 
 
+def should_dispatch_document_task_to_celery(queue: str, timeout: float = 1.0) -> bool:
+    """Return True when document processing should use Celery for this queue."""
+    from app.config import get_settings
+
+    settings = get_settings()
+    backend = str(settings.DOCUMENT_PROCESSING_BACKEND or "api").lower()
+    if backend != "celery":
+        logger.info(
+            "document_processing_using_api_background",
+            backend=backend,
+            queue=queue,
+        )
+        return False
+    return celery_workers_available(queue=queue, timeout=timeout)
+
+
 async def run_extract_document_inline(doc_id: str) -> dict[str, Any]:
     """Run OCR extraction without Celery for single-service Railway deployments."""
     try:

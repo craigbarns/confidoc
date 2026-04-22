@@ -18,8 +18,8 @@ from app.models.membership import Membership
 from app.services.storage_service import store_bytes
 from app.workers.tasks import (
     anonymize_document_task,
-    celery_workers_available,
     run_anonymize_document_inline,
+    should_dispatch_document_task_to_celery,
 )
 
 router = APIRouter()
@@ -175,7 +175,7 @@ async def create_demo_document(
     await db.refresh(document)
 
     doc_id = str(document.id)
-    if celery_workers_available(queue="nlp"):
+    if should_dispatch_document_task_to_celery(queue="nlp"):
         anonymize_document_task.delay(
             doc_id=doc_id,
             profile="strict",

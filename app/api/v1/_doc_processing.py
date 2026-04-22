@@ -105,13 +105,13 @@ async def extract_document(
     await db.commit()
 
     from app.workers.tasks import (
-        celery_workers_available,
         extract_document_task,
         run_extract_document_inline,
+        should_dispatch_document_task_to_celery,
     )
 
     doc_id = str(document.id)
-    if celery_workers_available(queue="ocr"):
+    if should_dispatch_document_task_to_celery(queue="ocr"):
         task = extract_document_task.delay(doc_id=doc_id)
         job_id = task.id
         background_processing = "celery"
@@ -183,12 +183,12 @@ async def anonymize_document(
 
     from app.workers.tasks import (
         anonymize_document_task,
-        celery_workers_available,
         run_anonymize_document_inline,
+        should_dispatch_document_task_to_celery,
     )
 
     doc_id = str(document.id)
-    if celery_workers_available(queue="nlp"):
+    if should_dispatch_document_task_to_celery(queue="nlp"):
         task = anonymize_document_task.delay(
             doc_id=doc_id,
             use_llm=use_llm,
@@ -235,13 +235,13 @@ async def process_document_legacy(
     document.status = DocumentStatus.PROCESSING
     await db.commit()
     from app.workers.tasks import (
-        celery_workers_available,
         process_document_legacy_task,
         run_process_document_legacy_inline,
+        should_dispatch_document_task_to_celery,
     )
 
     doc_id = str(document.id)
-    if celery_workers_available(queue="nlp"):
+    if should_dispatch_document_task_to_celery(queue="nlp"):
         task = process_document_legacy_task.delay(
             doc_id=doc_id,
             profile=profile,
