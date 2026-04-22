@@ -56,6 +56,16 @@ async def list_documents(
     query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
+    
+    # ── Full-Text Search (FTS) logic ──
+    if q_norm:
+        # Join with document versions to search inside content
+        from app.models.document_version import DocumentVersion, DocumentVersionType
+        query = query.join(DocumentVersion).where(
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+            func.to_tsvector('french', DocumentVersion.content_text).op('@@')(func.plainto_tsquery('french', q_norm)) | 
+            Document.original_filename.ilike(f"%{q_norm}%")
+        )
 
     if status_norm and status_norm != "deleted":
         if status_norm == "ready":
@@ -87,23 +97,8 @@ async def list_documents(
     result = await db.execute(query)
     documents_all = list(result.scalars().all())
 
-    # Filter by client_name (tags) and search query in memory for now
-    # unless we move them to SQL (requires more complex GIN index queries)
+    # Filter by client_name (tags) in memory for now 
     if client_norm:
-        filtered: list[Document] = []
-        for d in documents_all:
-            tags = list(getattr(d, "tags", []) or [])
-            if tags and client_norm in _normalize_client_name(tags[0]):
-                filtered.append(d)
-        documents_all = filtered
-
-    if q_norm:
-        documents_all = [
-            d
-            for d in documents_all
-            if q_norm in _normalize_client_name(getattr(d, "original_filename", ""))
-        ]
-
     return documents_all
 
 

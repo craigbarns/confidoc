@@ -79,6 +79,7 @@ async def init_database() -> None:
 
         # 3. Composite indexes (idempotent)
         indexes = [
+            "CREATE EXTENSION IF NOT EXISTS pg_trgm;",
             "CREATE INDEX IF NOT EXISTS ix_documents_is_deleted ON documents (is_deleted);",
             (
                 "CREATE INDEX IF NOT EXISTS ix_documents_user_created "
@@ -95,6 +96,10 @@ async def init_database() -> None:
             "CREATE INDEX IF NOT EXISTS ix_documents_org_status ON documents (org_id, status);",
             "CREATE INDEX IF NOT EXISTS ix_documents_doc_type ON documents (doc_type);",
             "CREATE INDEX IF NOT EXISTS ix_documents_tags ON documents USING GIN (tags);",
+            # FTS index on document content (using gin and to_tsvector)
+            "CREATE INDEX IF NOT EXISTS ix_document_versions_content_fts ON document_versions USING GIN (to_tsvector('french', content_text));",
+            # Fuzzy search on filename
+            "CREATE INDEX IF NOT EXISTS ix_documents_filename_trgm ON documents USING GIN (original_filename gin_trgm_ops);",
         ]
 
         for idx_sql in indexes:
