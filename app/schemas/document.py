@@ -4,7 +4,7 @@ from datetime import datetime
 from typing import Any
 import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator
+from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
 
 
 class DocumentResponse(BaseModel):
@@ -25,6 +25,13 @@ class DocumentResponse(BaseModel):
     updated_at: datetime
 
     model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v: Any) -> str:
+        if hasattr(v, "value"):
+            return str(v.value)
+        return str(v)
 
 
 class DetectionResponse(BaseModel):

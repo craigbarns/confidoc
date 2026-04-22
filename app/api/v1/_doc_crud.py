@@ -56,17 +56,26 @@ async def list_documents(
     query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
+    
+    if status_norm and status_norm != "deleted":
+        # Note: this might need adjustment depending on how your Enum is stored
+        query = query.where(func.cast(Document.status, __import__("sqlalchemy").String).ilike(status_norm))
+    elif status_norm == "deleted":
+        query = query.where(Document.is_deleted.is_(True))
 
-    result = await db.execute(query.order_by(desc(Document.created_at)))
+    # Apply database pagination early
+    query = query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
+    
+    result = await db.execute(query)
     documents_all = list(result.scalars().all())
 
+    # Filter by client_name (tags) and search query in memory for now 
+    # unless we move them to SQL (requires more complex GIN index queries)
     if client_norm:
         filtered: list[Document] = []
         for d in documents_all:
             tags = list(getattr(d, "tags", []) or [])
-            if not tags:
-                continue
-            if client_norm in _normalize_client_name(tags[0]):
+            if tags and client_norm in _normalize_client_name(tags[0]):
                 filtered.append(d)
         documents_all = filtered
 
@@ -77,22 +86,7 @@ async def list_documents(
             if q_norm in _normalize_client_name(getattr(d, "original_filename", ""))
         ]
 
-    if status_norm:
-        if status_norm == "deleted":
-            documents_all = [d for d in documents_all if bool(getattr(d, "is_deleted", False))]
-        else:
-            documents_all = [
-                d
-                for d in documents_all
-                if _normalize_client_name(
-                    getattr(d, "status", "").value
-                    if hasattr(getattr(d, "status", ""), "value")
-                    else str(getattr(d, "status", ""))
-                )
-                == status_norm
-            ]
-
-    return documents_all[offset : offset + limit]
+    return documents_all
 
 
 @router.get(
@@ -175,7 +169,7 @@ async def list_trash(
                 "created_at": d.created_at.isoformat() if d.created_at else None,
                 "deleted_at": d.deleted_at.isoformat() if d.deleted_at else None,
                 "doc_type": d.doc_type,
-                "status": d.status.value if d.status else None,
+                "status": d.status.value if hasattr(d.status, "value") else str(d.status),
             }
             for d in docs
         ],
