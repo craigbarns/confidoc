@@ -89,6 +89,7 @@ async def build_anonymization_llm(
     original_text: str,
     use_llm: bool = False,
     profile: str = "moderate",
+    document_type: str = "auto",
 ) -> tuple[str, list[dict], dict[str, Any]]:
     """Étape 2: Anonymisation. 
     
@@ -109,7 +110,9 @@ async def build_anonymization_llm(
     else:
         # Dictionary Path (Default): Deterministic and stable
         method = "dictionary"
-        preview_text, detections, registry = await anonymize_document_dictionary(original_text)
+        preview_text, detections, registry = await anonymize_document_dictionary(
+            original_text, profile=profile, document_type=document_type
+        )
         entity_summary = registry.export_entity_summary()
         registry_raw_mapping = registry.export_raw_mapping()
 

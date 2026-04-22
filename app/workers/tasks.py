@@ -106,12 +106,13 @@ def anonymize_document_task(
     use_llm: bool = False,
     profile: str = "moderate",
     mode: str = "pseudonymization",
+    document_type: str = "auto",
 ) -> dict[str, Any]:
     """Background task: Step 2 - Anonymization/Pseudonymization."""
     from app.core.metrics import PIPELINE_LATENCY, PIPELINE_STEPS
     start_time = time.time()
     try:
-        res = _run_async(_anonymize_document_async_v2(doc_id, use_llm, profile, mode))
+        res = _run_async(_anonymize_document_async_v2(doc_id, use_llm, profile, mode, document_type))
         PIPELINE_STEPS.labels(step="anonymize", status="success").inc()
         return res
     except Exception as exc:
@@ -128,6 +129,7 @@ async def _anonymize_document_async_v2(
     use_llm: bool,
     profile: str,
     mode: str,
+    document_type: str,
 ) -> dict[str, Any]:
     from app.models.document_version import DocumentVersion, DocumentVersionType
     from app.services.reidentification_risk_service import analyze_reidentification_risk
@@ -165,7 +167,12 @@ async def _anonymize_document_async_v2(
         effective_use_llm = True if mode == "anonymization" else use_llm
 
         preview_text, detections, meta = await build_anonymization_llm(
-            db, document, original_text, use_llm=effective_use_llm, profile=effective_profile
+            db,
+            document,
+            original_text,
+            use_llm=effective_use_llm,
+            profile=effective_profile,
+            document_type=document_type,
         )
         
         # Risk analysis

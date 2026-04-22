@@ -17,7 +17,9 @@ from app.services.anonymization.cleanup import clean_ocr_artifacts
 logger = get_logger(__name__)
 
 
-def anonymize_with_dictionary(text: str, profile: str = "moderate") -> dict[str, Any]:
+def anonymize_with_dictionary(
+    text: str, profile: str = "moderate", document_type: str = "generic"
+) -> dict[str, Any]:
     """Anonymise un texte en utilisant les patterns regex spécialisés.
 
     Returns:
@@ -42,8 +44,8 @@ def anonymize_with_dictionary(text: str, profile: str = "moderate") -> dict[str,
 
     registry = EntityRegistry()
     
-    # 1. Détection des entités via patterns regex (ancien dictionnaire + nouveaux patterns)
-    detections = detect_entities(text, profile=profile)
+    # 1. Détection des entités via patterns regex
+    detections = detect_entities(text, profile=profile, document_type=document_type)
     
     # 2. Application des pseudonymes stables
     # En mode dictionnaire, on applique toujours les pseudonymes stables
@@ -78,12 +80,12 @@ def anonymize_with_dictionary(text: str, profile: str = "moderate") -> dict[str,
 
 
 async def anonymize_document_dictionary(
-    text: str,
+    text: str, profile: str = "moderate", document_type: str = "generic"
 ) -> tuple[str, list[dict[str, Any]], EntityRegistry]:
     """Interface compatible avec le pipeline de traitement.
 
     Returns:
         (anonymized_text, detections_list, entity_registry)
     """
-    result = anonymize_with_dictionary(text)
+    result = anonymize_with_dictionary(text, profile=profile, document_type=document_type)
     return result["anonymized_text"], result["entities"], result["registry"]
