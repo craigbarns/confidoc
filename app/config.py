@@ -256,6 +256,8 @@ class Settings(BaseSettings):
                 if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
                     insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")
             if insecure:
+                from app.core.logging import get_logger
+                get_logger("config").error("production_blocked_insecure_config", missing=insecure)
                 raise ValueError(
                     f"Production blocked: insecure default values found for: "
                     f"{', '.join(insecure)}. Set these via environment variables!"
