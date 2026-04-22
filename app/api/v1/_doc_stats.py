@@ -131,7 +131,7 @@ async def get_golden_report(current_user: CurrentUser) -> dict:
 
 
 @router.get(
-    "/stats/dashboard",
+    "/dashboard",
     status_code=status.HTTP_200_OK,
     summary="Statistiques dashboard utilisateur",
 )
@@ -358,7 +358,7 @@ async def _load_dossier_360_payload(
 
 
 @router.get(
-    "/stats/dossier-360",
+    "/dossier-360",
     status_code=status.HTTP_200_OK,
     summary="Vue Dossier 360 par client",
 )
@@ -371,7 +371,7 @@ async def get_dossier_360_stats(
 
 
 @router.get(
-    "/stats/dossier-360/report",
+    "/dossier-360/report",
     status_code=status.HTTP_200_OK,
     summary="Rapport PDF Dossier 360",
 )
