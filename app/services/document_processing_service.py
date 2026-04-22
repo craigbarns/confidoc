@@ -28,7 +28,7 @@ async def build_extraction_ocr(
 ) -> tuple[str, dict[str, Any]]:
     """Étape 1: Extraction OCR (Mistral first, then local fallbacks)."""
     document.status = DocumentStatus.EXTRACTING
-    await db.commit()
+    await db.flush()
 
     try:
         # Unified extraction logic
@@ -60,7 +60,7 @@ async def build_extraction_ocr(
     )
     db.add(original_version)
     document.status = DocumentStatus.EXTRACTED
-    await db.commit()
+    await db.flush()
 
     return original_text, extraction_meta
 
@@ -79,7 +79,7 @@ async def build_anonymization_llm(
     even when using the LLM for detection.
     """
     document.status = DocumentStatus.ANONYMIZING
-    await db.commit()
+    await db.flush()
 
     registry = EntityRegistry()
     
@@ -153,7 +153,7 @@ async def build_anonymization_llm(
         await db.execute(insert(EntityDetection), rows)
 
     document.status = DocumentStatus.READY
-    await db.commit()
+    await db.flush()
 
     # RAG embedding
     try:

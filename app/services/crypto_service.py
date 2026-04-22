@@ -39,15 +39,20 @@ def encrypt_data(data: str | bytes, master_key: str | None = None) -> str:
 
 
 def decrypt_data(token: str, master_key: str | None = None) -> str:
-    """Decrypt a Fernet token back to a string."""
+    """Decrypt a Fernet token back to a string with fallback for cleartext."""
+    if not token:
+        return ""
     if master_key is None:
         master_key = get_settings().ENCRYPTION_MASTER_KEY
         
-    key = _derive_key(master_key)
-    f = Fernet(key)
-    
-    payload = f.decrypt(token.encode("ascii"))
-    return payload.decode("utf-8")
+    try:
+        key = _derive_key(master_key)
+        f = Fernet(key)
+        payload = f.decrypt(token.encode("ascii"))
+        return payload.decode("utf-8")
+    except Exception:
+        # If it's not a valid Fernet token, assume it's cleartext (migration)
+        return token
 
 
 # ── Backward compatible mapping encryption ─────────────────────────────
