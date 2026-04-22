@@ -3,26 +3,26 @@
 
 /* ─── DESIGN TOKENS ────────────────────────────────────────────── */
 :root {
-  /* Core Backgrounds */
-  --bg: #070c1b;
-  --bg-card: rgba(11, 18, 38, 0.9);
-  --bg-sidebar: rgba(8, 14, 30, 0.97);
-  --bg-hover: rgba(99, 102, 241, 0.07);
-  --bg-surface: rgba(255, 255, 255, 0.03);
-  --bg-input: rgba(255, 255, 255, 0.04);
+  /* Core Backgrounds - Deep Slate for high-end look */
+  --bg: #020617;
+  --bg-card: rgba(15, 23, 42, 0.7);
+  --bg-sidebar: rgba(2, 6, 23, 0.8);
+  --bg-hover: rgba(99, 102, 241, 0.12);
+  --bg-surface: rgba(30, 41, 59, 0.5);
+  --bg-input: rgba(15, 23, 42, 0.6);
 
-  /* Glass */
-  --glass: blur(20px) saturate(180%);
+  /* Glass - Enhanced for modern feel */
+  --glass: blur(16px) saturate(160%);
 
-  /* Borders */
-  --border: rgba(255, 255, 255, 0.07);
-  --border-light: rgba(255, 255, 255, 0.12);
-  --border-accent: rgba(99, 102, 241, 0.35);
+  /* Borders - Surgical precision */
+  --border: rgba(255, 255, 255, 0.05);
+  --border-light: rgba(255, 255, 255, 0.08);
+  --border-accent: rgba(99, 102, 241, 0.4);
 
-  /* Text */
-  --text: #eef2ff;
-  --text-muted: #8895b3;
-  --text-dim: #3d4a6b;
+  /* Text - High contrast / readability */
+  --text: #f8fafc;
+  --text-muted: #94a3b8;
+  --text-dim: #475569;
 
   /* Brand */
   --accent: #6366f1;
@@ -114,12 +114,16 @@ html, body { height: 100%; }
 body {
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
   background: var(--bg);
+  background-image: 
+    radial-gradient(at 0% 0%, rgba(99, 102, 241, 0.08) 0, transparent 40%),
+    radial-gradient(at 100% 100%, rgba(167, 139, 250, 0.05) 0, transparent 40%);
   color: var(--text);
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
   font-feature-settings: "cv02","cv03","cv04","cv11";
+  min-height: 100vh;
 }
 
 /* No body::before overlay — keep backgrounds simple and non-interfering */
@@ -630,18 +634,18 @@ body {
 .mt-8 { margin-top: 8px; }
 
 /* ─── PIPELINE STEPS ───────────────────────────────────────────── */
-.pipeline {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 10px;
-  padding: 10px 24px;
+.glass {
   background: var(--bg-card);
-  border-bottom: 1px solid var(--border);
   backdrop-filter: var(--glass);
   -webkit-backdrop-filter: var(--glass);
-  position: relative;
-  z-index: 1;
+  border: 1px solid var(--border-light);
+}
+
+.glass-sidebar {
+  background: var(--bg-sidebar);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border-right: 1px solid var(--border);
 }
 
 .step {
@@ -874,22 +878,27 @@ body {
 
 /* ─── DOC ITEMS ────────────────────────────────────────────────── */
 .doc-item {
-  padding: 10px 12px;
-  border-radius: var(--radius);
+  padding: 12px 14px;
+  border-radius: var(--radius-lg);
   cursor: pointer;
-  transition: all var(--t);
+  transition: all 0.25s var(--ease);
   border: 1px solid transparent;
-  margin-bottom: 3px;
+  margin-bottom: 6px;
   position: relative;
-  animation: fadeIn 0.2s ease;
+  background: transparent;
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
 }
 .doc-item:hover {
   background: var(--bg-hover);
-  border-color: var(--border);
+  border-color: var(--border-light);
+  transform: translateX(4px);
 }
 .doc-item.selected {
   background: var(--accent-dim);
   border-color: var(--border-accent);
+  box-shadow: 0 4px 12px rgba(99, 102, 241, 0.1);
 }
 .doc-item.trashed {
   opacity: 0.55;
@@ -1177,54 +1186,46 @@ body {
 .spinner-lg { width: 44px; height: 44px; border-width: 3px; }
 
 .processing-console {
-  width: min(620px, 100%);
-  margin-top: 10px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: var(--bg-surface);
-  padding: 14px;
+  width: min(680px, 100%);
+  margin-top: 20px;
+  border: 1px solid var(--border-accent);
+  border-radius: var(--radius-lg);
+  background: rgba(2, 6, 23, 0.95);
+  backdrop-filter: var(--glass);
+  padding: 20px;
   text-align: left;
+  box-shadow: 0 20px 50px rgba(0,0,0,0.5), var(--shadow-accent);
+  font-family: 'SF Mono', 'Fira Code', monospace;
 }
-.processing-console-top,
-.processing-metrics,
-.processing-steps {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  gap: 10px;
+.processing-console-top {
+  margin-bottom: 16px;
 }
 .processing-console-top span {
-  color: var(--text);
-  font-size: 13px;
-  font-weight: 700;
+  color: var(--accent);
+  font-size: 14px;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 1px;
 }
 .processing-console-top strong {
-  color: var(--accent);
-  font-size: 12px;
-  font-variant-numeric: tabular-nums;
+  color: var(--text-muted);
+  font-size: 13px;
 }
 .processing-track {
-  height: 7px;
-  background: var(--border);
+  height: 4px;
+  background: rgba(255,255,255,0.05);
   border-radius: 999px;
   overflow: hidden;
-  margin: 12px 0 10px;
+  margin: 16px 0 16px;
 }
 .processing-track > div {
-  height: 100%;
-  width: 8%;
-  border-radius: inherit;
-  background: linear-gradient(90deg, var(--accent), var(--success));
-  transition: width 0.35s ease;
+  background: var(--grad-brand);
+  box-shadow: 0 0 10px var(--accent);
 }
 .processing-steps span {
-  color: var(--text-dim);
-  font-size: 10px;
-  font-weight: 700;
-  text-transform: uppercase;
+  font-size: 9px;
+  letter-spacing: 0.5px;
 }
-.processing-steps span.done { color: var(--success); }
-.processing-steps span.current { color: var(--accent); }
 .processing-metrics {
   justify-content: flex-start;
   flex-wrap: wrap;
@@ -1564,28 +1565,25 @@ body {
 
 .dash-kpi-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--border-light);
   border-radius: var(--radius-lg);
-  padding: 20px;
+  padding: 24px;
   display: flex;
   flex-direction: column;
   align-items: flex-start;
-  gap: 8px;
-  transition: all var(--t);
+  gap: 12px;
+  transition: all 0.3s var(--ease-spring);
   position: relative;
   overflow: hidden;
+  box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255, 255, 255, 0.03);
 }
-.dash-kpi-card::before {
-  content: "";
-  position: absolute;
-  top: 0; left: 0; right: 0;
-  height: 2px;
-  background: var(--grad-brand);
-  opacity: 0;
-  transition: opacity var(--t);
+.dash-kpi-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-lg), var(--shadow-accent);
+  transform: translateY(-4px) scale(1.02);
 }
-.dash-kpi-card:hover { border-color: var(--border-accent); box-shadow: var(--shadow-md); }
-.dash-kpi-card:hover::before { opacity: 1; }
 
 .dash-kpi-icon {
   font-size: 20px;
@@ -1831,15 +1829,21 @@ body {
 
 .dash-gdpr-card {
   background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: var(--radius-lg);
-  padding: 20px;
+  backdrop-filter: var(--glass);
+  -webkit-backdrop-filter: var(--glass);
+  border: 1px solid var(--border-light);
+  border-radius: var(--radius-xl);
+  padding: 24px;
   display: flex;
   align-items: center;
-  gap: 20px;
-  transition: all var(--t);
+  gap: 28px;
+  transition: all 0.3s var(--ease);
+  box-shadow: var(--shadow-md), inset 0 0 0 1px rgba(255,255,255,0.02);
 }
-.dash-gdpr-card:hover { border-color: var(--border-accent); }
+.dash-gdpr-card:hover {
+  border-color: var(--border-accent);
+  box-shadow: var(--shadow-lg), 0 0 20px var(--accent-dim);
+}
 
 .dash-gdpr-score-ring {
   width: 72px;

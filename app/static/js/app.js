@@ -2345,11 +2345,38 @@ function showDashboard() {
   if (!dashboardLoaded) loadDashboard();
 }
 
+function renderDashboardSkeleton() {
+  const content = $("dash-content");
+  if (!content) return;
+  content.style.display = "";
+  content.innerHTML = `
+    <div class="dash-kpi-grid">
+      ${[1, 2, 3, 4].map(() => `
+        <div class="dash-kpi-card skeleton-wrap">
+          <div class="skeleton-line w60" style="height: 36px; width: 36px; border-radius: 9px; margin-bottom: 12px;"></div>
+          <div class="skeleton-line w75" style="height: 28px;"></div>
+          <div class="skeleton-line w60" style="height: 12px;"></div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="dash-gdpr-section">
+      <div class="dash-gdpr-card skeleton-wrap">
+        <div class="skeleton-line" style="height: 72px; width: 72px; border-radius: 50%;"></div>
+        <div style="flex:1">
+          <div class="skeleton-line w60" style="height: 24px;"></div>
+          <div class="skeleton-line w90" style="height: 12px; margin-top: 8px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 async function loadDashboard() {
   const loading = $("dash-loading");
   const content = $("dash-content");
-  if (loading) loading.style.display = "";
-  if (content) content.style.display = "none";
+  if (loading) loading.style.display = "none";
+  
+  renderDashboardSkeleton();
 
   try {
     const [statsResult, summaryResult, dossierResult] = await Promise.allSettled([
@@ -2357,6 +2384,9 @@ async function loadDashboard() {
       apiFetch("/documents/status-summary?days=30"),
       apiFetch("/documents/stats/dossier-360"),
     ]);
+
+    // Restore original structure
+    content.innerHTML = _dashboard_original_html;
 
     if (
       statsResult.status === "rejected" &&
@@ -3512,3 +3542,4 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
   search.focus();
 });
+let _dashboard_original_html = ''; window.addEventListener('DOMContentLoaded', () => { const el = document.getElementById('dash-content'); if(el) _dashboard_original_html = el.innerHTML; });
