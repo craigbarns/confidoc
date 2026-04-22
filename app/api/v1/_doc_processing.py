@@ -97,19 +97,34 @@ async def extract_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
     document.status = DocumentStatus.PROCESSING
     await db.commit()
 
-    from app.workers.tasks import extract_document_task
-    task = extract_document_task.delay(doc_id=str(document.id))
+    from app.workers.tasks import (
+        celery_workers_available,
+        extract_document_task,
+        run_extract_document_inline,
+    )
+
+    doc_id = str(document.id)
+    if celery_workers_available(queue="ocr"):
+        task = extract_document_task.delay(doc_id=doc_id)
+        job_id = task.id
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(run_extract_document_inline, doc_id=doc_id)
+        job_id = None
+        background_processing = "api"
 
     return {
-        "document_id": str(document.id),
-        "job_id": task.id,
+        "document_id": doc_id,
+        "job_id": job_id,
         "status": "processing",
+        "background_processing": background_processing,
     }
 
 
@@ -173,7 +188,7 @@ async def anonymize_document(
     )
 
     doc_id = str(document.id)
-    if celery_workers_available():
+    if celery_workers_available(queue="nlp"):
         task = anonymize_document_task.delay(
             doc_id=doc_id,
             use_llm=use_llm,
@@ -212,19 +227,44 @@ async def process_document_legacy(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     profile: str = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     document.status = DocumentStatus.PROCESSING
     await db.commit()
-    from app.workers.tasks import process_document_legacy_task
-    task = process_document_legacy_task.delay(
-        doc_id=str(document.id),
-        profile=profile,
-        document_type=document_type,
+    from app.workers.tasks import (
+        celery_workers_available,
+        process_document_legacy_task,
+        run_process_document_legacy_inline,
     )
-    return {"document_id": str(document.id), "job_id": task.id, "status": "processing"}
+
+    doc_id = str(document.id)
+    if celery_workers_available(queue="nlp"):
+        task = process_document_legacy_task.delay(
+            doc_id=doc_id,
+            profile=profile,
+            document_type=document_type,
+        )
+        job_id = task.id
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(
+            run_process_document_legacy_inline,
+            doc_id=doc_id,
+            profile=profile,
+            document_type=document_type,
+        )
+        job_id = None
+        background_processing = "api"
+
+    return {
+        "document_id": doc_id,
+        "job_id": job_id,
+        "status": "processing",
+        "background_processing": background_processing,
+    }
 
 
 @router.get(

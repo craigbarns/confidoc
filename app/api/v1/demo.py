@@ -6,7 +6,7 @@ import time
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
 from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 
@@ -16,7 +16,11 @@ from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.services.storage_service import store_bytes
-from app.workers.tasks import anonymize_document_task
+from app.workers.tasks import (
+    anonymize_document_task,
+    celery_workers_available,
+    run_anonymize_document_inline,
+)
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -128,6 +132,7 @@ async def get_public_demo_audit_report_pdf(request: Request) -> Any:
 async def create_demo_document(
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     """Upload a pre-baked demo PDF and trigger background anonymization.
 
@@ -169,22 +174,34 @@ async def create_demo_document(
     await db.commit()
     await db.refresh(document)
 
-    # Launch background Celery task immediately
-    anonymize_document_task.delay(
-        doc_id=str(document.id),
-        profile="strict",
-        document_type="auto",
-    )
+    doc_id = str(document.id)
+    if celery_workers_available(queue="nlp"):
+        anonymize_document_task.delay(
+            doc_id=doc_id,
+            profile="strict",
+            document_type="auto",
+        )
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(
+            run_anonymize_document_inline,
+            doc_id=doc_id,
+            profile="strict",
+            document_type="auto",
+        )
+        background_processing = "api"
 
     logger.info(
         "demo_document_created",
-        doc_id=str(document.id),
+        doc_id=doc_id,
         user_id=str(current_user.id),
+        background_processing=background_processing,
     )
 
     return {
         "status": "processing",
-        "document_id": str(document.id),
+        "document_id": doc_id,
         "original_filename": document.original_filename,
+        "background_processing": background_processing,
         "message": "Document de démo créé. Anonymisation en cours en arrière-plan…",
     }

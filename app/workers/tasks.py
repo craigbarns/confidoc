@@ -21,16 +21,60 @@ from app.services.storage_service import read_document_bytes
 logger = get_logger(__name__)
 
 
-def celery_workers_available(timeout: float = 1.0) -> bool:
-    """Return True when at least one Celery worker responds to broker inspection."""
+def celery_workers_available(queue: str | None = None, timeout: float = 1.0) -> bool:
+    """Return True when a Celery worker is available.
+
+    When a queue is provided, require at least one responding worker to consume that
+    queue. A plain ping is not enough: Railway can have a worker alive while the
+    OCR/NLP queues are not actually consumed, leaving tasks stuck in Redis.
+    """
     try:
         from app.workers.celery_app import celery_app
 
-        workers = celery_app.control.inspect(timeout=timeout).ping()
-        return bool(workers)
+        inspector = celery_app.control.inspect(timeout=timeout)
+        workers = inspector.ping() or {}
+        if not workers:
+            return False
+        if queue is None:
+            return True
+
+        active_queues = inspector.active_queues() or {}
+        for worker_name in workers:
+            queue_names = {
+                str(item.get("name"))
+                for item in active_queues.get(worker_name, [])
+                if isinstance(item, dict) and item.get("name")
+            }
+            if queue in queue_names:
+                return True
+
+        logger.warning(
+            "celery_queue_unavailable",
+            queue=queue,
+            workers=list(workers.keys()),
+            active_queues={
+                name: [
+                    q.get("name")
+                    for q in queues
+                    if isinstance(q, dict) and q.get("name")
+                ]
+                for name, queues in active_queues.items()
+            },
+        )
+        return False
     except Exception as exc:
         logger.warning("celery_worker_probe_failed", error=str(exc))
         return False
+
+
+async def run_extract_document_inline(doc_id: str) -> dict[str, Any]:
+    """Run OCR extraction without Celery for single-service Railway deployments."""
+    try:
+        return await _extract_document_async(doc_id)
+    except Exception as exc:
+        logger.error("inline_extract_failed", doc_id=doc_id, error=str(exc))
+        await _set_document_status(doc_id, DocumentStatus.FAILED)
+        return {"error": str(exc)}
 
 
 async def run_anonymize_document_inline(
@@ -45,6 +89,21 @@ async def run_anonymize_document_inline(
         return await _anonymize_document_async_v2(doc_id, use_llm, profile, mode, document_type)
     except Exception as exc:
         logger.error("inline_anonymize_failed", doc_id=doc_id, error=str(exc))
+        await _set_document_status(doc_id, DocumentStatus.FAILED)
+        return {"error": str(exc)}
+
+
+async def run_process_document_legacy_inline(
+    doc_id: str,
+    profile: str = "moderate",
+    document_type: str = "auto",
+) -> dict[str, Any]:
+    """Run the legacy full pipeline without Celery."""
+    try:
+        await _process_document_legacy_async(doc_id, profile, document_type)
+        return {"document_id": doc_id, "status": "ready"}
+    except Exception as exc:
+        logger.error("inline_process_legacy_failed", doc_id=doc_id, error=str(exc))
         await _set_document_status(doc_id, DocumentStatus.FAILED)
         return {"error": str(exc)}
 

@@ -216,7 +216,7 @@ async def _upload_document_body(
 
     if auto_anonymize:
         doc_id = str(document.id)
-        if celery_workers_available():
+        if celery_workers_available(queue="nlp"):
             try:
                 anonymize_document_task.delay(
                     doc_id=doc_id,
