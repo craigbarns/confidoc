@@ -1,4 +1,4 @@
-"""PDF report generation for Dossier 360 portfolio summaries."""
+"""PDF report generation for Dossier 360 portfolio summaries (Premium Version)."""
 
 from __future__ import annotations
 
@@ -7,14 +7,18 @@ from typing import Any
 
 from fpdf import FPDF
 
-_ACCENT = (93, 95, 239)
-_DARK = (15, 17, 23)
-_WHITE = (255, 255, 255)
-_MUTED = (109, 116, 145)
-_LIGHT = (244, 246, 251)
-_SUCCESS = (16, 185, 129)
-_WARNING = (245, 158, 11)
-_DANGER = (239, 68, 68)
+# Modern Enterprise Colors
+_PRIMARY = (17, 24, 39)       # Gray 900
+_SECONDARY = (79, 70, 229)    # Indigo 600
+_ACCENT = (99, 102, 241)      # Indigo 500
+_MUTED = (107, 114, 128)      # Gray 500
+_LIGHT_BG = (249, 250, 251)   # Gray 50
+_BORDER = (229, 231, 235)     # Gray 200
+
+# Status Colors
+_SUCCESS = (16, 185, 129)     # Emerald 500
+_WARNING = (245, 158, 11)     # Amber 500
+_DANGER = (239, 68, 68)       # Red 500
 
 _RISK_COLORS = {
     "low": _SUCCESS,
@@ -22,11 +26,12 @@ _RISK_COLORS = {
     "high": _DANGER,
     "critical": _DANGER,
 }
+
 _RISK_LABELS = {
-    "low": "Faible",
-    "medium": "Moyen",
-    "high": "Eleve",
-    "critical": "Critique",
+    "low": "Risque Faible",
+    "medium": "Risque Moyen",
+    "high": "Risque Élevé",
+    "critical": "Risque Critique",
 }
 
 
@@ -36,196 +41,272 @@ def _safe(value: object) -> str:
     return text.encode("latin-1", "replace").decode("latin-1")
 
 
-class _Dossier360PDF(FPDF):
+class _PremiumDossierPDF(FPDF):
     def __init__(self) -> None:
         super().__init__()
         self.set_auto_page_break(auto=True, margin=20)
 
     def header(self) -> None:
-        self.set_fill_color(*_DARK)
-        self.rect(0, 0, 210, 30, "F")
-        self.set_xy(12, 7)
-        self.set_font("Helvetica", "B", 17)
-        self.set_text_color(*_WHITE)
-        self.cell(0, 7, "ConfiDoc", new_x="LMARGIN")
-        self.set_xy(12, 16)
-        self.set_font("Helvetica", "", 9)
-        self.set_text_color(185, 191, 215)
-        self.cell(0, 6, "Rapport Dossier 360", new_x="LMARGIN")
-        self.set_xy(135, 8)
-        now = datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC")
+        # Cover page has no header
+        if self.page_no() == 1:
+            return
+
+        self.set_fill_color(*_LIGHT_BG)
+        self.rect(0, 0, 210, 25, "F")
+        self.set_draw_color(*_BORDER)
+        self.line(0, 25, 210, 25)
+
+        self.set_xy(15, 8)
+        self.set_font("Helvetica", "B", 14)
+        self.set_text_color(*_PRIMARY)
+        self.cell(0, 7, "ConfiDoc Enterprise", new_x="LMARGIN")
+        
+        self.set_xy(15, 15)
         self.set_font("Helvetica", "", 8)
-        self.cell(63, 5, _safe(f"Genere le {now}"), align="R")
-        self.set_y(36)
+        self.set_text_color(*_MUTED)
+        self.cell(0, 5, "Bilan de Conformite RGPD & Revue de Portefeuille", new_x="LMARGIN")
+
+        self.set_xy(135, 10)
+        now = datetime.now(UTC).strftime("%d/%m/%Y %H:%M")
+        self.set_font("Helvetica", "", 8)
+        self.cell(60, 5, _safe(f"Genere le {now} UTC"), align="R")
+        self.set_y(35)
 
     def footer(self) -> None:
+        # Cover page has no footer
+        if self.page_no() == 1:
+            return
+
         self.set_y(-15)
-        self.set_draw_color(*_ACCENT)
-        self.line(10, self.get_y(), 200, self.get_y())
-        self.set_font("Helvetica", "I", 7)
+        self.set_draw_color(*_BORDER)
+        self.line(15, self.get_y(), 195, self.get_y())
+        
+        self.set_font("Helvetica", "I", 8)
         self.set_text_color(*_MUTED)
-        self.cell(0, 9, f"ConfiDoc -- Dossier 360 -- Page {self.page_no()}/{{nb}}", align="C")
+        self.cell(0, 9, f"Confidentiel -- Dossier 360 -- Page {self.page_no()}/{{nb}}", align="C")
+
+    def draw_cover(self, portfolio: dict[str, Any]) -> None:
+        """Dessine une page de garde premium."""
+        self.add_page()
+        
+        # Top banner
+        self.set_fill_color(*_PRIMARY)
+        self.rect(0, 0, 210, 80, "F")
+        
+        self.set_xy(15, 30)
+        self.set_font("Helvetica", "B", 28)
+        self.set_text_color(255, 255, 255)
+        self.multi_cell(180, 12, "BILAN DE CONFORMITE\nRGPD & DOSSIER 360", align="L")
+        
+        self.set_xy(15, 60)
+        self.set_font("Helvetica", "", 12)
+        self.set_text_color(209, 213, 219)
+        self.cell(180, 6, "Rapport d'Audit Automatique", new_x="LMARGIN", new_y="NEXT")
+        
+        self.set_y(100)
+        
+        # Summary Box
+        self.set_fill_color(*_LIGHT_BG)
+        self.set_draw_color(*_BORDER)
+        self.rect(15, 95, 180, 50, "DF")
+        
+        self.set_xy(20, 100)
+        self.set_font("Helvetica", "B", 14)
+        self.set_text_color(*_PRIMARY)
+        self.cell(0, 8, "Resume Executif", new_x="LMARGIN", new_y="NEXT")
+        
+        self.set_font("Helvetica", "", 10)
+        self.set_text_color(*_MUTED)
+        summary = (
+            f"Ce rapport consolide l'etat de preparation de vos dossiers clients. "
+            f"Il inclut l'analyse de {portfolio.get('documents_count', 0)} documents repartis "
+            f"sur {portfolio.get('clients_count', 0)} clients. L'objectif est d'identifier "
+            "rapidement les pieces manquantes et les risques de re-identification avant tout "
+            "export ou audit."
+        )
+        self.set_x(20)
+        self.multi_cell(170, 6, _safe(summary))
+        
+        # Score Highlight
+        self.set_y(160)
+        average_score = int(portfolio.get("average_score") or 0)
+        score_color = _score_color(average_score)
+        
+        self.set_font("Helvetica", "B", 12)
+        self.set_text_color(*_PRIMARY)
+        self.cell(180, 8, "Score de Conformite Moyen", align="C", new_x="LMARGIN", new_y="NEXT")
+        
+        self.set_font("Helvetica", "B", 48)
+        self.set_text_color(*score_color)
+        self.cell(180, 20, f"{average_score}/100", align="C", new_x="LMARGIN", new_y="NEXT")
+        
+        self.add_page() # Start content on page 2
 
     def section_title(self, title: str) -> None:
-        self.ln(4)
-        self.set_font("Helvetica", "B", 13)
-        self.set_text_color(*_ACCENT)
-        self.cell(0, 7, _safe(title), new_x="LMARGIN", new_y="NEXT")
+        self.ln(6)
+        self.set_font("Helvetica", "B", 14)
+        self.set_text_color(*_PRIMARY)
+        self.cell(0, 8, _safe(title), new_x="LMARGIN", new_y="NEXT")
         self.set_draw_color(*_ACCENT)
-        self.line(self.get_x(), self.get_y(), self.get_x() + 45, self.get_y())
-        self.ln(4)
+        self.line(self.get_x(), self.get_y(), self.get_x() + 30, self.get_y())
+        self.ln(5)
 
-    def metric_card(self, x: float, title: str, value: object, color: tuple[int, int, int]) -> None:
-        y = self.get_y()
-        self.set_fill_color(*_LIGHT)
-        self.set_draw_color(222, 226, 238)
-        self.rect(x, y, 43, 24, "DF")
+    def metric_card(self, x: float, y: float, title: str, value: object, color: tuple[int, int, int]) -> None:
+        self.set_fill_color(255, 255, 255)
+        self.set_draw_color(*_BORDER)
+        self.rect(x, y, 42, 26, "DF")
         self.set_xy(x + 4, y + 4)
-        self.set_font("Helvetica", "", 7)
+        self.set_font("Helvetica", "", 8)
         self.set_text_color(*_MUTED)
-        self.cell(35, 4, _safe(title), new_x="LMARGIN")
-        self.set_xy(x + 4, y + 11)
-        self.set_font("Helvetica", "B", 16)
+        self.cell(34, 4, _safe(title), new_x="LMARGIN")
+        self.set_xy(x + 4, y + 12)
+        self.set_font("Helvetica", "B", 18)
         self.set_text_color(*color)
-        self.cell(35, 7, _safe(value), new_x="LMARGIN")
+        self.cell(34, 8, _safe(value), new_x="LMARGIN")
 
 
 def _score_color(score: int) -> tuple[int, int, int]:
     if score >= 80:
         return _SUCCESS
-    if score >= 55:
+    if score >= 60:
         return _WARNING
     return _DANGER
 
 
-def _bullet_list(pdf: _Dossier360PDF, items: list[Any], *, limit: int = 4) -> None:
+def _bullet_list(pdf: _PremiumDossierPDF, items: list[Any], *, limit: int = 4) -> None:
     if not items:
         pdf.set_text_color(*_MUTED)
-        pdf.set_font("Helvetica", "I", 8)
-        pdf.cell(0, 5, "Aucun element prioritaire.", new_x="LMARGIN", new_y="NEXT")
+        pdf.set_font("Helvetica", "I", 9)
+        pdf.cell(0, 5, "Aucun element prioritaire detecte.", new_x="LMARGIN", new_y="NEXT")
         return
-    pdf.set_font("Helvetica", "", 8)
-    pdf.set_text_color(45, 48, 70)
+    pdf.set_font("Helvetica", "", 9)
+    pdf.set_text_color(*_PRIMARY)
     for item in items[:limit]:
-        pdf.multi_cell(0, 4.5, _safe(f"- {item}"))
+        pdf.set_x(pdf.get_x() + 5)
+        pdf.multi_cell(0, 5, _safe(f"• {item}"))
+        pdf.set_x(pdf.get_x() - 5)
 
 
 def generate_dossier_360_pdf(payload: dict[str, Any]) -> bytes:
-    """Generate a PDF portfolio report from a Dossier 360 payload."""
+    """Generate a Premium PDF portfolio report."""
 
     portfolio = payload.get("portfolio") or {}
     dossiers = payload.get("dossiers") or []
 
-    pdf = _Dossier360PDF()
+    pdf = _PremiumDossierPDF()
     pdf.alias_nb_pages()
-    pdf.add_page()
+    
+    # Page 1 : Cover
+    pdf.draw_cover(portfolio)
 
-    pdf.section_title("1. Synthese portefeuille")
+    # Page 2 : Overview Metrics
+    pdf.section_title("1. Metriques Globales")
     start_y = pdf.get_y()
-    average_score = int(portfolio.get("average_score") or 0)
+    
     metrics = [
-        ("Clients", portfolio.get("clients_count", 0), _ACCENT),
-        ("Score moyen", f"{average_score}/100", _score_color(average_score)),
-        ("Dossiers prets", portfolio.get("ready_dossiers", 0), _SUCCESS),
-        ("Dossiers a risque", portfolio.get("at_risk_dossiers", 0), _DANGER),
+        ("Total Clients", portfolio.get("clients_count", 0), _SECONDARY),
+        ("Total Documents", portfolio.get("documents_count", 0), _SECONDARY),
+        ("Dossiers Prets", portfolio.get("ready_dossiers", 0), _SUCCESS),
+        ("Dossiers a Risque", portfolio.get("at_risk_dossiers", 0), _DANGER),
     ]
     for idx, (title, value, color) in enumerate(metrics):
-        pdf.metric_card(12 + idx * 47, title, value, color)
-    pdf.set_y(start_y + 29)
-
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(45, 48, 70)
-    summary = (
-        f"{portfolio.get('documents_count', 0)} document(s) analyses, "
-        f"{portfolio.get('critical_actions', 0)} action(s) critique(s) identifiees. "
-        "Ce rapport priorise les dossiers clients selon leur preparation, leur risque "
-        "et les pieces manquantes."
-    )
-    pdf.multi_cell(0, 5, _safe(summary))
+        pdf.metric_card(15 + idx * 45, start_y, title, value, color)
+    pdf.set_y(start_y + 35)
 
     missing = portfolio.get("top_missing_documents") or []
     if missing:
-        pdf.section_title("2. Pieces manquantes recurrentes")
+        pdf.section_title("2. Top 5 Pieces Manquantes (Vue Portefeuille)")
+        pdf.set_fill_color(*_LIGHT_BG)
+        pdf.set_draw_color(*_BORDER)
+        pdf.rect(15, pdf.get_y(), 180, len(missing[:5]) * 8 + 4, "DF")
+        pdf.set_y(pdf.get_y() + 2)
         for item in missing[:5]:
             label = item.get("label", "Piece") if isinstance(item, dict) else str(item)
             count = item.get("count", 0) if isinstance(item, dict) else ""
-            pdf.set_font("Helvetica", "", 8)
-            pdf.set_text_color(45, 48, 70)
-            pdf.cell(0, 5, _safe(f"- {label} ({count} dossier(s))"), new_x="LMARGIN", new_y="NEXT")
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(*_PRIMARY)
+            pdf.set_x(20)
+            pdf.cell(140, 8, _safe(f"• {label}"))
+            pdf.set_font("Helvetica", "", 9)
+            pdf.set_text_color(*_WARNING)
+            pdf.cell(30, 8, _safe(f"{count} manquant(s)"), align="R", new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(6)
 
-    pdf.section_title("3. Dossiers prioritaires")
+    # Page 3+ : Detailed Dossiers
+    pdf.add_page()
+    pdf.section_title("3. Revues Individuelles des Dossiers")
+    
     if not dossiers:
-        pdf.set_font("Helvetica", "I", 9)
+        pdf.set_font("Helvetica", "I", 10)
         pdf.set_text_color(*_MUTED)
         pdf.cell(0, 6, "Aucun dossier client disponible.", new_x="LMARGIN", new_y="NEXT")
-    for idx, dossier in enumerate(dossiers[:8], 1):
-        score = int(dossier.get("score") or 0)
-        risk = str(dossier.get("risk_level") or "low")
-        risk_color = _RISK_COLORS.get(risk, _MUTED)
-
-        if pdf.get_y() > 238:
+        
+    for idx, dossier in enumerate(dossiers[:15], 1):
+        if pdf.get_y() > 210:
             pdf.add_page()
 
         y = pdf.get_y()
-        pdf.set_fill_color(*_LIGHT)
-        pdf.set_draw_color(222, 226, 238)
-        pdf.rect(12, y, 186, 12, "DF")
-        pdf.set_xy(15, y + 3)
-        pdf.set_font("Helvetica", "B", 10)
-        pdf.set_text_color(*_DARK)
+        score = int(dossier.get("score") or 0)
+        risk = str(dossier.get("risk_level") or "low")
+        risk_color = _RISK_COLORS.get(risk, _MUTED)
+        
+        # Dossier Header Box
+        pdf.set_fill_color(*_LIGHT_BG)
+        pdf.set_draw_color(*_BORDER)
+        pdf.rect(15, y, 180, 14, "DF")
+        
+        pdf.set_xy(18, y + 4)
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(*_PRIMARY)
         client = dossier.get("client_name") or "Sans client"
         readiness = dossier.get("readiness") or ""
-        pdf.cell(110, 5, _safe(f"{idx}. {client} -- {readiness}"))
-        pdf.set_xy(143, y + 3)
-        pdf.set_text_color(*_score_color(score))
-        pdf.cell(25, 5, f"{score}/100")
-        pdf.set_text_color(*risk_color)
-        pdf.cell(25, 5, _safe(_RISK_LABELS.get(risk, risk)), align="R")
-        pdf.set_y(y + 16)
-
-        pdf.set_font("Helvetica", "", 8)
+        pdf.cell(100, 6, _safe(f"{idx}. {client}"))
+        
+        pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(*_MUTED)
+        pdf.cell(40, 6, _safe(readiness))
+        
+        pdf.set_font("Helvetica", "B", 11)
+        pdf.set_text_color(*_score_color(score))
+        pdf.cell(15, 6, f"{score}/100", align="R")
+        
+        pdf.set_text_color(*risk_color)
+        pdf.cell(22, 6, _safe(_RISK_LABELS.get(risk, risk)), align="R")
+        
+        pdf.set_y(y + 18)
+
+        # Internal Box Content
         ready_count = dossier.get("ready_count", 0)
         document_count = dossier.get("document_count", 0)
-        pdf.cell(
-            0,
-            5,
-            _safe(
-                f"{ready_count}/{document_count} documents prets, "
-                f"{dossier.get('entity_count', 0)} entites masquees"
-            ),
-            new_x="LMARGIN",
-            new_y="NEXT",
-        )
+        entities = dossier.get("entity_count", 0)
+        
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(*_PRIMARY)
+        pdf.cell(0, 6, _safe(f"Documents prets : {ready_count}/{document_count}  |  Entites masquees : {entities}"), new_x="LMARGIN", new_y="NEXT")
+        pdf.ln(2)
 
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_text_color(*_ACCENT)
-        pdf.cell(0, 5, "Pieces manquantes", new_x="LMARGIN", new_y="NEXT")
-        _bullet_list(pdf, list(dossier.get("missing_documents") or []), limit=3)
-
-        pdf.set_font("Helvetica", "B", 8)
+        pdf.set_font("Helvetica", "B", 9)
         pdf.set_text_color(*_WARNING)
-        pdf.cell(0, 5, "Blockers", new_x="LMARGIN", new_y="NEXT")
-        _bullet_list(pdf, list(dossier.get("blockers") or []), limit=3)
+        pdf.cell(0, 6, "Pieces manquantes :", new_x="LMARGIN", new_y="NEXT")
+        _bullet_list(pdf, list(dossier.get("missing_documents") or []), limit=3)
+        pdf.ln(2)
 
-        pdf.set_font("Helvetica", "B", 8)
-        pdf.set_text_color(*_SUCCESS)
-        pdf.cell(0, 5, "Prochaines actions", new_x="LMARGIN", new_y="NEXT")
+        blockers = list(dossier.get("blockers") or [])
+        if blockers:
+            pdf.set_font("Helvetica", "B", 9)
+            pdf.set_text_color(*_DANGER)
+            pdf.cell(0, 6, "Blockers / Risques critiques :", new_x="LMARGIN", new_y="NEXT")
+            _bullet_list(pdf, blockers, limit=3)
+            pdf.ln(2)
+
+        pdf.set_font("Helvetica", "B", 9)
+        pdf.set_text_color(*_SECONDARY)
+        pdf.cell(0, 6, "Prochaines actions :", new_x="LMARGIN", new_y="NEXT")
         _bullet_list(pdf, list(dossier.get("next_actions") or []), limit=3)
-        pdf.ln(3)
-
-    pdf.add_page()
-    pdf.section_title("4. Lecture cabinet / investisseur")
-    pdf.set_font("Helvetica", "", 9)
-    pdf.set_text_color(45, 48, 70)
-    pdf.multi_cell(
-        0,
-        5,
-        _safe(
-            "Le Dossier 360 est une synthese operationnelle. Il ne remplace pas la revue "
-            "professionnelle, mais permet d'identifier rapidement les dossiers prets, les "
-            "risques de re-identification, les pieces a demander et les actions a prioriser."
-        ),
-    )
+        
+        pdf.ln(8)
+        pdf.set_draw_color(243, 244, 246)
+        pdf.line(15, pdf.get_y(), 195, pdf.get_y())
+        pdf.ln(4)
 
     return bytes(pdf.output(dest="S"))

@@ -136,3 +136,39 @@ async def get_processing_register(
         }
         for record in records
     ]
+
+
+@router.get(
+    "/audit-logs",
+    summary="Journal d'audit visuel (SOC2)",
+)
+async def get_audit_logs(
+    current_user: CurrentUser,
+    db: DbSession,
+    limit: int = 50,
+) -> list[dict]:
+    """Retourne l'historique complet des actions pour la data room."""
+    from app.models.audit_log import AuditLog
+    from sqlalchemy import desc
+
+    result = await db.execute(
+        select(AuditLog)
+        .where(AuditLog.user_id == current_user.id)
+        .order_by(desc(AuditLog.created_at))
+        .limit(limit)
+    )
+    logs = result.scalars().all()
+    
+    return [
+        {
+            "id": str(log.id),
+            "timestamp": log.created_at.isoformat() if log.created_at else None,
+            "action": log.action,
+            "resource_type": log.resource_type,
+            "resource_id": log.resource_id,
+            "status_code": log.status_code,
+            "ip_address": log.ip_address,
+            "details": log.details,
+        }
+        for log in logs
+    ]

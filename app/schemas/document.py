@@ -19,6 +19,7 @@ class DocumentResponse(BaseModel):
     storage_key: str
     tags: list[str] | None = None
     doc_type: str | None = None
+    search_snippet: str | None = None
     is_deleted: bool = False
     deleted_at: datetime | None = None
     created_at: datetime
