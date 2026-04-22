@@ -13,14 +13,12 @@ La logique est répartie en sous-modules :
 from fastapi import APIRouter
 
 from app.api.v1._doc_crud import router as crud_router
-from app.api.v1._doc_stats import router as stats_router
 from app.api.v1._doc_processing import router as processing_router
 from app.api.v1._doc_export import router as export_router
 
 router = APIRouter()
 
 # L'ordre d'inclusion est important : routes statiques avant /{document_id}
-router.include_router(stats_router)       # /stats/dashboard, /status-summary
 router.include_router(crud_router)        # /, /clients, /trash/list, /all, /{id}
 router.include_router(processing_router)  # /{id}/extract, /anonymize, /validate…
 router.include_router(export_router)      # /{id}/export, /audit-report, /compliance…
