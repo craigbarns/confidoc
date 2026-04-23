@@ -30,14 +30,25 @@ def upgrade() -> None:
             validated_at timestamp with time zone,
             risk_score double precision,
             risk_level varchar(20)
-        );
-
+        )
+        """
+    )
+    op.execute(
+        """
         CREATE INDEX IF NOT EXISTS ix_pseudonym_mappings_document_id
-            ON pseudonym_mappings (document_id);
+            ON pseudonym_mappings (document_id)
+        """
+    )
+    op.execute(
+        """
         CREATE INDEX IF NOT EXISTS ix_pseudonym_mappings_user_id
-            ON pseudonym_mappings (user_id);
+            ON pseudonym_mappings (user_id)
+        """
+    )
+    op.execute(
+        """
         CREATE INDEX IF NOT EXISTS ix_pseudonym_mappings_expires_at
-            ON pseudonym_mappings (expires_at);
+            ON pseudonym_mappings (expires_at)
         """
     )
 
@@ -49,8 +60,8 @@ def upgrade() -> None:
         BEGIN
             BEGIN
                 CREATE EXTENSION IF NOT EXISTS vector;
-            EXCEPTION WHEN undefined_file THEN
-                RAISE NOTICE 'pgvector extension unavailable; skipping document_chunks';
+            EXCEPTION WHEN undefined_file OR insufficient_privilege THEN
+                RAISE NOTICE 'pgvector unavailable; skipping document_chunks';
             END;
 
             IF EXISTS (SELECT 1 FROM pg_extension WHERE extname = 'vector') THEN
