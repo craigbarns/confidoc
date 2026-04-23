@@ -9,7 +9,7 @@ change significantly year-over-year?"
 
 from __future__ import annotations
 
-import uuid
+import re
 from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -55,8 +55,8 @@ async def compare_documents(
     current_data = await extract_with_llm(current_text, doc_type=doc_type)
     previous_data = await extract_with_llm(previous_text, doc_type=doc_type)
 
-    current_fields = current_data.get("fields", {})
-    previous_fields = previous_data.get("fields", {})
+    current_fields = _extract_fields_for_comparison(current_data)
+    previous_fields = _extract_fields_for_comparison(previous_data)
 
     # 2) Find all keys present in either document
     all_keys = set(current_fields.keys()) | set(previous_fields.keys())
@@ -78,10 +78,7 @@ async def compare_documents(
 
         if curr is not None and prev is not None:
             var_abs = round(curr - prev, 2)
-            if prev != 0:
-                var_pct = round((curr - prev) / abs(prev) * 100, 2)
-            else:
-                var_pct = None
+            var_pct = round((curr - prev) / abs(prev) * 100, 2) if prev != 0 else None
 
             # Severity heuristics
             if var_pct is not None:
@@ -135,7 +132,10 @@ async def compare_documents(
     warning_count = sum(1 for v in variations if v["severity"] == "warning")
 
     if critical_count > 0:
-        global_trend = f"{critical_count} variation(s) majeure(s) détectée(s). Revue approfondie recommandée."
+        global_trend = (
+            f"{critical_count} variation(s) majeure(s) détectée(s). "
+            "Revue approfondie recommandée."
+        )
     elif warning_count > 0:
         global_trend = f"{warning_count} point(s) d'attention. Vérification conseillée."
     else:
@@ -164,10 +164,60 @@ async def compare_documents(
         "coherence_flags": coherence_flags,
         "global_trend": global_trend,
         "periods": {
-            "current": current_data.get("metadata", {}).get("exercice", "N"),
-            "previous": previous_data.get("metadata", {}).get("exercice", "N-1"),
+            "current": _extract_period_label(current_data, default="N"),
+            "previous": _extract_period_label(previous_data, default="N-1"),
         },
     }
+
+
+def _extract_fields_for_comparison(data: dict[str, Any]) -> dict[str, Any]:
+    """Normalize extracted payload to a flat {field -> value} structure."""
+    raw_fields = data.get("fields")
+    if isinstance(raw_fields, dict):
+        return raw_fields
+
+    fields: dict[str, Any] = {}
+    totaux = data.get("totaux")
+    if isinstance(totaux, dict):
+        for key, value in totaux.items():
+            if isinstance(value, dict):
+                fields[key] = value.get("montant")
+            else:
+                fields[key] = value
+
+    montants = data.get("montants_cles")
+    if isinstance(montants, list):
+        for item in montants:
+            if not isinstance(item, dict):
+                continue
+            label = str(item.get("libelle") or "").strip().lower()
+            amount = item.get("montant")
+            if not label or amount is None:
+                continue
+            slug = re.sub(r"[^a-z0-9]+", "_", label).strip("_")
+            if not slug:
+                continue
+            key = f"poste_{slug[:80]}"
+            fields.setdefault(key, amount)
+
+    return fields
+
+
+def _extract_period_label(data: dict[str, Any], default: str) -> str:
+    metadata = data.get("metadata")
+    if isinstance(metadata, dict):
+        exercice = metadata.get("exercice")
+        if isinstance(exercice, str) and exercice.strip():
+            return exercice
+
+    exercice_data = data.get("exercice")
+    if isinstance(exercice_data, dict):
+        for key in ("date_fin", "date_arrete", "date_debut"):
+            value = exercice_data.get(key)
+            if isinstance(value, str) and value.strip():
+                return value
+
+    return default
 
 
 def _to_float(value: Any) -> float | None:

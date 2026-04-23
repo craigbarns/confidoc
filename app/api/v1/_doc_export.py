@@ -12,8 +12,8 @@ from __future__ import annotations
 import asyncio
 import io
 import uuid
+from contextlib import suppress
 from datetime import UTC, datetime
-from io import BytesIO
 from types import SimpleNamespace
 from typing import Any
 
@@ -36,6 +36,13 @@ from app.models.entity_detection import EntityDetection
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _risk_score_percent(score: float | None) -> float:
+    if score is None:
+        return 0.0
+    value = float(score)
+    return value * 100 if 0 <= value <= 1 else value
 
 
 @router.get(
@@ -95,28 +102,48 @@ async def export_fec(
     document = await _get_user_document_or_404(db, document_id, current_user.id)
     await _check_export_gate(db, document, current_user)
 
-    # Récupération des données structurées (LLM extraction)
-    from app.models.document_version import DocumentVersion, DocumentVersionType
-    result = await db.execute(
-        select(DocumentVersion).where(
-            DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type == DocumentVersionType.STRUCTURED_DATA,
-        )
-    )
-    structured_version = result.scalar_one_or_none()
-    if not structured_version:
-        raise http_404("Données structurées non disponibles. Lancez l'analyse IA d'abord.")
+    anonymized_text = await _get_anonymized_text(db, document)
+    if not anonymized_text:
+        raise http_404("Texte anonymise indisponible. Lancez l'anonymisation d'abord.")
 
-    import json
-    data = json.loads(structured_version.content_text)
-    
+    from app.services.llm_extraction_service import extract_with_llm
+
+    data = await extract_with_llm(anonymized_text, doc_type=document.doc_type or None)
+    montants = data.get("montants_cles", [])
+    has_amounts = any(
+        isinstance(item, dict) and item.get("montant") is not None for item in montants
+    )
+    if not has_amounts:
+        raise http_404("Aucune donnee comptable exploitable pour generer le FEC.")
+
     # Construction du FEC (format tab-separated standard)
-    header = "JournalCode\tJournalLib\tEcritureNum\tEcritureDate\tCompteNum\tCompteLib\tCompteAuxNum\tCompteAuxLib\tPieceRef\tPieceDate\tEcritureLib\tDebit\tCredit\tEcritureLet\tDateLet\tValidDate\tMontantdevise\tIdevise"
+    header = "\t".join(
+        [
+            "JournalCode",
+            "JournalLib",
+            "EcritureNum",
+            "EcritureDate",
+            "CompteNum",
+            "CompteLib",
+            "CompteAuxNum",
+            "CompteAuxLib",
+            "PieceRef",
+            "PieceDate",
+            "EcritureLib",
+            "Debit",
+            "Credit",
+            "EcritureLet",
+            "DateLet",
+            "ValidDate",
+            "Montantdevise",
+            "Idevise",
+        ]
+    )
     lines = [header]
-    
+
     journal = "HA" if "facture" in str(data.get("type_document", "")).lower() else "OD"
     date_fec = datetime.now(UTC).strftime("%Y%m%d")
-    
+
     # On crée une ligne pour chaque montant clé extrait
     for i, m in enumerate(data.get("montants_cles", [])):
         code = m.get("pcg_code") or "471000"
@@ -124,12 +151,33 @@ async def export_fec(
         val = m.get("montant") or 0
         debit = f"{val:.2f}".replace(".", ",") if val > 0 else "0,00"
         credit = f"{abs(val):.2f}".replace(".", ",") if val < 0 else "0,00"
-        
-        line = f"{journal}\tCONFILOG\t{i+1}\t{date_fec}\t{code}\t{lib}\t\t\t\t{date_fec}\t{lib}\t{debit}\t{credit}\t\t\t{date_fec}\t\t"
+
+        line = "\t".join(
+            [
+                journal,
+                "CONFILOG",
+                str(i + 1),
+                date_fec,
+                str(code),
+                str(lib),
+                "",
+                "",
+                "",
+                date_fec,
+                str(lib),
+                debit,
+                credit,
+                "",
+                "",
+                date_fec,
+                "",
+                "",
+            ]
+        )
         lines.append(line)
-        
+
     fec_content = "\n".join(lines)
-    
+
     # Audit log
     try:
         from app.models.audit_log import AuditLog
@@ -144,7 +192,7 @@ async def export_fec(
         pass
 
     return PlainTextResponse(
-        fec_content, 
+        fec_content,
         headers={"Content-Disposition": f"attachment; filename=FEC_{document.id}.txt"}
     )
 
@@ -195,10 +243,12 @@ async def export_redacted_pdf(
         try:
             from app.services.pdf_redaction_service import redact_pdf_bytes
             loop = asyncio.get_running_loop()
-            redacted_bytes = await loop.run_in_executor(None, redact_pdf_bytes, original_bytes, sensitive_values)
+            redacted_bytes = await loop.run_in_executor(
+                None, redact_pdf_bytes, original_bytes, sensitive_values
+            )
         except Exception as exc:
             logger.error("pdf_redaction_failed", doc_id=str(document.id), error=str(exc))
-            raise http_400("Impossible de générer le PDF redacté.")
+            raise http_400("Impossible de générer le PDF redacté.") from exc
 
         def iterfile():
             chunk_size = 8192
@@ -206,7 +256,9 @@ async def export_redacted_pdf(
                 while chunk := f.read(chunk_size):
                     yield chunk
 
-        headers = {"Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'}
+        headers = {
+            "Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'
+        }
         return StreamingResponse(iterfile(), media_type="application/pdf", headers=headers)
     except Exception as exc:
         if hasattr(exc, "status_code"):
@@ -382,7 +434,7 @@ async def get_document_risk_score(
     risk_level = "low"
 
     if mapping and mapping.risk_score is not None:
-        risk_score = mapping.risk_score
+        risk_score = _risk_score_percent(mapping.risk_score)
         risk_level = mapping.risk_level or "low"
     else:
         ent_result = await db.execute(
@@ -419,13 +471,21 @@ async def get_document_risk_score(
 
     recommendations: list[str] = []
     if "CARTE_BANCAIRE" in unique_types or "IBAN" in unique_types:
-        recommendations.append("Données bancaires détectées : validation manuelle avant tout export.")
+        recommendations.append(
+            "Données bancaires détectées : validation manuelle avant tout export."
+        )
     if "EMAIL" in unique_types or "TELEPHONE" in unique_types:
-        recommendations.append("Coordonnées directes présentes : appliquer une anonymisation stricte.")
+        recommendations.append(
+            "Coordonnées directes présentes : appliquer une anonymisation stricte."
+        )
     if "PERSONNE" in unique_types:
-        recommendations.append("Identités de personnes physiques : vérifier la base légale du traitement.")
+        recommendations.append(
+            "Identités de personnes physiques : vérifier la base légale du traitement."
+        )
     if risk_score < 40:
-        recommendations.append("Risque faible : document probablement conforme pour un usage interne.")
+        recommendations.append(
+            "Risque faible : document probablement conforme pour un usage interne."
+        )
     if not mapping or not mapping.human_validated:
         recommendations.append("Validation humaine recommandée avant diffusion externe.")
 
@@ -487,16 +547,18 @@ async def get_compliance_report(
         .order_by(PseudonymMapping.created_at.desc())
     )
     mapping = pm_result.scalar_one_or_none()
-    risk_score_val = round(mapping.risk_score, 1) if mapping and mapping.risk_score is not None else 0.0
+    risk_score_val = (
+        round(mapping.risk_score, 1)
+        if mapping and mapping.risk_score is not None
+        else 0.0
+    )
     risk_level = mapping.risk_level or "low" if mapping else "low"
     human_validated = bool(mapping and mapping.human_validated)
 
     # Anonymized text for LLM / recommendation
     anonymized_preview = ""
-    try:
+    with suppress(Exception):
         anonymized_preview = await _get_anonymized_text(db, document)
-    except Exception:
-        pass
 
     risk_info: dict[str, Any] = {
         "score": risk_score_val,
@@ -504,7 +566,9 @@ async def get_compliance_report(
         "human_validated": human_validated,
     }
     if mapping:
-        risk_info["validated_at"] = mapping.validated_at.isoformat() if mapping.validated_at else None
+        risk_info["validated_at"] = (
+            mapping.validated_at.isoformat() if mapping.validated_at else None
+        )
         risk_info["expires_at"] = mapping.expires_at.isoformat() if mapping.expires_at else None
 
     if anonymized_preview and entity_counts:
@@ -566,7 +630,10 @@ async def get_compliance_report(
     llm_report: dict[str, Any] = {
         "summary": "Rapport généré automatiquement.",
         "findings": [f"{k}: {v} occurrence(s)" for k, v in entity_counts.items()],
-        "recommendations": ["Vérifier la base légale du traitement.", "Valider manuellement avant export externe."],
+        "recommendations": [
+            "Vérifier la base légale du traitement.",
+            "Valider manuellement avant export externe.",
+        ],
         "conclusion": "Document conforme en l'état pour un usage interne.",
     }
     from app.config import get_settings
@@ -581,8 +648,9 @@ async def get_compliance_report(
                 f"Ne renvoie que le JSON."
             )
             from app.core.json_utils import extract_json
-            from app.services.mistral_service import chat_completion
-            raw = await chat_completion(prompt, temperature=0.3)
+            from app.services.mistral_service import _chat_completion
+
+            raw = await _chat_completion(prompt, temperature=0.3)
             parsed = extract_json(raw)
             if parsed:
                 llm_report = {
@@ -601,7 +669,11 @@ async def get_compliance_report(
             "document_id": str(document.id),
             "filename": document.original_filename,
             "created_at": document.created_at.isoformat() if document.created_at else None,
-            "status": document.status.value if hasattr(document.status, "value") else str(document.status),
+            "status": (
+                document.status.value
+                if hasattr(document.status, "value")
+                else str(document.status)
+            ),
         },
         "conformity": {
             "score": conformity_score,

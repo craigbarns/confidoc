@@ -9,8 +9,8 @@ from sqlalchemy.ext.asyncio import (
 )
 
 from app.config import get_settings
-from app.models import Base
 from app.core.logging import get_logger
+from app.models import Base
 
 logger = get_logger(__name__)
 settings = get_settings()
@@ -48,11 +48,31 @@ async def init_database() -> None:
     from sqlalchemy import text
     async with engine.begin() as conn:
         try:
-            # 1. Création des tables manquantes
-            await conn.run_sync(Base.metadata.create_all)
+            # 1. Création des tables manquantes hors PGvector optionnel.
+            core_tables = [
+                table
+                for name, table in Base.metadata.tables.items()
+                if name != "document_chunks"
+            ]
+            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(
+                sync_conn,
+                tables=core_tables,
+            ))
             logger.info("db_metadata_create_all_success")
         except Exception as e:
             logger.warning("db_metadata_create_all_failed_continuing", error=str(e))
+
+        try:
+            await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
+            document_chunks = Base.metadata.tables.get("document_chunks")
+            if document_chunks is not None:
+                await conn.run_sync(lambda sync_conn: document_chunks.create(
+                    sync_conn,
+                    checkfirst=True,
+                ))
+                logger.info("db_document_chunks_ready")
+        except Exception as e:
+            logger.warning("db_document_chunks_skipped", error=str(e))
 
         # 2. Ajout manuel des colonnes manquantes
         manual_migrations = [
@@ -97,9 +117,15 @@ async def init_database() -> None:
             "CREATE INDEX IF NOT EXISTS ix_documents_doc_type ON documents (doc_type);",
             "CREATE INDEX IF NOT EXISTS ix_documents_tags ON documents USING GIN (tags);",
             # FTS index on document content (using gin and to_tsvector)
-            "CREATE INDEX IF NOT EXISTS ix_document_versions_content_fts ON document_versions USING GIN (to_tsvector('french', content_text));",
+            (
+                "CREATE INDEX IF NOT EXISTS ix_document_versions_content_fts "
+                "ON document_versions USING GIN (to_tsvector('french', content_text));"
+            ),
             # Fuzzy search on filename
-            "CREATE INDEX IF NOT EXISTS ix_documents_filename_trgm ON documents USING GIN (original_filename gin_trgm_ops);",
+            (
+                "CREATE INDEX IF NOT EXISTS ix_documents_filename_trgm "
+                "ON documents USING GIN (original_filename gin_trgm_ops);"
+            ),
         ]
 
         for idx_sql in indexes:

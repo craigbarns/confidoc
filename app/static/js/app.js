@@ -419,6 +419,7 @@ function logout() {
   currentDocSize = 0;
   currentProvider = "—";
   latestAssistantText = "";
+  renderExportGuard({});
   originalTextCache = {};
   Object.values(bgPollers).forEach(id => clearInterval(id));
   bgPollers = {};
@@ -513,13 +514,79 @@ function renderAIDocInsights(payload = {}) {
   $("kpi-next-action").textContent = payload.nextAction || "—";
 }
 
+function normalizeRiskPercent(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(numeric <= 1 ? numeric * 100 : numeric);
+}
+
+function renderExportGuard(payload = {}) {
+  const guard = $("export-guard");
+  if (!guard) return;
+  if (!currentDocId) {
+    guard.style.display = "none";
+    return;
+  }
+
+  const status = payload.status || currentDocStatus || "";
+  const ready = isReadyStatus(status);
+  const level = String(payload.risk_level || payload.level || currentRiskLevel || "low").toLowerCase();
+  const validated = !!(payload.human_validated ?? payload.humanValidated);
+  const score = normalizeRiskPercent(payload.risk_score ?? payload.score);
+  const scoreText = score === null ? "" : `Score RGPD ${score}% · `;
+  const approveBtn = $("btn-export-approve-inline");
+  const titleEl = $("export-guard-title");
+  const detailEl = $("export-guard-detail");
+  let state = "ready";
+  let title = "Export prêt";
+  let detail = `${scoreText}Document anonymisé.`;
+  let canApprove = false;
+
+  if (!ready) {
+    state = "watch";
+    title = "Export en attente";
+    detail = "Le document doit être anonymisé puis validé avant diffusion.";
+  } else if (level === "critical") {
+    state = "blocked";
+    title = "Export bloqué";
+    detail = `${scoreText}Risque critique de réidentification.`;
+  } else if (level === "high" && !validated) {
+    state = "watch";
+    title = "Validation humaine requise";
+    detail = `${scoreText}Les exports restent verrouillés jusqu'à validation.`;
+    canApprove = true;
+  } else if (level === "high" && validated) {
+    state = "ready";
+    title = "Export validé";
+    detail = `${scoreText}Validation humaine journalisée.`;
+  } else if (level === "medium") {
+    state = "watch";
+    title = "Export sous vigilance";
+    detail = `${scoreText}Contrôle recommandé avant partage externe.`;
+  }
+
+  guard.className = `export-guard ${state}`;
+  guard.style.display = "";
+  if (titleEl) titleEl.textContent = title;
+  if (detailEl) detailEl.textContent = detail;
+  if (approveBtn) approveBtn.style.display = canApprove ? "" : "none";
+}
+
 async function refreshAIDocInsights(docId) {
   if (!docId) {
     renderAIDocInsights({});
+    renderExportGuard({});
     return;
   }
   try {
-    const st = await apiFetch(`/documents/${docId}/status`);
+    const [statusResult, riskResult] = await Promise.allSettled([
+      apiFetch(`/documents/${docId}/status`),
+      apiFetch(`/documents/${docId}/risk-score`),
+    ]);
+    if (statusResult.status === "rejected") throw statusResult.reason;
+    const st = statusResult.value;
+    const risk = riskResult.status === "fulfilled" ? riskResult.value : {};
     const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Discussion IA";
     updatePipelineTimeline({
       status: st.status || currentDocStatus,
@@ -532,6 +599,10 @@ async function refreshAIDocInsights(docId) {
       detections: st?.anonymization?.detections_count ?? 0,
       nextAction: next,
     });
+    renderExportGuard({
+      ...risk,
+      status: st.status || currentDocStatus,
+    });
   } catch (_e) {
     updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: isReadyStatus(currentDocStatus) });
     renderAIDocInsights({
@@ -540,6 +611,7 @@ async function refreshAIDocInsights(docId) {
       detections: "—",
       nextAction: "Vérifier document",
     });
+    renderExportGuard({ status: currentDocStatus, risk_level: currentRiskLevel });
   }
 }
 
@@ -963,6 +1035,7 @@ async function deleteDoc(id, name) {
       currentDocId = null;
       currentDocName = "";
       currentDocStatus = "";
+      renderExportGuard({});
       setStep(1);
     }
     await loadClientSuggestions();
@@ -995,6 +1068,7 @@ async function permanentDeleteDoc(id, name) {
       currentDocId = null;
       currentDocName = "";
       currentDocStatus = "";
+      renderExportGuard({});
       setStep(1);
     }
     await loadClientSuggestions();
@@ -1328,6 +1402,14 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
 
   // Store risk level globally for export gating
   currentRiskLevel = risk ? risk.level : null;
+  if (risk) {
+    renderExportGuard({
+      status: "ready",
+      risk_level: risk.level,
+      risk_score: risk.score,
+      human_validated: false,
+    });
+  }
 
   // Risk indicator (RGPD)
   const riskEl = $("risk-indicator");
@@ -2177,7 +2259,14 @@ async function exportFec() {
     toast("Export FEC terminé", "success");
   } catch (e) {
     console.error("exportFec error:", e);
-    toast(`Erreur export FEC: ${e.message}`, "error");
+    if (e.message && e.message.includes("bloqu")) {
+      toast(e.message, "error");
+      if (e.message.includes("validation humaine")) {
+        showApproveExportPrompt();
+      }
+    } else {
+      toast(`Erreur export FEC: ${e.message}`, "error");
+    }
   }
 }
 
@@ -2236,6 +2325,12 @@ async function showApproveExportPrompt() {
   try {
     await apiFetch(`/documents/${currentDocId}/approve-export`, { method: "POST" });
     toast("Export approuvé — vous pouvez maintenant exporter.", "success");
+    renderExportGuard({
+      status: currentDocStatus,
+      risk_level: currentRiskLevel || "high",
+      human_validated: true,
+    });
+    refreshAIDocInsights(currentDocId).catch(() => {});
   } catch (e) {
     toast(`Erreur approbation: ${e.message}`, "error");
   }
@@ -3235,6 +3330,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
     updateHeaderContext();
     renderAIDocInsights({});
+    renderExportGuard({});
     updatePipelineTimeline({});
     setStep(1);
   });
@@ -3446,6 +3542,9 @@ document.addEventListener("DOMContentLoaded", () => {
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
   if ($("btn-export-fec")) $("btn-export-fec").addEventListener("click", exportFec);
+  if ($("btn-export-approve-inline")) {
+    $("btn-export-approve-inline").addEventListener("click", showApproveExportPrompt);
+  }
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
   if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
 
@@ -3524,6 +3623,7 @@ document.addEventListener("keydown", (e) => {
   if (mod && e.shiftKey && e.key.toLowerCase() === "u") {
     e.preventDefault();
     currentDocId = null;
+    renderExportGuard({});
     setStep(1);
     $("upload-client-name")?.focus();
     return;

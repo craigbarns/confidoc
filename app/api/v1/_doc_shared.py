@@ -189,19 +189,16 @@ async def _get_anonymized_text(db: AsyncSession, document: Document) -> str:
 
 async def _check_export_gate(db: AsyncSession, document: Document, current_user: object) -> None:
     """Enforce RGPD export policy based on risk level."""
-    from app.core.database import async_session_factory
-
     doc_id = str(document.id)
-    user_id = str(current_user.id)  # type: ignore[union-attr]
+    user_id = str(getattr(current_user, "id", "unknown"))
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
-        async with async_session_factory() as gate_session:
-            result = await gate_session.execute(
-                select(PseudonymMapping)
-                .where(PseudonymMapping.document_id == doc_id)
-                .order_by(PseudonymMapping.created_at.desc())
-            )
-            mapping = result.scalar_one_or_none()
+        result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = result.scalar_one_or_none()
 
         if not mapping:
             return
@@ -231,4 +228,12 @@ async def _check_export_gate(db: AsyncSession, document: Document, current_user:
     except Exception as exc:
         if hasattr(exc, "status_code"):
             raise
-        logger.warning("export_gate_check_skipped", error=str(exc))
+        logger.error(
+            "export_gate_check_failed",
+            doc_id=doc_id,
+            user_id=user_id,
+            error=str(exc),
+        )
+        raise http_400(
+            "Export temporairement indisponible : controle de conformite inaccessible."
+        ) from exc

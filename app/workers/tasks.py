@@ -286,6 +286,7 @@ async def _anonymize_document_async_v2(
         if mode == "pseudonymization":
             try:
                 from datetime import UTC, datetime, timedelta
+
                 from app.config import get_settings
                 from app.models.pseudonym_mapping import PseudonymMapping
                 from app.services.crypto_service import encrypt_mapping
@@ -297,7 +298,7 @@ async def _anonymize_document_async_v2(
                     expiry = datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
                     db.add(PseudonymMapping(
                         document_id=document.id,
-                        user_id=document.user_id,
+                        user_id=document.uploaded_by_user_id,
                         encrypted_mapping=encrypted,
                         expires_at=expiry,
                         risk_score=risk_report.score,
