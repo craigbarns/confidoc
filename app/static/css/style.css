@@ -1417,7 +1417,20 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
 }
 .dash-kpi-card:hover { transform: translateY(-4px); box-shadow: var(--shadow-lg); }
 .dash-kpi-card:hover::before { opacity: 1; }
-.dash-kpi-icon { font-size: 28px; margin-bottom: 8px; }
+.dash-kpi-icon {
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  flex-shrink: 0;
+  margin: 0 auto 12px;
+}
+.dash-kpi-icon.kpi-violet { background: rgba(124,116,255,0.15); color: var(--accent); }
+.dash-kpi-icon.kpi-green  { background: rgba(16,185,129,0.15);  color: var(--success); }
+.dash-kpi-icon.kpi-orange { background: rgba(245,158,11,0.15);  color: var(--warning); }
+.dash-kpi-icon.kpi-red    { background: rgba(239,68,68,0.15);   color: var(--danger); }
 .dash-kpi-num {
   font-size: 36px;
   font-weight: 800;
