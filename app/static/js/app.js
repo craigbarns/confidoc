@@ -434,12 +434,12 @@ function updateHeaderContext() {
   const providerPill = $("header-provider-pill");
   if (currentDocId && currentDocName) {
     const labelMap = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
-    docPill.textContent = `📄 ${currentDocName} · ${labelMap[currentDocStatus] || currentDocStatus || "—"}`;
+    docPill.textContent = `${currentDocName} · ${labelMap[currentDocStatus] || currentDocStatus || "—"}`;
     docPill.style.display = "";
   } else {
     docPill.style.display = "none";
   }
-  providerPill.textContent = `🤖 Provider IA: ${currentProvider || "—"}`;
+  providerPill.textContent = `Provider IA: ${currentProvider || "—"}`;
   providerPill.style.display = "";
 }
 
@@ -805,7 +805,8 @@ async function selectDoc(id, status, name, sizeBytes) {
       "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
   } else if (status === "failed") {
     $("anon-empty").style.display = "";
-    $("anon-empty").querySelector(".hint-icon").textContent = "⚠️";
+    $("anon-empty").querySelector(".hint-icon").innerHTML =
+      '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
     $("anon-empty").querySelector("p").innerHTML =
       "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
   }
@@ -962,7 +963,8 @@ async function uploadFile(file) {
       updateAnonDocBar(file.name, file.size);
       refreshAIDocInsights(currentDocId);
       $("anon-empty").style.display = "";
-      $("anon-empty").querySelector(".hint-icon").textContent = "📄";
+      $("anon-empty").querySelector(".hint-icon").innerHTML =
+        '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
       if (autoAnon) {
         $("anon-empty").querySelector("p").innerHTML =
           `<strong>${file.name}</strong> uploadé.<br>Anonymisation en cours en arrière-plan…`;
@@ -1004,7 +1006,8 @@ async function createDemoDocument() {
     updateAnonDocBar(res.original_filename, 0);
     refreshAIDocInsights(currentDocId);
     $("anon-empty").style.display = "";
-    $("anon-empty").querySelector(".hint-icon").textContent = "🚀";
+    $("anon-empty").querySelector(".hint-icon").innerHTML =
+      '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
     $("anon-empty").querySelector("p").innerHTML =
       `<strong>${res.original_filename}</strong> créé.<br>Anonymisation en cours en arrière-plan…`;
     showAnonLoading("Anonymisation en cours…");
@@ -1493,8 +1496,10 @@ function resetChat() {
   latestAssistantText = "";
   $("btn-copy-answer").disabled = true;
   $("chat-messages").innerHTML =
-    '<div class="chat-intro"><div class="chat-intro-icon">🔒</div>' +
-    "<p>Document anonymisé. Posez vos questions en toute sécurité.</p></div>";
+    '<div class="chat-intro"><div class="chat-intro-icon" role="img" aria-label="Cadenas">' +
+    '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+    '</div><p>Document anonymisé. Posez vos questions en toute sécurité.</p></div>';
 }
 
 function appendUserMsg(text) {
@@ -2385,17 +2390,14 @@ document.addEventListener("DOMContentLoaded", () => {
     $("btn-toggle-password").addEventListener("click", () => {
       const inp = $("password");
       const btn = $("btn-toggle-password");
-      if (inp.type === "password") {
-        inp.type = "text";
-        btn.textContent = "🙈️";
-        btn.title = "Masquer le mot de passe";
-        btn.setAttribute("aria-pressed", "true");
-      } else {
-        inp.type = "password";
-        btn.textContent = "👁️";
-        btn.title = "Afficher le mot de passe";
-        btn.setAttribute("aria-pressed", "false");
-      }
+      const isHidden = inp.type === "password";
+      inp.type = isHidden ? "text" : "password";
+      btn.title = isHidden ? "Masquer le mot de passe" : "Afficher le mot de passe";
+      btn.setAttribute("aria-pressed", isHidden ? "true" : "false");
+      const eyeOpen = btn.querySelector(".eye-open");
+      const eyeClosed = btn.querySelector(".eye-closed");
+      if (eyeOpen) eyeOpen.style.display = isHidden ? "none" : "";
+      if (eyeClosed) eyeClosed.style.display = isHidden ? "" : "none";
     });
   }
 
@@ -2470,17 +2472,14 @@ document.addEventListener("DOMContentLoaded", () => {
     $("btn-toggle-reset-password").addEventListener("click", () => {
       const inp = $("reset-password-new");
       const btn = $("btn-toggle-reset-password");
-      if (inp.type === "password") {
-        inp.type = "text";
-        btn.textContent = "🙈️";
-        btn.title = "Masquer le mot de passe";
-        btn.setAttribute("aria-pressed", "true");
-      } else {
-        inp.type = "password";
-        btn.textContent = "👁️";
-        btn.title = "Afficher le mot de passe";
-        btn.setAttribute("aria-pressed", "false");
-      }
+      const isHidden = inp.type === "password";
+      inp.type = isHidden ? "text" : "password";
+      btn.title = isHidden ? "Masquer le mot de passe" : "Afficher le mot de passe";
+      btn.setAttribute("aria-pressed", isHidden ? "true" : "false");
+      const eyeOpen = btn.querySelector(".eye-open");
+      const eyeClosed = btn.querySelector(".eye-closed");
+      if (eyeOpen) eyeOpen.style.display = isHidden ? "none" : "";
+      if (eyeClosed) eyeClosed.style.display = isHidden ? "" : "none";
     });
   }
   if ($("btn-reset-submit")) {
@@ -2695,7 +2694,7 @@ document.addEventListener("DOMContentLoaded", () => {
       copilotMode = !copilotMode;
       const b = $("btn-copilot-mode");
       b.dataset.on = copilotMode ? "true" : "false";
-      b.textContent = copilotMode ? "🤖 Copilot: ON" : "🤖 Copilot: OFF";
+      b.textContent = copilotMode ? "Copilot: ON" : "Copilot: OFF";
       b.classList.toggle("active", copilotMode);
       if (!copilotMode && $("copilot-insights")) $("copilot-insights").style.display = "none";
       toast(copilotMode ? "Copilot activé" : "Copilot désactivé", "info");
