@@ -1026,7 +1026,7 @@ function resetAnonPanel() {
   hideAnonLoading();
   $("anon-results").style.display = "none";
   $("anon-empty").style.display = "none";
-  $("anon-empty").querySelector(".hint-icon").textContent = "👈";
+  $("anon-empty").querySelector(".hint-icon").innerHTML = `<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>`;
   $("anon-empty").querySelector("p").innerHTML =
     "Sélectionnez un document dans la liste<br>ou uploadez-en un nouveau.";
   $("btn-anonymize").disabled = false;
@@ -2685,7 +2685,7 @@ document.addEventListener("DOMContentLoaded", () => {
     reportMode = !reportMode;
     const b = $("btn-report-mode");
     b.dataset.on = reportMode ? "true" : "false";
-    b.textContent = reportMode ? "🧱 Mode rapport: ON" : "🧱 Mode rapport: OFF";
+    b.textContent = reportMode ? "Mode rapport: ON" : "Mode rapport: OFF";
     b.classList.toggle("active", reportMode);
     toast(reportMode ? "Mode rapport activé" : "Mode rapport désactivé", "info");
   });
