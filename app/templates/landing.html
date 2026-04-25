@@ -459,7 +459,7 @@
   <section class="cta" id="demo">
     <h2>Prêt à protéger<br>vos documents ?</h2>
     <p>Testez ConfiDoc avec un document de démonstration. Aucune inscription requise.</p>
-    <a href="/ui" class="btn-primary">
+    <a href="#demo-section" class="btn-primary" id="cta-demo-btn">
       <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       Lancer la démo interactive
     </a>
@@ -490,10 +490,11 @@
 
   if (!launchBtn) return;
 
-  // Hero CTA → scroll to demo section then auto-trigger
-  const heroDemoBtn = $('hero-demo-btn');
-  if (heroDemoBtn) {
-    heroDemoBtn.addEventListener('click', (e) => {
+  // Any CTA → scroll to demo section then auto-trigger
+  ['hero-demo-btn', 'cta-demo-btn'].forEach(id => {
+    const btn = $(id);
+    if (!btn) return;
+    btn.addEventListener('click', (e) => {
       e.preventDefault();
       const section = $('demo-section');
       if (section) {
@@ -501,7 +502,7 @@
         setTimeout(() => launchBtn.click(), 600);
       }
     });
-  }
+  });
 
   launchBtn.addEventListener('click', async () => {
     launchBtn.disabled = true;
