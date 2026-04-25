@@ -1114,7 +1114,7 @@ async function selectDoc(id, status, name, sizeBytes) {
         "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
     } else if (status === "failed") {
       $("anon-empty").style.display = "";
-      $("anon-empty").querySelector(".hint-icon").textContent = "⚠️";
+      $("anon-empty").querySelector(".hint-icon").innerHTML = `<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
       $("anon-empty").querySelector("p").innerHTML =
         "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
     }
@@ -2301,7 +2301,7 @@ async function loadGoldenReport() {
       badge.style.background = "rgba(16,185,129,0.15)";
       badge.style.color = "#10b981";
       badge.style.border = "1px solid rgba(16,185,129,0.3)";
-      badge.innerHTML = `🛡️ Qualité Corpus: <strong>${Math.round(data.pass_rate)}%</strong>`;
+      badge.innerHTML = `Qualité Corpus: <strong>${Math.round(data.pass_rate)}%</strong>`;
       badge.title = `Taux de succès sur ${data.total} cas de référence métiers`;
       $("header-pills")?.appendChild(badge);
     }
@@ -3512,7 +3512,7 @@ document.addEventListener("DOMContentLoaded", () => {
         </head>
         <body>
           <div class="header">
-            <div class="logo">🔒 ConfiDoc</div>
+            <div class="logo">ConfiDoc</div>
             <div class="meta">
               <p><strong>Date d'analyse :</strong> ${dateStr}</p>
               <p><strong>Modèle d'IA :</strong> Mistral-Large (Contexte Anonymisé)</p>
