@@ -1195,6 +1195,8 @@ body {
 .btn-icon {
   width: 32px;
   height: 32px;
+  padding: 0;
+  box-sizing: border-box;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -1215,22 +1217,6 @@ body {
 /* ── MOBILE SIDEBAR DRAWER ─────────────────── */
 .sidebar-toggle {
   display: none;
-  align-items: center;
-  justify-content: center;
-  width: 32px;
-  height: 32px;
-  border: 1px solid var(--border);
-  border-radius: var(--radius);
-  background: transparent;
-  color: var(--text-muted);
-  font-size: 18px;
-  cursor: pointer;
-  transition: all 0.15s ease;
-}
-.sidebar-toggle:hover {
-  background: var(--accent-dim);
-  border-color: var(--border-accent, rgba(124,116,255,0.3));
-  color: var(--accent);
 }
 .sidebar-backdrop {
   position: fixed;
