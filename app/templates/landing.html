@@ -465,5 +465,103 @@
   </section>
 
   <footer>© 2026 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.</footer>
+
+<script nonce="{{CSP_NONCE}}">
+(function() {
+  const $ = id => document.getElementById(id);
+
+  const launchBtn   = $('demo-launch-btn');
+  const proofBtn    = $('demo-proof-btn');
+  const statusEl    = $('demo-status');
+  const errorEl     = $('demo-error');
+  const resultEl    = $('demo-result');
+  const runtimeEl   = $('demo-runtime-badge');
+  const origEl      = $('demo-original');
+  const anonEl      = $('demo-anonymized');
+  const entitiesEl  = $('demo-entities');
+  const riskEl      = $('demo-risk');
+  const methodEl    = $('demo-method');
+  const policyEl    = $('demo-policy');
+  const chipsEl     = $('demo-chips');
+  const proofCard   = $('demo-proof-card');
+  const proofMsg    = $('demo-proof-message');
+  const proofPoints = $('demo-proof-points');
+
+  if (!launchBtn) return;
+
+  launchBtn.addEventListener('click', async () => {
+    launchBtn.disabled = true;
+    launchBtn.textContent = 'Traitement en cours…';
+    if (errorEl) errorEl.textContent = '';
+    if (statusEl) statusEl.textContent = 'Anonymisation en cours…';
+
+    const t0 = Date.now();
+    try {
+      const res = await fetch('/api/v1/demo/public');
+      const data = await res.json();
+
+      if (res.status === 202 || data.status === 'warming_up') {
+        if (statusEl) statusEl.textContent = data.message || 'La démo se prépare, réessayez dans quelques secondes.';
+        launchBtn.disabled = false;
+        launchBtn.textContent = 'Réessayer';
+        return;
+      }
+      if (!res.ok) throw new Error(data.detail || 'Erreur serveur');
+
+      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
+
+      // Show results
+      if (resultEl) resultEl.style.display = '';
+      if (origEl)   origEl.textContent  = data.original_excerpt  || '';
+      if (anonEl)   anonEl.textContent  = data.anonymized_excerpt || '';
+      if (entitiesEl) entitiesEl.textContent = data.detections_count ?? '—';
+      if (riskEl) {
+        const level = data.risk?.level || 'low';
+        const score = data.risk?.score != null ? Math.round(data.risk.score * 100) + '%' : level;
+        riskEl.textContent = score;
+      }
+      if (methodEl) methodEl.textContent = data.extraction_method || '—';
+      if (policyEl) policyEl.textContent = data.proof?.export_policy?.label || '—';
+      if (runtimeEl) runtimeEl.textContent = `Traitement en ${elapsed}s`;
+      if (statusEl) statusEl.textContent = 'Démo complète.';
+
+      // Entity chips
+      if (chipsEl && data.entity_summary) {
+        chipsEl.innerHTML = Object.entries(data.entity_summary)
+          .sort((a, b) => b[1] - a[1])
+          .slice(0, 10)
+          .map(([k, v]) => `<span style="display:inline-flex;align-items:center;gap:4px;background:rgba(124,116,255,0.12);color:#9189ff;border:1px solid rgba(124,116,255,0.2);padding:3px 10px;border-radius:999px;font-size:11px;font-weight:600">${k}<span style="background:rgba(124,116,255,0.2);padding:0 5px;border-radius:4px">${v}</span></span>`)
+          .join('');
+      }
+
+      // Proof card
+      if (proofCard && data.proof) {
+        proofCard.style.display = '';
+        if (proofMsg) proofMsg.textContent = data.proof.export_policy?.message || '';
+        if (proofPoints && data.proof.steps) {
+          proofPoints.innerHTML = data.proof.steps
+            .map(s => `<li>✓ ${s.label || s.method || JSON.stringify(s)}</li>`)
+            .join('');
+        }
+      }
+
+      launchBtn.textContent = 'Relancer la démo';
+      launchBtn.disabled = false;
+
+    } catch (err) {
+      if (errorEl) errorEl.textContent = 'Erreur : ' + err.message;
+      if (statusEl) statusEl.textContent = 'Une erreur est survenue.';
+      launchBtn.textContent = 'Réessayer';
+      launchBtn.disabled = false;
+    }
+  });
+
+  if (proofBtn) {
+    proofBtn.addEventListener('click', () => {
+      window.open('/api/v1/demo/public/audit-report-pdf', '_blank');
+    });
+  }
+})();
+</script>
 </body>
 </html>
