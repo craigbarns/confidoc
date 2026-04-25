@@ -338,11 +338,20 @@
         </div>
         <div style="margin: 12px 0; text-align: center">
           <button id="btn-demo" class="btn btn-primary" type="button" title="Démo instantanée pour les investisseurs">
-            🚀 Essayer avec un document de démo
+            <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+              <polygon points="5 3 19 12 5 21 5 3"/>
+            </svg>
+            Essayer avec un document de démo
           </button>
         </div>
         <div class="upload-zone" id="upload-zone">
-          <div class="upload-icon" role="img" aria-label="Document">📄</div>
+          <div class="upload-icon">
+            <svg aria-hidden="true" focusable="false" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+              <polyline points="16 16 12 12 8 16"/>
+              <line x1="12" y1="12" x2="12" y2="21"/>
+              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+            </svg>
+          </div>
           <p class="upload-main">Glissez votre fichier ici ou</p>
           <label class="btn btn-secondary" for="file-input">Choisir un fichier</label>
           <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
@@ -353,10 +362,10 @@
           <p id="upload-status">Envoi en cours…</p>
         </div>
         <div class="upload-formats">
-          <span class="format-badge">📄 PDF</span>
-          <span class="format-badge">🖼 PNG</span>
-          <span class="format-badge">🖼 JPG</span>
-          <span class="format-badge">🖼 TIFF</span>
+          <span class="format-badge">PDF</span>
+          <span class="format-badge">PNG</span>
+          <span class="format-badge">JPG</span>
+          <span class="format-badge">TIFF</span>
         </div>
         <div id="upload-queue" class="upload-queue" style="display:none"></div>
       </div>

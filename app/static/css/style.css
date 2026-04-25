@@ -644,18 +644,31 @@ body {
 
 /* ── UPLOAD ZONE ────────────────────────────── */
 .upload-zone {
-  border: 2px dashed var(--border-light);
+  border: 2px dashed rgba(124,116,255,0.25);
   border-radius: var(--radius-lg);
-  padding: 48px 32px;
+  padding: 40px 24px;
   text-align: center;
-  transition: all 0.2s;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  background: transparent;
   max-width: 560px;
 }
-.upload-zone:hover, .upload-zone.drag-over {
+.upload-zone:hover,
+.upload-zone.drag-over {
   border-color: var(--accent);
   background: var(--accent-dim);
 }
-.upload-icon { font-size: 40px; margin-bottom: 14px; }
+.upload-icon {
+  width: 60px;
+  height: 60px;
+  background: var(--accent-dim);
+  border-radius: var(--radius-lg);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  margin: 0 auto 16px;
+  color: var(--accent);
+}
 .upload-main { color: var(--text-muted); margin-bottom: 12px; }
 .upload-hint { font-size: 12px; color: var(--text-dim); margin-top: 10px; }
 
@@ -686,12 +699,17 @@ body {
   font-size: 10px;
 }
 .format-badge {
-  background: var(--bg-card);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 4px 10px;
   font-size: 11px;
+  font-weight: 600;
+  padding: 3px 10px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.06);
   color: var(--text-muted);
+  text-transform: uppercase;
+  letter-spacing: 0.3px;
+}
+input[type="checkbox"] {
+  accent-color: var(--accent);
 }
 
 .progress-bar {
