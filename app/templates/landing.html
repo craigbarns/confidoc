@@ -32,6 +32,7 @@
       --text: #f0f0ff; --text-muted: #8892b0; --dim: #4b5563;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
     body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
 
     /* NAV */
@@ -198,7 +199,7 @@
     <h1>Anonymisez vos documents<br><span>sensibles en 10 secondes</span></h1>
     <p>ConfiDoc détecte et masque automatiquement les données personnelles et financières dans vos documents juridiques et comptables.</p>
     <div class="hero-actions">
-      <a href="/ui" class="btn-primary">
+      <a href="#demo-section" class="btn-primary" id="hero-demo-btn">
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Lancer la démo
       </a>
@@ -488,6 +489,19 @@
   const proofPoints = $('demo-proof-points');
 
   if (!launchBtn) return;
+
+  // Hero CTA → scroll to demo section then auto-trigger
+  const heroDemoBtn = $('hero-demo-btn');
+  if (heroDemoBtn) {
+    heroDemoBtn.addEventListener('click', (e) => {
+      e.preventDefault();
+      const section = $('demo-section');
+      if (section) {
+        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
+        setTimeout(() => launchBtn.click(), 600);
+      }
+    });
+  }
 
   launchBtn.addEventListener('click', async () => {
     launchBtn.disabled = true;
