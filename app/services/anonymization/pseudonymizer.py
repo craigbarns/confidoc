@@ -23,7 +23,13 @@ def infer_business_prefix(
         line_end = len(text)
     line = text[line_start:line_end].lower()
 
-    if entity_type in {"person_name", "person_uppercase", "person_title"}:
+    if entity_type in {
+        "person_name",
+        "person_uppercase",
+        "person_title",
+        "accounting_person_account_label",
+        "capital_holder_name",
+    }:
         if "associe" in ctx or re.search(r"\b455\d{3,6}\b", line):
             return "ASSOCIE"
         if "fournisseur" in ctx:
@@ -31,6 +37,9 @@ def infer_business_prefix(
         if "client" in ctx:
             return "CLIENT"
         return "PERSONNE"
+
+    if entity_type == "birth_table_date":
+        return "DATE_NAISSANCE"
 
     if entity_type == "invoice_identity_block":
         if any(k in value_excerpt.lower() for k in ("dirigeant", "contact", "gérant", "gerant")):
@@ -41,7 +50,16 @@ def infer_business_prefix(
             return "SOCIETE"
         return "SOCIETE"
 
-    if entity_type in {"company_legal_name", "company_legal_suffix"}:
+    if entity_type in {
+        "company_legal_name",
+        "company_legal_suffix",
+        "accounting_company_account_label",
+        "legal_denomination",
+        "accounting_identity_heading",
+        "accounting_identity_repeat",
+    }:
+        if "expert-comptable" in ctx or "expert comptable" in ctx or "comptable" in ctx:
+            return "CABINET"
         if "fournisseur" in ctx:
             return "FOURNISSEUR"
         if "client" in ctx:

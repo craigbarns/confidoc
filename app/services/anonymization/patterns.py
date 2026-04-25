@@ -253,6 +253,8 @@ QUASI_IDENTIFIER_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
 
 LABEL_VALUE_PATTERN = re.compile(
     r"(?im)^(?:nom|prénom|prenom|raison\s+sociale|société|societe|"
+    r"expert[\-\s]?comptable|cabinet|comptable|prestataire\s+ecf|"
+    r"d[ée]nomination(?:\s+de\s+l[’']?entreprise)?|d[ée]signation\s+de\s+l[’']?entreprise|"
     r"client|destinataire|titulaire|bénéficiaire|beneficiaire|"
     r"adresse|email|e[\-]?mail|téléphone|telephone|tel|tél|mobile|portable|"
     r"iban|bic|siret|siren|tva(?:\s+intracom)?|"

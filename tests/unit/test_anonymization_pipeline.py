@@ -16,19 +16,27 @@ from __future__ import annotations
 
 import pytest
 
+from app.core.tokens import (
+    TOKEN_ADRESSE,
+    TOKEN_DATE_NAISSANCE,
+    TOKEN_EMAIL,
+    TOKEN_IBAN,
+    TOKEN_NSS,
+    TOKEN_PERSONNE,
+    TOKEN_SIREN,
+    TOKEN_SIRET,
+    TOKEN_SOCIETE,
+    TOKEN_TELEPHONE,
+    TOKEN_TVA,
+    TOKEN_VILLE,
+)
 from app.services.anonymization_service import (
     _detect_entities,
     _is_false_positive,
     anonymize_text,
-    clean_ocr_artifacts,
     classify_document_type,
+    clean_ocr_artifacts,
 )
-from app.core.tokens import (
-    TOKEN_EMAIL, TOKEN_TELEPHONE, TOKEN_IBAN, TOKEN_SIRET, TOKEN_SIREN,
-    TOKEN_TVA, TOKEN_NSS, TOKEN_ADRESSE, TOKEN_VILLE, TOKEN_PERSONNE,
-    TOKEN_MONTANT, TOKEN_REDACTED,
-)
-
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
@@ -318,6 +326,48 @@ class TestAnonymizeText:
         assert bank_dets[0]["value_excerpt"] == "51210000 QONTO"
         assert "120000 EUR" in out
         assert "832 419 428 00038" not in out
+
+    def test_dataset_accounting_masks_fiscal_package_identity_leaks(self):
+        text = (
+            "Plaquette annuelle\n"
+            "SASU\n"
+            "ALPHACO\n"
+            "Siret 123 456 789 01234\n\n"
+            "CABINETOMEGA\n"
+            "ALPHA\n"
+            "# Bilan - Actif\n"
+            "421DUP DUPONT ALICE - SALAIRE\n"
+            "45510000 DUPONT ALICE - COMPTE COURANT\n"
+            "45100000 BETABUILD 117 840,00\n"
+            "45110000 BETAINVEST I 332 780,23\n"
+            "| Titre | M | Nom complet | Alice DUPONT | |\n"
+            "Naissance: | Date | 23/02/1980 | Commune | LYON |\n"
+            "Dénomination BETAINVEST III [COMPTE_8]\n"
+        )
+
+        out, dets, _ = anonymize_text(
+            text,
+            profile="dataset_accounting",
+            document_type="accounting",
+        )
+
+        for leak in (
+            "ALPHACO",
+            "CABINETOMEGA",
+            "ALPHA",
+            "DUPONT",
+            "BETABUILD",
+            "BETAINVEST",
+            "23/02/1980",
+        ):
+            assert leak not in out
+        assert "421DUP " in out
+        assert "- SALAIRE" in out
+        assert "45100000 " in out
+        assert "117 840,00" in out
+        assert any(d["replacement"] == TOKEN_SOCIETE for d in dets)
+        assert any(d["replacement"] == TOKEN_PERSONNE for d in dets)
+        assert any(d["replacement"] == TOKEN_DATE_NAISSANCE for d in dets)
 
 
 # ══════════════════════════════════════════════════════════════════════

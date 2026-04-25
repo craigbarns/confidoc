@@ -3,20 +3,21 @@
 from __future__ import annotations
 
 from typing import Any
+from uuid import uuid4
 
-from sqlalchemy import delete
+from sqlalchemy import delete, insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
-from app.services.dictionary_anonymization_service import anonymize_document_dictionary
-from app.services.llm_anonymization_service import anonymize_with_llm
-from app.services.extraction.service import extract_text_from_file_with_meta
+from app.services.anonymization.detector import deduplicate, detect_entities
+from app.services.anonymization.pseudonymizer import apply_business_pseudonyms
 from app.services.entity_registry import EntityRegistry
+from app.services.extraction.service import extract_text_from_file_with_meta
+from app.services.llm_anonymization_service import anonymize_with_llm
 
 logger = get_logger(__name__)
 
@@ -35,10 +36,10 @@ async def build_extraction_ocr(
         original_text, extraction_meta = await extract_text_from_file_with_meta(
             file_content, document.extension
         )
-        
+
         if not original_text.strip():
             raise ValueError("Extraction produced empty text")
-            
+
     except Exception as exc:
         logger.error("extraction_pipeline_failed", doc_id=str(document.id), error=str(exc))
         document.status = DocumentStatus.FAILED
@@ -73,8 +74,8 @@ async def build_anonymization_llm(
     profile: str = "moderate",
     document_type: str = "auto",
 ) -> tuple[str, list[dict], dict[str, Any]]:
-    """Étape 2: Anonymisation (V5 Unified). 
-    
+    """Étape 2: Anonymisation (V5 Unified).
+
     This version ensures EntityRegistry is ALWAYS used for stable placeholders,
     even when using the LLM for detection.
     """
@@ -82,26 +83,29 @@ async def build_anonymization_llm(
     await db.flush()
 
     registry = EntityRegistry()
-    
+
     effective_use_llm = use_llm or (profile == "strict")
 
+    deterministic_detections = detect_entities(
+        original_text,
+        profile=profile,
+        document_type=document_type,
+    )
+
     if effective_use_llm:
-        method = "llm"
+        method = "llm+dictionary"
         # 1. Use LLM to detect entities
         llm_result = await anonymize_with_llm(original_text)
-        detections = llm_result.get("entities", [])
-        
+        detections = deduplicate([*deterministic_detections, *llm_result.get("entities", [])])
+
         # 2. Convert LLM generic tokens to stable placeholders via Registry
-        from app.services.anonymization.pseudonymizer import apply_business_pseudonyms
         detections = apply_business_pseudonyms(original_text, detections, registry)
     else:
         method = "dictionary"
         # 1. Use Regex patterns to detect entities
-        from app.services.anonymization.detector import detect_entities
-        detections = detect_entities(original_text, profile=profile, document_type=document_type)
-        
+        detections = deterministic_detections
+
         # 2. Apply stable placeholders
-        from app.services.anonymization.pseudonymizer import apply_business_pseudonyms
         detections = apply_business_pseudonyms(original_text, detections, registry)
 
     # 3. Apply replacements to text
@@ -131,12 +135,10 @@ async def build_anonymization_llm(
         content_text=postgres_safe_text(preview_text),
     )
     db.add(preview_version)
-    
+
     await db.execute(delete(EntityDetection).where(EntityDetection.document_id == document.id))
 
     if detections:
-        from uuid import uuid4
-        from sqlalchemy import insert
         rows = [
             {
                 "id": uuid4(),
