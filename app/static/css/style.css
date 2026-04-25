@@ -136,17 +136,16 @@ body {
   align-items: center;
   justify-content: center;
   background: var(--bg);
+  background: radial-gradient(ellipse at 50% 0%, rgba(124,116,255,0.1) 0%, transparent 60%), var(--bg);
 }
 .auth-card {
-  background: var(--bg-card);
-  backdrop-filter: var(--glass);
-  -webkit-backdrop-filter: var(--glass);
-  border: 1px solid var(--border-light);
-  border-radius: var(--radius-lg);
-  padding: 48px 40px;
-  width: 420px;
-  box-shadow: var(--shadow-lg);
-  transition: transform 0.3s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+  background: var(--bg-card, rgba(13,13,24,0.92));
+  border: 1px solid rgba(255,255,255,0.08);
+  border-radius: var(--radius-xl);
+  box-shadow: 0 32px 64px -16px rgba(0,0,0,0.7), 0 0 0 1px rgba(124,116,255,0.05);
+  padding: 40px;
+  width: 100%;
+  max-width: 420px;
 }
 .auth-card:hover { box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-light); }
 .auth-logo {
@@ -154,7 +153,17 @@ body {
   font-size: 40px;
   margin-bottom: 16px;
 }
-.auth-logo-icon { font-size: 40px; }
+.auth-logo-icon {
+  width: 52px;
+  height: 52px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  border-radius: 14px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  margin: 0 auto 16px;
+}
 .auth-card h1 {
   font-size: 24px;
   font-weight: 700;
@@ -197,7 +206,12 @@ body {
 .field input:focus {
   outline: none;
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(108,99,255,0.15);
+  box-shadow: 0 0 0 3px rgba(124,116,255,0.1);
+}
+.auth-form input:focus {
+  outline: none;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px rgba(124,116,255,0.1);
 }
 .error-msg {
   color: var(--danger);
