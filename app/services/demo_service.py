@@ -61,7 +61,7 @@ def _summarize_entities(detections: list[dict[str, Any]]) -> dict[str, int]:
     return summary
 
 
-def _excerpt(text: str, max_chars: int = 1800) -> str:
+def _excerpt(text: str, max_chars: int = 3200) -> str:
     clean = (text or "").strip()
     if len(clean) <= max_chars:
         return clean

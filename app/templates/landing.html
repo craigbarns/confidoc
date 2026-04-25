@@ -24,7 +24,7 @@
   <link rel="icon" href="/static/confidoc-mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Outfit:wght@500;700;800&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&amp;family=JetBrains+Mono:wght@500;700&amp;family=Outfit:wght@500;700;800&amp;display=swap" rel="stylesheet">
   <style nonce="{{CSP_NONCE}}">
     :root {
       --primary: #6c5ce7;
@@ -89,6 +89,52 @@
     .nav-links { display: flex; gap: 2rem; align-items: center; }
     .nav-links a { color: var(--text-muted); text-decoration: none; font-weight: 500; font-size: 0.95rem; transition: color 0.2s; }
     .nav-links a:hover { color: white; }
+    .mobile-nav-toggle {
+      display: none;
+      align-items: center;
+      justify-content: center;
+      width: 44px;
+      height: 44px;
+      border-radius: 12px;
+      border: 1px solid var(--surface-border);
+      background: rgba(255, 255, 255, 0.04);
+      color: white;
+      cursor: pointer;
+    }
+    .mobile-nav-toggle:hover { background: rgba(255, 255, 255, 0.08); }
+    .mobile-nav-toggle svg { width: 20px; height: 20px; display: block; }
+    .mobile-nav-panel {
+      position: fixed;
+      top: 78px;
+      left: 1rem;
+      right: 1rem;
+      z-index: 95;
+      display: grid;
+      gap: 0.65rem;
+      padding: 1rem;
+      border-radius: 16px;
+      border: 1px solid var(--surface-border);
+      background: rgba(11, 15, 25, 0.96);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      box-shadow: 0 20px 50px rgba(0, 0, 0, 0.35);
+    }
+    .mobile-nav-panel[hidden] { display: none; }
+    .mobile-nav-panel a {
+      color: white;
+      text-decoration: none;
+      font-weight: 600;
+      padding: 0.9rem 1rem;
+      border-radius: 12px;
+      background: rgba(255, 255, 255, 0.04);
+      border: 1px solid rgba(255, 255, 255, 0.06);
+    }
+    .mobile-nav-panel a.btn {
+      width: 100%;
+      justify-content: center;
+      background: transparent;
+    }
+    body.mobile-menu-open { overflow: hidden; }
     
     .btn {
       display: inline-flex; align-items: center; justify-content: center;
@@ -262,7 +308,7 @@
     }
     .demo-panel {
       background: var(--bg); border: 1px solid var(--surface-border);
-      border-radius: 8px; overflow: hidden; min-height: 320px;
+      border-radius: 8px; overflow: hidden; min-height: 380px;
     }
     .demo-panel-header {
       display: flex; justify-content: space-between; gap: 1rem; align-items: center;
@@ -274,7 +320,7 @@
       letter-spacing: 0.08em;
     }
     .demo-text {
-      margin: 0; min-height: 270px; max-height: 360px; overflow: auto;
+      margin: 0; min-height: 330px; max-height: 480px; overflow: auto;
       padding: 1rem; white-space: pre-wrap; word-break: break-word;
       color: #cbd5e1; font-size: 0.86rem; line-height: 1.75;
       font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
@@ -554,9 +600,12 @@
     .footer-brand svg { width: 18px; height: 18px; display: block; color: var(--primary); }
 
     @media (max-width: 768px) {
+      .nav { padding: 0.9rem 1rem; }
       .hero h1 { font-size: 2.2rem; }
       .arch-container { flex-direction: column; }
       .nav-links { display: none; }
+      .nav-cta { display: none; }
+      .mobile-nav-toggle { display: inline-flex; }
       .proof-strip, .pilot-shell, .pilot-card-grid, .demo-grid, .demo-metrics, .demo-proof-card, .pricing-grid,
       .beta-layout, .beta-form-grid { grid-template-columns: 1fr; }
       .beta-field-full, .beta-consent, .beta-submit-row { grid-column: auto; }
@@ -585,8 +634,32 @@
       <a href="/trust">Trust Center</a>
       <a href="#beta-access">Accès beta</a>
     </div>
-    <a href="/ui" class="btn btn-outline" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Espace Client</a>
+    <a href="/ui" class="btn btn-outline nav-cta" style="padding: 0.5rem 1rem; font-size: 0.85rem;">Espace Client</a>
+    <button
+      id="mobile-menu-toggle"
+      class="mobile-nav-toggle"
+      type="button"
+      aria-expanded="false"
+      aria-controls="mobile-menu-panel"
+      aria-label="Ouvrir la navigation"
+    >
+      <svg viewBox="0 0 24 24" fill="none" aria-hidden="true">
+        <path d="M4.5 7.5H19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M4.5 12H19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        <path d="M4.5 16.5H19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+      </svg>
+    </button>
   </nav>
+  <div id="mobile-menu-panel" class="mobile-nav-panel" hidden>
+    <a href="#demo-section">Démo</a>
+    <a href="#how-it-works">Fonctionnement</a>
+    <a href="#use-cases">Cas d'usage</a>
+    <a href="#pricing">Tarifs</a>
+    <a href="#features">Bénéfices</a>
+    <a href="/trust">Trust Center</a>
+    <a href="/ui" class="btn btn-outline">Espace client</a>
+    <a href="#beta-access" class="btn btn-primary">Demander un accès beta</a>
+  </div>
 
   <!-- HERO -->
   <section class="hero animate-up">
@@ -608,8 +681,8 @@
       <a href="/ui" class="btn btn-outline">Espace client</a>
     </div>
     <div class="proof-strip animate-up delay-1">
-      <div class="proof-item"><strong>5</strong><span>familles de données détectées sur le document de démo</span></div>
-      <div class="proof-item"><strong>&lt; 12s</strong><span>objectif de traitement par document standard</span></div>
+      <div class="proof-item"><strong>3 pages</strong><span>dossier de démonstration comptable, RH et juridique</span></div>
+      <div class="proof-item"><strong>60+</strong><span>entités sensibles masquées sur le dossier de démo</span></div>
       <div class="proof-item"><strong>RGPD</strong><span>score de risque avant tout usage IA</span></div>
     </div>
 
@@ -1071,6 +1144,8 @@
     const demoRuntimeBadge = document.getElementById('demo-runtime-badge');
     const demoResult = document.getElementById('demo-result');
     const demoError = document.getElementById('demo-error');
+    const mobileMenuToggle = document.getElementById('mobile-menu-toggle');
+    const mobileMenuPanel = document.getElementById('mobile-menu-panel');
     const betaForm = document.getElementById('beta-form');
     const betaSubmitButton = document.getElementById('beta-submit-btn');
     const betaMessage = document.getElementById('beta-form-message');
@@ -1085,6 +1160,27 @@
       a.click();
       a.remove();
       setTimeout(() => URL.revokeObjectURL(url), 1500);
+    }
+
+    async function readJsonSafely(response) {
+      const raw = await response.text();
+      if (!raw) {
+        return {};
+      }
+      try {
+        return JSON.parse(raw);
+      } catch {
+        return { detail: raw.trim() };
+      }
+    }
+
+    function setMobileMenuOpen(isOpen) {
+      if (!mobileMenuToggle || !mobileMenuPanel) {
+        return;
+      }
+      mobileMenuToggle.setAttribute('aria-expanded', String(isOpen));
+      mobileMenuPanel.hidden = !isOpen;
+      document.body.classList.toggle('mobile-menu-open', isOpen);
     }
 
     function renderTaggedText(target, text) {
@@ -1169,7 +1265,7 @@
           return;
         }
         if (!response.ok) {
-          const data = await response.json().catch(() => ({}));
+          const data = await readJsonSafely(response);
           throw new Error(data.detail || 'Impossible de générer la preuve DPO.');
         }
         const blob = await response.blob();
@@ -1191,7 +1287,7 @@
       demoStatus.textContent = 'Chargement du résultat anonymisé...';
       try {
         const response = await fetch('/api/v1/demo/public', { headers: { 'Accept': 'application/json' } });
-        const data = await response.json();
+        const data = await readJsonSafely(response);
         if (response.status === 202 || data.status === 'warming_up') {
           if (attempt < 4) {
             demoStatus.textContent = 'Préparation de la démo, nouvel essai dans quelques secondes...';
@@ -1216,6 +1312,13 @@
 
     demoButton?.addEventListener('click', () => launchDemo());
     demoProofButton?.addEventListener('click', downloadDemoProof);
+    mobileMenuToggle?.addEventListener('click', () => {
+      const isOpen = mobileMenuToggle.getAttribute('aria-expanded') === 'true';
+      setMobileMenuOpen(!isOpen);
+    });
+    mobileMenuPanel?.querySelectorAll('a').forEach((link) => {
+      link.addEventListener('click', () => setMobileMenuOpen(false));
+    });
 
     async function submitBetaLead(event) {
       event.preventDefault();
@@ -1235,7 +1338,7 @@
           headers: { 'Content-Type': 'application/json', 'Accept': 'application/json' },
           body: JSON.stringify(payload),
         });
-        const data = await response.json().catch(() => ({}));
+        const data = await readJsonSafely(response);
         if (!response.ok) {
           const detail = Array.isArray(data.detail) ? data.detail[0]?.msg : data.detail;
           throw new Error(detail || 'Impossible d’enregistrer la demande.');
@@ -1253,6 +1356,16 @@
     }
 
     betaForm?.addEventListener('submit', submitBetaLead);
+    window.addEventListener('resize', () => {
+      if (window.innerWidth > 768) {
+        setMobileMenuOpen(false);
+      }
+    });
+    document.addEventListener('keydown', (event) => {
+      if (event.key === 'Escape') {
+        setMobileMenuOpen(false);
+      }
+    });
 
     // Intersection Observer for animations
     const observer = new IntersectionObserver((entries) => {
