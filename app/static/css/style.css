@@ -150,7 +150,6 @@ body {
 .auth-card:hover { box-shadow: var(--shadow-lg), 0 0 0 1px var(--border-light); }
 .auth-logo {
   text-align: center;
-  font-size: 40px;
   margin-bottom: 16px;
 }
 .auth-logo-icon {
@@ -204,11 +203,6 @@ body {
   transition: border-color 0.15s, box-shadow 0.15s;
 }
 .field input:focus {
-  outline: none;
-  border-color: var(--accent);
-  box-shadow: 0 0 0 3px rgba(124,116,255,0.1);
-}
-.auth-form input:focus {
   outline: none;
   border-color: var(--accent);
   box-shadow: 0 0 0 3px rgba(124,116,255,0.1);
