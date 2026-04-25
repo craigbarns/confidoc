@@ -97,6 +97,94 @@ def _build_demo_proof(result: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def _build_mock_demo_result(reason: str | None = None) -> dict[str, Any]:
+    """Return a deterministic fallback payload for investor/demo contexts."""
+    detections = [
+        {
+            "entity_type": "person_name",
+            "start_index": 3,
+            "end_index": 14,
+            "value_excerpt": "Jean Dupont",
+            "replacement": "[PERSONNE_1]",
+        },
+        {
+            "entity_type": "company",
+            "start_index": 26,
+            "end_index": 43,
+            "value_excerpt": "DUPONT CONSEIL SAS",
+            "replacement": "[SOCIETE_1]",
+        },
+        {
+            "entity_type": "siren",
+            "start_index": 51,
+            "end_index": 62,
+            "value_excerpt": "123 456 789",
+            "replacement": "[SIREN_1]",
+        },
+        {
+            "entity_type": "amount",
+            "start_index": 82,
+            "end_index": 91,
+            "value_excerpt": "450 000 €",
+            "replacement": "[MONTANT_1]",
+        },
+        {
+            "entity_type": "date",
+            "start_index": 108,
+            "end_index": 118,
+            "value_excerpt": "12/03/2026",
+            "replacement": "[DATE_1]",
+        },
+    ]
+    result = {
+        "status": "ready",
+        "source": "mock_demo_fallback",
+        "is_mock": True,
+        "filename": "demo_doc.pdf",
+        "document_type": "bilan",
+        "pages": 2,
+        "extraction_method": "mock_payload",
+        "original_excerpt": (
+            "M. Jean Dupont\n"
+            "Societe: DUPONT CONSEIL SAS\n"
+            "SIREN 123 456 789\n"
+            "Capital social: 450 000 €\n"
+            "Document date du 12/03/2026\n"
+            "Objet: bilan annuel et annexes de gestion."
+        ),
+        "anonymized_excerpt": (
+            "M. [PERSONNE_1]\n"
+            "Societe: [SOCIETE_1]\n"
+            "SIREN [SIREN_1]\n"
+            "Capital social: [MONTANT_1]\n"
+            "Document date du [DATE_1]\n"
+            "Objet: bilan annuel et annexes de gestion."
+        ),
+        "detections": detections,
+        "detections_count": len(detections),
+        "entity_summary": {
+            "PERSONNE": 1,
+            "SOCIETE": 1,
+            "SIREN": 1,
+            "MONTANT": 1,
+            "DATE": 1,
+        },
+        "risk": {
+            "score": 0.08,
+            "level": "low",
+            "recommendation": (
+                "Fallback mock active. La demonstration reste exploitable pour le pitch "
+                "et signale clairement qu'il s'agit d'un payload de secours."
+            ),
+            "signals": [],
+        },
+    }
+    if reason:
+        result["fallback_reason"] = reason
+    result["proof"] = _build_demo_proof(result)
+    return result
+
+
 def _compute_demo_result() -> dict[str, Any]:
     """Compute the bundled demo result synchronously."""
     if not DEMO_DOC_PATH.exists():
@@ -121,6 +209,7 @@ def _compute_demo_result() -> dict[str, Any]:
     result = {
         "status": "ready",
         "source": "bundled_demo_doc",
+        "is_mock": False,
         "filename": DEMO_DOC_PATH.name,
         "document_type": document_type,
         "pages": int(extraction.get("pages") or 0),
@@ -254,10 +343,11 @@ async def warm_demo_cache() -> None:
     try:
         loop = asyncio.get_running_loop()
         result = await loop.run_in_executor(None, _compute_demo_result)
-        _memory_demo_cache = result
     except Exception as exc:
-        logger.warning("demo_cache_warm_failed", error=str(exc))
-        return
+        logger.warning("demo_cache_warm_failed", error=str(exc), action="using_mock_fallback")
+        result = _build_mock_demo_result(str(exc))
+
+    _memory_demo_cache = result
 
     redis_client = await _get_redis()
     if redis_client is None:
@@ -279,23 +369,23 @@ async def get_demo_result() -> dict[str, Any] | None:
 
     redis_client = await _get_redis()
     if redis_client is None:
-        return None
+        return _build_mock_demo_result("redis_unavailable")
 
     try:
         async with redis_client as redis_conn:
             raw = await redis_conn.get(DEMO_CACHE_KEY)
     except Exception as exc:
         logger.warning("demo_cache_fetch_failed", error=str(exc))
-        return None
+        return _build_mock_demo_result(str(exc))
 
     if not raw:
-        return None
+        return _build_mock_demo_result("cache_miss")
 
     try:
         parsed = json.loads(raw)
     except json.JSONDecodeError:
-        return None
+        return _build_mock_demo_result("invalid_cached_json")
 
     if isinstance(parsed, dict):
         return parsed
-    return None
+    return _build_mock_demo_result("invalid_cached_payload")

@@ -29,15 +29,21 @@ async def test_beta_lead_endpoint_requires_no_auth(client):
             "app.api.v1.leads.send_beta_lead_notification",
             new_callable=AsyncMock,
         ) as notify,
+        patch(
+            "app.api.v1.leads.send_beta_welcome_email",
+            new_callable=AsyncMock,
+        ) as welcome,
     ):
         persist.return_value = True
         notify.return_value = True
+        welcome.return_value = True
         resp = await client.post("/api/v1/leads/beta", json=_payload())
 
     assert resp.status_code == 201
     assert resp.json()["status"] == "received"
     persist.assert_awaited_once()
     notify.assert_awaited_once()
+    welcome.assert_awaited_once()
 
 
 @pytest.mark.anyio

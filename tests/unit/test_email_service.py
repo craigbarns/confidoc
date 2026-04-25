@@ -25,6 +25,7 @@ def _make_settings(smtp_host="", is_production=False, smtp_tls=True):
     s.SMTP_TLS = smtp_tls
     s.is_production = is_production
     s.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES = 30
+    s.APP_BASE_URL = "https://confidoc.test"
     return s
 
 
@@ -138,3 +139,22 @@ class TestEmailServiceSMTP:
                 "dest@test.com", "https://app.io/reset"
             )
             assert result is False
+
+    @pytest.mark.asyncio
+    async def test_beta_welcome_email_uses_smtp(self):
+        settings = _make_settings(smtp_host="smtp.example.com", is_production=False, smtp_tls=True)
+        mock_server = self._smtp_ctx_manager()
+
+        with patch("app.services.email_service.get_settings", return_value=settings), \
+             patch("smtplib.SMTP", return_value=mock_server):
+            from app.services import email_service
+            result = await email_service.send_beta_welcome_email(
+                {
+                    "email": "dest@test.com",
+                    "full_name": "Marie Martin",
+                    "company": "Cabinet Martin",
+                    "use_case": "Anonymisation de bilans clients",
+                }
+            )
+            assert result is True
+            mock_server.sendmail.assert_called_once()

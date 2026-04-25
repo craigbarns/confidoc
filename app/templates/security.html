@@ -3,16 +3,40 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ConfiDoc — Trust Center &amp; Conformite RGPD</title>
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}" />
+  <meta name="robots" content="index,follow" />
+  <meta name="theme-color" content="#0b0f19" />
+  <link rel="canonical" href="{{CANONICAL_URL}}" />
+  <meta property="og:site_name" content="ConfiDoc" />
+  <meta property="og:type" content="{{OG_TYPE}}" />
+  <meta property="og:title" content="{{OG_TITLE}}" />
+  <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+  <meta property="og:url" content="{{OG_URL}}" />
+  <meta property="og:image" content="{{OG_IMAGE_URL}}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="{{OG_IMAGE_ALT}}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{TWITTER_TITLE}}" />
+  <meta name="twitter:description" content="{{TWITTER_DESCRIPTION}}" />
+  <meta name="twitter:image" content="{{TWITTER_IMAGE_URL}}" />
   <link rel="stylesheet" href="/static/css/style.css" />
-  <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 100 100'><text y='.9em' font-size='90'>🔒</text></svg>" type="image/svg+xml" />
+  <link rel="icon" href="/static/confidoc-mark.svg" type="image/svg+xml" />
 </head>
 <body>
 
 <header class="app-header">
   <div class="header-inner">
     <div class="logo">
-      <span class="logo-icon">🔒</span>
+      <span class="logo-icon logo-icon-svg" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 2L5 5.5V11C5 15.55 8.08 19.74 12 21C15.92 19.74 19 15.55 19 11V5.5L12 2Z" fill="currentColor" opacity="0.22"/>
+          <path d="M12 3.4L6.5 6.1V11C6.5 14.9 9.04 18.32 12 19.47C14.96 18.32 17.5 14.9 17.5 11V6.1L12 3.4Z" stroke="currentColor" stroke-width="1.6"/>
+          <rect x="9.25" y="10.75" width="5.5" height="4.8" rx="1.1" stroke="currentColor" stroke-width="1.6"/>
+          <path d="M10.4 10.75V9.45C10.4 8.57 11.12 7.85 12 7.85C12.88 7.85 13.6 8.57 13.6 9.45V10.75" stroke="currentColor" stroke-width="1.6" stroke-linecap="round"/>
+        </svg>
+      </span>
       <span class="logo-text">ConfiDoc</span>
     </div>
     <div class="header-tagline">Trust Center & Conformite RGPD</div>
@@ -38,29 +62,55 @@
 
   <div class="sec-grid">
     <div class="sec-metric">
-      <div class="metric-icon">🔐</div>
+      <div class="metric-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <rect x="6.5" y="10.5" width="11" height="8" rx="1.8" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M9 10.5V8.3C9 6.64 10.34 5.3 12 5.3C13.66 5.3 15 6.64 15 8.3V10.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <circle cx="12" cy="14.5" r="1.1" fill="currentColor"/>
+        </svg>
+      </div>
       <div class="metric-value">Fernet</div>
       <div class="metric-label">AES-128-CBC + HMAC-SHA256</div>
     </div>
     <div class="sec-metric">
-      <div class="metric-icon">📋</div>
+      <div class="metric-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M8 4.5H16L18.5 7V18.5H5.5V7L8 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+          <path d="M9 9.25H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M9 12.5H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M9 15.75H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
       <div class="metric-value">Audit</div>
       <div class="metric-label">Actions journalisees</div>
     </div>
     <div class="sec-metric">
-      <div class="metric-icon">🛡️</div>
+      <div class="metric-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 3L6 5.9V10.8C6 14.7 8.6 18.1 12 19.2C15.4 18.1 18 14.7 18 10.8V5.9L12 3Z" stroke="currentColor" stroke-width="1.8"/>
+          <path d="M9.3 11.8L11.15 13.65L14.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+        </svg>
+      </div>
       <div class="metric-value">2 modes</div>
       <div class="metric-label">Pseudo / Anonymisation forte</div>
     </div>
     <div class="sec-metric">
-      <div class="metric-icon">⚖️</div>
+      <div class="metric-icon" aria-hidden="true">
+        <svg viewBox="0 0 24 24" fill="none">
+          <path d="M12 4V19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M7 7.5H17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+          <path d="M8.5 7.5L6.2 12.1C5.85 12.8 6.36 13.62 7.13 13.62H9.87C10.64 13.62 11.15 12.8 10.8 12.1L8.5 7.5Z" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M15.5 7.5L13.2 12.1C12.85 12.8 13.36 13.62 14.13 13.62H16.87C17.64 13.62 18.15 12.8 17.8 12.1L15.5 7.5Z" stroke="currentColor" stroke-width="1.5"/>
+          <path d="M9.2 19.5H14.8" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+        </svg>
+      </div>
       <div class="metric-value">Export gate</div>
       <div class="metric-label">Blocage des risques eleves</div>
     </div>
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">✅</span> Engagements acheteurs</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 3L6 5.9V10.8C6 14.7 8.6 18.1 12 19.2C15.4 18.1 18 14.7 18 10.8V5.9L12 3Z" stroke="currentColor" stroke-width="1.8"/><path d="M9.3 11.8L11.15 13.65L14.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Engagements acheteurs</h2>
     <div class="sec-grid">
       <div class="sec-card">
         <h3>IA de discussion sur texte filtre</h3>
@@ -82,19 +132,19 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">🔄</span> Flux de traitement</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M7 7H17V12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M17 17H7V12" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M14 9L17 12L20 9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/><path d="M10 15L7 12L4 15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Flux de traitement</h2>
     <div class="sec-flow">
-      <div class="sec-flow-step">📄 Upload</div>
+      <div class="sec-flow-step"><svg viewBox="0 0 24 24" fill="none"><path d="M8 4.5H16L18.5 7V18.5H5.5V7L8 4.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 9V14" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M10.1 10.9L12 9L13.9 10.9" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Upload</span></div>
       <div class="sec-flow-arrow">→</div>
-      <div class="sec-flow-step">👁 OCR (Mistral)</div>
+      <div class="sec-flow-step"><svg viewBox="0 0 24 24" fill="none"><path d="M2.5 12C4.8 8.3 8.1 6.5 12 6.5C15.9 6.5 19.2 8.3 21.5 12C19.2 15.7 15.9 17.5 12 17.5C8.1 17.5 4.8 15.7 2.5 12Z" stroke="currentColor" stroke-width="1.7"/><circle cx="12" cy="12" r="2.6" stroke="currentColor" stroke-width="1.7"/></svg><span>OCR (Mistral)</span></div>
       <div class="sec-flow-arrow">→</div>
-      <div class="sec-flow-step">🔒 Anonymisation</div>
+      <div class="sec-flow-step"><svg viewBox="0 0 24 24" fill="none"><rect x="6.5" y="10.5" width="11" height="8" rx="1.8" stroke="currentColor" stroke-width="1.7"/><path d="M9 10.5V8.3C9 6.64 10.34 5.3 12 5.3C13.66 5.3 15 6.64 15 8.3V10.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Anonymisation</span></div>
       <div class="sec-flow-arrow">→</div>
-      <div class="sec-flow-step">📊 Scoring risque</div>
+      <div class="sec-flow-step"><svg viewBox="0 0 24 24" fill="none"><path d="M5.5 17.5H18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M7.5 15V11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 15V8.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M16.5 15V6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Scoring risque</span></div>
       <div class="sec-flow-arrow">→</div>
-      <div class="sec-flow-step">✅ Validation humaine</div>
+      <div class="sec-flow-step"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.7"/><path d="M9.3 12.15L11.15 14L14.9 10.25" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg><span>Validation humaine</span></div>
       <div class="sec-flow-arrow">→</div>
-      <div class="sec-flow-step">💬 Discussion IA</div>
+      <div class="sec-flow-step"><svg viewBox="0 0 24 24" fill="none"><path d="M6 7.5H18C18.83 7.5 19.5 8.17 19.5 9V14C19.5 14.83 18.83 15.5 18 15.5H11.5L8 18V15.5H6C5.17 15.5 4.5 14.83 4.5 14V9C4.5 8.17 5.17 7.5 6 7.5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M8.5 11.5H15.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg><span>Discussion IA</span></div>
     </div>
     <div class="sec-card">
       <p>Le document original n'est jamais transmis au moteur de discussion IA. L'etape OCR est separee et configurable; seul le texte anonymise est utilise pour l'analyse conversationnelle. Le mapping reversible est chiffre et stocke separement.</p>
@@ -102,7 +152,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">🔐</span> Deux modes d'anonymisation</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="6.5" y="10.5" width="11" height="8" rx="1.8" stroke="currentColor" stroke-width="1.7"/><path d="M9 10.5V8.3C9 6.64 10.34 5.3 12 5.3C13.66 5.3 15 6.64 15 8.3V10.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span> Deux modes d'anonymisation</h2>
     <div class="sec-grid">
       <div class="sec-card">
         <h3>Pseudonymisation <span class="sec-badge sec-badge-purple">Interne</span></h3>
@@ -128,7 +178,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">📊</span> Scoring du risque de reidentification</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M5.5 17.5H18.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M7.5 15V11.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M12 15V8.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M16.5 15V6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span> Scoring du risque de reidentification</h2>
     <div class="sec-card">
       <p>Conforme aux recommandations CNIL : l'anonymisation doit rendre impossible l'identification, pas seulement la masquer. ConfiDoc analyse le risque residuel par detection de :</p>
       <ul>
@@ -155,7 +205,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">🗄️</span> Stockage & Chiffrement</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M6 7.5C6 6.4 8.69 5.5 12 5.5C15.31 5.5 18 6.4 18 7.5V16.5C18 17.6 15.31 18.5 12 18.5C8.69 18.5 6 17.6 6 16.5V7.5Z" stroke="currentColor" stroke-width="1.7"/><path d="M6 11.5C6 12.6 8.69 13.5 12 13.5C15.31 13.5 18 12.6 18 11.5" stroke="currentColor" stroke-width="1.7"/></svg></span> Stockage & Chiffrement</h2>
     <div class="sec-card">
       <h3>Architecture de securite</h3>
       <table class="sec-table">
@@ -173,7 +223,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">📋</span> Journal d'audit & Tracabilite</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M8 4.5H16L18.5 7V18.5H5.5V7L8 4.5Z" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/><path d="M9 9.25H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9 12.5H15" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/><path d="M9 15.75H13" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/></svg></span> Journal d'audit & Tracabilite</h2>
     <div class="sec-card">
       <p>Chaque action sensible est journalisee de facon non modifiable :</p>
       <ul>
@@ -188,7 +238,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">⏱️</span> Politique de retention & Purge</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><circle cx="12" cy="12" r="7.5" stroke="currentColor" stroke-width="1.7"/><path d="M12 8V12L14.8 13.8" stroke="currentColor" stroke-width="1.7" stroke-linecap="round" stroke-linejoin="round"/></svg></span> Politique de retention & Purge</h2>
     <div class="sec-card">
       <table class="sec-table">
         <thead><tr><th>Donnee</th><th>Duree de conservation</th><th>Action a expiration</th></tr></thead>
@@ -205,7 +255,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">🤖</span> LLM & Donnees</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><rect x="7" y="8" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.7"/><path d="M12 4.5V6.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M8 19.5H16" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M4.5 10.5H7" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><path d="M17 10.5H19.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/></svg></span> LLM & Donnees</h2>
     <div class="sec-card">
       <h3>Separation stricte</h3>
       <p>Le LLM de discussion ne recoit <strong>jamais</strong> le texte original. Seul le texte anonymise est transmis pour la discussion IA. L'OCR, lorsqu'il utilise un fournisseur externe, reste une etape distincte documentee dans le flux de traitement.</p>
@@ -219,7 +269,7 @@
   </div>
 
   <div class="sec-section">
-    <h2><span class="sec-icon">⚠️</span> Limites connues</h2>
+    <h2><span class="sec-icon" aria-hidden="true"><svg viewBox="0 0 24 24" fill="none"><path d="M12 5L19 18H5L12 5Z" stroke="currentColor" stroke-width="1.7" stroke-linejoin="round"/><path d="M12 9V12.5" stroke="currentColor" stroke-width="1.7" stroke-linecap="round"/><circle cx="12" cy="15.6" r="0.9" fill="currentColor"/></svg></span> Limites connues</h2>
     <div class="sec-card">
       <ul>
         <li>L'anonymisation par dictionnaire depend de la qualite des regles configurees</li>

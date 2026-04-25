@@ -15,7 +15,7 @@ from app.core.logging import get_logger
 from app.models.audit_log import AuditLog
 from app.models.beta_lead import BetaLead
 from app.schemas.lead import BetaLeadCreate, BetaLeadResponse
-from app.services.email_service import send_beta_lead_notification
+from app.services.email_service import send_beta_lead_notification, send_beta_welcome_email
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -138,12 +138,15 @@ async def create_beta_lead(payload: BetaLeadCreate, request: Request) -> dict[st
     await _check_beta_lead_rate_limit(client_ip)
 
     stored = await _persist_beta_lead(payload, request)
-    notification_sent = await send_beta_lead_notification(payload.model_dump())
+    payload_dict = payload.model_dump()
+    notification_sent = await send_beta_lead_notification(payload_dict)
+    welcome_email_sent = await send_beta_welcome_email(payload_dict)
 
     logger.info(
         "beta_lead_received",
         stored=stored,
         notification_sent=notification_sent,
+        welcome_email_sent=welcome_email_sent,
         source=payload.source,
         email_hash=_email_hash(str(payload.email)),
     )

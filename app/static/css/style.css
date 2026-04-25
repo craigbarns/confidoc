@@ -3218,7 +3218,23 @@ body {
   padding: 18px;
   min-height: 132px;
 }
-.metric-icon { font-size: 24px; margin-bottom: 12px; }
+.metric-icon {
+  width: 40px;
+  height: 40px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 10px;
+  margin-bottom: 12px;
+  color: var(--accent);
+  background: rgba(99,102,241,0.1);
+  border: 1px solid rgba(99,102,241,0.16);
+}
+.metric-icon svg {
+  width: 21px;
+  height: 21px;
+  display: block;
+}
 .metric-value {
   font-size: 24px;
   line-height: 1.1;
@@ -3243,7 +3259,19 @@ body {
   font-size: 24px;
   margin-bottom: 16px;
 }
-.sec-icon { font-size: 20px; }
+.sec-icon {
+  width: 28px;
+  height: 28px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent);
+}
+.sec-icon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
+}
 .sec-card {
   padding: 20px;
   color: var(--text-muted);
@@ -3269,6 +3297,9 @@ body {
   margin: 14px 0 18px;
 }
 .sec-flow-step {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
   border: 1px solid var(--border);
   border-radius: 8px;
   padding: 9px 12px;
@@ -3276,6 +3307,25 @@ body {
   color: var(--text);
   font-size: 13px;
   font-weight: 700;
+}
+.sec-flow-step svg {
+  width: 16px;
+  height: 16px;
+  display: block;
+  color: var(--accent);
+  flex-shrink: 0;
+}
+.logo-icon-svg {
+  width: 20px;
+  height: 20px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+.logo-icon-svg svg {
+  width: 20px;
+  height: 20px;
+  display: block;
 }
 .sec-flow-arrow {
   color: var(--text-dim);

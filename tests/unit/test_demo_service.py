@@ -97,3 +97,17 @@ async def test_warm_demo_cache_uses_memory_when_redis_unavailable():
 
     assert await demo_service.get_demo_result() == payload
     demo_service._memory_demo_cache = None
+
+
+@pytest.mark.asyncio
+async def test_get_demo_result_falls_back_to_mock_payload_when_cache_unavailable():
+    demo_service._memory_demo_cache = None
+
+    with patch.object(demo_service, "_get_redis", return_value=None):
+        result = await demo_service.get_demo_result()
+
+    assert result is not None
+    assert result["status"] == "ready"
+    assert result["is_mock"] is True
+    assert result["source"] == "mock_demo_fallback"
+    demo_service._memory_demo_cache = None
