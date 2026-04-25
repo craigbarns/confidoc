@@ -1130,20 +1130,6 @@ async function selectDoc(id, status, name, sizeBytes) {
     } catch (e) {
       console.error("preview load error:", e);
     }
-  } else if (status === "processing") {
-    showAnonLoading("Traitement en cours…");
-    pollDocStatus(id);
-  } else if (status === "uploaded") {
-    // Doc uploadé, pas encore anonymisé — montrer panel vide avec instructions
-    $("anon-empty").style.display = "";
-    $("anon-empty").querySelector("p").innerHTML =
-      "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
-  } else if (status === "failed") {
-    $("anon-empty").style.display = "";
-    $("anon-empty").querySelector(".hint-icon").innerHTML =
-      '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>';
-    $("anon-empty").querySelector("p").innerHTML =
-      "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
   }
   refreshCompareDocSelect();
 }
