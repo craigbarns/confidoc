@@ -10,7 +10,7 @@
     :root {
       --bg: #080810; --surface: #0d0d18; --border: rgba(255,255,255,0.07);
       --accent: #7c74ff; --accent-light: #a78bfa;
-      --text: #f0f0ff; --muted: #8892b0; --dim: #4b5563;
+      --text: #f0f0ff; --text-muted: #8892b0; --dim: #4b5563;
     }
     * { margin:0; padding:0; box-sizing:border-box; }
     body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
@@ -21,7 +21,7 @@
     .logo-icon { width:32px; height:32px; background:linear-gradient(135deg,var(--accent),var(--accent-light)); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 4px 16px -4px rgba(124,116,255,0.5); flex-shrink:0; }
     .logo-text { font-size:17px; font-weight:800; letter-spacing:-0.4px; color:var(--text); }
     .nav-links { display:flex; align-items:center; gap:32px; }
-    .nav-links a { color:var(--muted); font-size:14px; font-weight:500; text-decoration:none; transition:color .2s; }
+    .nav-links a { color:var(--text-muted); font-size:14px; font-weight:500; text-decoration:none; transition:color .2s; }
     .nav-links a:hover { color:var(--text); }
     .btn-nav { background:rgba(124,116,255,0.12); color:#9189ff; border:1px solid rgba(124,116,255,0.3); padding:8px 20px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; transition:all .2s; }
     .btn-nav:hover { background:rgba(124,116,255,0.22); }
@@ -34,7 +34,7 @@
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
     .hero h1 { font-size:clamp(2.8rem,5vw,4.2rem); font-weight:900; line-height:1.05; letter-spacing:-2px; color:var(--text); margin-bottom:20px; }
     .hero h1 span { background:linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 50%,#c4b5fd 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-    .hero p { font-size:1.1rem; color:var(--muted); max-width:560px; margin:0 auto 36px; line-height:1.7; }
+    .hero p { font-size:1.1rem; color:var(--text-muted); max-width:560px; margin:0 auto 36px; line-height:1.7; }
     .hero-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
     .btn-primary { background:linear-gradient(135deg,var(--accent),#6c5ce7); color:#fff; padding:13px 28px; border-radius:10px; font-size:15px; font-weight:700; border:none; cursor:pointer; box-shadow:0 12px 32px -8px rgba(124,116,255,0.55); transition:all .2s; display:inline-flex; align-items:center; gap:8px; text-decoration:none; }
     .btn-primary:hover { transform:translateY(-2px); box-shadow:0 16px 40px -8px rgba(124,116,255,0.6); }
@@ -46,7 +46,7 @@
     .stat { background:rgba(13,13,24,0.9); border:1px solid var(--border); border-radius:14px; padding:24px 20px; text-align:center; transition:border-color .2s; }
     .stat:hover { border-color:rgba(124,116,255,0.3); }
     .stat h3 { font-size:2rem; font-weight:900; color:var(--accent); letter-spacing:-1px; margin-bottom:4px; }
-    .stat p { color:var(--muted); font-size:13px; }
+    .stat p { color:var(--text-muted); font-size:13px; }
 
     /* FEATURES */
     .features { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; max-width:1100px; margin:0 auto 80px; padding:0 24px; }
@@ -54,12 +54,13 @@
     .feature:hover { border-color:rgba(124,116,255,0.25); transform:translateY(-2px); }
     .feature-icon { width:40px; height:40px; background:rgba(124,116,255,0.12); border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:16px; color:var(--accent); }
     .feature h4 { font-size:15px; font-weight:700; color:var(--text); margin-bottom:8px; }
-    .feature p { color:var(--muted); font-size:13px; line-height:1.65; }
+    .feature p { color:var(--text-muted); font-size:13px; line-height:1.65; }
 
     /* CTA SECTION */
     .cta { text-align:center; padding:80px 24px; max-width:700px; margin:0 auto; }
     .cta h2 { font-size:2.5rem; font-weight:900; letter-spacing:-1.5px; margin-bottom:16px; color:var(--text); }
-    .cta p { color:var(--muted); margin-bottom:32px; font-size:1rem; }
+    .cta p { color:var(--text-muted); margin-bottom:32px; font-size:1rem; }
+    .cta .btn-primary { margin: 0 auto; }
 
     footer { text-align:center; padding:32px 24px; color:var(--dim); font-size:13px; border-top:1px solid var(--border); }
   </style>
@@ -138,12 +139,12 @@
   <section class="cta" id="demo">
     <h2>Prêt à protéger<br>vos documents ?</h2>
     <p>Testez ConfiDoc avec un document de démonstration. Aucune inscription requise.</p>
-    <a href="/ui" class="btn-primary" style="display:inline-flex;margin:0 auto">
+    <a href="/ui" class="btn-primary">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       Lancer la démo interactive
     </a>
   </section>
 
-  <footer>© 2025 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.</footer>
+  <footer>© 2026 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.</footer>
 </body>
 </html>
