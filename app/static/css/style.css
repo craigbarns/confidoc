@@ -87,7 +87,17 @@ body {
   font-weight: 700;
   letter-spacing: -0.3px;
 }
-.logo-icon { font-size: 18px; }
+.logo-icon {
+  width: 32px;
+  height: 32px;
+  background: linear-gradient(135deg, var(--accent), var(--accent-light));
+  border-radius: 8px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: #fff;
+  flex-shrink: 0;
+}
 .logo-text { font-size: 16px; font-weight: 700; letter-spacing: -0.3px; }
 .header-tagline {
   color: var(--text-muted);
