@@ -56,4 +56,4 @@ RUN useradd -m confidoc && chown -R confidoc:confidoc /app
 USER confidoc
 
 # Lancer le worker principal (écoute la queue par défaut celery)
-CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO"]
+CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "--pool=threads", "--concurrency=2"]

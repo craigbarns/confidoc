@@ -7,17 +7,17 @@ license = { text = "Proprietary" }
 authors = [{ name = "ConfiDoc", email = "dev@confidoc.fr" }]
 
 dependencies = [
-    # Framework
-    "fastapi>=0.110.0",
-    "uvicorn[standard]>=0.27.0",
-    "pydantic>=2.6.0",
-    "pydantic-settings>=2.1.0",
+    # Framework (versions figées mineures pour builds reproductibles)
+    "fastapi~=0.115.0",
+    "uvicorn[standard]~=0.32.0",
+    "pydantic~=2.10.0",
+    "pydantic-settings~=2.8.0",
     "email-validator>=2.1.0",
 
     # Database
-    "sqlalchemy[asyncio]>=2.0.25",
+    "sqlalchemy[asyncio]~=2.0.0",
     "asyncpg>=0.29.0",
-    "alembic>=1.13.0",
+    "alembic~=1.14.0",
     "greenlet>=3.0.0",
 
     # Auth & Security
@@ -27,7 +27,7 @@ dependencies = [
     "python-multipart>=0.0.7",
 
     # Async tasks
-    "celery[redis]>=5.3.0",
+    "celery[redis]~=5.4.0",
     "redis>=5.0.0",
 
     # Storage
@@ -49,8 +49,8 @@ dependencies = [
     # LangGraph agent
     "langgraph>=0.2.0",
 
-    # Docling — advanced document parsing (tables, structure, multi-format)
-    "docling>=2.0.0",
+    # Vector search (PGvector adapter — lightweight)
+    "pgvector>=0.2.0",
 ]
 
 [project.optional-dependencies]
@@ -66,6 +66,11 @@ dev = [
     # Import runtime (anonymization_service -> fitz) requis pour charger app.main dans les tests.
     "pymupdf>=1.23.0",
     "jsonschema>=4.22.0",
+]
+
+rag = [
+    # Semantic search (local embeddings — heavy, optional for Railway)
+    "sentence-transformers>=3.0.0",
 ]
 
 processing = [
@@ -91,6 +96,10 @@ line-length = 100
 
 [tool.ruff.lint]
 select = ["E", "F", "I", "N", "W", "UP", "B", "SIM"]
+
+# Fichier volumineux (regex longues, patterns métier) : longueur de ligne gérée au cas par cas.
+[tool.ruff.lint.per-file-ignores]
+"app/services/anonymization_service.py" = ["E501"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

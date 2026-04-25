@@ -10,6 +10,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.core.database import get_db
 from app.core.exceptions import http_401, http_403
 from app.core.security import decode_access_token
+from app.models.membership import Membership
 from app.models.user import User
 
 oauth2_scheme = OAuth2PasswordBearer(
@@ -55,14 +56,30 @@ async def get_current_user(
     if not user.is_active:
         raise http_403("Compte désactivé")
 
-    # Stocker en request state pour les hooks RBAC plus tard
+    membership_result = await db.execute(
+        select(Membership)
+        .where(
+            Membership.user_id == user.id,
+            Membership.is_active.is_(True),
+        )
+        .order_by(Membership.created_at.asc())
+    )
+    membership = membership_result.scalars().first()
+    org_id = membership.org_id if membership else None
+
+    # Stocker en request state pour audit/RBAC.
     request.state.user = user
+    request.state.org_id = org_id
+    request.state.membership = membership
 
     return user
 
 
+current_user_dependency = Depends(get_current_user)
+
+
 async def require_platform_admin(
-    current_user: User = Depends(get_current_user),
+    current_user: User = current_user_dependency,
 ) -> User:
     """Dépendance : exige un compte superadmin plateforme."""
     if not current_user.is_platform_admin:

@@ -14,3 +14,9 @@ class PaginatedResponse(BaseModel, Generic[T]):
     page: int = Field(default=1, description="Page actuelle (1-index)")
     size: int = Field(default=50, description="Taille de la page")
     pages: int = Field(..., description="Nombre total de pages")
+
+
+class GenericResponse(BaseModel):
+    """Format de réponse standard simple (success/message)."""
+    success: bool = True
+    message: str | None = None

@@ -26,7 +26,9 @@ ANONYMIZATION_PROMPT = f"""Tu es un système d'anonymisation de documents confid
 MISSION: Identifie TOUTES les informations personnelles/sensibles et remplace-les par des tokens.
 
 RÈGLES STRICTES:
-1. Remplace par ces tokens EXACTS (orthographe impérative — copie exactement) :
+1. TU NE DOIS JAMAIS REFORMULER LE TEXTE. Tu dois retourner exactement le même texte, mot pour mot, ponctuation comprise, en remplaçant SEULEMENT les entités par les tokens.
+2. Si tu modifies une seule virgule ou un saut de ligne, les index seront faux et le système plantera.
+3. Remplace par ces tokens EXACTS :
    - Noms de personnes → {TOKEN_PERSONNE}
    - Emails → {TOKEN_EMAIL}
    - Téléphones → {TOKEN_TELEPHONE}
@@ -66,30 +68,18 @@ Document à anonymiser:
 Réponds UNIQUEMENT avec le JSON, sans texte avant ou après:"""
 
 
-def _clean_json_response(raw: str) -> dict[str, Any] | None:
-    """Extrait et parse le JSON de la réponse LLM."""
-    if not raw:
-        return None
-    
-    # Cherche le bloc JSON
-    start = raw.find("{")
-    end = raw.rfind("}")
-    if start == -1 or end == -1 or start >= end:
-        return None
-    
-    try:
-        return json.loads(raw[start:end + 1])
-    except json.JSONDecodeError:
-        # Tentative de nettoyage
-        cleaned = raw[start:end + 1].replace("\n", " ").replace("'", '"')
-        try:
-            return json.loads(cleaned)
-        except json.JSONDecodeError:
-            return None
+from app.core.json_utils import extract_json as _clean_json_response
 
 
 def _fallback_anonymize(text: str) -> str:
-    """Anonymisation fallback basique si LLM échoue."""
+    """Anonymisation fallback deterministe si LLM echoue."""
+    try:
+        from app.services.dictionary_anonymization_service import anonymize_with_dictionary
+
+        return str(anonymize_with_dictionary(text).get("anonymized_text") or "")
+    except Exception as exc:
+        logger.warning("llm_anonymization_dictionary_fallback_failed", error=str(exc))
+
     patterns = [
         (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', TOKEN_EMAIL),
         (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', TOKEN_TELEPHONE),

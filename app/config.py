@@ -1,6 +1,5 @@
 """ConfiDoc Backend — Configuration centralisée via pydantic-settings."""
 
-import warnings
 from functools import lru_cache
 from typing import Annotated, Literal
 
@@ -38,6 +37,8 @@ class Settings(BaseSettings):
     DATABASE_URL: str = (
         "postgresql+asyncpg://confidoc:confidoc_dev_password@localhost:5432/confidoc"
     )
+    DB_POOL_SIZE: int = 20
+    DB_MAX_OVERFLOW: int = 30
 
     # ---- Redis ----
     REDIS_URL: str = "redis://localhost:6379/0"
@@ -45,6 +46,10 @@ class Settings(BaseSettings):
     # ---- Celery ----
     CELERY_BROKER_URL: str = "redis://localhost:6379/0"
     CELERY_RESULT_BACKEND: str = "redis://localhost:6379/1"
+    # User-facing document processing. Keep API as the default for single-service
+    # Railway deployments; set to "celery" only when dedicated OCR/NLP workers
+    # are deployed and consuming the expected queues.
+    DOCUMENT_PROCESSING_BACKEND: Literal["api", "celery"] = "api"
 
     # ---- MinIO / S3 ----
     STORAGE_BACKEND: Literal["local", "minio", "database"] = "local"
@@ -57,6 +62,9 @@ class Settings(BaseSettings):
 
     # ---- JWT ----
     JWT_SECRET_KEY: str = "CHANGE-ME"
+    JWT_PRIVATE_KEY: str | None = None
+    JWT_PUBLIC_KEY: str | None = None
+    JWT_KID: str = "confidoc-default-v1"
     JWT_ALGORITHM: str = "HS256"
     JWT_ACCESS_TOKEN_EXPIRE_MINUTES: int = 15
     JWT_REFRESH_TOKEN_EXPIRE_DAYS: int = 7
@@ -112,7 +120,7 @@ class Settings(BaseSettings):
     MISTRAL_BASE_URL: str = "https://api.mistral.ai"
     MISTRAL_MODEL: str = "mistral-large-latest"
     MISTRAL_ENABLED: bool = False
-    MISTRAL_TIMEOUT_SECONDS: int = 60
+    MISTRAL_TIMEOUT_SECONDS: int = 180
 
     # Hugging Face NER assistif (API gérée en UE)
     HF_API_KEY: str = ""
@@ -147,6 +155,8 @@ class Settings(BaseSettings):
     SMTP_PASSWORD: str = ""
     SMTP_FROM: str = "noreply@confidoc.fr"
     SMTP_TLS: bool = True
+    # Recipient for public beta access requests. Falls back to SMTP_FROM if empty.
+    BETA_LEAD_RECIPIENT_EMAIL: str = ""
     # URL de base de l'interface (ex: https://app.confidoc.fr) pour les liens de reset.
     APP_BASE_URL: str = "http://localhost:3000"
     # Durée de validité du token de reset (en minutes)
@@ -245,10 +255,21 @@ class Settings(BaseSettings):
             ):
                 if getattr(self, key) == "CHANGE-ME":
                     insecure.append(key)
+
+            if self.JWT_ALGORITHM.startswith("RS"):
+                if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
+                    insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")
             if insecure:
+                from app.core.logging import get_logger
+                get_logger("config").error("production_blocked_insecure_config", missing=insecure)
                 raise ValueError(
                     f"Production blocked: insecure default values found for: "
                     f"{', '.join(insecure)}. Set these via environment variables!"
+                )
+            if self.STORAGE_BACKEND == "local":
+                raise ValueError(
+                    "Production blocked: STORAGE_BACKEND=local is ephemeral. "
+                    "Use minio/S3 or database-backed storage."
                 )
         return self
 

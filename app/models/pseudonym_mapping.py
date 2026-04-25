@@ -6,9 +6,9 @@ Access restricted to document owner + explicit validation step.
 """
 
 import uuid
-from datetime import datetime, timezone
+from datetime import datetime
 
-from sqlalchemy import DateTime, ForeignKey, String, Text, Boolean
+from sqlalchemy import Boolean, DateTime, ForeignKey, String, Text
 from sqlalchemy.dialects.postgresql import UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
@@ -30,7 +30,7 @@ class PseudonymMapping(BaseModel):
         nullable=False,
         index=True,
     )
-    # Encrypted JSON blob: {"[PERSONNE_1]": "BARANES GREGORY", ...}
+    # Encrypted JSON blob: {"[PERSONNE_1]": "DUPONT ALICE", ...}
     encrypted_mapping: Mapped[str] = mapped_column(Text, nullable=False)
     # Expiration: mapping auto-deleted after this date
     expires_at: Mapped[datetime | None] = mapped_column(

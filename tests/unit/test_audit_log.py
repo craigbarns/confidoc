@@ -1,7 +1,7 @@
 """Tests for audit log model and middleware helpers."""
 
+from app.audit import _extract_action, _extract_resource
 from app.models.audit_log import AuditLog
-from app.audit import _extract_resource, _extract_action
 
 
 class TestAuditLogModel:
@@ -51,6 +51,11 @@ class TestExtractResource:
     def test_feedback_path(self):
         rtype, rid = _extract_resource("/api/v1/feedback")
         assert rtype == "feedback"
+
+    def test_lead_path(self):
+        rtype, rid = _extract_resource("/api/v1/leads/beta")
+        assert rtype == "lead"
+        assert rid is None
 
     def test_unknown_path(self):
         rtype, rid = _extract_resource("/api/v1/something-else")

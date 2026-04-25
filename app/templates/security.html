@@ -3,7 +3,24 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title>ConfiDoc — Securite &amp; Conformite RGPD</title>
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}" />
+  <meta name="robots" content="index,follow" />
+  <meta name="theme-color" content="#0b0f19" />
+  <link rel="canonical" href="{{CANONICAL_URL}}" />
+  <meta property="og:site_name" content="ConfiDoc" />
+  <meta property="og:type" content="{{OG_TYPE}}" />
+  <meta property="og:title" content="{{OG_TITLE}}" />
+  <meta property="og:description" content="{{OG_DESCRIPTION}}" />
+  <meta property="og:url" content="{{OG_URL}}" />
+  <meta property="og:image" content="{{OG_IMAGE_URL}}" />
+  <meta property="og:image:width" content="1200" />
+  <meta property="og:image:height" content="630" />
+  <meta property="og:image:alt" content="{{OG_IMAGE_ALT}}" />
+  <meta name="twitter:card" content="summary_large_image" />
+  <meta name="twitter:title" content="{{TWITTER_TITLE}}" />
+  <meta name="twitter:description" content="{{TWITTER_DESCRIPTION}}" />
+  <meta name="twitter:image" content="{{TWITTER_IMAGE_URL}}" />
   <link rel="stylesheet" href="/static/css/style.css" />
   <link rel="icon" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24' fill='none' stroke='%237c74ff' stroke-width='2'><rect x='3' y='11' width='18' height='11' rx='2' ry='2'/><path d='M7 11V7a5 5 0 0 1 10 0v4'/></svg>" type="image/svg+xml" />
 </head>
@@ -15,19 +32,25 @@
       <span class="logo-icon"><svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span>
       <span class="logo-text">ConfiDoc</span>
     </div>
-    <div class="header-tagline">Securite & Conformite RGPD</div>
+    <div class="header-tagline">Trust Center & Conformite RGPD</div>
     <div class="header-actions">
-      <a href="/ui" class="btn btn-ghost btn-sm">← Retour a l'app</a>
+      <a href="/" class="btn btn-ghost btn-sm">Landing</a>
+      <a href="/ui" class="btn btn-ghost btn-sm">Retour a l'app</a>
     </div>
   </div>
 </header>
 
 <div class="sec-page">
-  <a href="/ui" class="sec-back">← Retour a ConfiDoc</a>
+  <a href="/" class="sec-back">Retour a ConfiDoc</a>
 
   <div class="sec-hero">
-    <h1>Securite & Conformite</h1>
-    <p>ConfiDoc est concu selon les principes du RGPD et du privacy by design, avec des mecanismes de pseudonymisation, d'anonymisation forte, de scoring du risque et de tracabilite.</p>
+    <span class="sec-eyebrow">Trust Center</span>
+    <h1>Securite, gouvernance IA et preuves RGPD</h1>
+    <p>ConfiDoc est concu pour permettre aux cabinets d'utiliser l'IA sur des dossiers sensibles avec pseudonymisation, anonymisation forte, scoring du risque residuel, validation humaine et tracabilite exportable.</p>
+    <div class="sec-hero-actions">
+      <a href="/api/v1/demo/public/audit-report-pdf" class="btn btn-primary">Telecharger une preuve DPO</a>
+      <a href="/#demo-section" class="btn btn-ghost">Voir la demo publique</a>
+    </div>
   </div>
 
   <div class="sec-grid">
@@ -69,7 +92,7 @@
       <div class="sec-flow-step"><svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/></svg> Discussion IA</div>
     </div>
     <div class="sec-card">
-      <p>Le document original ne quitte jamais votre infrastructure. Seul le texte anonymise est transmis au LLM pour la discussion IA. Le mapping reversible est chiffre et stocke separement.</p>
+      <p>Le document original n'est jamais transmis au moteur de discussion IA. L'etape OCR est separee et configurable; seul le texte anonymise est utilise pour l'analyse conversationnelle. Le mapping reversible est chiffre et stocke separement.</p>
     </div>
   </div>
 
@@ -111,6 +134,7 @@
         <li>Combinaisons de quasi-identifiants (effet croisement)</li>
         <li>References d'emprunts, pourcentages de detention</li>
       </ul>
+      <p style="margin-top:12px;">La politique d'export est lisible par tous : risque faible export autorise, risque moyen avertissement, risque eleve validation obligatoire, risque critique export bloque.</p>
     </div>
     <table class="sec-table">
       <thead>
@@ -179,9 +203,9 @@
     <h2><span class="sec-icon"><svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></span> LLM & Donnees</h2>
     <div class="sec-card">
       <h3>Separation stricte</h3>
-      <p>Le LLM (Mistral Large) ne recoit <strong>jamais</strong> le texte original. Seul le texte anonymise est transmis pour la discussion IA. Les donnees sensibles restent sur votre infrastructure.</p>
+      <p>Le LLM de discussion ne recoit <strong>jamais</strong> le texte original. Seul le texte anonymise est transmis pour la discussion IA. L'OCR, lorsqu'il utilise un fournisseur externe, reste une etape distincte documentee dans le flux de traitement.</p>
       <ul>
-        <li>OCR : Mistral OCR (extraction uniquement)</li>
+        <li>OCR : fournisseur configure ou extraction locale selon deploiement</li>
         <li>Anonymisation : dictionnaire local + LLM second pass</li>
         <li>Discussion : texte anonymise uniquement</li>
         <li>Aucun entrainement sur vos donnees</li>

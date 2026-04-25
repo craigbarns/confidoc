@@ -11,7 +11,6 @@ from __future__ import annotations
 
 import pytest
 
-
 # ══════════════════════════════════════════════════════════════════════
 # Routes déclarées (structure)
 # ══════════════════════════════════════════════════════════════════════
@@ -42,6 +41,14 @@ class TestDocumentsRouterStructure:
     def test_stats_dashboard_route_exists(self):
         paths = self._get_paths()
         assert "/stats/dashboard" in paths
+
+    def test_dossier_360_route_exists(self):
+        paths = self._get_paths()
+        assert "/stats/dossier-360" in paths
+
+    def test_dossier_360_report_route_exists(self):
+        paths = self._get_paths()
+        assert "/stats/dossier-360/report" in paths
 
     def test_status_summary_route_exists(self):
         paths = self._get_paths()
@@ -98,6 +105,7 @@ class TestDocumentsRouterStructure:
     def test_no_duplicate_method_path_routes(self):
         """Un même (method, path) ne doit pas apparaître deux fois."""
         from fastapi.routing import APIRoute
+
         from app.api.v1.documents import router
         seen: set[tuple] = set()
         for route in router.routes:
@@ -109,12 +117,21 @@ class TestDocumentsRouterStructure:
                 seen.add(key)
 
     def test_static_routes_before_dynamic(self):
-        """Les routes statiques (/clients, /trash/list) doivent être déclarées AVANT /{document_id}."""
+        """Les routes statiques doivent être déclarées avant /{document_id}."""
         paths = self._get_paths()
         dynamic_idx = next((i for i, p in enumerate(paths) if p == "/{document_id}"), None)
         assert dynamic_idx is not None, "Route /{document_id} introuvable"
 
-        for static in ("/clients", "/trash/list", "/all", "/stats/dashboard", "/status-summary"):
+        static_routes = (
+            "/clients",
+            "/trash/list",
+            "/all",
+            "/stats/dashboard",
+            "/stats/dossier-360",
+            "/stats/dossier-360/report",
+            "/status-summary",
+        )
+        for static in static_routes:
             if static in paths:
                 static_idx = paths.index(static)
                 assert static_idx < dynamic_idx, (
@@ -148,6 +165,16 @@ class TestDocumentsAuthRequired:
     @pytest.mark.asyncio
     async def test_dashboard_requires_auth(self, client):
         resp = await client.get("/api/v1/documents/stats/dashboard")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_dossier_360_requires_auth(self, client):
+        resp = await client.get("/api/v1/documents/stats/dossier-360")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_dossier_360_report_requires_auth(self, client):
+        resp = await client.get("/api/v1/documents/stats/dossier-360/report")
         assert resp.status_code == 401
 
     @pytest.mark.asyncio

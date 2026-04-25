@@ -1,9 +1,27 @@
 <!DOCTYPE html>
-<html lang="fr">
+<html lang="fr" class="dark">
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>ConfiDoc — Confidentialité documentaire automatisée</title>
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#0b0f19">
+  <link rel="canonical" href="{{CANONICAL_URL}}">
+  <meta property="og:site_name" content="ConfiDoc">
+  <meta property="og:type" content="{{OG_TYPE}}">
+  <meta property="og:title" content="{{OG_TITLE}}">
+  <meta property="og:description" content="{{OG_DESCRIPTION}}">
+  <meta property="og:url" content="{{OG_URL}}">
+  <meta property="og:image" content="{{OG_IMAGE_URL}}">
+  <meta property="og:image:width" content="1200">
+  <meta property="og:image:height" content="630">
+  <meta property="og:image:alt" content="{{OG_IMAGE_ALT}}">
+  <meta name="twitter:card" content="summary_large_image">
+  <meta name="twitter:title" content="{{TWITTER_TITLE}}">
+  <meta name="twitter:description" content="{{TWITTER_DESCRIPTION}}">
+  <meta name="twitter:image" content="{{TWITTER_IMAGE_URL}}">
+  <link rel="icon" href="/static/confidoc-mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
@@ -104,6 +122,215 @@
     <div class="stat"><h3>24/7</h3><p>Traitement automatisé</p></div>
   </section>
 
+  <!-- LIVE DEMO -->
+  <section id="demo-section" class="demo-section">
+    <div class="demo-shell">
+      <div class="section-title animate-up">
+        <h2>Voyez le filtre ConfiDoc en action</h2>
+        <p>Un vrai document de démonstration est traité en lecture seule, sans compte et sans upload utilisateur.</p>
+      </div>
+      <div class="demo-toolbar animate-up delay-1">
+        <div class="demo-status" id="demo-status">Prêt à lancer la démonstration publique.</div>
+        <button id="demo-launch-btn" class="btn btn-primary" type="button">Lancer la démo</button>
+      </div>
+      <div id="demo-error" class="demo-error"></div>
+      <div id="demo-runtime-badge" class="demo-runtime-badge"></div>
+      <div id="demo-result" style="display:none">
+        <div class="demo-grid">
+          <div class="demo-panel">
+            <div class="demo-panel-header">Document original <span>Données sensibles</span></div>
+            <pre id="demo-original" class="demo-text"></pre>
+          </div>
+          <div class="demo-panel">
+            <div class="demo-panel-header">Document envoyé à l'IA <span>Anonymisé</span></div>
+            <pre id="demo-anonymized" class="demo-text"></pre>
+          </div>
+        </div>
+        <div class="demo-metrics">
+          <div class="demo-metric"><strong id="demo-entities">0</strong><span>entités masquées</span></div>
+          <div class="demo-metric"><strong id="demo-risk">0%</strong><span>risque de ré-identification</span></div>
+          <div class="demo-metric"><strong id="demo-method">—</strong><span>méthode d'extraction</span></div>
+          <div class="demo-metric"><strong id="demo-policy">—</strong><span>politique d'export</span></div>
+        </div>
+        <div id="demo-chips" class="demo-chips"></div>
+        <div id="demo-proof-card" class="demo-proof-card" style="display:none">
+          <div>
+            <h3>Preuve DPO générée</h3>
+            <p id="demo-proof-message">Chaque étape critique est tracée dans un rapport téléchargeable.</p>
+          </div>
+          <ul id="demo-proof-points" class="demo-proof-list"></ul>
+        </div>
+        <div style="margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap">
+          <a href="/ui" class="btn btn-primary">Traiter vos propres documents</a>
+          <button id="demo-proof-btn" class="btn btn-outline" type="button">Télécharger la preuve DPO</button>
+          <a href="#beta-access" class="btn btn-outline">Demander un accès beta</a>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- 3 STEPS WORKFLOW -->
+  <section id="how-it-works" style="padding-top: 4rem;">
+     <div class="section-title animate-up">
+       <h2>Auditez n'importe quel dossier en 3 étapes.</h2>
+       <p>Un processus transparent pour auditer plus vite, sans sacrifier le risque client.</p>
+     </div>
+     <div class="workflow-steps animate-up delay-1">
+        <div class="step-card">
+           <div class="step-number">1</div>
+           <h3>Déposez votre Bilan (PDF)</h3>
+           <p>Chargez le document dans votre portail hautement sécurisé de bout en bout.</p>
+        </div>
+        <div class="step-card">
+           <div class="step-number">2</div>
+           <h3>L'outil anonymise localement</h3>
+           <p>Tous les identifiants sensibles sont caviardés visuellement. Vous gardez la certitude de ce qui sort de vos locaux.</p>
+        </div>
+        <div class="step-card">
+           <div class="step-number">3</div>
+           <h3>L'IA analyse & synthétise</h3>
+           <p>L'IA résume, pointe les points clés de conformité et rédige votre synthèse en format prêt à envoyer à vos clients.</p>
+        </div>
+     </div>
+  </section>
+
+  <!-- PRICING -->
+  <section id="pricing" class="pricing">
+    <div class="section-title animate-up">
+      <h2>Un modèle lisible dès la beta</h2>
+      <p>Des offres simples pour tester, équiper une équipe, puis intégrer ConfiDoc au SI du cabinet.</p>
+    </div>
+    <div class="pricing-grid animate-up delay-1">
+      <div class="plan-card">
+        <h3>Starter</h3>
+        <div class="plan-price">0€ <small>/ mois</small></div>
+        <ul>
+          <li>10 documents de test</li>
+          <li>Démo anonymisation</li>
+          <li>Export texte anonymisé</li>
+        </ul>
+      </div>
+      <div class="plan-card featured">
+        <h3>Pro</h3>
+        <div class="plan-price">49€ <small>/ mois</small></div>
+        <ul>
+          <li>200 documents par mois</li>
+          <li>Discussion IA sécurisée</li>
+          <li>Rapports RGPD et PDF</li>
+        </ul>
+      </div>
+      <div class="plan-card">
+        <h3>Cabinet</h3>
+        <div class="plan-price">Sur devis</div>
+        <ul>
+          <li>Volumes étendus</li>
+          <li>Intégration stockage et SI</li>
+          <li>Accompagnement conformité</li>
+        </ul>
+      </div>
+    </div>
+  </section>
+
+  <!-- CAS D'USAGE (Concrete Proofs) -->
+  <section id="use-cases" style="padding: 5rem 2rem; background: var(--surface);">
+     <div class="section-title animate-up">
+       <h2>Des analyses taillées pour votre métier</h2>
+       <p>ConfiDoc s'adapte à vos dossiers récurrents et génère des livrables exploitables.</p>
+     </div>
+     <div class="grid-3 animate-up delay-1" style="max-width: 1200px; margin: 0 auto;">
+       <div class="card" style="background: var(--bg);">
+          <div class="card-icon case-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M5.5 18H18.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M7.5 15V11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M12 15V8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M16.5 15V6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h3>Audit d'un Bilan Annuel</h3>
+          <p>Chargez simplement la liasse fiscale et le bilan comptable. Demandez au système de calculer la variation du BFR, le ratio de liquidité, ou d'isoler en 30 secondes les incohérences de trésorerie sur les deux derniers exercices.</p>
+       </div>
+       <div class="card" style="background: var(--bg);">
+          <div class="card-icon case-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <path d="M6.5 18V7.5L12 5L17.5 7.5V18" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+              <path d="M10 10.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M10 13.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M12 18V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h3>Revue d'un Bail Commercial</h3>
+          <p>Générez un résumé exhaustif des obligations du preneur, localisez immédiatement la date de renouvellement du bail ou comparez les clauses d'indexation complexes grâce à une interrogation intuitive.</p>
+       </div>
+       <div class="card" style="background: var(--bg);">
+          <div class="card-icon case-icon" aria-hidden="true">
+            <svg viewBox="0 0 24 24" fill="none">
+              <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.8"/>
+              <circle cx="15.5" cy="10" r="2" stroke="currentColor" stroke-width="1.8"/>
+              <path d="M5.5 17C6.1 14.9 7.75 13.7 10 13.7C12.25 13.7 13.9 14.9 14.5 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+              <path d="M13.6 17C14 15.6 15.1 14.8 16.55 14.8C18 14.8 19.1 15.6 19.5 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+            </svg>
+          </div>
+          <h3>Vérification d'un Dossier RH</h3>
+          <p>Vérifiez que le contrat de travail d'un collaborateur est parfaitement en phase avec les minimas de la convention collective applicable, tout cela sans que son nom ou ses fiches de paie ne soient lisibles par l'IA.</p>
+       </div>
+     </div>
+  </section>
+
+  <!-- ARCHITECTURE (Business Value) -->
+  <section class="architecture" id="solution">
+    <div class="arch-container animate-up">
+      <div class="arch-content">
+        <h2>La "Muraille de Chine" Logicielle</h2>
+        <p>Transmettre des données sensibles à une IA tierce pose un vrai problème de conformité. Notre architecture lève ce frein cryptographiquement :</p>
+        <ul>
+          <li><strong>Traitement Local :</strong> Vos PDF sont lus intégralement sur l'infrastructure de votre portail, sans envoi direct à l'IA.</li>
+          <li><strong>Filtre Censeur :</strong> 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont masqués et les tables de correspondances restent locales.</li>
+          <li><strong>Hébergement Sécurisé :</strong> L'IA est obligée de travailler et rédiger sur les données "caviardées" : elle ne voit que la logique métier.</li>
+          <li><strong>Restauration Automatique :</strong> Lors du téléchargement de vos rapports, le document retrouve les vrais noms côté client.</li>
+        </ul>
+      </div>
+      <div class="arch-visual">
+        <div class="arch-box" style="border-left: 4px solid #ef4444;">
+           <span class="arch-node-icon" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="none">
+               <path d="M6.5 18V7.5L12 5L17.5 7.5V18" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
+               <path d="M10 10.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+               <path d="M10 13.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+             </svg>
+           </span>
+           <h4 style="margin-bottom:5px;">Espace Cabinet / Droit</h4>
+           <small style="color:var(--text-muted)">Hébergé en Europe, document original inviolé.</small>
+        </div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box secure">
+           <span class="arch-node-icon" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="none">
+               <path d="M12 3L6 5.9V10.8C6 14.7 8.6 18.1 12 19.2C15.4 18.1 18 14.7 18 10.8V5.9L12 3Z" stroke="currentColor" stroke-width="1.8"/>
+               <path d="M9.3 11.8L11.15 13.65L14.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
+             </svg>
+           </span>
+           <h4 style="margin-bottom:5px; color:#10b981;">Filtre ConfiDoc</h4>
+           <small style="color:var(--text-muted)">Isolation des données identifiantes.</small>
+        </div>
+        <div class="arch-arrow">↓</div>
+        <div class="arch-box" style="border-left: 4px solid var(--primary);">
+           <span class="arch-node-icon" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="none">
+               <rect x="7" y="8" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/>
+               <path d="M12 4.5V6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+               <path d="M4.5 10.5H7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+               <path d="M17 10.5H19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
+             </svg>
+           </span>
+           <h4 style="margin-bottom:5px;">Moteur d'IA</h4>
+           <small style="color:var(--text-muted)">Analyse métier sans accès aux données privées.</small>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- FEATURES (Business Value) -->
   <section class="features" id="features">
     <div class="feature">
       <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>

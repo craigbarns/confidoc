@@ -6,6 +6,7 @@ Remplace PyMuPDF/Tesseract par l'OCR Mistral natif.
 from __future__ import annotations
 
 import base64
+import hashlib
 import json
 from typing import Any
 
@@ -15,6 +16,55 @@ from app.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
+
+# ── Redis cache helpers (OCR result by SHA256) ──────────────────────────
+
+_REDIS_CACHE_TTL_SECONDS = 60 * 60 * 24 * 7  # 7 jours
+
+
+def _ocr_cache_key(file_hash: str) -> str:
+    return f"confidoc:ocr:v1:{file_hash}"
+
+
+async def _get_redis() -> Any | None:
+    """Renvoie un client Redis async, ou None si indisponible."""
+    try:
+        import redis.asyncio as aioredis
+        from app.config import get_settings
+        settings = get_settings()
+        return aioredis.from_url(
+            settings.REDIS_URL, decode_responses=True, socket_connect_timeout=2
+        )
+    except Exception:
+        return None
+
+
+async def _fetch_ocr_from_cache(file_hash: str) -> dict[str, Any] | None:
+    """Récupère un résultat OCR depuis Redis. Renvoie None si miss ou erreur."""
+    redis = await _get_redis()
+    if redis is None:
+        return None
+    try:
+        raw = await redis.get(_ocr_cache_key(file_hash))
+        await redis.close()
+        if raw:
+            return json.loads(raw)
+    except Exception:
+        pass
+    return None
+
+
+async def _store_ocr_in_cache(file_hash: str, text: str, meta: dict[str, Any]) -> None:
+    """Stocke un résultat OCR dans Redis (TTL 7 jours). Ignore silencieusement les erreurs."""
+    redis = await _get_redis()
+    if redis is None:
+        return
+    try:
+        payload = json.dumps({"text": text, "meta": meta}, default=str)
+        await redis.setex(_ocr_cache_key(file_hash), _REDIS_CACHE_TTL_SECONDS, payload)
+        await redis.close()
+    except Exception:
+        pass
 
 
 async def extract_text_with_mistral_ocr(
@@ -143,10 +193,22 @@ async def extract_text_from_file(
     extension: str = "pdf",
 ) -> tuple[str, dict[str, Any]]:
     """Interface compatible avec anonymization_service.extract_text_from_file.
-    
+
+    Ajoute un cache Redis par SHA256 du fichier pour éviter les appels
+    API redondants (coût Mistral et latence).
+
     Returns:
         (texte, metadata)
     """
+    file_hash = hashlib.sha256(content).hexdigest()
+
+    # ── Cache hit ──
+    cached = await _fetch_ocr_from_cache(file_hash)
+    if cached is not None:
+        logger.info("ocr_cache_hit", sha256=file_hash[:16], extension=extension)
+        return cached["text"], cached["meta"]
+
+    # ── Cache miss → appel Mistral ──
     mime_types = {
         "pdf": "application/pdf",
         "png": "image/png",
@@ -155,25 +217,29 @@ async def extract_text_from_file(
         "tiff": "image/tiff",
         "tif": "image/tiff",
     }
-    
+
     mime = mime_types.get(extension.lower(), "application/octet-stream")
-    
+
     result = await extract_text_with_mistral_ocr(
         file_content=content,
         filename=f"document.{extension}",
         mime_type=mime,
     )
-    
-    meta = {
+
+    meta: dict[str, Any] = {
         "extension": extension,
         "method": "mistral_ocr",
         "model": result.get("model"),
         "pages": len(result.get("pages", [])),
     }
-    
+
     if result.get("error"):
         meta["error"] = result["error"]
-        # Fallback: retourne vide
         return "", meta
-    
-    return result["text"], meta
+
+    text = result["text"]
+
+    # ── Stocker dans le cache ──
+    await _store_ocr_in_cache(file_hash, text, meta)
+
+    return text, meta

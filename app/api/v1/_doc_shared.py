@@ -9,18 +9,15 @@ from __future__ import annotations
 import hashlib
 import re
 import uuid
-from types import SimpleNamespace
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.api.deps import DbSession
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
-from app.models.document import Document, DocumentStatus
+from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
-from app.models.entity_detection import EntityDetection
 from app.schemas.document import DetectionResponse
 
 logger = get_logger(__name__)
@@ -112,14 +109,11 @@ async def _get_user_document_or_404(
 
 
 def _read_file_or_404(document: Document) -> bytes:
-    from app.services.storage_service import read_bytes
+    from app.services.storage_service import read_document_bytes
     try:
-        return read_bytes(document.storage_backend, document.storage_key)
+        return read_document_bytes(document)
     except Exception as exc:
-        logger.warning("storage_read_fallback", doc_id=str(document.id), error=str(exc))
-
-    if document.raw_content:
-        return document.raw_content
+        logger.warning("document_source_read_failed", doc_id=str(document.id), error=str(exc))
 
     raise http_404("Fichier source introuvable. Ré-uploadez le document.")
 
@@ -172,7 +166,7 @@ async def _get_original_text(db: AsyncSession, document: Document) -> str:
         return version.content_text
 
     file_content = _read_file_or_404(document)
-    return extract_text_from_file(file_content, document.extension) or ""
+    return await extract_text_from_file(file_content, document.extension) or ""
 
 
 async def _get_anonymized_text(db: AsyncSession, document: Document) -> str:
@@ -195,19 +189,16 @@ async def _get_anonymized_text(db: AsyncSession, document: Document) -> str:
 
 async def _check_export_gate(db: AsyncSession, document: Document, current_user: object) -> None:
     """Enforce RGPD export policy based on risk level."""
-    from app.core.database import async_session_factory
-
     doc_id = str(document.id)
-    user_id = str(current_user.id)  # type: ignore[union-attr]
+    user_id = str(getattr(current_user, "id", "unknown"))
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
-        async with async_session_factory() as gate_session:
-            result = await gate_session.execute(
-                select(PseudonymMapping)
-                .where(PseudonymMapping.document_id == doc_id)
-                .order_by(PseudonymMapping.created_at.desc())
-            )
-            mapping = result.scalar_one_or_none()
+        result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = result.scalar_one_or_none()
 
         if not mapping:
             return
@@ -237,4 +228,12 @@ async def _check_export_gate(db: AsyncSession, document: Document, current_user:
     except Exception as exc:
         if hasattr(exc, "status_code"):
             raise
-        logger.warning("export_gate_check_skipped", error=str(exc))
+        logger.error(
+            "export_gate_check_failed",
+            doc_id=doc_id,
+            user_id=user_id,
+            error=str(exc),
+        )
+        raise http_400(
+            "Export temporairement indisponible : controle de conformite inaccessible."
+        ) from exc

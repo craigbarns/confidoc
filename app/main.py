@@ -1,7 +1,7 @@
 """ConfiDoc Backend — Application principale FastAPI."""
 
-from contextlib import asynccontextmanager
 from collections.abc import AsyncGenerator
+from contextlib import asynccontextmanager
 from pathlib import Path
 
 from fastapi import FastAPI
@@ -10,16 +10,15 @@ from fastapi.staticfiles import StaticFiles
 from slowapi.errors import RateLimitExceeded
 from uvicorn.middleware.proxy_headers import ProxyHeadersMiddleware
 
+from app.api.health import router as health_router
+from app.api.ui import router as ui_router
+from app.api.v1.router import router as v1_router
+from app.audit import AuditLogMiddleware
 from app.config import get_settings
 from app.core.database import init_database
 from app.core.logging import get_logger, setup_logging
 from app.middleware import RequestIdMiddleware, SecurityHeadersMiddleware, TimingMiddleware
-from app.audit import AuditLogMiddleware
 from app.rate_limit import limiter, rate_limit_exceeded_handler
-from app.api.health import router as health_router
-from app.api.ui import router as ui_router
-from app.api.v1.router import router as v1_router
-
 
 _RETENTION_REDIS_KEY = "confidoc:retention:last_purge_ts"
 _RETENTION_INTERVAL_SECONDS = 86400      # 24h normal interval
@@ -29,6 +28,7 @@ _RETENTION_MAX_GAP_SECONDS = 172800      # alerte si gap > 48h au démarrage
 async def _run_retention_purge(logger: object) -> None:
     """Exécute une purge de rétention et met à jour le timestamp Redis."""
     import time
+
     from app.core.database import async_session_factory
     from app.services.retention_service import purge_expired_data
 
@@ -110,6 +110,10 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
     logger.info("database_initialized")
 
     import asyncio as _aio
+
+    from app.services.demo_service import warm_demo_cache
+
+    _aio.create_task(warm_demo_cache())
     _aio.create_task(_periodic_retention_purge())
 
     yield
@@ -157,8 +161,14 @@ def create_app() -> FastAPI:
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # ---- Routers ----
-    app.include_router(health_router)
     app.include_router(ui_router)
+    app.include_router(health_router)
+    
+    @app.get("/metrics", include_in_schema=False)
+    def metrics():
+        from app.core.metrics import get_metrics_response
+        return get_metrics_response()
+
     app.include_router(v1_router, prefix=settings.API_V1_PREFIX)
 
     return app

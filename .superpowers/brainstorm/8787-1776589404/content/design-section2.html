@@ -1,0 +1,65 @@
+<h2>Section 2 — Refonte landing page</h2>
+<p class="subtitle">Chaque bloc a un objectif précis pour convaincre un investor en 90 secondes</p>
+
+<div class="section">
+  <h3>Structure proposée (de haut en bas)</h3>
+</div>
+
+<div style="display:flex; flex-direction:column; gap:8px; max-width:680px; margin:0 auto;">
+
+  <div style="background:#0f172a; border:1px solid rgba(99,102,241,0.4); border-radius:10px; padding:14px 18px;">
+    <div style="color:#6366f1; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">1 · HERO</div>
+    <div style="color:#f1f5f9; font-weight:600; margin-bottom:4px;">"L'IA comptable sans exposer vos données clients"</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Sous-titre clair + 3 métriques inline (ex: 2 400 docs traités · 94% Full Ready · &lt; 12s/doc) + <strong>2 CTA</strong> : "Tester maintenant" (→ demo inline) · "Espace client" (→ /ui)</div>
+    <div style="margin-top:8px; background:#1e1b4b; border-radius:6px; padding:8px 12px; font-size:0.8rem; color:#a29bfe;">✦ Screenshot HTML du vrai app (split-view anonymisé/original) — remplace l'image manquante</div>
+  </div>
+
+  <div style="text-align:center; color:#334155; font-size:0.9rem;">↓</div>
+
+  <div style="background:#0f172a; border:1px solid rgba(16,185,129,0.3); border-radius:10px; padding:14px 18px;">
+    <div style="color:#10b981; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">2 · LIVE DEMO INLINE</div>
+    <div style="color:#f1f5f9; font-weight:600; margin-bottom:4px;">Nouveau bloc — le cœur de la page</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Bouton "Lancer la démo" → appel GET /api/v1/demo/public → affiche side-by-side texte original / texte anonymisé + entités colorées + score RGPD. Tout ça sans quitter la landing.</div>
+  </div>
+
+  <div style="text-align:center; color:#334155; font-size:0.9rem;">↓</div>
+
+  <div style="background:#0f172a; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px;">
+    <div style="color:#94a3b8; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">3 · LOGOS / SOCIAL PROOF</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Bande "Utilisé par des cabinets d'expertise comptable" — même avec 3-4 logos ou "beta testeurs". Ou remplacer par badges : RGPD · ISO 27001 ready · Made in France</div>
+  </div>
+
+  <div style="text-align:center; color:#334155; font-size:0.9rem;">↓</div>
+
+  <div style="background:#0f172a; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px;">
+    <div style="color:#94a3b8; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">4 · COMMENT ÇA MARCHE</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">3 étapes visuelles — déjà dans la page, à garder. Juste réécrire les textes pour être moins techniques.</div>
+  </div>
+
+  <div style="text-align:center; color:#334155; font-size:0.9rem;">↓</div>
+
+  <div style="background:#0f172a; border:1px solid rgba(245,158,11,0.3); border-radius:10px; padding:14px 18px;">
+    <div style="color:#f59e0b; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">5 · TARIFICATION — NOUVEAU</div>
+    <div style="color:#f1f5f9; font-weight:600; margin-bottom:4px;">3 plans simples</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Starter (gratuit / 10 docs) · Pro (49€/mois / 200 docs) · Cabinet (sur devis / illimité). Les angels veulent voir que tu sais comment monétiser.</div>
+  </div>
+
+  <div style="text-align:center; color:#334155; font-size:0.9rem;">↓</div>
+
+  <div style="background:#0f172a; border:1px solid rgba(255,255,255,0.08); border-radius:10px; padding:14px 18px;">
+    <div style="color:#94a3b8; font-size:0.75rem; font-weight:700; text-transform:uppercase; letter-spacing:1px; margin-bottom:6px;">6 · CTA FINAL</div>
+    <div style="color:#94a3b8; font-size:0.85rem;">Remplacer "Prendre rendez-vous" → /ui par un vrai formulaire email ou lien Calendly. + capture email "Rejoindre la beta" si pas encore de compte.</div>
+  </div>
+
+</div>
+
+<div class="section" style="margin-top:2rem;">
+  <h3>Fixes immédiats (rapides)</h3>
+  <ul style="list-style:none; padding:0;">
+    <li style="color:#ef4444; margin-bottom:6px;">✗ CTA "Prendre rendez-vous" → /ui → <span style="color:#10b981;">Remplacer par mailto: ou Calendly</span></li>
+    <li style="color:#ef4444; margin-bottom:6px;">✗ Image hero manquante → <span style="color:#10b981;">Remplacer par mockup HTML inline</span></li>
+    <li style="color:#ef4444; margin-bottom:6px;">✗ "2026 ConfiDoc SAS" dans le footer sans lien mentions légales → <span style="color:#10b981;">Ajouter page /legal minimale</span></li>
+  </ul>
+</div>
+
+<p style="text-align:center; color:#64748b; margin-top:2rem; font-size:0.9rem;">Section 2/3 — Est-ce que cette structure te convient ?</p>

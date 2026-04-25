@@ -38,11 +38,44 @@ let originalTextCache = {};
 let bgPollers = {};
 let uploadQueue = [];
 let isUploadProcessing = false;
+let batchMode = false;
+let selectedDocIds = new Set();
+let processingStartedAt = null;
+let processingElapsedTimer = null;
 
 const $ = id => document.getElementById(id);
 const FILTERS_STORAGE_KEY = "confidoc_filters_v1";
 const CHAT_STORAGE_PREFIX = "confidoc_chat_";
 const ONBOARDING_KEY = "confidoc_onboarding_done";
+const READY_STATUSES = new Set(["ready", "anonymized"]);
+const PROCESSING_STATUSES = new Set(["processing", "extracting", "extracted", "anonymizing"]);
+
+function isReadyStatus(status) {
+  return READY_STATUSES.has((status || "").toLowerCase());
+}
+
+function isProcessingStatus(status) {
+  return PROCESSING_STATUSES.has((status || "").toLowerCase());
+}
+
+function formatElapsed(seconds) {
+  const s = Math.max(0, Math.floor(seconds || 0));
+  return `${String(Math.floor(s / 60)).padStart(2, "0")}:${String(s % 60).padStart(2, "0")}`;
+}
+
+function documentStatusLabel(status) {
+  const map = {
+    uploaded: "Uploadé",
+    processing: "Traitement",
+    extracting: "OCR",
+    extracted: "OCR terminé",
+    anonymizing: "Anonymisation",
+    anonymized: "Prêt IA",
+    ready: "Prêt IA",
+    failed: "Erreur",
+  };
+  return map[(status || "").toLowerCase()] || status || "—";
+}
 
 function saveFilterState() {
   const payload = {
@@ -236,13 +269,16 @@ function toggleSidebarCollapse() {
   const sidebar = document.querySelector(".sidebar");
   if (!sidebar) return;
   sidebar.classList.toggle("collapsed");
+  const collapsed = sidebar.classList.contains("collapsed");
   const collapseBtn = $("btn-sidebar-collapse");
   if (collapseBtn) {
-    const collapsed = sidebar.classList.contains("collapsed");
     collapseBtn.textContent = collapsed ? "▶" : "◀";
     collapseBtn.setAttribute("aria-label", collapsed ? "Agrandir la sidebar" : "Réduire la sidebar");
     localStorage.setItem("confidoc_sidebar_collapsed", collapsed ? "1" : "0");
   }
+  // Show/hide the external expand button
+  const expandBtn = $("btn-sidebar-expand");
+  if (expandBtn) expandBtn.style.display = collapsed ? "" : "none";
 }
 
 // ── Toast ──────────────────────────────────────────────────────────────
@@ -251,7 +287,7 @@ function toast(msg, type = "info") {
   const container = $("toast-container");
   if (!container) return;
   const el = document.createElement("div");
-  el.className = `toast${type === "success" ? " success" : type === "error" ? " error" : ""}`;
+  el.className = `toast${type === "success" ? " success" : type === "error" ? " error" : type === "warning" ? " warning" : ""}`;
   el.textContent = String(msg || "");
   container.prepend(el);
   while (container.children.length > 5) container.removeChild(container.lastElementChild);
@@ -383,6 +419,7 @@ function logout() {
   currentDocSize = 0;
   currentProvider = "—";
   latestAssistantText = "";
+  renderExportGuard({});
   originalTextCache = {};
   Object.values(bgPollers).forEach(id => clearInterval(id));
   bgPollers = {};
@@ -418,6 +455,7 @@ async function initApp(email) {
   }
 
   await loadProviderInfo();
+  await loadGoldenReport();
   updateHeaderContext();
   showDashboard();
   restoreFilterState();
@@ -477,13 +515,79 @@ function renderAIDocInsights(payload = {}) {
   $("kpi-next-action").textContent = payload.nextAction || "—";
 }
 
+function normalizeRiskPercent(value) {
+  if (value === null || value === undefined || value === "") return null;
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return null;
+  return Math.round(numeric <= 1 ? numeric * 100 : numeric);
+}
+
+function renderExportGuard(payload = {}) {
+  const guard = $("export-guard");
+  if (!guard) return;
+  if (!currentDocId) {
+    guard.style.display = "none";
+    return;
+  }
+
+  const status = payload.status || currentDocStatus || "";
+  const ready = isReadyStatus(status);
+  const level = String(payload.risk_level || payload.level || currentRiskLevel || "low").toLowerCase();
+  const validated = !!(payload.human_validated ?? payload.humanValidated);
+  const score = normalizeRiskPercent(payload.risk_score ?? payload.score);
+  const scoreText = score === null ? "" : `Score RGPD ${score}% · `;
+  const approveBtn = $("btn-export-approve-inline");
+  const titleEl = $("export-guard-title");
+  const detailEl = $("export-guard-detail");
+  let state = "ready";
+  let title = "Export prêt";
+  let detail = `${scoreText}Document anonymisé.`;
+  let canApprove = false;
+
+  if (!ready) {
+    state = "watch";
+    title = "Export en attente";
+    detail = "Le document doit être anonymisé puis validé avant diffusion.";
+  } else if (level === "critical") {
+    state = "blocked";
+    title = "Export bloqué";
+    detail = `${scoreText}Risque critique de réidentification.`;
+  } else if (level === "high" && !validated) {
+    state = "watch";
+    title = "Validation humaine requise";
+    detail = `${scoreText}Les exports restent verrouillés jusqu'à validation.`;
+    canApprove = true;
+  } else if (level === "high" && validated) {
+    state = "ready";
+    title = "Export validé";
+    detail = `${scoreText}Validation humaine journalisée.`;
+  } else if (level === "medium") {
+    state = "watch";
+    title = "Export sous vigilance";
+    detail = `${scoreText}Contrôle recommandé avant partage externe.`;
+  }
+
+  guard.className = `export-guard ${state}`;
+  guard.style.display = "";
+  if (titleEl) titleEl.textContent = title;
+  if (detailEl) detailEl.textContent = detail;
+  if (approveBtn) approveBtn.style.display = canApprove ? "" : "none";
+}
+
 async function refreshAIDocInsights(docId) {
   if (!docId) {
     renderAIDocInsights({});
+    renderExportGuard({});
     return;
   }
   try {
-    const st = await apiFetch(`/documents/${docId}/status`);
+    const [statusResult, riskResult] = await Promise.allSettled([
+      apiFetch(`/documents/${docId}/status`),
+      apiFetch(`/documents/${docId}/risk-score`),
+    ]);
+    if (statusResult.status === "rejected") throw statusResult.reason;
+    const st = statusResult.value;
+    const risk = riskResult.status === "fulfilled" ? riskResult.value : {};
     const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Discussion IA";
     updatePipelineTimeline({
       status: st.status || currentDocStatus,
@@ -496,14 +600,19 @@ async function refreshAIDocInsights(docId) {
       detections: st?.anonymization?.detections_count ?? 0,
       nextAction: next,
     });
+    renderExportGuard({
+      ...risk,
+      status: st.status || currentDocStatus,
+    });
   } catch (_e) {
-    updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: currentDocStatus === "ready" });
+    updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: isReadyStatus(currentDocStatus) });
     renderAIDocInsights({
       status: currentDocStatus || "—",
       ocrLength: "—",
       detections: "—",
       nextAction: "Vérifier document",
     });
+    renderExportGuard({ status: currentDocStatus, risk_level: currentRiskLevel });
   }
 }
 
@@ -521,7 +630,7 @@ function updatePipelineTimeline(payload = {}) {
   let currentStep = "extract";
   if (!extractDone) currentStep = "extract";
   else if (!anonymDone) currentStep = "anonymize";
-  else if (st === "ready") currentStep = "ai";
+  else if (isReadyStatus(st)) currentStep = "ai";
   else currentStep = "anonymize";
   tl.querySelectorAll(".pipe-step").forEach((el) => {
     const key = el.dataset.step;
@@ -529,9 +638,87 @@ function updatePipelineTimeline(payload = {}) {
     if (key === "upload") el.classList.add("done");
     if (key === "extract" && extractDone) el.classList.add("done");
     if (key === "anonymize" && anonymDone) el.classList.add("done");
-    if (key === "ai" && st === "ready") el.classList.add("done");
+    if (key === "ai" && isReadyStatus(st)) el.classList.add("done");
     if (key === currentStep) el.classList.add("current");
   });
+}
+
+function processingPhaseFromStatus(status, extractionDone = false, anonymDone = false) {
+  const st = (status || "").toLowerCase();
+  if (isReadyStatus(st) || anonymDone) return "ready";
+  if (st === "failed") return "failed";
+  if (st === "extracted") return "detect";
+  if (st === "anonymizing" || extractionDone) return "mask";
+  if (st === "extracting" || st === "processing") return "ocr";
+  return "upload";
+}
+
+function updateProcessingConsole(payload = {}) {
+  const el = $("processing-console");
+  if (!el) return;
+  el.style.display = "";
+
+  const phase = processingPhaseFromStatus(
+    payload.status || currentDocStatus,
+    payload.extractDone,
+    payload.anonymDone
+  );
+  const order = ["upload", "ocr", "detect", "mask", "ready"];
+  const activeIndex = phase === "failed" ? 0 : Math.max(0, order.indexOf(phase));
+  const widths = { upload: 12, ocr: 38, detect: 58, mask: 78, ready: 100, failed: 100 };
+  const labels = {
+    upload: "Upload sécurisé",
+    ocr: "Mistral OCR en cours",
+    detect: "Détection des données sensibles",
+    mask: "Masquage RGPD",
+    ready: "Document prêt pour l'IA",
+    failed: "Traitement interrompu",
+  };
+
+  el.classList.toggle("failed", phase === "failed");
+  const spinner = document.querySelector("#anon-loading .spinner-lg");
+  if (spinner) spinner.style.display = phase === "failed" ? "none" : "";
+  const label = $("processing-phase-label");
+  if (label) label.textContent = labels[phase] || labels.upload;
+  const fill = $("processing-track-fill");
+  if (fill) fill.style.width = `${widths[phase] || 12}%`;
+
+  el.querySelectorAll(".processing-steps span").forEach((step) => {
+    const idx = order.indexOf(step.dataset.phase);
+    step.classList.toggle("done", phase !== "failed" && idx >= 0 && idx < activeIndex);
+    step.classList.toggle("current", phase !== "failed" && idx === activeIndex);
+  });
+
+  const ocrMetric = $("processing-ocr-metric");
+  if (ocrMetric) {
+    const len = payload.ocrLength;
+    ocrMetric.textContent = Number.isFinite(len) ? `OCR ${len.toLocaleString("fr-FR")} car.` : "OCR —";
+  }
+  const entityMetric = $("processing-entity-metric");
+  if (entityMetric) {
+    const count = payload.detections;
+    entityMetric.textContent = Number.isFinite(count) ? `Entités ${count}` : "Entités —";
+  }
+  const backendMetric = $("processing-backend-metric");
+  if (backendMetric) backendMetric.textContent = payload.backend || "API";
+}
+
+function startProcessingTimer() {
+  processingStartedAt = processingStartedAt || Date.now();
+  if (processingElapsedTimer) clearInterval(processingElapsedTimer);
+  const tick = () => {
+    const target = $("processing-elapsed");
+    if (target && processingStartedAt) {
+      target.textContent = formatElapsed((Date.now() - processingStartedAt) / 1000);
+    }
+  };
+  tick();
+  processingElapsedTimer = setInterval(tick, 1000);
+}
+
+function stopProcessingTimer() {
+  if (processingElapsedTimer) clearInterval(processingElapsedTimer);
+  processingElapsedTimer = null;
 }
 
 // ── Document list ──────────────────────────────────────────────────────
@@ -569,8 +756,8 @@ function renderSidebarStats(docs = []) {
     return;
   }
   const total = docs.length;
-  const ready = docs.filter((d) => d.status === "ready").length;
-  const processing = docs.filter((d) => d.status === "processing").length;
+  const ready = docs.filter((d) => isReadyStatus(d.status)).length;
+  const processing = docs.filter((d) => isProcessingStatus(d.status)).length;
   const trashed = docs.filter((d) => !!d.is_deleted).length;
   el.innerHTML = [
     `<span class="stat-chip">Total: ${total}</span>`,
@@ -634,17 +821,10 @@ function renderDocList(docs) {
 
   if (count) count.textContent = docs.length;
 
-  const statusLabel = {
-    uploaded: "Uploadé",
-    processing: "En cours",
-    ready: "Prêt",
-    failed: "Erreur",
-  };
-
   list.innerHTML = docs.map(d => {
     const rawName = escapeHtml(d.original_filename || "");
     const name = rawName.length > 26 ? rawName.slice(0, 24) + "…" : rawName;
-    const label = escapeHtml(statusLabel[d.status] || d.status || "");
+    const label = escapeHtml(documentStatusLabel(d.status));
     const selected = d.id === currentDocId ? " selected" : "";
     const size = formatBytes(d.size_bytes);
     const date = formatDate(d.created_at);
@@ -654,8 +834,35 @@ function renderDocList(docs) {
       : "";
     const isDeleted = !!d.is_deleted;
     const deletedBadge = isDeleted ? `<span class="doc-item-status">Corbeille</span>` : "";
+    // Risk dot
+    const riskDotClass = {
+      ready: "risk-dot-green",
+      anonymized: "risk-dot-green",
+      processing: "risk-dot-blue",
+      extracting: "risk-dot-blue",
+      extracted: "risk-dot-blue",
+      anonymizing: "risk-dot-blue",
+      uploaded: "risk-dot-orange",
+      failed: "risk-dot-red",
+    }[d.status] || "risk-dot-orange";
+    const riskDotTitle = {
+      ready: "Anonymisé — prêt pour l'IA",
+      anonymized: "Anonymisé — prêt pour l'IA",
+      processing: "Anonymisation en cours…",
+      extracting: "OCR en cours…",
+      extracted: "OCR terminé",
+      anonymizing: "Anonymisation en cours…",
+      uploaded: "Non anonymisé — risque RGPD",
+      failed: "Erreur de traitement",
+    }[d.status] || "";
+    const riskDot = isDeleted ? "" : `<span class="risk-dot ${riskDotClass}" title="${riskDotTitle}"></span>`;
     const cardClass = isDeleted ? " trashed" : "";
-    const deleteBtn = isDeleted
+    const batchCheck = batchMode && !isDeleted
+      ? `<input type="checkbox" class="doc-item-check" data-id="${escapeHtml(d.id)}" ${selectedDocIds.has(d.id) ? "checked" : ""} />`
+      : "";
+    const batchSelectedClass = selectedDocIds.has(d.id) ? " batch-selected" : "";
+    const batchModeClass = batchMode ? " batch-mode" : "";
+    const deleteBtn = isDeleted || batchMode
       ? ""
       : `<button class="doc-item-del" data-id="${escapeHtml(d.id)}" data-name="${rawName}" title="Supprimer">✕</button>`;
     const trashActions = isDeleted
@@ -665,8 +872,8 @@ function renderDocList(docs) {
         </div>`
       : "";
 
-    return `<div class="doc-item${selected}${cardClass}" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" data-name="${rawName}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
-      <div class="doc-item-name">${name}</div>
+    return `<div class="doc-item${selected}${cardClass}${batchModeClass}${batchSelectedClass}" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" data-name="${rawName}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
+      <div class="doc-item-name" style="display:flex;align-items:center;gap:6px">${batchCheck}${riskDot}${name}</div>
       <div class="doc-item-meta">
         <span class="doc-item-status status-${escapeHtml(d.status)}">${label}</span>
         ${deletedBadge}
@@ -680,12 +887,35 @@ function renderDocList(docs) {
 
   list.querySelectorAll(".doc-item").forEach(el => {
     if (el.dataset.deleted === "1") return;
-    el.addEventListener("click", () => selectDoc(
-      el.dataset.id,
-      el.dataset.status,
-      el.dataset.name,
-      parseInt(el.dataset.size, 10) || 0
-    ));
+    el.addEventListener("click", (e) => {
+      if (batchMode) {
+        if (e.target.classList.contains("doc-item-check")) return; // handled by checkbox
+        const id = el.dataset.id;
+        if (selectedDocIds.has(id)) selectedDocIds.delete(id);
+        else selectedDocIds.add(id);
+        renderDocList(lastDocsList);
+        updateBatchBar();
+        return;
+      }
+      selectDoc(
+        el.dataset.id,
+        el.dataset.status,
+        el.dataset.name,
+        parseInt(el.dataset.size, 10) || 0
+      );
+    });
+  });
+
+  list.querySelectorAll(".doc-item-check").forEach(cb => {
+    cb.addEventListener("change", (e) => {
+      e.stopPropagation();
+      const id = cb.dataset.id;
+      if (cb.checked) selectedDocIds.add(id);
+      else selectedDocIds.delete(id);
+      const item = cb.closest(".doc-item");
+      if (item) item.classList.toggle("batch-selected", cb.checked);
+      updateBatchBar();
+    });
   });
 
   list.querySelectorAll(".doc-item-del").forEach(btn => {
@@ -709,6 +939,91 @@ function renderDocList(docs) {
   refreshCompareDocSelect();
 }
 
+// ── Batch mode ──────────────────────────────────────────────────────────
+
+function updateBatchBar() {
+  const bar = $("batch-bar");
+  const countEl = $("batch-count");
+  if (!bar) return;
+  const n = selectedDocIds.size;
+  if (batchMode && n > 0) {
+    bar.classList.add("visible");
+    if (countEl) countEl.textContent = `${n} sélectionné${n > 1 ? "s" : ""}`;
+  } else {
+    bar.classList.remove("visible");
+  }
+}
+
+function toggleBatchMode() {
+  batchMode = !batchMode;
+  selectedDocIds.clear();
+  const btn = $("btn-batch-toggle");
+  if (btn) btn.classList.toggle("active", batchMode);
+  updateBatchBar();
+  renderDocList(lastDocsList);
+}
+
+async function batchDeleteSelected() {
+  const ids = [...selectedDocIds];
+  if (!ids.length) return;
+  const names = ids.map(id => {
+    const d = lastDocsList.find(x => x.id === id);
+    return d ? d.original_filename : id;
+  });
+  const ok = await confirm(
+    `${ids.length} document(s) seront déplacés dans la corbeille.`,
+    `Supprimer ${ids.length} document(s) ?`,
+    "Supprimer"
+  );
+  if (!ok) return;
+  let succeeded = 0;
+  for (const id of ids) {
+    try {
+      await apiRequest(`/documents/${id}`, { method: "DELETE" });
+      succeeded++;
+    } catch (_e) { /* continue */ }
+  }
+  toast(`${succeeded} / ${ids.length} document(s) supprimé(s)`, "success");
+  selectedDocIds.clear();
+  batchMode = false;
+  const btn = $("btn-batch-toggle");
+  if (btn) btn.classList.remove("active");
+  updateBatchBar();
+  await loadClientSuggestions();
+  await loadDocList();
+}
+
+async function batchAnonymizeSelected() {
+  const ids = [...selectedDocIds].filter(id => {
+    const d = lastDocsList.find(x => x.id === id);
+    return d && (d.status === "uploaded" || d.status === "failed");
+  });
+  if (!ids.length) {
+    toast("Aucun document éligible (seuls les docs non anonymisés sont traités)", "error");
+    return;
+  }
+  const ok = await confirm(
+    `${ids.length} document(s) vont être anonymisés.`,
+    `Anonymiser ${ids.length} document(s) ?`,
+    "Lancer"
+  );
+  if (!ok) return;
+  let launched = 0;
+  for (const id of ids) {
+    try {
+      await apiFetch(`/documents/${id}/anonymize`, { method: "POST", body: JSON.stringify({ profile: "moderate", document_type: "auto" }) });
+      launched++;
+    } catch (_e) { /* continue */ }
+  }
+  toast(`${launched} anonymisation(s) lancée(s)`, "success");
+  selectedDocIds.clear();
+  batchMode = false;
+  const btn = $("btn-batch-toggle");
+  if (btn) btn.classList.remove("active");
+  updateBatchBar();
+  await loadDocList();
+}
+
 // ── Delete document ─────────────────────────────────────────────────────
 
 async function deleteDoc(id, name) {
@@ -721,6 +1036,7 @@ async function deleteDoc(id, name) {
       currentDocId = null;
       currentDocName = "";
       currentDocStatus = "";
+      renderExportGuard({});
       setStep(1);
     }
     await loadClientSuggestions();
@@ -753,6 +1069,7 @@ async function permanentDeleteDoc(id, name) {
       currentDocId = null;
       currentDocName = "";
       currentDocStatus = "";
+      renderExportGuard({});
       setStep(1);
     }
     await loadClientSuggestions();
@@ -777,23 +1094,41 @@ async function selectDoc(id, status, name, sizeBytes) {
     el.classList.toggle("selected", el.dataset.id === id)
   );
 
-  setStep(2);
-  resetAnonPanel();
-  updateAnonDocBar(name, sizeBytes);
-  updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: status === "ready" });
-  await refreshAIDocInsights(id);
+  // Si le document est prêt, aller directement à l'étape 3 (Discussion IA)
+  // pour un flux naturel. Sinon, étape 2 (Anonymisation).
+  const targetStep = isReadyStatus(status) ? 3 : 2;
+  setStep(targetStep);
 
-  if (status === "ready") {
-    showAnonLoading("Chargement de la prévisualisation…");
+  if (targetStep === 2) {
+    resetAnonPanel();
+    updateAnonDocBar(name, sizeBytes);
+    updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: isReadyStatus(status) });
+    await refreshAIDocInsights(id);
+
+    if (isProcessingStatus(status)) {
+      showAnonLoading("Traitement en cours…");
+      pollDocStatus(id);
+    } else if (status === "uploaded") {
+      $("anon-empty").style.display = "";
+      $("anon-empty").querySelector("p").innerHTML =
+        "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
+    } else if (status === "failed") {
+      $("anon-empty").style.display = "";
+      $("anon-empty").querySelector(".hint-icon").textContent = "⚠️";
+      $("anon-empty").querySelector("p").innerHTML =
+        "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
+    }
+  } else {
+    // targetStep === 3 (ready doc)
+    updateAIDocBar(name, sizeBytes);
+    updatePipelineTimeline({ status, extractDone: true, anonymDone: true });
+    await refreshAIDocInsights(id);
+    // Pre-fill quick insights if possible, but don't block on preview
     try {
       const preview = await apiFetch(`/documents/${id}/preview`);
-      // Use entity_summary if available in preview metadata (if we had it in status)
-      // or from a separate call later. For now, we take count from preview.
       showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
     } catch (e) {
       console.error("preview load error:", e);
-      hideAnonLoading();
-      toast("Impossible de charger la prévisualisation.", "error");
     }
   } else if (status === "processing") {
     showAnonLoading("Traitement en cours…");
@@ -819,8 +1154,7 @@ function updateAnonDocBar(name, sizeBytes) {
   $("anon-doc-size").textContent = formatBytes(sizeBytes);
   const st = $("anon-doc-status");
   const status = currentDocStatus || "uploaded";
-  const map = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
-  st.textContent = map[status] || status;
+  st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
   $("anon-doc-bar").style.display = "";
 }
@@ -831,8 +1165,7 @@ function updateAIDocBar(name, sizeBytes) {
   $("ai-doc-size").textContent = formatBytes(sizeBytes);
   const st = $("ai-doc-status");
   const status = currentDocStatus || "uploaded";
-  const map = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
-  st.textContent = map[status] || status;
+  st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
   $("ai-doc-bar").style.display = "";
 }
@@ -948,7 +1281,7 @@ async function uploadFile(file) {
     const data = await uploadWithProgress(fd, `/uploads?auto_anonymize=${autoAnon}${clientQp}`, fill, statusEl);
     currentDocId = data.document_id;
     currentDocName = file.name;
-    currentDocStatus = "uploaded";
+    currentDocStatus = data.processing?.status || data.status || "uploaded";
     currentDocSize = file.size || 0;
     updateHeaderContext();
     await loadClientSuggestions();
@@ -968,7 +1301,11 @@ async function uploadFile(file) {
       if (autoAnon) {
         $("anon-empty").querySelector("p").innerHTML =
           `<strong>${file.name}</strong> uploadé.<br>Anonymisation en cours en arrière-plan…`;
-        showAnonLoading("Anonymisation en cours…");
+        showAnonLoading("Mistral OCR et anonymisation en cours…");
+        updateProcessingConsole({
+          status: currentDocStatus,
+          backend: (data.processing?.background_processing || "api").toUpperCase(),
+        });
         pollDocStatus(currentDocId);
       } else {
         $("anon-empty").querySelector("p").innerHTML =
@@ -1023,6 +1360,8 @@ async function createDemoDocument() {
 // ── Anonymisation ──────────────────────────────────────────────────────
 
 function resetAnonPanel() {
+  stopProcessingTimer();
+  processingStartedAt = null;
   hideAnonLoading();
   $("anon-results").style.display = "none";
   $("anon-empty").style.display = "none";
@@ -1043,18 +1382,30 @@ function showAnonLoading(msg) {
   $("anon-results").style.display = "none";
   $("anon-empty").style.display = "none";
   $("btn-anonymize").disabled = true;
+  startProcessingTimer();
+  updateProcessingConsole({ status: currentDocStatus || "processing" });
 }
 
 function hideAnonLoading() {
   $("anon-loading").style.display = "none";
   $("btn-anonymize").disabled = false;
+  stopProcessingTimer();
+  const processingConsole = $("processing-console");
+  if (processingConsole) processingConsole.style.display = "none";
+  const spinner = document.querySelector("#anon-loading .spinner-lg");
+  if (spinner) spinner.style.display = "";
 }
 
-function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization") {
+function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization", fullData = {}) {
   hideAnonLoading();
+  const processingConsole = $("processing-console");
+  if (processingConsole) processingConsole.style.display = "none";
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+
+  // Render audit insights if available
+  renderAuditInsights(fullData);
 
   // Render summary chips
   const chips = $("anon-summary-chips");
@@ -1068,6 +1419,14 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
 
   // Store risk level globally for export gating
   currentRiskLevel = risk ? risk.level : null;
+  if (risk) {
+    renderExportGuard({
+      status: "ready",
+      risk_level: risk.level,
+      risk_score: risk.score,
+      human_validated: false,
+    });
+  }
 
   // Risk indicator (RGPD)
   const riskEl = $("risk-indicator");
@@ -1133,7 +1492,7 @@ async function anonymize() {
       updatePipelineTimeline({ status: "processing", extractDone: true, anonymDone: false });
     } else if (res.ok) {
       const data = await res.json();
-      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {}, data.risk || null, data.mode || mode);
+      showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {}, data.risk || null, data.mode || mode, data);
       toast(`${data.detections_count ?? 0} entité(s) anonymisée(s) (${mode === "anonymization" ? "anonymisation forte" : "pseudonymisation"})`, "success");
       currentDocStatus = "ready";
       updateHeaderContext();
@@ -1163,8 +1522,30 @@ function pollDocStatus(docId) {
       return;
     }
     try {
-      const doc = await apiFetch(`/documents/${docId}`);
-      if (doc.status === "ready") {
+      const st = await apiFetch(`/documents/${docId}/status`);
+      const status = (st.status || "").toLowerCase();
+      const extractDone = !!st.extraction?.done;
+      const anonymDone = !!st.anonymization?.done;
+      const ocrLength = Number(st.extraction?.text_length ?? NaN);
+      const detections = Number(st.anonymization?.detections_count ?? NaN);
+      currentDocStatus = status || currentDocStatus;
+      updateAnonDocBar(currentDocName, currentDocSize);
+      updatePipelineTimeline({ status, extractDone, anonymDone });
+      updateProcessingConsole({
+        status,
+        extractDone,
+        anonymDone,
+        ocrLength,
+        detections,
+      });
+      renderAIDocInsights({
+        status: status || "—",
+        ocrLength: Number.isFinite(ocrLength) ? ocrLength : "—",
+        detections: Number.isFinite(detections) ? detections : "—",
+        nextAction: anonymDone ? "Discussion IA" : "Anonymisation",
+      });
+
+      if (isReadyStatus(status) || anonymDone) {
         clearInterval(interval);
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
@@ -1179,11 +1560,13 @@ function pollDocStatus(docId) {
         updateHeaderContext();
         updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });
         await loadDocList();
-      } else if (doc.status === "failed") {
+      } else if (status === "failed") {
         clearInterval(interval);
-        hideAnonLoading();
+        updateProcessingConsole({ status: "failed", ocrLength, detections });
+        stopProcessingTimer();
+        $("btn-anonymize").disabled = false;
         toast("L'anonymisation a échoué. Veuillez réessayer.", "error");
-        updatePipelineTimeline({ status: "failed", extractDone: true, anonymDone: false });
+        updatePipelineTimeline({ status: "failed", extractDone, anonymDone: false });
         await loadDocList();
       }
       // sinon: toujours "processing", on continue à poller
@@ -1253,12 +1636,12 @@ function renderRiskMeter(score) {
 function startBgPollers(docs) {
   Object.values(bgPollers).forEach(id => clearInterval(id));
   bgPollers = {};
-  const processing = (docs || []).filter(d => d.status === "processing" && !d.is_deleted);
+  const processing = (docs || []).filter(d => isProcessingStatus(d.status) && !d.is_deleted);
   processing.forEach(d => {
     bgPollers[d.id] = setInterval(async () => {
       try {
         const doc = await apiFetch(`/documents/${d.id}`);
-        if (doc.status === "ready") {
+        if (isReadyStatus(doc.status)) {
           clearInterval(bgPollers[d.id]);
           delete bgPollers[d.id];
           notifyDocReady(d.original_filename, d.id);
@@ -1391,10 +1774,10 @@ function loadChatHistory(docId) {
 
 function showOnboarding() {
   const steps = [
-    { target: ".upload-zone", title: "1. Uploadez un document", text: "Glissez un PDF ou cliquez pour choisir un fichier. Le nom du client est obligatoire." },
-    { target: "#btn-anonymize", title: "2. Anonymisez", text: "Choisissez un mode RGPD et un profil, puis lancez le traitement." },
-    { target: ".quick-actions", title: "3. Discutez avec l'IA", text: "Posez des questions en toute securite. L'IA ne voit que le texte masque." },
-    { target: "#btn-export-txt", title: "4. Exportez", text: "Telechargez le texte anonymise, le PDF redacte ou le rapport d'audit RGPD." },
+    { target: ".upload-zone", title: "📄 Uploadez un document", text: "Glissez un PDF, PNG ou JPEG — contrat, bilan, relevé bancaire. Saisissez le nom du client. Max 50 MB." },
+    { target: "#btn-anonymize", title: "🔒 Anonymisation RGPD", text: "L'IA détecte noms, IBAN, SIREN, adresses… et les remplace par des balises. Mode modéré ou strict selon votre besoin." },
+    { target: ".quick-actions", title: "💬 Discussion IA sécurisée", text: "Posez vos questions métier. L'IA ne voit que le texte masqué — vos données confidentielles ne sortent jamais." },
+    { target: "#btn-export-txt", title: "⬇ Export & Audit", text: "Téléchargez le texte anonymisé, le PDF rédacté, ou le rapport d'audit RGPD complet pour vos dossiers." },
   ];
   let current = 0;
   const overlay = document.createElement("div");
@@ -1404,14 +1787,18 @@ function showOnboarding() {
   function renderStep() {
     const step = steps[current];
     const targetEl = document.querySelector(step.target);
+    const dots = steps.map((_, i) =>
+      `<div class="onboarding-dot${i === current ? " active" : ""}"></div>`
+    ).join("");
     overlay.innerHTML = '<div class="onboarding-backdrop"></div>' +
       '<div class="onboarding-card">' +
-      '<div class="onboarding-step-indicator">' + (current+1) + ' / ' + steps.length + '</div>' +
+      '<div class="onboarding-dots">' + dots + '</div>' +
       '<h3>' + step.title + '</h3>' +
       '<p>' + step.text + '</p>' +
       '<div class="onboarding-actions">' +
-      '<button class="btn btn-ghost btn-sm" id="onboarding-skip">Passer</button>' +
-      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant' : 'Commencer !') + '</button>' +
+      '<button class="btn btn-ghost btn-sm" id="onboarding-skip">Ignorer</button>' +
+      (current > 0 ? '<button class="btn btn-ghost btn-sm" id="onboarding-prev">← Précédent</button>' : '') +
+      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant →' : '🚀 Commencer !') + '</button>' +
       '</div></div>';
     document.body.appendChild(overlay);
     const card = overlay.querySelector(".onboarding-card");
@@ -1436,6 +1823,12 @@ function showOnboarding() {
       if (current >= steps.length) { finishOnboarding(); }
       else { overlay.remove(); renderStep(); }
     });
+    const prevBtn = overlay.querySelector("#onboarding-prev");
+    if (prevBtn) prevBtn.addEventListener("click", () => {
+      if (targetEl) targetEl.classList.remove("onboarding-highlight");
+      current--;
+      overlay.remove(); renderStep();
+    });
     overlay.querySelector("#onboarding-skip").addEventListener("click", () => {
       document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
       finishOnboarding();
@@ -1446,7 +1839,8 @@ function showOnboarding() {
     overlay.remove();
     document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
     localStorage.setItem(ONBOARDING_KEY, "true");
-    toast("Bienvenue sur ConfiDoc !", "success");
+    toast("Bienvenue sur ConfiDoc ! Uploadez votre premier document.", "success");
+    setStep(1);
   }
 
   renderStep();
@@ -1537,20 +1931,59 @@ function renderStructuredAnswer(bodyEl, text) {
   for (const raw of lines) {
     const line = raw.trim();
     if (!line) continue;
-    const heading = line.match(/^#{1,3}\s+(.+)$/) || line.match(/^([A-Za-zÀ-ÿ0-9 \-]+)\s*:\s*$/);
+    // Detect headings: ## Title, **Title**, Title :, 1) Title, 1. Title
+    const heading =
+      line.match(/^#{1,3}\s+(.+)$/) ||
+      line.match(/^\*\*([^*]+)\*\*\s*:?\s*$/) ||
+      line.match(/^([A-Za-zÀ-ÿ0-9][A-Za-zÀ-ÿ0-9 ''\-\/]+)\s*:\s*$/) ||
+      line.match(/^\d+[.)\-]\s+\*\*([^*]+)\*\*/) ||
+      line.match(/^\d+[.)\-]\s+([A-ZÀ-ÿ][A-Za-zÀ-ÿ0-9 ''\-\/]{3,})\s*:?\s*$/);
     if (heading) {
       if (current.items.length) sections.push(current);
-      current = { title: heading[1], items: [] };
+      current = { title: heading[1].replace(/\*\*/g, "").trim(), items: [] };
       continue;
     }
-    current.items.push(line.replace(/^[\-•]\s*/, ""));
+    // Strip list markers: - • * 1. 1) a)
+    const cleaned = line.replace(/^(?:[\-•*]|\d+[.)\-]|[a-z][.)\-])\s+/, "").replace(/\*\*(.+?)\*\*/g, "$1");
+    current.items.push(cleaned);
   }
   if (current.items.length) sections.push(current);
   if (!sections.length) return;
+
+  // Map section titles to icons
+  const sectionIcons = {
+    résumé: "📋", resume: "📋", synthèse: "📋", synthese: "📋", executif: "📋",
+    points: "🔑", clés: "🔑", cles: "🔑", clef: "🔑",
+    risques: "⚠️", alertes: "⚠️", anomalies: "⚠️", vigilance: "⚠️",
+    actions: "✅", recommandations: "✅", prochaines: "✅", recommandées: "✅",
+    chiffres: "📊", montants: "📊", données: "📊", donnees: "📊",
+  };
+  function getIcon(title) {
+    const lower = title.toLowerCase();
+    for (const [kw, icon] of Object.entries(sectionIcons)) {
+      if (lower.includes(kw)) return icon;
+    }
+    return "📌";
+  }
+  function getSectionClass(title) {
+    const lower = title.toLowerCase();
+    if (/risque|alerte|anomalie|vigilance/.test(lower)) return "ai-section-risk";
+    if (/action|recommand|prochaine/.test(lower)) return "ai-section-action";
+    if (/chiffre|montant|donn[ée]e/.test(lower)) return "ai-section-data";
+    return "";
+  }
+
   bodyEl.classList.add("structured");
   bodyEl.innerHTML = sections
-    .map((s) => `<div class="ai-section"><div class="ai-section-title">${escapeHtml(s.title)}</div><ul>${s.items.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul></div>`)
+    .map((s) => {
+      const icon = getIcon(s.title);
+      const cls = getSectionClass(s.title);
+      return `<div class="ai-section ${cls}"><div class="ai-section-title">${icon} ${escapeHtml(s.title)}</div><ul>${s.items.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul></div>`;
+    })
     .join("");
+
+  // Show export button if report mode
+  if (reportMode && $("btn-export-rapport")) $("btn-export-rapport").style.display = "";
 }
 
 async function sendMessage() {
@@ -1662,9 +2095,12 @@ async function sendCopilotMessage(question, inputEl) {
   bodyEl.classList.add("streaming");
   latestAssistantText = "";
   $("btn-copy-answer").disabled = true;
+  // Show loading state for copilot (no streaming but still needs visual feedback)
+  $("btn-send").style.display = "none";
+  $("btn-stop-stream").style.display = "";
   try {
     const baseQ = reportMode
-      ? `${question}\n\nRéponds en format rapport structuré avec sections: Résumé, Points clés, Risques, Actions recommandées.`
+      ? `${question}\n\nRéponds en format rapport structuré avec sections: ## Résumé, ## Points clés, ## Risques, ## Actions recommandées. Utilise des tirets pour les listes.`
       : question;
     const resp = await apiFetch(`/copilot/${currentDocId}/ask`, {
       method: "POST",
@@ -1682,6 +2118,8 @@ async function sendCopilotMessage(question, inputEl) {
     if (reportMode && latestAssistantText.trim()) {
       renderStructuredAnswer(bodyEl, latestAssistantText);
     }
+    $("btn-send").style.display = "";
+    $("btn-stop-stream").style.display = "none";
     saveChatHistory(currentDocId);
   }
 }
@@ -1799,7 +2237,7 @@ async function exportText() {
     toast("Export texte terminé", "success");
   } catch (e) {
     console.error("exportText error:", e);
-    if (e.message && e.message.includes("bloque")) {
+    if (e.message && e.message.includes("bloqu")) {
       toast(e.message, "error");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
@@ -1819,7 +2257,7 @@ async function exportPdf() {
     toast("Export PDF terminé", "success");
   } catch (e) {
     console.error("exportPdf error:", e);
-    if (e.message && e.message.includes("bloque")) {
+    if (e.message && e.message.includes("bloqu")) {
       toast(e.message, "error");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
@@ -1830,6 +2268,70 @@ async function exportPdf() {
   }
 }
 
+
+async function exportFec() {
+  if (!currentDocId) return;
+  try {
+    const resp = await apiRequest(`/documents/${currentDocId}/export-fec`);
+    const blob = new Blob([await resp.text()], { type: "text/plain;charset=utf-8" });
+    triggerDownload(blob, `FEC_${currentDocId.slice(0, 8)}.txt`);
+    toast("Export FEC terminé", "success");
+  } catch (e) {
+    console.error("exportFec error:", e);
+    if (e.message && e.message.includes("bloqu")) {
+      toast(e.message, "error");
+      if (e.message.includes("validation humaine")) {
+        showApproveExportPrompt();
+      }
+    } else {
+      toast(`Erreur export FEC: ${e.message}`, "error");
+    }
+  }
+}
+
+async function loadGoldenReport() {
+  if (!token) return;
+  try {
+    const data = await apiFetch("/stats/golden-report");
+    if (data && data.pass_rate !== undefined) {
+      if ($("golden-quality-badge")) return;
+      const badge = document.createElement("div");
+      badge.id = "golden-quality-badge";
+      badge.className = "header-pill";
+      badge.style.background = "rgba(16,185,129,0.15)";
+      badge.style.color = "#10b981";
+      badge.style.border = "1px solid rgba(16,185,129,0.3)";
+      badge.innerHTML = `🛡️ Qualité Corpus: <strong>${Math.round(data.pass_rate)}%</strong>`;
+      badge.title = `Taux de succès sur ${data.total} cas de référence métiers`;
+      $("header-pills")?.appendChild(badge);
+    }
+  } catch (_e) {}
+}
+
+function renderAuditInsights(data) {
+  const panel = $("audit-insights");
+  if (!panel) return;
+  
+  const score = data.audit_risk_score ?? 0;
+  const findings = data.audit_findings || [];
+  
+  if (findings.length === 0 && score === 0) {
+    panel.style.display = "none";
+    return;
+  }
+  
+  panel.style.display = "";
+  $("audit-risk-score").textContent = score;
+  
+  const findingsEl = $("audit-findings");
+  if (findingsEl) {
+    findingsEl.innerHTML = findings.map(f => `
+      <div class="audit-finding severity-${f.severity}">
+        <strong>${escapeHtml(f.label)}</strong>: ${escapeHtml(f.detail)}
+      </div>
+    `).join("");
+  }
+}
 
 async function showApproveExportPrompt() {
   if (!currentDocId) return;
@@ -1842,6 +2344,12 @@ async function showApproveExportPrompt() {
   try {
     await apiFetch(`/documents/${currentDocId}/approve-export`, { method: "POST" });
     toast("Export approuvé — vous pouvez maintenant exporter.", "success");
+    renderExportGuard({
+      status: currentDocStatus,
+      risk_level: currentRiskLevel || "high",
+      human_validated: true,
+    });
+    refreshAIDocInsights(currentDocId).catch(() => {});
   } catch (e) {
     toast(`Erreur approbation: ${e.message}`, "error");
   }
@@ -1871,6 +2379,17 @@ async function downloadComplianceReport() {
   }
 }
 
+async function downloadDossier360Report() {
+  try {
+    const resp = await apiRequest("/documents/stats/dossier-360/report");
+    const blob = await resp.blob();
+    triggerDownload(blob, "rapport_dossier_360.pdf");
+    toast("Rapport Dossier 360 telecharge", "success");
+  } catch (e) {
+    toast(`Erreur rapport Dossier 360: ${e.message}`, "error");
+  }
+}
+
 function triggerDownload(blob, filename) {
   const url = URL.createObjectURL(blob);
   const a = document.createElement("a");
@@ -1887,6 +2406,47 @@ function triggerDownload(blob, filename) {
 
 let dashboardLoaded = false;
 
+function emptyDashboardData() {
+  return {
+    total_documents: 0,
+    total_entities_masked: 0,
+    trashed_documents: 0,
+    status_counts: {},
+    gdpr_score: {
+      score: 0,
+      color: "warning",
+      grade: "-",
+      status: "Indisponible",
+      recommendations: ["Les statistiques completes n'ont pas pu etre chargees."],
+      breakdown: {},
+    },
+    risk_distribution: {},
+    entity_distribution: {},
+    recent_activity: [],
+  };
+}
+
+function emptyDossier360() {
+  return {
+    portfolio: {
+      clients_count: 0,
+      documents_count: 0,
+      average_score: 0,
+      ready_dossiers: 0,
+      at_risk_dossiers: 0,
+      critical_actions: 0,
+      top_missing_documents: [],
+    },
+    dossiers: [],
+  };
+}
+
+function dashboardErrorMessage(err) {
+  const msg = String(err?.message || err || "");
+  if (!msg) return "Statistiques indisponibles.";
+  return msg.replace(/https?:\/\/\S+/g, "").slice(0, 220);
+}
+
 function showDashboard() {
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   const dash = $("panel-dashboard");
@@ -1899,50 +2459,119 @@ function showDashboard() {
   if (!dashboardLoaded) loadDashboard();
 }
 
+function renderDashboardSkeleton() {
+  const content = $("dash-content");
+  if (!content) return;
+  content.style.display = "";
+  content.innerHTML = `
+    <div class="dash-kpi-grid">
+      ${[1, 2, 3, 4].map(() => `
+        <div class="dash-kpi-card skeleton-wrap">
+          <div class="skeleton-line w60" style="height: 36px; width: 36px; border-radius: 9px; margin-bottom: 12px;"></div>
+          <div class="skeleton-line w75" style="height: 28px;"></div>
+          <div class="skeleton-line w60" style="height: 12px;"></div>
+        </div>
+      `).join("")}
+    </div>
+    <div class="dash-gdpr-section">
+      <div class="dash-gdpr-card skeleton-wrap">
+        <div class="skeleton-line" style="height: 72px; width: 72px; border-radius: 50%;"></div>
+        <div style="flex:1">
+          <div class="skeleton-line w60" style="height: 24px;"></div>
+          <div class="skeleton-line w90" style="height: 12px; margin-top: 8px;"></div>
+        </div>
+      </div>
+    </div>
+  `;
+}
+
 async function loadDashboard() {
   const loading = $("dash-loading");
   const content = $("dash-content");
-  if (loading) loading.style.display = "";
-  if (content) content.style.display = "none";
+  if (loading) loading.style.display = "none";
+  
+  renderDashboardSkeleton();
 
   try {
-    const [data, summary] = await Promise.all([
+    const [statsResult, summaryResult, dossierResult] = await Promise.allSettled([
       apiFetch("/documents/stats/dashboard"),
       apiFetch("/documents/status-summary?days=30"),
+      apiFetch("/documents/stats/dossier-360"),
     ]);
-    dashboardLoaded = true;
-    renderDashboard(data, summary);
+
+    // Restore original structure
+    content.innerHTML = _dashboard_original_html;
+
+    if (
+      statsResult.status === "rejected" &&
+      summaryResult.status === "rejected" &&
+      dossierResult.status === "rejected"
+    ) {
+      throw new Error(
+        `${dashboardErrorMessage(statsResult.reason)} ${dashboardErrorMessage(summaryResult.reason)}`.trim()
+      );
+    }
+
+    const data = statsResult.status === "fulfilled" ? statsResult.value : emptyDashboardData();
+    const summary = summaryResult.status === "fulfilled" ? summaryResult.value : {};
+    const dossier360 = dossierResult.status === "fulfilled" ? dossierResult.value : emptyDossier360();
+
+    dashboardLoaded =
+      statsResult.status === "fulfilled" &&
+      summaryResult.status === "fulfilled" &&
+      dossierResult.status === "fulfilled";
+    renderDashboard(data, summary, dossier360);
+
+    if (!dashboardLoaded) {
+      const failed =
+        statsResult.status === "rejected"
+          ? statsResult.reason
+          : summaryResult.status === "rejected"
+            ? summaryResult.reason
+            : dossierResult.reason;
+      console.warn("loadDashboard partial:", failed);
+      toast(`Dashboard partiel: ${dashboardErrorMessage(failed)}`, "warning");
+    }
   } catch (e) {
     console.warn("loadDashboard failed:", e);
     if (content) {
       content.style.display = "";
-      content.innerHTML = '<div class="empty-state">Impossible de charger les statistiques.</div>';
+      content.innerHTML = `<div class="empty-state">Impossible de charger les statistiques. ${escapeHtml(dashboardErrorMessage(e))}</div>`;
     }
   } finally {
     if (loading) loading.style.display = "none";
   }
 }
 
-function renderDashboard(data, summary = {}) {
+function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const content = $("dash-content");
   if (!content) return;
   content.style.display = "";
 
   // KPIs
   const sc = data.status_counts || {};
+  const readyCount = (sc.ready || 0) + (sc.anonymized || 0);
+  const summaryReady = (summary.ready ?? sc.ready ?? 0) + (summary.anonymized ?? sc.anonymized ?? 0);
+  const summaryProcessing =
+    (summary.processing ?? sc.processing ?? 0)
+    + (summary.extracting ?? sc.extracting ?? 0)
+    + (summary.extracted ?? sc.extracted ?? 0)
+    + (summary.anonymizing ?? sc.anonymizing ?? 0);
   animateNumber($("dash-total-docs"), data.total_documents || 0);
   animateNumber($("dash-total-entities"), data.total_entities_masked || 0);
-  animateNumber($("dash-ready-count"), sc.ready || 0);
+  animateNumber($("dash-ready-count"), readyCount);
   animateNumber($("dash-trashed"), data.trashed_documents || 0);
-  animateNumber($("dash-bucket-ready"), summary.ready ?? sc.ready ?? 0);
-  animateNumber($("dash-bucket-processing"), summary.processing ?? sc.processing ?? 0);
+  animateNumber($("dash-bucket-ready"), summaryReady);
+  animateNumber($("dash-bucket-processing"), summaryProcessing);
   animateNumber($("dash-bucket-uploaded"), summary.uploaded ?? sc.uploaded ?? 0);
   animateNumber($("dash-bucket-failed"), summary.failed ?? sc.failed ?? 0);
-  animateNumber($("dash-uploads-24h"), summary.uploads_24h ?? 0);
+  animateNumber($("dash-uploads-24h"), summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
   const total = Math.max(0, summary.total ?? data.total_documents ?? 0);
-  const ready = Math.max(0, summary.ready ?? sc.ready ?? 0);
+  const ready = Math.max(0, summaryReady);
   if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
   if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
+
+  renderDossier360(dossier360);
 
   // GDPR Score
   const gdpr = data.gdpr_score || {};
@@ -2067,7 +2696,7 @@ function renderDashboard(data, summary = {}) {
   const actSection = $("dash-activity-section");
   const actEl = $("dash-activity-chart");
   if (actEl && data.recent_activity && data.recent_activity.length) {
-    actSection.style.display = "";
+    if (actSection) actSection.style.display = "";
     const maxAct = Math.max(1, ...data.recent_activity.map(a => a.count));
     actEl.innerHTML = data.recent_activity.map(a => {
       const h = Math.max(2, (a.count / maxAct) * 80);
@@ -2077,6 +2706,9 @@ function renderDashboard(data, summary = {}) {
         <span class="dash-activity-label">${day}</span>
       </div>`;
     }).join("");
+  } else {
+    if (actSection) actSection.style.display = "none";
+    if (actEl) actEl.innerHTML = "";
   }
   const trendEl = $("dash-trend-7d");
   const trendData = summary.created_last_7_days || [];
@@ -2088,6 +2720,68 @@ function renderDashboard(data, summary = {}) {
       return `<div class="dash-activity-col"><div class="dash-activity-bar" style="height:${h}px"></div><span class="dash-activity-label">${day}</span></div>`;
     }).join("");
   }
+}
+
+function riskLabel(level) {
+  const labels = { low: "Faible", medium: "Moyen", high: "Eleve", critical: "Critique" };
+  return labels[level] || level || "Inconnu";
+}
+
+function renderDossier360(payload = emptyDossier360()) {
+  const section = $("dash-dossier360");
+  const list = $("dash-d360-list");
+  if (!section || !list) return;
+
+  const portfolio = payload.portfolio || {};
+  const dossiers = payload.dossiers || [];
+  const clients = portfolio.clients_count || 0;
+
+  if ($("dash-d360-clients")) {
+    $("dash-d360-clients").textContent = `${clients} client${clients > 1 ? "s" : ""}`;
+  }
+  animateNumber($("dash-d360-score"), portfolio.average_score || 0);
+  animateNumber($("dash-d360-ready"), portfolio.ready_dossiers || 0);
+  animateNumber($("dash-d360-risk"), portfolio.at_risk_dossiers || 0);
+  animateNumber($("dash-d360-actions"), portfolio.critical_actions || 0);
+
+  if (!dossiers.length) {
+    list.innerHTML = '<div class="empty-state" style="padding:16px">Aucun dossier client à analyser.</div>';
+    return;
+  }
+
+  list.innerHTML = dossiers.map((dossier) => {
+    const score = Math.max(0, Math.min(100, Math.round(dossier.score || 0)));
+    const risk = dossier.risk_level || "low";
+    const missing = (dossier.missing_documents || []).slice(0, 2);
+    const actions = (dossier.next_actions || []).slice(0, 2);
+    const blockers = (dossier.blockers || []).slice(0, 2);
+    const readyCount = dossier.ready_count || 0;
+    const docCount = dossier.document_count || 0;
+    return `<div class="dash-d360-card">
+      <div class="dash-d360-top">
+        <div>
+          <strong>${escapeHtml(dossier.client_name || "Sans client")}</strong>
+          <span>${readyCount}/${docCount} prêts · ${escapeHtml(dossier.readiness || "")}</span>
+        </div>
+        <span class="dash-risk-chip risk-${escapeHtml(risk)}">${escapeHtml(riskLabel(risk))}</span>
+      </div>
+      <div class="dash-d360-scoreline">
+        <div class="dash-d360-scorebar"><div style="width:${score}%"></div></div>
+        <strong>${score}</strong>
+      </div>
+      <div class="dash-d360-tags">
+        ${missing.length
+          ? missing.map((item) => `<span>${escapeHtml(item)}</span>`).join("")
+          : '<span class="good">Pieces clés couvertes</span>'}
+      </div>
+      ${blockers.length
+        ? `<ul class="dash-d360-alerts">${blockers.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}</ul>`
+        : ""}
+      <ul class="dash-d360-actions">
+        ${actions.map((item) => `<li>${escapeHtml(item)}</li>`).join("")}
+      </ul>
+    </div>`;
+  }).join("");
 }
 
 function animateNumber(el, target) {
@@ -2112,10 +2806,10 @@ let reviewResult = null;
 
 const REVIEW_STEPS = [
   { id: "classify", icon: "1", label: "Classification du document" },
-  { id: "extract", icon: "2", label: "Extraction des donnees cles" },
-  { id: "analyze", icon: "3", label: "Analyse metier" },
+  { id: "extract", icon: "2", label: "Extraction des données clés" },
+  { id: "analyze", icon: "3", label: "Analyse métier" },
   { id: "findings", icon: "4", label: "Identification des constats" },
-  { id: "filter", icon: "5", label: "Controle qualite" },
+  { id: "filter", icon: "5", label: "Contrôle qualité" },
   { id: "synthesize", icon: "6", label: "Note de revue" },
 ];
 
@@ -2175,7 +2869,9 @@ function renderReviewResult(data) {
   if (verdict) {
     const verdictIcons = { favorable: "\u2705", reserve: "\u26A0\uFE0F", defavorable: "\u274C" };
     const verdictLabels = { favorable: "Favorable", reserve: "Reserve", defavorable: "Defavorable" };
-    html += `<div class="review-verdict ${verdict}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)${docType ? ` — <span class="review-doc-type">${escapeHtml(docType)}</span>` : ""}</div>`;
+    const verdictClasses = { favorable: "good", reserve: "warning", defavorable: "critical" };
+    const verdictClass = verdictClasses[verdict] || "neutral";
+    html += `<div class="review-verdict ${verdictClass}">${verdictIcons[verdict] || ""} ${verdictLabels[verdict] || verdict} (confiance: ${Math.round(confidence * 100)}%)${docType ? ` — <span class="review-doc-type">${escapeHtml(docType)}</span>` : ""}</div>`;
   }
 
   html += block("1", "Résumé exécutif", reviewNote ? escapeHtml(reviewNote) : "Aucun resume disponible.");
@@ -2222,6 +2918,34 @@ function renderReviewResult(data) {
   $("review-actions").style.display = "";
 }
 
+function formatReviewError(message) {
+  const raw = String(message || "").trim();
+  if (!raw) return "Analyse indisponible. Relancez dans quelques instants.";
+  const lower = raw.toLowerCase();
+  if (raw.includes("429") || lower.includes("too many requests") || lower.includes("rate limit")) {
+    return "Mistral limite temporairement les analyses. Le document reste pret; relancez dans quelques minutes.";
+  }
+  return raw.replace(/https?:\/\/\S+/g, "").slice(0, 260);
+}
+
+function renderReviewError(message, detail = {}) {
+  const el = $("review-result");
+  if (!el) return;
+  const retry = detail?.retry_after_seconds
+    ? `<p class="review-cabinet-empty">Nouvel essai conseille dans ${escapeHtml(String(detail.retry_after_seconds))} secondes.</p>`
+    : "";
+  el.style.display = "";
+  el.innerHTML = `<div class="review-section review-cabinet-block">
+    <div class="review-section-title">Analyse indisponible</div>
+    <div class="review-section-body">
+      <p>${escapeHtml(formatReviewError(message))}</p>
+      ${retry}
+    </div>
+  </div>`;
+  const actions = $("review-actions");
+  if (actions) actions.style.display = "none";
+}
+
 async function startReview() {
   if (!currentDocId || reviewRunning) return;
   reviewRunning = true;
@@ -2263,8 +2987,9 @@ async function startReview() {
       buffer = lines.pop();
 
       for (const line of lines) {
-        if (!line.startsWith("data:")) continue;
-        const raw = line.slice(5).trim();
+        const cleanLine = line.replace(/\r/g, "");
+        if (!cleanLine.startsWith("data:")) continue;
+        const raw = cleanLine.slice(5).trim();
         if (raw === "[DONE]") break;
 
         try {
@@ -2289,10 +3014,12 @@ async function startReview() {
             renderReviewSteps(null, completedSteps);
             reviewResult = allData;
             renderReviewResult(allData);
-            toast("Synthese cabinet terminee", "success");
+            toast(allData.degraded ? "Analyse limitee disponible" : "Synthese cabinet terminee", allData.degraded ? "warning" : "success");
           } else if (status === "error") {
             renderReviewSteps(null, completedSteps);
-            toast(`Erreur analyse: ${event.data?.error || "inconnue"}`, "error");
+            const msg = event.data?.message || event.data?.error || "Analyse indisponible.";
+            renderReviewError(msg, event.data || {});
+            toast(`Analyse interrompue: ${formatReviewError(msg)}`, "error");
           }
         } catch (e) {
           console.warn("Review SSE parse error:", e);
@@ -2301,7 +3028,9 @@ async function startReview() {
     }
   } catch (e) {
     console.error("startReview error:", e);
-    toast(`Erreur analyse: ${e.message}`, "error");
+    const msg = formatReviewError(e.message);
+    renderReviewError(msg);
+    toast(`Erreur analyse: ${msg}`, "error");
   } finally {
     reviewRunning = false;
   }
@@ -2374,9 +3103,10 @@ function exportReviewResult() {
 
 document.addEventListener("DOMContentLoaded", () => {
 
-  // Garantir l'état initial : overlay fermé, forgot-section caché
+  // Garantir l'état initial : overlay fermé, forgot/reset-section cachés
   if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
   if ($("forgot-section")) $("forgot-section").style.display = "none";
+  if ($("reset-section")) $("reset-section").style.display = "none";
 
   // Fermer la modal confirm avec Echap
   document.addEventListener("keydown", (e) => {
@@ -2560,15 +3290,49 @@ document.addEventListener("DOMContentLoaded", () => {
   if ($("btn-dashboard")) $("btn-dashboard").addEventListener("click", showDashboard);
   if ($("btn-home")) $("btn-home").addEventListener("click", goHome);
   if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", () => setStep(1));
-  if ($("btn-dash-list")) $("btn-dash-list").addEventListener("click", () => document.querySelector(".sidebar")?.classList.add("open"));
+  if ($("btn-dash-list")) {
+    $("btn-dash-list").addEventListener("click", () => {
+      const sidebar = document.querySelector(".sidebar");
+      if (!sidebar) return;
+      const isMobile = window.innerWidth <= 768;
+      if (isMobile) {
+        // Ouvrir le drawer sur mobile/tablette avec backdrop
+        sidebar.classList.add("open");
+        const backdrop = $("sidebar-backdrop");
+        if (backdrop) backdrop.classList.add("visible");
+      } else {
+        // Sur desktop, scroll + highlight temporaire pour guider l'utilisateur
+        sidebar.scrollIntoView({ behavior: "smooth", inline: "start" });
+        sidebar.animate([
+          { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" },
+          { boxShadow: "inset 4px 0 0 0 rgba(124,116,255,0.6)" },
+          { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" }
+        ], { duration: 700, iterations: 2 });
+      }
+    });
+  }
   if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {
     dashboardLoaded = false;
     loadDashboard();
   });
+  if ($("btn-d360-pdf")) $("btn-d360-pdf").addEventListener("click", downloadDossier360Report);
   [1, 2, 3].forEach((n) => {
     const stepBtn = $(`step-${n}`);
     if (stepBtn) stepBtn.addEventListener("click", () => setStep(n));
   });
+
+  // Batch mode
+  if ($("btn-batch-toggle")) $("btn-batch-toggle").addEventListener("click", toggleBatchMode);
+  if ($("btn-batch-cancel")) $("btn-batch-cancel").addEventListener("click", () => {
+    batchMode = false;
+    selectedDocIds.clear();
+    const btn = $("btn-batch-toggle");
+    if (btn) btn.classList.remove("active");
+    updateBatchBar();
+    renderDocList(lastDocsList);
+  });
+  if ($("btn-batch-delete")) $("btn-batch-delete").addEventListener("click", batchDeleteSelected);
+  if ($("btn-batch-anonymize")) $("btn-batch-anonymize").addEventListener("click", batchAnonymizeSelected);
 
   // Sidebar: nouveau document
   $("btn-new-doc").addEventListener("click", () => {
@@ -2579,6 +3343,7 @@ document.addEventListener("DOMContentLoaded", () => {
     document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
     updateHeaderContext();
     renderAIDocInsights({});
+    renderExportGuard({});
     updatePipelineTimeline({});
     setStep(1);
   });
@@ -2687,8 +3452,93 @@ document.addEventListener("DOMContentLoaded", () => {
     b.dataset.on = reportMode ? "true" : "false";
     b.textContent = reportMode ? "Mode rapport: ON" : "Mode rapport: OFF";
     b.classList.toggle("active", reportMode);
-    toast(reportMode ? "Mode rapport activé" : "Mode rapport désactivé", "info");
+    // Show/hide export rapport button
+    if ($("btn-export-rapport")) $("btn-export-rapport").style.display = reportMode ? "" : "none";
+    toast(reportMode ? "Mode rapport activé — les réponses seront structurées automatiquement" : "Mode rapport désactivé", "info");
   });
+  // Export rapport: export latest structured answer as Premium Branded PDF
+  if ($("btn-export-rapport")) {
+    $("btn-export-rapport").addEventListener("click", () => {
+      if (!latestAssistantText.trim()) {
+        toast("Aucun rapport à exporter. Posez d'abord une question.", "info");
+        return;
+      }
+      
+      const printWindow = window.open("", "_blank");
+      if (!printWindow) {
+        toast("Veuillez autoriser les pop-ups pour exporter le PDF.", "error");
+        return;
+      }
+      
+      // Get the structured HTML content from the chat
+      const msgBodies = document.querySelectorAll("#chat-messages .msg-body.structured");
+      const lastAnswerHtml = msgBodies.length > 0 ? msgBodies[msgBodies.length - 1].innerHTML : latestAssistantText.replace(/\n/g, '<br>');
+      
+      const docName = escapeHtml(currentDocName || "Document inconnu");
+      const dateStr = new Date().toLocaleDateString("fr-FR");
+      
+      printWindow.document.write(`
+        <!DOCTYPE html>
+        <html lang="fr">
+        <head>
+          <meta charset="UTF-8">
+          <title>Rapport d'Analyse IA — ${docName}</title>
+          <style>
+            @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
+            @page { margin: 20mm; size: A4; }
+            body { font-family: 'Inter', sans-serif; color: #1a1a2e; line-height: 1.6; margin: 0; padding: 0; }
+            .header { border-bottom: 3px solid #6c5ce7; padding-bottom: 20px; margin-bottom: 30px; display: flex; justify-content: space-between; align-items: flex-end; }
+            .logo { font-size: 28px; font-weight: 700; color: #6c5ce7; display: flex; align-items: center; gap: 8px; }
+            .meta { text-align: right; font-size: 12px; color: #64748b; }
+            .meta p { margin: 4px 0; }
+            .doc-title { font-size: 18px; font-weight: 600; margin-bottom: 24px; color: #0f172a; padding: 12px; background: #f8fafc; border-radius: 8px; border-left: 4px solid #6c5ce7; }
+            
+            /* Styles for the structured sections (imported from main css) */
+            .ai-section { margin-bottom: 24px; page-break-inside: avoid; }
+            .ai-section-title { font-size: 16px; font-weight: 700; color: #6c5ce7; margin-bottom: 12px; display: flex; align-items: center; gap: 6px; border-bottom: 1px solid #e2e8f0; padding-bottom: 6px; }
+            .ai-section-risk .ai-section-title { color: #d97706; border-color: #fef08a; }
+            .ai-section-action .ai-section-title { color: #059669; border-color: #a7f3d0; }
+            .ai-section-data .ai-section-title { color: #0284c7; border-color: #bae6fd; }
+            .ai-section ul { padding-left: 20px; margin: 0; }
+            .ai-section li { margin-bottom: 8px; color: #334155; }
+            
+            .footer { margin-top: 50px; font-size: 10px; color: #94a3b8; text-align: center; border-top: 1px solid #e2e8f0; padding-top: 15px; }
+            
+            @media print {
+              body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+              .header { border-bottom: 3px solid #6c5ce7 !important; }
+            }
+          </style>
+        </head>
+        <body>
+          <div class="header">
+            <div class="logo">🔒 ConfiDoc</div>
+            <div class="meta">
+              <p><strong>Date d'analyse :</strong> ${dateStr}</p>
+              <p><strong>Modèle d'IA :</strong> Mistral-Large (Contexte Anonymisé)</p>
+            </div>
+          </div>
+          <div class="doc-title">Document analysé : ${docName}</div>
+          <div class="content">
+            ${lastAnswerHtml}
+          </div>
+          <div class="footer">
+            Rapport confidentiel généré par ConfiDoc. Les données personnelles et financières ont été anonymisées par un système déterministe avant soumission à l'Intelligence Artificielle afin de garantir le strict respect du RGPD et du secret professionnel.
+          </div>
+          <script>
+            window.onload = function() { 
+              setTimeout(() => {
+                window.print(); 
+              }, 300);
+            };
+          </script>
+        </body>
+        </html>
+      `);
+      printWindow.document.close();
+      toast("Préparation du PDF Premium...", "success");
+    });
+  }
   if ($("btn-copilot-mode")) {
     $("btn-copilot-mode").addEventListener("click", () => {
       copilotMode = !copilotMode;
@@ -2704,8 +3554,18 @@ document.addEventListener("DOMContentLoaded", () => {
   // Export
   $("btn-export-txt").addEventListener("click", exportText);
   $("btn-export-pdf").addEventListener("click", exportPdf);
+  if ($("btn-export-fec")) $("btn-export-fec").addEventListener("click", exportFec);
+  if ($("btn-export-approve-inline")) {
+    $("btn-export-approve-inline").addEventListener("click", showApproveExportPrompt);
+  }
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
   if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
+
+  // Load Global Quality on startup when a session already exists.
+  loadGoldenReport();
+
+  // Logo → dashboard
+  if ($("logo-btn")) $("logo-btn").addEventListener("click", showDashboard);
 
   // Theme
   initTheme();
@@ -2718,18 +3578,23 @@ document.addEventListener("DOMContentLoaded", () => {
   // Desktop/tablet sidebar collapse
   if ($("btn-sidebar-collapse")) $("btn-sidebar-collapse").addEventListener("click", toggleSidebarCollapse);
 
-  // Restore sidebar collapse state
-  try {
-    if (localStorage.getItem("confidoc_sidebar_collapsed") === "1") {
+  // Sidebar : toujours visible au démarrage — on remet collapsed à false
+  localStorage.removeItem("confidoc_sidebar_collapsed");
+  const sidebar = document.querySelector(".sidebar");
+  if (sidebar) sidebar.classList.remove("collapsed");
+
+  // Bouton d'expansion sidebar (outside sidebar, visible when collapsed)
+  if ($("btn-sidebar-expand")) {
+    $("btn-sidebar-expand").addEventListener("click", () => {
       const sidebar = document.querySelector(".sidebar");
-      if (sidebar && window.innerWidth > 1024) sidebar.classList.add("collapsed");
+      if (sidebar) sidebar.classList.remove("collapsed");
+      localStorage.setItem("confidoc_sidebar_collapsed", "0");
       const collapseBtn = $("btn-sidebar-collapse");
-      if (collapseBtn) {
-        collapseBtn.textContent = "▶";
-        collapseBtn.setAttribute("aria-label", "Agrandir la sidebar");
-      }
-    }
-  } catch (_e) {}
+      if (collapseBtn) { collapseBtn.textContent = "◀"; }
+      const expandBtn = $("btn-sidebar-expand");
+      if (expandBtn) expandBtn.style.display = "none";
+    });
+  }
 
   document.querySelectorAll(".sidebar .doc-item").forEach(el => {
     el.addEventListener("click", closeSidebar);
@@ -2751,7 +3616,7 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Service Worker
   if ("serviceWorker" in navigator) {
-    navigator.serviceWorker.register("/static/sw.js?v=2").catch(() => {});
+    navigator.serviceWorker.register("/static/sw.js?v=4").catch(() => {});
   }
 
   // Reprendre la session si token en sessionStorage
@@ -2771,6 +3636,7 @@ document.addEventListener("keydown", (e) => {
   if (mod && e.shiftKey && e.key.toLowerCase() === "u") {
     e.preventDefault();
     currentDocId = null;
+    renderExportGuard({});
     setStep(1);
     $("upload-client-name")?.focus();
     return;
@@ -2789,3 +3655,4 @@ document.addEventListener("keydown", (e) => {
   e.preventDefault();
   search.focus();
 });
+let _dashboard_original_html = ''; window.addEventListener('DOMContentLoaded', () => { const el = document.getElementById('dash-content'); if(el) _dashboard_original_html = el.innerHTML; });

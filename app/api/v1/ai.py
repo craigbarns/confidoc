@@ -10,14 +10,14 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.config import get_settings
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
-from app.services.ollama_service import generate_summary_with_ollama
-from app.services.mistral_service import generate_summary_with_mistral, stream_mistral_response
 from app.services.llm_extraction_service import extract_with_llm
-from app.config import get_settings
+from app.services.mistral_service import generate_summary_with_mistral, stream_mistral_response
+from app.services.ollama_service import generate_summary_with_ollama
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -126,9 +126,26 @@ async def ai_summary(
     if mode == "question" and not question.strip():
         raise http_400("Paramètre question requis quand mode=question.")
 
+    # ── RAG enrichment for question mode ──
+    rag_context = ""
+    if mode == "question" and question.strip():
+        try:
+            from app.services.rag_service import build_rag_context
+            rag_context = await build_rag_context(db, question, document.id, top_k=5)
+        except Exception:
+            pass
+
+    text_for_llm = anonymized_text[:14000]
+    if rag_context:
+        # Prepend RAG context so the LLM can ground its answer
+        text_for_llm = (
+            f"[Contexte pertinent extrait du document]\n{rag_context}\n\n"
+            f"[Document complet]\n{text_for_llm}"
+        )[:16000]
+
     ai_payload = {
         "document_id": str(document.id),
-        "anonymized_text": anonymized_text[:14000],
+        "anonymized_text": text_for_llm,
         "user_question": question.strip() or None,
     }
 
@@ -177,7 +194,11 @@ async def ai_stream(
 
     if not anonymized_text:
         async def _blocked():
-            yield "data: " + json.dumps({"error": "Aucun texte anonymisé. Lancez d'abord l'anonymisation."}) + "\n\n"
+            err = json.dumps(
+                {"error": "Aucun texte anonymisé. Lancez d'abord l'anonymisation."}
+            )
+            yield f"data: {err}\n\n"
+
         return StreamingResponse(_blocked(), media_type="text/event-stream")
 
     prompt_question = question.strip() or "Fais une synthèse courte et claire de ce document."
@@ -234,7 +255,7 @@ async def ai_extract(
     db: DbSession,
 ) -> JSONResponse:
     """Extrait les données structurées (type, montants, totaux) via Mistral Large.
-    
+
     Pas de regex, pas de règles métier — uniquement un LLM sur le texte anonymisé.
     """
     document = await _get_document_or_404(db, document_id, current_user.id)
@@ -261,21 +282,9 @@ async def ai_extract(
 # ──────────────────────────────────────────────────────────────────────
 
 
-async def _get_docling_structured(document: "Document") -> dict:
-    """Try to extract structured data (tables, sections) via Docling."""
-    try:
-        from app.services.storage_service import read_bytes
-        file_bytes = (
-            document.raw_content
-            if document.raw_content
-            else read_bytes(document.storage_backend, document.storage_key)
-        )
-        from app.services.docling_service import get_structured_content
-        return await get_structured_content(file_bytes, document.extension)
-    except Exception as exc:
-        import logging
-        logging.getLogger(__name__).warning("docling_structured_skipped: %s", str(exc)[:200])
-        return {"tables": [], "sections": [], "available": False}
+async def _get_review_structured_layout(_document: Document) -> dict:
+    """Contexte structuré (tables/sections) pour l'agent de revue — sans Docling."""
+    return {"tables": [], "sections": [], "available": False}
 
 
 @router.post(
@@ -302,7 +311,15 @@ async def ai_review(
 
     if not anonymized_text:
         async def _blocked():
-            yield "data: " + json.dumps({"step": "error", "status": "error", "data": {"error": "Aucun texte anonymise. Lancez d'abord l'anonymisation."}}) + "\n\n"
+            payload = {
+                "step": "error",
+                "status": "error",
+                "data": {
+                    "error": "Aucun texte anonymise. Lancez d'abord l'anonymisation.",
+                },
+            }
+            yield f"data: {json.dumps(payload)}\n\n"
+
         return StreamingResponse(_blocked(), media_type="text/event-stream")
 
     # Get entity summary for richer analysis
@@ -322,7 +339,7 @@ async def ai_review(
 
     from app.services.review_agent import run_review_streaming
 
-    docling_data = await _get_docling_structured(document)
+    layout_data = await _get_review_structured_layout(document)
 
     async def _event_stream():
         # Signal start
@@ -337,8 +354,8 @@ async def ai_review(
             async for event in run_review_streaming(
                 anonymized_text,
                 entity_summary,
-                docling_tables=docling_data.get("tables", []),
-                docling_sections=docling_data.get("sections", []),
+                docling_tables=layout_data.get("tables", []),
+                docling_sections=layout_data.get("sections", []),
             ):
                 yield "data: " + json.dumps(event, ensure_ascii=False, default=str) + "\n\n"
         except Exception as exc:
@@ -392,13 +409,13 @@ async def ai_review_sync(
 
     from app.services.review_agent import run_review
 
-    docling_data = await _get_docling_structured(document)
+    layout_data = await _get_review_structured_layout(document)
 
     result = await run_review(
         anonymized_text,
         entity_summary,
-        docling_tables=docling_data.get("tables", []),
-        docling_sections=docling_data.get("sections", []),
+        docling_tables=layout_data.get("tables", []),
+        docling_sections=layout_data.get("sections", []),
     )
 
     # Remove raw text from response
@@ -407,4 +424,46 @@ async def ai_review_sync(
     return JSONResponse({
         "document_id": str(document.id),
         "review": result,
+    })
+
+
+# ──────────────────────────────────────────────────────────────────────
+# RAG SEMANTIC SEARCH
+# ──────────────────────────────────────────────────────────────────────
+
+@router.get(
+    "/rag-search/{document_id}",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Recherche sémantique dans le document (RAG)",
+)
+async def rag_search(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    q: str = Query(..., min_length=2, description="Question ou mots-clés"),
+    top_k: int = Query(default=5, ge=1, le=20),
+) -> JSONResponse:
+    """Semantic search across document chunks using PGvector.
+
+    Returns the most relevant text snippets with similarity scores.
+    """
+    document = await _get_document_or_404(db, document_id, current_user.id)
+
+    from app.services.rag_service import search_similar
+
+    chunks = await search_similar(db, q, top_k=top_k, document_filter=document.id)
+
+    return JSONResponse({
+        "document_id": str(document.id),
+        "query": q,
+        "results": [
+            {
+                "chunk_index": c.chunk_index,
+                "text": c.chunk_text,
+                "source_section": c.source_section,
+            }
+            for c in chunks
+        ],
+        "total": len(chunks),
     })

@@ -8,6 +8,7 @@ from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel
+from app.services.crypto_service import EncryptedString
 
 
 class ProfessionType(str, PyEnum):
@@ -28,7 +29,8 @@ class PlanType(str, PyEnum):
 class Organization(BaseModel):
     __tablename__ = "organizations"
 
-    name: Mapped[str] = mapped_column(String(255), nullable=False)
+    name: Mapped[str] = mapped_column(EncryptedString(500), nullable=False)
+    siret: Mapped[str | None] = mapped_column(EncryptedString(200), nullable=True)
     slug: Mapped[str] = mapped_column(String(100), unique=True, index=True, nullable=False)
     profession_type: Mapped[ProfessionType] = mapped_column(
         Enum(ProfessionType), default=ProfessionType.AUTRE, index=True

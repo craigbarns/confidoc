@@ -301,6 +301,24 @@ class TestAnonymizeText:
         pii_dets = [d for d in dets if d["entity_type"] in pii_types]
         assert len(pii_dets) == 0
 
+    def test_dataset_accounting_bank_label_does_not_consume_following_lines(self):
+        text = (
+            "51210000 QONTO\n"
+            "CHIFFRE D AFFAIRES 120000 EUR\n"
+            "SIRET: 832 419 428 00038"
+        )
+        out, dets, _ = anonymize_text(
+            text,
+            profile="dataset_accounting",
+            document_type="accounting",
+        )
+        bank_dets = [d for d in dets if d["entity_type"] == "bank_account_code_label"]
+
+        assert bank_dets
+        assert bank_dets[0]["value_excerpt"] == "51210000 QONTO"
+        assert "120000 EUR" in out
+        assert "832 419 428 00038" not in out
+
 
 # ══════════════════════════════════════════════════════════════════════
 # clean_ocr_artifacts

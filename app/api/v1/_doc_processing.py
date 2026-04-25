@@ -6,33 +6,24 @@ Routes : /status, extract, extracted-text, anonymize, process (legacy),
 
 from __future__ import annotations
 
-import uuid
-from datetime import datetime, timezone
-from io import BytesIO
-from types import SimpleNamespace
-from typing import Any
+from datetime import UTC, datetime
 
 from fastapi import APIRouter, BackgroundTasks, Body, Query, status
 from sqlalchemy import delete, func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import (
-    _check_export_gate,
     _get_anonymized_text,
-    _get_or_create_final_version,
     _get_user_document_or_404,
     _infer_semantic_type,
-    _read_file_or_404,
 )
-from app.core.database import async_session_factory
 from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
-from app.models.document import Document, DocumentStatus
+from app.models.document import DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.schemas.document import (
-    AnonymizeResponse,
     DocumentPreviewResponse,
     EntityMappingItem,
     StructuredDocumentResponse,
@@ -76,9 +67,12 @@ async def document_status(
     )
     detections_count = count_result.scalar() or 0
 
+    status_value = (
+        document.status.value if hasattr(document.status, "value") else str(document.status)
+    )
     return {
         "document_id": str(document.id),
-        "status": document.status.value,
+        "status": status_value,
         "extraction": {
             "done": original is not None and bool(original.content_text),
             "text_length": len(original.content_text) if original and original.content_text else 0,
@@ -96,28 +90,41 @@ async def document_status(
 
 @router.post(
     "/{document_id}/extract",
-    status_code=status.HTTP_200_OK,
-    summary="Étape 1 : Extraire le texte via Mistral OCR",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Étape 1 : Extraire le texte via Mistral OCR (Async)",
 )
 async def extract_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    file_content = _read_file_or_404(document)
 
-    from app.services.document_processing_service import build_extraction_ocr
-    original_text, meta = await build_extraction_ocr(db, document, file_content)
+    document.status = DocumentStatus.PROCESSING
     await db.commit()
 
+    from app.workers.tasks import (
+        extract_document_task,
+        run_extract_document_inline,
+        should_dispatch_document_task_to_celery,
+    )
+
+    doc_id = str(document.id)
+    if should_dispatch_document_task_to_celery(queue="ocr"):
+        task = extract_document_task.delay(doc_id=doc_id)
+        job_id = task.id
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(run_extract_document_inline, doc_id=doc_id)
+        job_id = None
+        background_processing = "api"
+
     return {
-        "document_id": str(document.id),
-        "status": "extracted",
-        "text": original_text,
-        "text_length": len(original_text),
-        "pages": meta.get("pages", 0),
-        "model": meta.get("model", "unknown"),
+        "document_id": doc_id,
+        "job_id": job_id,
+        "status": "processing",
+        "background_processing": background_processing,
     }
 
 
@@ -147,142 +154,67 @@ async def get_extracted_text(
         "document_id": str(document.id),
         "text": original_version.content_text,
         "text_length": len(original_version.content_text),
-        "extraction_date": original_version.created_at.isoformat() if original_version.created_at else None,
+        "extraction_date": (
+            original_version.created_at.isoformat() if original_version.created_at else None
+        ),
     }
 
 
 @router.post(
     "/{document_id}/anonymize",
-    status_code=status.HTTP_200_OK,
-    summary="Étape 2 : Anonymiser le texte extrait",
+    status_code=status.HTTP_202_ACCEPTED,
+    summary="Étape 2 : Anonymiser le texte extrait (Async)",
 )
 async def anonymize_document(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     auto_extract: bool = Query(default=True),
     use_llm: bool = Query(default=False),
     profile: str = Query(default="moderate", description="moderate | strict"),
+    document_type: str = Query(default="auto"),
     mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
 ) -> dict:
-    """Anonymisation du texte.
-
-    - **pseudonymization** : tokens réversibles, usage interne.
-    - **anonymization** : masquage fort, export/IA.
-    """
-    import traceback as _tb
-    try:
-        return await _anonymize_inner(document_id, current_user, db, auto_extract, use_llm, profile, mode)
-    except Exception as exc:
-        if hasattr(exc, "status_code"):
-            raise
-        logger.error("anonymize_unhandled", error=str(exc), tb=_tb.format_exc())
-        raise http_500(f"Anonymization failed: {type(exc).__name__}: {str(exc)[:200]}")
-
-
-async def _anonymize_inner(
-    document_id: str,
-    current_user: Any,
-    db: Any,
-    auto_extract: bool,
-    use_llm: bool,
-    profile: str,
-    mode: str,
-) -> dict:
-    from app.services.document_processing_service import build_anonymization_llm, build_extraction_ocr
-    from app.services.reidentification_risk_service import analyze_reidentification_risk
-
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    _doc_id = str(document.id)
-    _user_id = current_user.id
-    _org_id = getattr(current_user, "org_id", None)
 
-    result = await db.execute(
-        select(DocumentVersion).where(
-            DocumentVersion.document_id == document.id,
-            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
-        )
-    )
-    original_version = result.scalar_one_or_none()
-    original_text = None
-    extracted_on_demand = False
-
-    if original_version and original_version.content_text is not None:
-        original_text = original_version.content_text
-    elif auto_extract:
-        file_content = _read_file_or_404(document)
-        original_text, _ = await build_extraction_ocr(db, document, file_content)
-        extracted_on_demand = True
-        await db.commit()
-
-    if original_text is None:
-        raise http_400("Texte non extrait. Lancez /extract d'abord ou activez auto_extract.")
-    if len(original_text.strip()) == 0:
-        raise http_400("Document vide ou illisible.")
-
-    effective_profile = "strict" if mode == "anonymization" else profile
-    effective_use_llm = True if mode == "anonymization" else use_llm
-
-    preview_text, detections, meta = await build_anonymization_llm(
-        db, document, original_text, use_llm=effective_use_llm, profile=effective_profile
-    )
+    document.status = DocumentStatus.PROCESSING
     await db.commit()
 
-    risk_report = analyze_reidentification_risk(preview_text, meta.get("entity_summary", {}))
+    from app.workers.tasks import (
+        anonymize_document_task,
+        run_anonymize_document_inline,
+        should_dispatch_document_task_to_celery,
+    )
 
-    try:
-        from app.models.audit_log import AuditLog
-        db.add(AuditLog(
-            user_id=_user_id, org_id=_org_id,
-            action=f"anonymize:{mode}", resource_type="document",
-            resource_id=_doc_id, method="POST",
-            path=f"/api/v1/documents/{document_id}/anonymize", status_code=200,
-            details={
-                "mode": mode, "profile": effective_profile,
-                "method": meta.get("method", "unknown"),
-                "detections_count": len(detections),
-                "risk_score": risk_report.score, "risk_level": risk_report.level,
-            },
-        ))
-        await db.commit()
-    except Exception as exc:
-        logger.warning("audit_log_save_failed", error=str(exc))
-        await db.rollback()
-
-    if mode == "pseudonymization":
-        try:
-            from app.services.crypto_service import encrypt_mapping
-            from app.models.pseudonym_mapping import PseudonymMapping
-            from app.config import get_settings
-            from datetime import timedelta
-            settings = get_settings()
-            raw_mapping = meta.get("registry_raw_mapping", {})
-            if raw_mapping:
-                encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
-                expiry = datetime.now(timezone.utc) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
-                db.add(PseudonymMapping(
-                    document_id=uuid.UUID(_doc_id),
-                    user_id=_user_id,
-                    encrypted_mapping=encrypted,
-                    expires_at=expiry,
-                    risk_score=risk_report.score,
-                    risk_level=risk_report.level,
-                ))
-                await db.commit()
-        except Exception as exc:
-            logger.warning("pseudo_mapping_save_failed", error=str(exc))
-            await db.rollback()
+    doc_id = str(document.id)
+    if should_dispatch_document_task_to_celery(queue="nlp"):
+        task = anonymize_document_task.delay(
+            doc_id=doc_id,
+            use_llm=use_llm,
+            profile=profile,
+            mode=mode,
+            document_type=document_type,
+        )
+        job_id = task.id
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(
+            run_anonymize_document_inline,
+            doc_id=doc_id,
+            use_llm=use_llm,
+            profile=profile,
+            mode=mode,
+            document_type=document_type,
+        )
+        job_id = None
+        background_processing = "api"
 
     return {
-        "document_id": _doc_id,
-        "status": "anonymized",
-        "mode": mode,
-        "preview_text": preview_text,
-        "detections_count": len(detections),
-        "entity_summary": meta.get("entity_summary", {}),
-        "method": meta.get("method", "llm"),
-        "auto_extracted": extracted_on_demand,
-        "risk": risk_report.to_dict(),
+        "document_id": doc_id,
+        "job_id": job_id,
+        "status": "processing",
+        "background_processing": background_processing,
     }
 
 
@@ -295,21 +227,44 @@ async def process_document_legacy(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    background_tasks: BackgroundTasks,
     profile: str = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> dict:
     document = await _get_user_document_or_404(db, document_id, current_user.id)
-    file_content = _read_file_or_404(document)
     document.status = DocumentStatus.PROCESSING
     await db.commit()
-    from app.workers.tasks import process_document_legacy_task
-    process_document_legacy_task.delay(
-        doc_id=str(document.id),
-        file_content=file_content,
-        profile=profile,
-        document_type=document_type,
+    from app.workers.tasks import (
+        process_document_legacy_task,
+        run_process_document_legacy_inline,
+        should_dispatch_document_task_to_celery,
     )
-    return {"document_id": str(document.id), "status": "processing"}
+
+    doc_id = str(document.id)
+    if should_dispatch_document_task_to_celery(queue="nlp"):
+        task = process_document_legacy_task.delay(
+            doc_id=doc_id,
+            profile=profile,
+            document_type=document_type,
+        )
+        job_id = task.id
+        background_processing = "celery"
+    else:
+        background_tasks.add_task(
+            run_process_document_legacy_inline,
+            doc_id=doc_id,
+            profile=profile,
+            document_type=document_type,
+        )
+        job_id = None
+        background_processing = "api"
+
+    return {
+        "document_id": doc_id,
+        "job_id": job_id,
+        "status": "processing",
+        "background_processing": background_processing,
+    }
 
 
 @router.get(
@@ -344,7 +299,7 @@ async def preview_document(
 
     return DocumentPreviewResponse(
         document_id=document.id,
-        status=document.status.value,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
         preview_text=preview_version.content_text or "",
         detections_count=len(detections),
         entity_summary=entity_summary,
@@ -391,7 +346,7 @@ async def get_structured_document(
     return StructuredDocumentResponse(
         document_id=document.id,
         doc_type=document.doc_type,
-        status=document.status.value,
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
         original_filename=document.original_filename,
         entity_summary=entity_summary,
         entity_tags=entity_tags,
@@ -443,6 +398,68 @@ async def validate_document(
     ))
     await db.commit()
 
+    # --- Auto-Golden Webhook ---
+    if args.corrected_data and args.doc_type:
+        try:
+            import os
+            import json
+            from pathlib import Path
+            from datetime import datetime, UTC
+
+            root_dir = Path(os.getcwd())
+            draft_dir = (
+                root_dir
+                / "golden"
+                / "cases"
+                / "draft"
+                / f"{args.doc_type}_auto_{document.id}"
+            )
+            draft_dir.mkdir(parents=True, exist_ok=True)
+
+            # Save input text
+            (draft_dir / "input.txt").write_text(final_text, encoding="utf-8")
+
+            # Save expected minimal JSON
+            expected_data = {
+                "doc_type": args.doc_type,
+                "extractor_name": f"extractor_{args.doc_type}",
+                "critical_fields": args.corrected_data,
+                "quality": {
+                    "critical_missing_fields": [],
+                    "quality_flags_must_include": [],
+                    "quality_flags_must_exclude": ["critical_fields_missing"],
+                    "needs_review": False,
+                    "ready_for_ai": True
+                }
+            }
+            (draft_dir / "expected.min.json").write_text(
+                json.dumps(expected_data, indent=2),
+                encoding="utf-8",
+            )
+
+            # Save meta.json
+            meta_data = {
+                "active": False,
+                "description": "Auto-generated from user manual correction in UI",
+                "source_filename": document.original_filename,
+                "requested_doc_type": args.doc_type,
+                "created_at": datetime.now(UTC).isoformat(),
+                "created_by": str(current_user.id)
+            }
+            (draft_dir / "meta.json").write_text(
+                json.dumps(meta_data, indent=2),
+                encoding="utf-8",
+            )
+
+            logger.info(
+                "auto_golden_draft_created",
+                document_id=str(document.id),
+                doc_type=args.doc_type,
+            )
+        except Exception as exc:
+            logger.error("auto_golden_draft_failed", error=str(exc))
+    # ---------------------------
+
     from app.config import get_settings
     from app.services.webhook_notify import notify_document_validated
     settings = get_settings()
@@ -485,12 +502,13 @@ async def approve_export(
 
         mapping.human_validated = True
         mapping.validated_by_user_id = current_user.id
-        mapping.validated_at = datetime.now(timezone.utc)
+        mapping.validated_at = datetime.now(UTC)
         await db.commit()
     except Exception as exc:
         if hasattr(exc, "status_code"):
             raise
         logger.warning("approve_export_failed", error=str(exc))
         await db.rollback()
+        raise http_500("Impossible d'approuver l'export pour le moment.") from exc
 
     return {"status": "approved", "document_id": str(document.id)}

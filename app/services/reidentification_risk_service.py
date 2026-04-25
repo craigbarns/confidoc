@@ -85,13 +85,13 @@ _RESIDUAL_PATTERNS: list[tuple[str, str, re.Pattern[str], float]] = [
     (
         "person_name_near_token",
         "Prenom/nom residuel avant un token personne",
-        re.compile(r"(?i)\b[A-Za-z][a-z'-]{2,15}\s+\[(?:PERSONNE|ASSOCIE|PRENOM)_\d+\]"),
+        re.compile(r"(?i)\b[A-Za-z][a-z'-]{2,15}[ \t]+\[(?:PERSONNE|ASSOCIE|PRENOM)_\d+\]"),
         0.20,
     ),
     (
         "person_name_near_token_after",
         "Prenom/nom residuel apres un token personne",
-        re.compile(r"(?i)\[(?:PERSONNE|ASSOCIE|PRENOM)_\d+\]\s+[A-Za-z][a-z'-]{2,15}\b"),
+        re.compile(r"(?i)\[(?:PERSONNE|ASSOCIE|PRENOM)_\d+\][ \t]+[A-Za-z][a-z'-]{2,15}\b"),
         0.20,
     ),
     (
@@ -145,7 +145,10 @@ _RESIDUAL_PATTERNS: list[tuple[str, str, re.Pattern[str], float]] = [
     (
         "ownership_pct",
         "Pourcentage de detention identifiable",
-        re.compile(r"\b(?:100|[1-9]\d?)\s*%\s*(?:des\s+parts|detention|participation|associe)", re.IGNORECASE),
+        re.compile(
+            r"\b(?:100|[1-9]\d?)\s*%\s*(?:des\s+parts|detention|participation|associe)",
+            re.IGNORECASE,
+        ),
         0.07,
     ),
     (
