@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
@@ -14,7 +14,8 @@ class _Risk:
         return {"score": 0.0, "level": "low", "signals": []}
 
 
-def test_compute_demo_result_returns_public_payload(tmp_path):
+@pytest.mark.asyncio
+async def test_compute_demo_result_returns_public_payload(tmp_path):
     demo_pdf = tmp_path / "demo.pdf"
     demo_pdf.write_bytes(b"%PDF demo")
 
@@ -39,8 +40,13 @@ def test_compute_demo_result_returns_public_payload(tmp_path):
         patch.object(demo_service, "DEMO_DOC_PATH", demo_pdf),
         patch.object(
             demo_service,
-            "extract_text_sync",
-            return_value={"text": "Jean Dupont a@b.com", "pages": 1, "method": "pymupdf"},
+            "extract_text_from_file_with_meta",
+            new=AsyncMock(
+                return_value=(
+                    "Jean Dupont a@b.com",
+                    {"pages": 1, "method": "mistral_ocr", "model": "mistral-ocr-latest"},
+                )
+            ),
         ),
         patch.object(demo_service, "classify_document_type", return_value="generic"),
         patch.object(
@@ -50,13 +56,15 @@ def test_compute_demo_result_returns_public_payload(tmp_path):
         ),
         patch.object(demo_service, "analyze_reidentification_risk", return_value=_Risk()),
     ):
-        result = demo_service._compute_demo_result()
+        result = await demo_service._compute_demo_result()
 
     assert result["status"] == "ready"
     assert result["filename"] == "demo.pdf"
     assert result["detections_count"] == 2
     assert result["entity_summary"] == {"EMAIL": 1, "PERSONNE": 1}
     assert result["risk"]["level"] == "low"
+    assert result["extraction_method"] == "mistral_ocr"
+    assert result["extraction_provider"] == "mistral"
     assert "[EMAIL]" in result["anonymized_excerpt"]
     assert result["proof"]["export_policy"]["label"] == "Export autorise"
 
@@ -90,7 +98,7 @@ async def test_warm_demo_cache_uses_memory_when_redis_unavailable():
     payload = {"status": "ready", "detections_count": 3}
 
     with (
-        patch.object(demo_service, "_compute_demo_result", return_value=payload),
+        patch.object(demo_service, "_compute_demo_result", new=AsyncMock(return_value=payload)),
         patch.object(demo_service, "_get_redis", return_value=None),
     ):
         await demo_service.warm_demo_cache()

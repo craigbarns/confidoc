@@ -6,7 +6,6 @@ The public demo is intentionally read-only: it only processes the bundled
 
 from __future__ import annotations
 
-import asyncio
 import json
 from datetime import UTC, datetime
 from pathlib import Path
@@ -14,13 +13,13 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.services.anonymization_service import anonymize_text, classify_document_type
-from app.services.fast_extraction_service import extract_text_sync
+from app.services.extraction.service import extract_text_from_file_with_meta
 from app.services.reidentification_risk_service import analyze_reidentification_risk
 
 logger = get_logger(__name__)
 
 DEMO_DOC_PATH = Path(__file__).resolve().parent.parent / "static" / "demo_doc.pdf"
-DEMO_CACHE_KEY = "confidoc:demo:public_result:v1"
+DEMO_CACHE_KEY = "confidoc:demo:public_result:v2"
 _memory_demo_cache: dict[str, Any] | None = None
 
 
@@ -144,6 +143,14 @@ def _build_mock_demo_result(reason: str | None = None) -> dict[str, Any]:
         "document_type": "bilan",
         "pages": 2,
         "extraction_method": "mock_payload",
+        "extraction_provider": "fallback",
+        "extraction_model": "deterministic_demo_payload",
+        "extraction_meta": {
+            "method": "mock_payload",
+            "provider": "fallback",
+            "model": "deterministic_demo_payload",
+            "pages": 2,
+        },
         "original_excerpt": (
             "M. Jean Dupont\n"
             "Societe: DUPONT CONSEIL SAS\n"
@@ -178,6 +185,12 @@ def _build_mock_demo_result(reason: str | None = None) -> dict[str, Any]:
             ),
             "signals": [],
         },
+        "trust_signals": [
+            "Payload de secours signale explicitement dans l'interface.",
+            "Aucune donnee utilisateur n'est stockee.",
+            "Tokens stables pour conserver le sens metier.",
+            "Score de risque calcule avant export.",
+        ],
     }
     if reason:
         result["fallback_reason"] = reason
@@ -185,14 +198,24 @@ def _build_mock_demo_result(reason: str | None = None) -> dict[str, Any]:
     return result
 
 
-def _compute_demo_result() -> dict[str, Any]:
-    """Compute the bundled demo result synchronously."""
+def _provider_from_extraction_meta(meta: dict[str, Any]) -> str:
+    method = str(meta.get("method") or "").lower()
+    if method == "mistral_ocr":
+        return "mistral"
+    if method.startswith("ocr_"):
+        return str(meta.get("ocr_engine") or "local_ocr")
+    if "pymupdf" in method:
+        return "pymupdf"
+    return "local"
+
+
+async def _compute_demo_result() -> dict[str, Any]:
+    """Compute the bundled demo result through the same extraction path as uploads."""
     if not DEMO_DOC_PATH.exists():
         raise FileNotFoundError(f"Demo document not found: {DEMO_DOC_PATH}")
 
     content = DEMO_DOC_PATH.read_bytes()
-    extraction = extract_text_sync(content, "pdf")
-    original_text = str(extraction.get("text") or "")
+    original_text, extraction_meta = await extract_text_from_file_with_meta(content, "pdf")
     if not original_text.strip():
         raise ValueError("Demo document extraction returned empty text")
 
@@ -205,6 +228,7 @@ def _compute_demo_result() -> dict[str, Any]:
     entity_summary = _summarize_entities(detections)
     risk = analyze_reidentification_risk(anonymized_text, entity_summary)
     risk_payload = risk.to_dict()
+    extraction_provider = _provider_from_extraction_meta(extraction_meta)
 
     result = {
         "status": "ready",
@@ -212,14 +236,28 @@ def _compute_demo_result() -> dict[str, Any]:
         "is_mock": False,
         "filename": DEMO_DOC_PATH.name,
         "document_type": document_type,
-        "pages": int(extraction.get("pages") or 0),
-        "extraction_method": extraction.get("method") or "unknown",
+        "pages": int(extraction_meta.get("pages") or 0),
+        "extraction_method": extraction_meta.get("method") or "unknown",
+        "extraction_provider": extraction_provider,
+        "extraction_model": extraction_meta.get("model") or extraction_provider,
+        "extraction_meta": {
+            "method": extraction_meta.get("method") or "unknown",
+            "provider": extraction_provider,
+            "model": extraction_meta.get("model") or extraction_provider,
+            "pages": int(extraction_meta.get("pages") or 0),
+        },
         "original_excerpt": _excerpt(original_text),
         "anonymized_excerpt": _excerpt(anonymized_text),
         "detections": detections[:80],
         "detections_count": len(detections),
         "entity_summary": entity_summary,
         "risk": risk_payload,
+        "trust_signals": [
+            "OCR execute avant anonymisation.",
+            "Texte original jamais envoye au LLM de discussion.",
+            "Tokens stables pour conserver le sens metier.",
+            "Score de risque calcule avant export.",
+        ],
     }
     result["proof"] = _build_demo_proof(result)
     return result
@@ -341,8 +379,7 @@ async def warm_demo_cache() -> None:
     global _memory_demo_cache
 
     try:
-        loop = asyncio.get_running_loop()
-        result = await loop.run_in_executor(None, _compute_demo_result)
+        result = await _compute_demo_result()
     except Exception as exc:
         logger.warning("demo_cache_warm_failed", error=str(exc), action="using_mock_fallback")
         result = _build_mock_demo_result(str(exc))

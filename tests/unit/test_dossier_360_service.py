@@ -47,6 +47,10 @@ def test_dossier_360_prioritizes_incomplete_high_risk_client() -> None:
     assert payload["dossiers"][0]["entity_count"] == 10
     assert payload["dossiers"][0]["missing_documents"]
     assert any("anonymisation" in action for action in payload["dossiers"][0]["next_actions"])
+    assert payload["mission_control"]["urgency"] == "danger"
+    assert "securiser" in payload["mission_control"]["headline"]
+    assert any("Alpha" in action for action in payload["mission_control"]["next_best_actions"])
+    assert "Completeness des pieces justificatives" in payload["mission_control"]["audit_focus"]
 
 
 def test_dossier_360_handles_empty_portfolio() -> None:
@@ -54,4 +58,6 @@ def test_dossier_360_handles_empty_portfolio() -> None:
 
     assert payload["portfolio"]["clients_count"] == 0
     assert payload["portfolio"]["average_score"] == 0
+    assert payload["mission_control"]["urgency"] == "neutral"
+    assert payload["mission_control"]["next_best_actions"]
     assert payload["dossiers"] == []

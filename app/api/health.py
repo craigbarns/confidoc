@@ -1,7 +1,9 @@
 """ConfiDoc Backend — Health check & readiness endpoints."""
 
+import asyncio
 import time
-from datetime import datetime, timezone
+from datetime import UTC, datetime
+from typing import Any
 
 from fastapi import APIRouter, status
 from fastapi.responses import JSONResponse
@@ -13,6 +15,51 @@ from app.core.logging import get_logger
 
 router = APIRouter(tags=["health"])
 logger = get_logger(__name__)
+
+_CELERY_PROBE_CACHE_TTL_SECONDS = 30.0
+_CELERY_PROBE_TIMEOUT_SECONDS = 0.7
+_celery_probe_cache: dict[str, Any] = {
+    "checked_at": 0.0,
+    "payload": None,
+}
+
+
+def _inspect_celery_workers() -> dict[str, Any]:
+    """Run the blocking Celery inspect call with a short broker-side timeout."""
+    from app.workers.celery_app import celery_app
+
+    inspect = celery_app.control.inspect(timeout=0.45)
+    workers = inspect.ping()
+    if workers:
+        return {"status": "ok", "workers_online": len(workers)}
+    return {"status": "warning", "detail": "No workers responding"}
+
+
+async def _check_celery_workers() -> dict[str, Any]:
+    """Return a cached, non-critical Celery readiness result.
+
+    Celery inspect is blocking and can take ~2s on Railway. Keep readiness fast:
+    DB/Redis remain critical, while worker state is informational and cached.
+    """
+    now = time.monotonic()
+    cached = _celery_probe_cache.get("payload")
+    checked_at = float(_celery_probe_cache.get("checked_at") or 0.0)
+    if isinstance(cached, dict) and now - checked_at < _CELERY_PROBE_CACHE_TTL_SECONDS:
+        payload = dict(cached)
+        payload["cached"] = True
+        return payload
+
+    try:
+        payload = await asyncio.wait_for(
+            asyncio.to_thread(_inspect_celery_workers),
+            timeout=_CELERY_PROBE_TIMEOUT_SECONDS,
+        )
+    except Exception as exc:
+        payload = {"status": "warning", "detail": str(exc)}
+
+    _celery_probe_cache["checked_at"] = now
+    _celery_probe_cache["payload"] = payload
+    return payload
 
 
 @router.get(
@@ -67,7 +114,10 @@ async def readiness_check() -> JSONResponse:
         pg_t0 = time.perf_counter()
         async with async_session_factory() as session:
             await session.execute(text("SELECT 1"))
-        checks["database"] = {"status": "ok", "latency_ms": round((time.perf_counter() - pg_t0) * 1000, 2)}
+        checks["database"] = {
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - pg_t0) * 1000, 2),
+        }
     except Exception as e:
         logger.error("database_readiness_failed", error=str(e))
         checks["database"] = {"status": "error", "detail": str(e)}
@@ -80,22 +130,16 @@ async def readiness_check() -> JSONResponse:
         r = aioredis.from_url(settings.REDIS_URL, socket_connect_timeout=2)
         await r.ping()
         await r.close()
-        checks["redis"] = {"status": "ok", "latency_ms": round((time.perf_counter() - redis_t0) * 1000, 2)}
+        checks["redis"] = {
+            "status": "ok",
+            "latency_ms": round((time.perf_counter() - redis_t0) * 1000, 2),
+        }
     except Exception as e:
         logger.error("redis_readiness_failed", error=str(e))
         checks["redis"] = {"status": "error", "detail": str(e)}
 
-    # ── Celery workers (informationnel) ──
-    try:
-        from app.workers.celery_app import celery_app
-        inspect = celery_app.control.inspect(timeout=2.0)
-        workers = inspect.ping()
-        if workers:
-            checks["celery"] = {"status": "ok", "workers_online": len(workers)}
-        else:
-            checks["celery"] = {"status": "warning", "detail": "No workers responding"}
-    except Exception as e:
-        checks["celery"] = {"status": "warning", "detail": str(e)}
+    # ── Celery workers (informationnel, non bloquant) ──
+    checks["celery"] = await _check_celery_workers()
 
     # ── Object storage (optionnel selon config) ──
     if settings.STORAGE_BACKEND == "minio":
@@ -127,7 +171,7 @@ async def readiness_check() -> JSONResponse:
     body = {
         "status": "ready" if all_ok else "degraded",
         "service": "confidoc-backend",
-        "timestamp": datetime.now(timezone.utc).isoformat(),
+        "timestamp": datetime.now(UTC).isoformat(),
         "total_latency_ms": round((time.perf_counter() - t0) * 1000, 2),
         "checks": checks,
     }

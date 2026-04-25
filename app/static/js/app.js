@@ -2423,6 +2423,13 @@ function emptyDossier360() {
       critical_actions: 0,
       top_missing_documents: [],
     },
+    mission_control: {
+      urgency: "neutral",
+      headline: "Aucun dossier client charge.",
+      summary: "Ajoutez les premieres pieces pour lancer la revue cabinet.",
+      next_best_actions: [],
+      audit_focus: [],
+    },
     dossiers: [],
   };
 }
@@ -2558,6 +2565,7 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
 
   renderDossier360(dossier360);
+  renderMissionControl(dossier360);
 
   // GDPR Score
   const gdpr = data.gdpr_score || {};
@@ -2711,6 +2719,45 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
 function riskLabel(level) {
   const labels = { low: "Faible", medium: "Moyen", high: "Eleve", critical: "Critique" };
   return labels[level] || level || "Inconnu";
+}
+
+function renderMissionControl(payload = emptyDossier360()) {
+  const mission = payload.mission_control || emptyDossier360().mission_control;
+  const headline = $("dash-mission-headline");
+  const summary = $("dash-mission-summary");
+  const urgency = $("dash-mission-urgency");
+  const actions = $("dash-mission-actions");
+  const focus = $("dash-mission-focus");
+  if (!headline || !summary || !urgency || !actions || !focus) return;
+
+  const urgencyKey = ["success", "warning", "danger", "neutral"].includes(mission.urgency)
+    ? mission.urgency
+    : "neutral";
+  const urgencyLabels = {
+    success: "Prêt revue",
+    warning: "À compléter",
+    danger: "Priorité haute",
+    neutral: "À cadrer",
+  };
+  const actionItems = mission.next_best_actions?.length
+    ? mission.next_best_actions
+    : ["Importer les pieces client et lancer l'anonymisation."];
+  const focusItems = mission.audit_focus?.length
+    ? mission.audit_focus
+    : ["Completeness des pieces", "Qualite OCR et anonymisation"];
+
+  headline.textContent = mission.headline || "Dossiers a qualifier";
+  summary.textContent = mission.summary || "Priorites cabinet en attente.";
+  urgency.textContent = urgencyLabels[urgencyKey];
+  urgency.className = `dash-mission-urgency urgency-${urgencyKey}`;
+  actions.innerHTML = actionItems
+    .slice(0, 4)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
+  focus.innerHTML = focusItems
+    .slice(0, 4)
+    .map((item) => `<li>${escapeHtml(item)}</li>`)
+    .join("");
 }
 
 function renderDossier360(payload = emptyDossier360()) {

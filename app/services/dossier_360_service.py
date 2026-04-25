@@ -124,6 +124,109 @@ def _next_actions(
     return actions[:4]
 
 
+def _build_mission_control(
+    dossiers: list[dict[str, Any]],
+    portfolio: dict[str, Any],
+) -> dict[str, Any]:
+    clients_count = int(portfolio.get("clients_count") or 0)
+    ready_count = int(portfolio.get("ready_dossiers") or 0)
+    at_risk_count = int(portfolio.get("at_risk_dossiers") or 0)
+    critical_actions = int(portfolio.get("critical_actions") or 0)
+    average_score = int(portfolio.get("average_score") or 0)
+    top_missing = portfolio.get("top_missing_documents") or []
+
+    if not clients_count:
+        return {
+            "urgency": "neutral",
+            "headline": "Aucun dossier client charge.",
+            "summary": "Ajoutez les premieres pieces pour lancer la revue cabinet.",
+            "next_best_actions": [
+                "Importer les bilans, liasses, releves bancaires et factures par client.",
+                "Taguer chaque document avec le nom du client pour activer Dossier 360.",
+                "Lancer l'anonymisation puis generer une premiere note de revue.",
+            ],
+            "audit_focus": [
+                "Completeness des pieces",
+                "Qualite OCR et anonymisation",
+                "Preuves pretes pour revue",
+            ],
+        }
+
+    if at_risk_count:
+        urgency = "danger"
+        headline = f"{at_risk_count} dossier(s) a securiser avant diffusion."
+        summary = (
+            "Priorite aux dossiers a risque, aux pieces manquantes "
+            "et aux blocages d'anonymisation."
+        )
+    elif critical_actions:
+        urgency = "warning"
+        headline = f"{critical_actions} action(s) bloquante(s) a traiter."
+        summary = (
+            "Le portefeuille avance, mais certains dossiers doivent etre "
+            "completes avant revue."
+        )
+    elif ready_count:
+        urgency = "success"
+        headline = f"{ready_count} dossier(s) pret(s) pour revue cabinet."
+        summary = (
+            "Les pieces essentielles sont suffisantes pour preparer notes, "
+            "exports et controles."
+        )
+    else:
+        urgency = "warning"
+        headline = f"{clients_count} dossier(s) a completer."
+        summary = f"Score moyen {average_score}/100: consolider les preuves avant restitution."
+
+    actions: list[str] = []
+    risky_dossiers = [
+        dossier
+        for dossier in dossiers
+        if str(dossier.get("risk_level") or "") in {"high", "critical"}
+    ]
+    if risky_dossiers:
+        client_names = ", ".join(
+            str(dossier.get("client_name") or "Sans client")
+            for dossier in risky_dossiers[:2]
+        )
+        actions.append(f"Revoir les preuves et mappings sensibles: {client_names}.")
+    if top_missing:
+        missing = top_missing[0]
+        actions.append(
+            f"Collecter en priorite: {missing.get('label')} "
+            f"({missing.get('count')} dossier(s))."
+        )
+    blocked_dossier = next((dossier for dossier in dossiers if dossier.get("blockers")), None)
+    if blocked_dossier:
+        actions.append(
+            f"Lever le premier blocage {blocked_dossier.get('client_name')}: "
+            f"{blocked_dossier['blockers'][0]}"
+        )
+    if ready_count:
+        actions.append("Generer les notes de revue et rapports PDF pour les dossiers prets.")
+    actions.append("Comparer N/N-1 sur les dossiers significatifs avant validation finale.")
+
+    audit_focus: list[str] = []
+    if at_risk_count:
+        audit_focus.append("Risque de re-identification et controles de confidentialite")
+    if top_missing:
+        audit_focus.append("Completeness des pieces justificatives")
+    if any(dossier.get("entity_count", 0) for dossier in dossiers):
+        audit_focus.append("Entites masquees et piste d'audit RGPD")
+    if ready_count:
+        audit_focus.append("Generation note de revue, export FEC et rapport Dossier 360")
+    if not audit_focus:
+        audit_focus.append("Collecte initiale et classification documentaire")
+
+    return {
+        "urgency": urgency,
+        "headline": headline,
+        "summary": summary,
+        "next_best_actions": actions[:4],
+        "audit_focus": audit_focus[:4],
+    }
+
+
 def build_dossier_360(
     documents: list[dict[str, Any]],
     *,
@@ -244,18 +347,21 @@ def build_dossier_360(
     at_risk = sum(1 for dossier in dossiers if dossier["risk_level"] in {"high", "critical"})
     ready = sum(1 for dossier in dossiers if int(dossier["score"]) >= 82)
 
+    portfolio = {
+        "clients_count": len(dossiers),
+        "documents_count": len(documents),
+        "average_score": avg_score,
+        "ready_dossiers": ready,
+        "at_risk_dossiers": at_risk,
+        "critical_actions": sum(len(dossier["blockers"]) for dossier in dossiers),
+        "top_missing_documents": [
+            {"label": label, "count": count}
+            for label, count in missing_counter.most_common(5)
+        ],
+    }
+
     return {
-        "portfolio": {
-            "clients_count": len(dossiers),
-            "documents_count": len(documents),
-            "average_score": avg_score,
-            "ready_dossiers": ready,
-            "at_risk_dossiers": at_risk,
-            "critical_actions": sum(len(dossier["blockers"]) for dossier in dossiers),
-            "top_missing_documents": [
-                {"label": label, "count": count}
-                for label, count in missing_counter.most_common(5)
-            ],
-        },
+        "portfolio": portfolio,
+        "mission_control": _build_mission_control(dossiers, portfolio),
         "dossiers": dossiers[: max(1, limit)],
     }
