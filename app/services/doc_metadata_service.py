@@ -36,6 +36,7 @@ CATEGORY_RULES = [
     ("contrat", [
         "contrat", "convention", "avenant", "bail",
         "clause", "article", "signataires",
+        "tribunal", "juridiction", "assignation", "jugement",
     ]),
     ("facture", [
         "facture", "invoice", "total ttc", "total ht",
