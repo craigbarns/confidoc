@@ -33,6 +33,8 @@ class Document(SoftDeleteMixin, BaseModel):
         Index("ix_documents_user_active", "uploaded_by_user_id", "is_deleted"),
         # Composite index: status filtering per org
         Index("ix_documents_org_status", "org_id", "status"),
+        # Composite index: dossier queries (client + exercice per user)
+        Index("ix_documents_client_exercice", "uploaded_by_user_id", "client_name", "exercice"),
     )
 
     org_id: Mapped[uuid.UUID | None] = mapped_column(
@@ -66,6 +68,17 @@ class Document(SoftDeleteMixin, BaseModel):
     # Auto-detected document type from classification
     doc_type: Mapped[str | None] = mapped_column(
         String(40), nullable=True, default=None, index=True,
+    )
+
+    # Dossier metadata (auto-detected or user-provided at upload)
+    client_name: Mapped[str | None] = mapped_column(
+        String(120), nullable=True, default=None,
+    )
+    exercice: Mapped[str | None] = mapped_column(
+        String(9), nullable=True, default=None,
+    )
+    doc_category: Mapped[str | None] = mapped_column(
+        String(30), nullable=True, default=None,
     )
 
     # Raw file bytes — stored in DB as fallback when external storage is ephemeral
