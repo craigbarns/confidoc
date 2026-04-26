@@ -1028,6 +1028,102 @@ function toggleDossierExercice(headerEl) {
   if (chevron) chevron.style.transform = isOpen ? "rotate(-90deg)" : "rotate(0deg)";
 }
 
+// ── Dossier page (zone principale) ────────────────────────────────────
+
+let currentDossierClient = "";
+
+function openDossierPage(clientName) {
+  currentDossierClient = clientName;
+  document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+  const panel = $("panel-dossier");
+  if (panel) panel.classList.add("active");
+  setPageTitle("Dossier");
+  loadDossierClientPage(clientName);
+}
+
+async function loadDossierClientPage(clientName) {
+  const exercicesEl = $("dossier-page-exercices");
+  const titleEl = $("dossier-page-client-name");
+  const statsEl = $("dossier-page-stats");
+  if (!exercicesEl) return;
+
+  exercicesEl.innerHTML = '<div class="spinner" style="margin:24px auto"></div>';
+  if (titleEl) titleEl.textContent = clientName;
+
+  try {
+    const data = await apiFetch(`/documents/dossiers?client_name=${encodeURIComponent(clientName)}`);
+    const client = Array.isArray(data) ? data.find(c => c.client_name === clientName) || data[0] : null;
+    if (!client) {
+      exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Aucun document trouvé pour ce client.</p>`;
+      return;
+    }
+    if (statsEl) statsEl.textContent = `${client.total_docs} document${client.total_docs > 1 ? "s" : ""} · ${client.exercices.length} exercice${client.exercices.length > 1 ? "s" : ""}`;
+    exercicesEl.innerHTML = (client.exercices || []).map(ex => renderDossierExerciceSection(ex)).join("");
+  } catch (e) {
+    exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Erreur chargement dossier.</p>`;
+  }
+}
+
+function renderDossierExerciceSection(ex) {
+  const allReady = ex.ready_count === ex.doc_count;
+  const statusBadge = allReady
+    ? `<span class="badge-category badge-green">Complet</span>`
+    : `<span class="badge-category badge-orange">${ex.ready_count}/${ex.doc_count} prêts</span>`;
+  const catsText = (ex.doc_categories || []).map(c => escapeHtml(c)).join(" · ");
+  return `
+    <div class="dossier-exercice-section">
+      <div class="dossier-exercice-section-header">
+        <h3>Exercice ${escapeHtml(ex.exercice || "Sans exercice")}</h3>
+        ${statusBadge}
+        ${catsText ? `<span style="font-size:11px;color:var(--text-muted)">${catsText}</span>` : ""}
+      </div>
+      <table class="dossier-docs-table">
+        <thead><tr>
+          <th>Document</th><th>Type</th><th>Taille</th><th>Date</th><th>Statut</th><th></th>
+        </tr></thead>
+        <tbody>
+          ${(ex.documents || []).map(doc => `
+            <tr class="dossier-doc-row" onclick="selectDoc('${escapeHtml(doc.id)}')">
+              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(doc.original_filename)}">${escapeHtml(doc.original_filename)}</td>
+              <td><span class="badge-category">${escapeHtml(doc.doc_category || "—")}</span></td>
+              <td style="color:var(--text-muted)">${formatBytes(doc.size_bytes)}</td>
+              <td style="color:var(--text-muted)">${formatDate(doc.created_at)}</td>
+              <td>${escapeHtml(documentStatusLabel(doc.status))}</td>
+              <td>
+                <button class="btn btn-ghost" style="font-size:11px;padding:2px 6px" onclick="event.stopPropagation();openEditMetadataModal('${escapeHtml(doc.id)}')">✏️</button>
+              </td>
+            </tr>
+          `).join("")}
+        </tbody>
+      </table>
+    </div>
+  `;
+}
+
+function openUploadForDossierClient() {
+  const nameEl = $("upload-client-name");
+  if (nameEl && currentDossierClient) nameEl.value = currentDossierClient;
+  setStep(1);
+}
+
+async function openEditMetadataModal(docId) {
+  const newExercice = window.prompt("Exercice (4 chiffres, ex: 2024) :");
+  if (newExercice === null) return;
+  const body = {};
+  if (newExercice.trim()) body.exercice = newExercice.trim();
+  try {
+    await apiFetch(`/documents/${docId}/metadata`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(body),
+    });
+    toast("Métadonnées mises à jour", "success");
+    if (currentDossierClient) loadDossierClientPage(currentDossierClient);
+  } catch (e) {
+    toast("Erreur mise à jour : " + e.message, "error");
+  }
+}
+
 // ── Batch mode ──────────────────────────────────────────────────────────
 
 function updateBatchBar() {
