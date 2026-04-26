@@ -120,33 +120,51 @@ async def list_documents(
     "/clients",
     response_model=list[str],
     status_code=status.HTTP_200_OK,
-    summary="Lister les clients connus (tags documents)",
+    summary="Lister les clients connus",
 )
 async def list_clients(
     current_user: CurrentUser,
     db: DbSession,
     include_deleted: bool = Query(default=False),
 ) -> list[str]:
-    import re
-
-    query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
+    # Primary: collect from client_name column
+    cn_query = (
+        select(Document.client_name)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.client_name.isnot(None),
+        )
+        .distinct()
+    )
     if not include_deleted:
-        query = query.where(Document.is_deleted.is_(False))
-    result = await db.execute(query.order_by(desc(Document.created_at)))
-    docs = list(result.scalars().all())
+        cn_query = cn_query.where(Document.is_deleted.is_(False))
+    cn_result = await db.execute(cn_query)
+    names: list[str] = [row[0] for row in cn_result.all() if row[0]]
+
+    # Fallback: docs without client_name — read from tags[0]
+    fb_query = (
+        select(Document)
+        .where(
+            Document.uploaded_by_user_id == current_user.id,
+            Document.client_name.is_(None),
+            Document.tags.isnot(None),
+        )
+    )
+    if not include_deleted:
+        fb_query = fb_query.where(Document.is_deleted.is_(False))
+    fb_result = await db.execute(fb_query)
+    for doc in fb_result.scalars().all():
+        tags = list(getattr(doc, "tags", []) or [])
+        if tags and tags[0]:
+            names.append(tags[0])
 
     seen: set[str] = set()
     out: list[str] = []
-    for d in docs:
-        tags = list(getattr(d, "tags", []) or [])
-        if not tags:
-            continue
-        label = re.sub(r"\s+", " ", str(tags[0]).strip())
-        key = _normalize_client_name(label)
-        if not key or key in seen:
-            continue
-        seen.add(key)
-        out.append(label)
+    for name in names:
+        key = name.strip().lower()
+        if key and key not in seen:
+            seen.add(key)
+            out.append(name.strip())
     return sorted(out, key=lambda x: x.lower())
 
 
