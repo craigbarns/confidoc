@@ -7,7 +7,6 @@ from fastapi import APIRouter, Request, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.config import get_settings
 from app.core.exceptions import http_400, http_403, http_404
 from app.core.security import generate_opaque_token, hash_token
 from app.models.integration import ApiKey, WebhookEndpoint
@@ -24,6 +23,7 @@ from app.schemas.integration import (
 from app.services.integration_service import (
     api_key_prefix,
     generate_api_key_value,
+    public_app_base_url,
 )
 from app.services.webhook_notify import notify_json_webhook
 
@@ -290,9 +290,8 @@ async def test_webhook(
     status_code=status.HTTP_200_OK,
     summary="Guide rapide API cabinet",
 )
-async def integration_guide() -> IntegrationGuideResponse:
-    settings = get_settings()
-    base_url = settings.APP_BASE_URL.rstrip("/") + "/api/v1"
+async def integration_guide(request: Request) -> IntegrationGuideResponse:
+    base_url = public_app_base_url(str(request.base_url)) + "/api/v1"
     return IntegrationGuideResponse(
         title="ConfiDoc Cabinet API",
         base_url=base_url,

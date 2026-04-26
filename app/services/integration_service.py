@@ -24,6 +24,7 @@ logger = get_logger(__name__)
 
 API_KEY_PREFIX = "confidoc_live_"
 IDEMPOTENCY_TTL_HOURS = 24
+RAILWAY_PRODUCTION_BASE_URL = "https://confidoc-production.up.railway.app"
 
 
 def is_api_key_token(value: str | None) -> bool:
@@ -36,6 +37,18 @@ def generate_api_key_value() -> str:
 
 def api_key_prefix(value: str) -> str:
     return value[:24]
+
+
+def public_app_base_url(request_base_url: str | None = None) -> str:
+    settings = get_settings()
+    configured = (settings.APP_BASE_URL or "").rstrip("/")
+    if configured and "localhost" not in configured:
+        return configured
+    if request_base_url:
+        return request_base_url.rstrip("/")
+    if settings.is_production:
+        return RAILWAY_PRODUCTION_BASE_URL
+    return configured or "http://localhost:3000"
 
 
 async def authenticate_api_key(db: AsyncSession, raw_key: str) -> tuple[User, ApiKey, Membership]:
@@ -165,8 +178,7 @@ def document_event_payload(
     event: str,
     event_id: str,
 ) -> dict[str, Any]:
-    settings = get_settings()
-    base_url = settings.APP_BASE_URL.rstrip("/")
+    base_url = public_app_base_url()
     client_name = document.tags[0] if document.tags else None
     status_value = (
         document.status.value if hasattr(document.status, "value") else str(document.status)
