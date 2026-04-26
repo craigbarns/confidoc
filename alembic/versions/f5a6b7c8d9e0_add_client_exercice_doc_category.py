@@ -1,15 +1,15 @@
 """Add client_name, exercice, doc_category to documents
 
-Revision ID: e4f5a6b7c8d9
-Revises: d3e4f5a6b7c8
+Revision ID: f5a6b7c8d9e0
+Revises: e4f5a6b7c8d9
 Create Date: 2026-04-26 00:00:00.000000
 
 """
 
 from alembic import op
 
-revision = "e4f5a6b7c8d9"
-down_revision = "d3e4f5a6b7c8"
+revision = "f5a6b7c8d9e0"
+down_revision = "e4f5a6b7c8d9"
 branch_labels = None
 depends_on = None
 
@@ -29,7 +29,6 @@ def upgrade() -> None:
             ON documents (uploaded_by_user_id, client_name, exercice)
         """
     )
-    # Backfill client_name from tags[0] where client_name is NULL
     op.execute(
         """
         UPDATE documents
