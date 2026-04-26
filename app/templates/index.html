@@ -216,6 +216,11 @@
         </div>
       </div>
 
+      <div class="sidebar-mode-toggle">
+        <button class="sidebar-mode-btn active" id="btn-mode-flat" onclick="setSidebarMode('flat')">Docs</button>
+        <button class="sidebar-mode-btn" id="btn-mode-dossier" onclick="setSidebarMode('dossier')">Dossiers</button>
+      </div>
+
       <div class="sidebar-batch-row">
         <button id="btn-batch-toggle" class="btn-batch-toggle-inline">Sélectionner</button>
       </div>
@@ -260,6 +265,25 @@
 
     <!-- ── MAIN ── -->
     <main id="main-content" class="main-panel glass" style="border:none; border-radius:0;">
+
+      <!-- DOSSIER CLIENT -->
+      <div id="panel-dossier" class="panel">
+        <div class="dossier-page-header">
+          <button class="btn btn-ghost btn-sm" onclick="showDashboard()" style="flex-shrink:0">← Retour</button>
+          <div class="dossier-page-title">
+            <h2 id="dossier-page-client-name">Client</h2>
+            <span class="dossier-page-stats" id="dossier-page-stats"></span>
+          </div>
+          <button class="btn btn-primary btn-sm" id="btn-dossier-upload" onclick="openUploadForDossierClient()">
+            + Ajouter
+          </button>
+        </div>
+        <div id="dossier-page-exercices" class="dossier-page-exercices">
+          <div class="panel-empty-hint">
+            <p>Sélectionnez un client dans la sidebar pour voir son dossier.</p>
+          </div>
+        </div>
+      </div>
 
       <!-- DASHBOARD -->
       <div id="panel-dashboard" class="panel">
@@ -457,6 +481,29 @@
         <div class="field-inline">
           <label for="upload-client-name">Client (obligatoire)</label>
           <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" />
+        </div>
+        <div class="upload-meta-row">
+          <div class="upload-meta-field">
+            <label>Exercice</label>
+            <select id="upload-exercice" class="input-sm">
+              <option value="">— Année —</option>
+            </select>
+            <span class="auto-badge" id="badge-exercice" style="display:none">✨ Auto</span>
+          </div>
+          <div class="upload-meta-field">
+            <label>Type doc</label>
+            <select id="upload-doc-category" class="input-sm">
+              <option value="">— Type —</option>
+              <option value="bilan">Bilan</option>
+              <option value="liasse_fiscale">Liasse fiscale</option>
+              <option value="releve_bancaire">Relevé bancaire</option>
+              <option value="grand_livre">Grand livre</option>
+              <option value="contrat">Contrat</option>
+              <option value="facture">Facture</option>
+              <option value="autre">Autre</option>
+            </select>
+            <span class="auto-badge" id="badge-doc-category" style="display:none">✨ Auto</span>
+          </div>
         </div>
         <div class="field-inline" style="margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;font-size:13px;letter-spacing:0;color:var(--text-muted);font-weight:500">
