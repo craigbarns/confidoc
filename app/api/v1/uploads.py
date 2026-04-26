@@ -1,5 +1,6 @@
 """ConfiDoc Backend — Upload Endpoints (v2) with Streaming."""
 
+import contextlib
 import hashlib
 import os
 import re
@@ -11,9 +12,11 @@ from fastapi import (
     APIRouter,
     BackgroundTasks,
     File,
+    Header,
     HTTPException,
     Query,
     Request,
+    Response,
     UploadFile,
     status,
 )
@@ -28,6 +31,11 @@ from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
+from app.services.integration_service import (
+    build_request_hash,
+    get_idempotency_replay,
+    store_idempotency_response,
+)
 from app.services.storage_service import store_file
 from app.workers.tasks import (
     anonymize_document_task,
@@ -66,14 +74,16 @@ def _normalize_client_name(value: str | None) -> str:
 @limiter.limit(settings.RATE_LIMIT_UPLOAD)
 async def upload_document(
     request: Request,
+    response: Response,
     current_user: CurrentUser,
     db: DbSession,
     background_tasks: BackgroundTasks,
-    file: UploadFile = File(...),
+    file: UploadFile = File(...),  # noqa: B008
     auto_anonymize: bool = Query(default=True),
-    profile: AnonymizationProfile = Query(default="moderate"),
+    profile: AnonymizationProfile = Query(default="moderate"),  # noqa: B008
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict:
     """Upload un document via streaming vers un fichier temporaire pour éviter l'OOM."""
     filename = file.filename or ""
@@ -111,7 +121,31 @@ async def upload_document(
         try:
             scan_file_for_malware(temp_path, extension)
         except SandboxError as scan_err:
-            raise http_400(f"Fichier rejeté : {str(scan_err)}")
+            raise http_400(f"Fichier rejeté : {str(scan_err)}") from scan_err
+
+        org_id = getattr(request.state, "org_id", None)
+        request_hash = build_request_hash({
+            "route": "POST /api/v1/uploads",
+            "filename": filename,
+            "extension": extension,
+            "size": size,
+            "sha256": sha256_hash.hexdigest(),
+            "auto_anonymize": auto_anonymize,
+            "profile": profile,
+            "document_type": document_type,
+            "client_name": _normalize_client_name(client_name),
+        })
+        replay = await get_idempotency_replay(
+            db,
+            user_id=current_user.id,
+            route="POST /api/v1/uploads",
+            idempotency_key=idempotency_key,
+            request_hash=request_hash,
+        )
+        if replay:
+            response.status_code = replay.status_code
+            response.headers["X-ConfiDoc-Idempotent-Replay"] = "true"
+            return replay.response_body
 
         return await _upload_document_body(
             db=db,
@@ -127,6 +161,10 @@ async def upload_document(
             document_type=document_type,
             client_name=client_name,
             background_tasks=background_tasks,
+            org_id_override=org_id,
+            idempotency_key=idempotency_key,
+            idempotency_route="POST /api/v1/uploads",
+            idempotency_request_hash=request_hash,
         )
     except HTTPException:
         raise
@@ -156,6 +194,10 @@ async def _upload_document_body(
     document_type: str,
     client_name: str = "",
     background_tasks: BackgroundTasks | None = None,
+    org_id_override: object | None = None,
+    idempotency_key: str | None = None,
+    idempotency_route: str | None = None,
+    idempotency_request_hash: str | None = None,
 ) -> dict:
     """Corps métier upload (utilisant le fichier temporaire)."""
     normalized_client_name = _normalize_client_name(client_name)
@@ -171,14 +213,16 @@ async def _upload_document_body(
         from uuid import uuid4
         storage_key = f"db://{sha256}.{uuid4().hex}.{extension}"
 
-    membership_res = await db.execute(
-        select(Membership).where(
-            Membership.user_id == current_user.id,
-            Membership.is_active.is_(True),
+    org_id = org_id_override
+    if org_id is None:
+        membership_res = await db.execute(
+            select(Membership).where(
+                Membership.user_id == current_user.id,
+                Membership.is_active.is_(True),
+            )
         )
-    )
-    membership = membership_res.scalar_one_or_none()
-    org_id = membership.org_id if membership else None
+        membership = membership_res.scalar_one_or_none()
+        org_id = membership.org_id if membership else None
     uploaded_by_snapshot = str(current_user.id)
 
     document = Document(
@@ -252,7 +296,7 @@ async def _upload_document_body(
         else:
             processing.update({"status": "uploaded", "background_processing": False})
 
-    return {
+    result = {
         "status": document.status.value,
         "document_id": str(document.id),
         "storage_backend": document.storage_backend,
@@ -264,6 +308,18 @@ async def _upload_document_body(
         "client_name": normalized_client_name,
         "processing": processing,
     }
+    await store_idempotency_response(
+        db,
+        user_id=current_user.id,
+        org_id=org_id,
+        route=idempotency_route or "",
+        idempotency_key=idempotency_key,
+        request_hash=idempotency_request_hash or "",
+        response_body=result,
+        status_code=status.HTTP_201_CREATED,
+        document_id=document.id,
+    )
+    return result
 
 
 @router.post(
@@ -274,20 +330,149 @@ async def _upload_document_body(
 @limiter.limit("10/minute")
 async def upload_batch(
     request: Request,
+    response: Response,
     current_user: CurrentUser,
     db: DbSession,
     background_tasks: BackgroundTasks,
-    files: list[UploadFile] = File(...),
+    files: list[UploadFile] = File(...),  # noqa: B008
     auto_anonymize: bool = Query(default=True),
-    profile: AnonymizationProfile = Query(default="moderate"),
+    profile: AnonymizationProfile = Query(default="moderate"),  # noqa: B008
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
+    idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
 ) -> dict:
     """Upload multiple documents at once via streaming."""
     if len(files) > MAX_BATCH_SIZE:
         raise http_400(f"Maximum {MAX_BATCH_SIZE} fichiers par batch. Reçu: {len(files)}.")
     if not files:
         raise http_400("Aucun fichier fourni.")
+
+    org_id = getattr(request.state, "org_id", None)
+    if idempotency_key:
+        temp_uploads: list[dict] = []
+        try:
+            for file in files:
+                filename = file.filename or ""
+                if "." not in filename:
+                    raise http_400("Nom de fichier invalide (pas d'extension)")
+
+                extension = filename.rsplit(".", 1)[1].lower()
+                if extension not in settings.ALLOWED_EXTENSIONS:
+                    raise http_400(f"Extension .{extension} non autorisée")
+
+                temp_fd, temp_path = tempfile.mkstemp(suffix=f".{extension}")
+                sha256_hash = hashlib.sha256()
+                size = 0
+                with os.fdopen(temp_fd, "wb") as tmp:
+                    while chunk := await file.read(CHUNK_SIZE):
+                        size += len(chunk)
+                        if size > settings.max_upload_size_bytes:
+                            raise http_413(
+                                "Fichier trop volumineux. "
+                                f"Maximum: {settings.MAX_UPLOAD_SIZE_MB} MB"
+                            )
+                        tmp.write(chunk)
+                        sha256_hash.update(chunk)
+
+                if size == 0:
+                    raise http_400("Fichier vide")
+
+                try:
+                    scan_file_for_malware(temp_path, extension)
+                except SandboxError as scan_err:
+                    raise http_400(f"Fichier rejeté : {str(scan_err)}") from scan_err
+
+                temp_uploads.append({
+                    "file": file,
+                    "temp_path": temp_path,
+                    "filename": filename,
+                    "extension": extension,
+                    "size": size,
+                    "sha256": sha256_hash.hexdigest(),
+                })
+
+            request_hash = build_request_hash({
+                "route": "POST /api/v1/uploads/batch",
+                "files": [
+                    {
+                        "filename": item["filename"],
+                        "extension": item["extension"],
+                        "size": item["size"],
+                        "sha256": item["sha256"],
+                    }
+                    for item in temp_uploads
+                ],
+                "auto_anonymize": auto_anonymize,
+                "profile": profile,
+                "document_type": document_type,
+                "client_name": _normalize_client_name(client_name),
+            })
+            replay = await get_idempotency_replay(
+                db,
+                user_id=current_user.id,
+                route="POST /api/v1/uploads/batch",
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+            )
+            if replay:
+                response.status_code = replay.status_code
+                response.headers["X-ConfiDoc-Idempotent-Replay"] = "true"
+                return replay.response_body
+
+            batch_results: list[dict] = []
+            succeeded = 0
+            failed = 0
+            for item in temp_uploads:
+                try:
+                    result = await _upload_document_body(
+                        db=db,
+                        current_user=current_user,
+                        file=item["file"],
+                        file_path=Path(item["temp_path"]),
+                        filename=item["filename"],
+                        extension=item["extension"],
+                        size=item["size"],
+                        sha256=item["sha256"],
+                        auto_anonymize=auto_anonymize,
+                        profile=profile,
+                        document_type=document_type,
+                        client_name=client_name,
+                        background_tasks=background_tasks,
+                        org_id_override=org_id,
+                    )
+                    batch_results.append(result)
+                    succeeded += 1
+                except Exception as exc:
+                    await db.rollback()
+                    failed += 1
+                    batch_results.append({
+                        "status": "error",
+                        "original_filename": item["filename"],
+                        "error": str(exc)[:500],
+                    })
+
+            final_result = {
+                "batch_size": len(files),
+                "succeeded": succeeded,
+                "failed": failed,
+                "results": batch_results,
+            }
+            await store_idempotency_response(
+                db,
+                user_id=current_user.id,
+                org_id=org_id,
+                route="POST /api/v1/uploads/batch",
+                idempotency_key=idempotency_key,
+                request_hash=request_hash,
+                response_body=final_result,
+                status_code=status.HTTP_200_OK,
+            )
+            return final_result
+        finally:
+            for item in temp_uploads:
+                temp_path = item.get("temp_path")
+                if temp_path and os.path.exists(temp_path):
+                    os.remove(temp_path)
 
     results: list[dict] = []
     succeeded = 0
@@ -326,7 +511,7 @@ async def upload_batch(
             try:
                 scan_file_for_malware(temp_path, extension)
             except SandboxError as scan_err:
-                raise ValueError(f"Fichier rejeté : {str(scan_err)}")
+                raise ValueError(f"Fichier rejeté : {str(scan_err)}") from scan_err
 
             result = await _upload_document_body(
                 db=db,
@@ -342,15 +527,14 @@ async def upload_batch(
                 document_type=document_type,
                 client_name=client_name,
                 background_tasks=background_tasks,
+                org_id_override=org_id,
             )
             results.append(result)
             succeeded += 1
 
         except Exception as exc:
-            try:
+            with contextlib.suppress(Exception):
                 await db.rollback()
-            except Exception:
-                pass
             logger.warning("batch_upload_file_failed", filename=filename, error=str(exc))
             results.append({
                 "status": "error",

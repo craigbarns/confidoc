@@ -156,14 +156,20 @@ def create_app() -> FastAPI:
         allow_origins=settings.ALLOWED_ORIGINS,
         allow_credentials=True,
         allow_methods=["GET", "POST", "PUT", "PATCH", "DELETE"],
-        allow_headers=["Content-Type", "Authorization", "X-Request-ID"],
+        allow_headers=[
+            "Content-Type",
+            "Authorization",
+            "X-ConfiDoc-API-Key",
+            "Idempotency-Key",
+            "X-Request-ID",
+        ],
     )
     app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
 
     # ---- Routers ----
     app.include_router(ui_router)
     app.include_router(health_router)
-    
+
     @app.get("/metrics", include_in_schema=False)
     def metrics():
         from app.core.metrics import get_metrics_response

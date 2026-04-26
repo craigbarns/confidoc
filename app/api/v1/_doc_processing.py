@@ -471,6 +471,12 @@ async def validate_document(
             url=wh_url,
             secret=settings.WEBHOOK_ON_VALIDATE_SECRET or "",
         )
+    try:
+        from app.services.integration_service import dispatch_document_event
+
+        background_tasks.add_task(dispatch_document_event, str(document.id), "document.validated")
+    except Exception as exc:
+        logger.warning("document_validated_webhook_enqueue_failed", error=str(exc))
 
     return {"status": "validated", "document_id": str(document.id)}
 

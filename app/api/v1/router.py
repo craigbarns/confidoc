@@ -2,7 +2,18 @@
 
 from fastapi import APIRouter
 
-from app.api.v1 import ai, auth, compliance, copilot, demo, documents, leads, uploads, users
+from app.api.v1 import (
+    ai,
+    auth,
+    compliance,
+    copilot,
+    demo,
+    documents,
+    integrations,
+    leads,
+    uploads,
+    users,
+)
 from app.api.v1._doc_stats import router as stats_router
 
 router = APIRouter()
@@ -15,5 +26,6 @@ router.include_router(documents.router, prefix="/documents", tags=["documents"])
 router.include_router(stats_router, prefix="/stats", tags=["stats"])
 router.include_router(ai.router, prefix="/ai", tags=["ai"])
 router.include_router(copilot.router, prefix="/copilot", tags=["copilot"])
+router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 router.include_router(demo.router, prefix="/demo", tags=["demo"])
 router.include_router(leads.router, prefix="/leads", tags=["leads"])

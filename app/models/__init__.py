@@ -9,6 +9,7 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.gdpr_consent import GDPRConsent
 from app.models.gdpr_register import GDPRProcessingRegister
+from app.models.integration import ApiKey, IdempotencyRecord, WebhookDelivery, WebhookEndpoint
 from app.models.llm_request import LlmRequest
 from app.models.membership import Membership
 from app.models.organization import Organization, PlanType, ProfessionType
@@ -30,6 +31,7 @@ __all__ = [
     "AuditLog",
     "GDPRConsent",
     "GDPRProcessingRegister",
+    "ApiKey", "WebhookEndpoint", "IdempotencyRecord", "WebhookDelivery",
     "PasswordResetToken",
     "PseudonymMapping",
     "BetaLead",

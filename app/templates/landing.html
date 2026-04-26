@@ -348,6 +348,7 @@
         <div style="margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap">
           <a href="/ui" class="btn btn-primary">Traiter vos propres documents</a>
           <button id="demo-proof-btn" class="btn btn-outline" type="button">Télécharger la preuve DPO</button>
+          <a href="/trust" class="btn btn-outline">Trust Center</a>
           <a href="#beta-access" class="btn btn-outline">Demander un accès beta</a>
         </div>
       </div>
@@ -556,6 +557,15 @@
       <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
       Lancer la démo interactive
     </a>
+  </section>
+
+  <section class="cta" id="beta-access">
+    <h2>Accès cabinet</h2>
+    <p id="pilot-proof">Pilote API et preuve DPO disponibles pour cabinets comptables, auditeurs et directions financières.</p>
+    <form id="beta-form" data-endpoint="/api/v1/leads/beta">
+      <input type="email" name="email" placeholder="email@cabinet.fr" aria-label="Email professionnel" />
+      <button class="btn btn-primary" type="submit">Demander un accès beta</button>
+    </form>
   </section>
 
   <footer>© 2026 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.</footer>

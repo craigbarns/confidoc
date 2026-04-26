@@ -144,6 +144,17 @@ async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
                 .values(status=status)
             )
             await db.commit()
+        if status == DocumentStatus.FAILED:
+            try:
+                from app.services.integration_service import dispatch_document_event
+
+                await dispatch_document_event(doc_id, "document.failed")
+            except Exception as exc:
+                logger.warning(
+                    "document_failed_webhook_dispatch_failed",
+                    doc_id=doc_id,
+                    error=str(exc),
+                )
     except __import__("sqlalchemy").exc.SQLAlchemyError as exc:
         logger.error(
             "set_document_status_failed",
@@ -311,6 +322,13 @@ async def _anonymize_document_async_v2(
         # as the terminal state for documents with an available preview.
         document.status = DocumentStatus.READY
         await db.commit()
+
+        try:
+            from app.services.integration_service import dispatch_document_event
+
+            await dispatch_document_event(doc_id, "document.ready")
+        except Exception as exc:
+            logger.warning("document_ready_webhook_dispatch_failed", doc_id=doc_id, error=str(exc))
 
         return {
             "document_id": doc_id,

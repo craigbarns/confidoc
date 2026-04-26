@@ -12,6 +12,7 @@ from app.core.exceptions import http_401, http_403
 from app.core.security import decode_access_token
 from app.models.membership import Membership
 from app.models.user import User
+from app.services.integration_service import authenticate_api_key, is_api_key_token
 
 oauth2_scheme = OAuth2PasswordBearer(
     tokenUrl="/api/v1/auth/token",
@@ -29,9 +30,20 @@ async def get_current_user(
 ) -> User:
     """Dépendance : récupère l'utilisateur connecté via le Bearer Token.
 
-    Lease et stocke le user dans `request.state.user` pour accès ultérieur,
+    Lit et stocke le user dans `request.state.user` pour accès ultérieur,
     ainsi que l'org_id courant.
     """
+    api_key_header = request.headers.get("X-ConfiDoc-API-Key")
+    if api_key_header or is_api_key_token(token):
+        raw_key = api_key_header or token or ""
+        user, api_key, membership = await authenticate_api_key(db, raw_key)
+        request.state.user = user
+        request.state.org_id = api_key.org_id
+        request.state.membership = membership
+        request.state.api_key = api_key
+        request.state.auth_type = "api_key"
+        return user
+
     if not token:
         # Fallback pour le JWT complet passé en header Authorization "Bearer ..."
         # oauth2_scheme gère ça normalement, mais si pas de token :
@@ -71,6 +83,7 @@ async def get_current_user(
     request.state.user = user
     request.state.org_id = org_id
     request.state.membership = membership
+    request.state.auth_type = "jwt"
 
     return user
 
