@@ -454,6 +454,7 @@ async function initApp(email) {
     }
   }
 
+  initExerciceSelect();
   await loadProviderInfo();
   await loadGoldenReport();
   updateHeaderContext();
@@ -1124,6 +1125,36 @@ async function openEditMetadataModal(docId) {
   }
 }
 
+// ── Upload metadata auto-fill ──────────────────────────────────────────
+
+function initExerciceSelect() {
+  const sel = $("upload-exercice");
+  if (!sel) return;
+  const currentYear = new Date().getFullYear();
+  const opts = ['<option value="">— Année —</option>'];
+  for (let y = currentYear; y >= 2020; y--) {
+    opts.push(`<option value="${y}">${y}</option>`);
+  }
+  sel.innerHTML = opts.join("");
+}
+
+function prefillUploadMetadata(suggestions) {
+  if (!suggestions) return;
+  const fields = [
+    { id: "upload-exercice", val: suggestions.exercice_detected, badgeId: "badge-exercice" },
+    { id: "upload-doc-category", val: suggestions.doc_category_detected, badgeId: "badge-doc-category" },
+  ];
+  fields.forEach(({ id, val, badgeId }) => {
+    const el = $(id);
+    const badge = $(badgeId);
+    if (!el || !val) return;
+    if (!el.value) {
+      el.value = val;
+      if (badge) badge.style.display = "";
+    }
+  });
+}
+
 // ── Batch mode ──────────────────────────────────────────────────────────
 
 function updateBatchBar() {
@@ -1448,15 +1479,27 @@ async function uploadFile(file) {
 
   try {
     const clientQp = clientName ? `&client_name=${encodeURIComponent(clientName)}` : "";
+    const exerciceQp = ($("upload-exercice")?.value || "").trim();
+    const catQp = ($("upload-doc-category")?.value || "").trim();
     const autoAnon = $("upload-auto-anonymize")?.checked ?? true;
-    const data = await uploadWithProgress(fd, `/uploads?auto_anonymize=${autoAnon}${clientQp}`, fill, statusEl);
+    const extraQp = [
+      exerciceQp && `exercice=${encodeURIComponent(exerciceQp)}`,
+      catQp && `doc_category=${encodeURIComponent(catQp)}`,
+    ].filter(Boolean).join("&");
+    const data = await uploadWithProgress(
+      fd,
+      `/uploads?auto_anonymize=${autoAnon}${clientQp}${extraQp ? "&" + extraQp : ""}`,
+      fill, statusEl
+    );
     currentDocId = data.document_id;
     currentDocName = file.name;
     currentDocStatus = data.processing?.status || data.status || "uploaded";
     currentDocSize = file.size || 0;
+    if (data.suggestions) prefillUploadMetadata(data.suggestions);
     updateHeaderContext();
     await loadClientSuggestions();
     await loadDocList();
+    if (sidebarMode === "dossier") loadDossierTree();
 
     setTimeout(() => {
       zone.style.display = "";
