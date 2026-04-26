@@ -939,6 +939,95 @@ function renderDocList(docs) {
   refreshCompareDocSelect();
 }
 
+// ── Sidebar dossier tree ───────────────────────────────────────────────
+
+let sidebarMode = "flat"; // "flat" | "dossier"
+
+function setSidebarMode(mode) {
+  sidebarMode = mode;
+  const btnFlat = $("btn-mode-flat");
+  const btnDossier = $("btn-mode-dossier");
+  if (btnFlat) btnFlat.classList.toggle("active", mode === "flat");
+  if (btnDossier) btnDossier.classList.toggle("active", mode === "dossier");
+  if (mode === "dossier") {
+    loadDossierTree();
+  } else {
+    loadDocList();
+  }
+}
+
+async function loadDossierTree() {
+  const list = $("doc-list");
+  if (!list) return;
+  list.innerHTML = '<div class="sidebar-skeleton"></div>';
+  try {
+    const data = await apiFetch("/documents/dossiers");
+    renderDossierTree(data);
+  } catch (e) {
+    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Erreur chargement dossiers</p>`;
+  }
+}
+
+function renderDossierTree(dossiers) {
+  const list = $("doc-list");
+  if (!list) return;
+  if (!dossiers || dossiers.length === 0) {
+    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun dossier. Uploadez un document avec un nom client.</p>`;
+    return;
+  }
+  list.innerHTML = dossiers.map(client => `
+    <div class="dossier-client" data-client="${escapeHtml(client.client_name)}">
+      <div class="dossier-client-header" onclick="toggleDossierClient(this)" ondblclick="openDossierPage('${escapeHtml(client.client_name)}')">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
+        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${escapeHtml(client.client_name)}</span>
+        <span class="dossier-client-count">${client.total_docs}</span>
+      </div>
+      <div class="dossier-exercices" style="display:none">
+        ${(client.exercices || []).map(ex => renderDossierExerciceTree(client.client_name, ex)).join("")}
+      </div>
+    </div>
+  `).join("");
+}
+
+function renderDossierExerciceTree(clientName, ex) {
+  const allReady = ex.ready_count === ex.doc_count;
+  return `
+    <div class="dossier-exercice-tree">
+      <div class="dossier-exercice-header" onclick="toggleDossierExercice(this)">
+        <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
+        <span class="dossier-exercice-year">${escapeHtml(ex.exercice || "Sans exercice")}</span>
+        <span class="dossier-status-dot ${allReady ? "green" : "orange"}"></span>
+        <span style="font-size:10px;color:var(--text-muted)">${ex.ready_count}/${ex.doc_count}</span>
+      </div>
+      <div class="dossier-docs-sidebar" style="display:none">
+        ${(ex.documents || []).map(doc => `
+          <div class="dossier-doc-sidebar-item" onclick="selectDoc('${escapeHtml(doc.id)}')" title="${escapeHtml(doc.original_filename)}">
+            ${escapeHtml(doc.original_filename)}
+          </div>
+        `).join("")}
+      </div>
+    </div>
+  `;
+}
+
+function toggleDossierClient(headerEl) {
+  const container = headerEl.closest(".dossier-client");
+  const exercicesEl = container.querySelector(".dossier-exercices");
+  const chevron = headerEl.querySelector(".chevron-icon");
+  const isOpen = exercicesEl.style.display !== "none";
+  exercicesEl.style.display = isOpen ? "none" : "";
+  if (chevron) chevron.style.transform = isOpen ? "rotate(-90deg)" : "rotate(0deg)";
+}
+
+function toggleDossierExercice(headerEl) {
+  const container = headerEl.closest(".dossier-exercice-tree");
+  const docsEl = container.querySelector(".dossier-docs-sidebar");
+  const chevron = headerEl.querySelector(".chevron-icon");
+  const isOpen = docsEl.style.display !== "none";
+  docsEl.style.display = isOpen ? "none" : "";
+  if (chevron) chevron.style.transform = isOpen ? "rotate(-90deg)" : "rotate(0deg)";
+}
+
 // ── Batch mode ──────────────────────────────────────────────────────────
 
 function updateBatchBar() {
