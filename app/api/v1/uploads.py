@@ -31,6 +31,7 @@ from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
+from app.services.doc_metadata_service import build_metadata_suggestions
 from app.services.integration_service import (
     build_request_hash,
     get_idempotency_replay,
@@ -84,6 +85,8 @@ async def upload_document(
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    exercice: str = Query(default=""),
+    doc_category: str = Query(default=""),
 ) -> dict:
     """Upload un document via streaming vers un fichier temporaire pour éviter l'OOM."""
     filename = file.filename or ""
@@ -160,6 +163,8 @@ async def upload_document(
             profile=profile,
             document_type=document_type,
             client_name=client_name,
+            exercice=exercice,
+            doc_category=doc_category,
             background_tasks=background_tasks,
             org_id_override=org_id,
             idempotency_key=idempotency_key,
@@ -193,6 +198,8 @@ async def _upload_document_body(
     profile: str,
     document_type: str,
     client_name: str = "",
+    exercice: str = "",
+    doc_category: str = "",
     background_tasks: BackgroundTasks | None = None,
     org_id_override: object | None = None,
     idempotency_key: str | None = None,
@@ -225,6 +232,19 @@ async def _upload_document_body(
         org_id = membership.org_id if membership else None
     uploaded_by_snapshot = str(current_user.id)
 
+    # Auto-detect metadata from file text (best-effort, skipped on failure)
+    raw_text = ""
+    try:
+        from app.services.anonymization_service import extract_text_from_file
+        raw_text = await extract_text_from_file(file_path.read_bytes(), extension) or ""
+    except Exception:
+        pass
+
+    suggestions = build_metadata_suggestions(raw_text, filename, [])
+
+    resolved_exercice = exercice.strip() or suggestions["exercice"] or None
+    resolved_doc_category = doc_category.strip() or suggestions["doc_category"] or None
+
     document = Document(
         org_id=org_id,
         uploaded_by_user_id=current_user.id,
@@ -238,6 +258,9 @@ async def _upload_document_body(
         status=DocumentStatus.UPLOADED,
         raw_content=file_path.read_bytes() if storage_backend == "database" else None,
         tags=[normalized_client_name],
+        client_name=normalized_client_name,
+        exercice=resolved_exercice,
+        doc_category=resolved_doc_category,
     )
     db.add(document)
     await db.commit()
@@ -249,6 +272,9 @@ async def _upload_document_body(
         filename=filename,
         size=size,
         backend=storage_backend,
+        client_name=normalized_client_name,
+        exercice=resolved_exercice,
+        doc_category=resolved_doc_category,
     )
 
     processing: dict = {
@@ -306,7 +332,21 @@ async def _upload_document_body(
         "size_bytes": size,
         "uploaded_by": uploaded_by_snapshot,
         "client_name": normalized_client_name,
+        "exercice": resolved_exercice,
+        "doc_category": resolved_doc_category,
         "processing": processing,
+        "suggestions": {
+            "client_suggestion": suggestions["client_suggestion"],
+            "exercice_detected": suggestions["exercice"],
+            "doc_category_detected": suggestions["doc_category"],
+            "auto_filled": [
+                k for k, v in [
+                    ("exercice", not exercice.strip() and suggestions["exercice"]),
+                    ("doc_category", not doc_category.strip() and suggestions["doc_category"]),
+                ]
+                if v
+            ],
+        },
     }
     await store_idempotency_response(
         db,
@@ -340,6 +380,8 @@ async def upload_batch(
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
+    exercice: str = Query(default=""),
+    doc_category: str = Query(default=""),
 ) -> dict:
     """Upload multiple documents at once via streaming."""
     if len(files) > MAX_BATCH_SIZE:
@@ -526,6 +568,8 @@ async def upload_batch(
                 profile=profile,
                 document_type=document_type,
                 client_name=client_name,
+                exercice=exercice,
+                doc_category=doc_category,
                 background_tasks=background_tasks,
                 org_id_override=org_id,
             )
