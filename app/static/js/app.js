@@ -950,9 +950,27 @@ function setSidebarMode(mode) {
   const btnDossier = $("btn-mode-dossier");
   if (btnFlat) btnFlat.classList.toggle("active", mode === "flat");
   if (btnDossier) btnDossier.classList.toggle("active", mode === "dossier");
+
+  const filters = $("sidebar-filters");
+  const batchRow = $("sidebar-batch-row");
+  const dossierSearch = $("dossier-client-search-row");
+
   if (mode === "dossier") {
+    if (filters) filters.style.display = "none";
+    if (batchRow) batchRow.style.display = "none";
+    if (dossierSearch) dossierSearch.style.display = "";
+    document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
+    const panel = $("panel-dossier");
+    if (panel) panel.classList.add("active");
+    openDossierOverview();
     loadDossierTree();
   } else {
+    if (filters) filters.style.display = "";
+    if (batchRow) batchRow.style.display = "";
+    if (dossierSearch) dossierSearch.style.display = "none";
+    const panel = $("panel-dossier");
+    if (panel) panel.classList.remove("active");
+    if (!document.querySelector(".panel.active")) showDashboard();
     loadDocList();
   }
 }
@@ -973,14 +991,16 @@ function renderDossierTree(dossiers) {
   const list = $("doc-list");
   if (!list) return;
   if (!dossiers || dossiers.length === 0) {
-    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun dossier. Uploadez un document avec un nom client.</p>`;
+    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun client. Uploadez un document avec un nom client.</p>`;
     return;
   }
   list.innerHTML = dossiers.map(client => `
     <div class="dossier-client" data-client="${escapeHtml(client.client_name)}">
-      <div class="dossier-client-header" onclick="toggleDossierClient(this)" ondblclick="openDossierPage('${escapeHtml(client.client_name)}')">
-        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
-        <span style="flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis">${escapeHtml(client.client_name)}</span>
+      <div class="dossier-client-header">
+        <button class="dossier-client-toggle-btn" onclick="toggleDossierClient(this.closest('.dossier-client'))">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
+        </button>
+        <button class="dossier-client-name-btn" onclick="openDossierPage('${escapeHtml(client.client_name)}')">${escapeHtml(client.client_name)}</button>
         <span class="dossier-client-count">${client.total_docs}</span>
       </div>
       <div class="dossier-exercices" style="display:none">
@@ -988,6 +1008,13 @@ function renderDossierTree(dossiers) {
       </div>
     </div>
   `).join("");
+}
+
+function filterDossierTree(query) {
+  const q = (query || "").toLowerCase();
+  document.querySelectorAll(".dossier-client").forEach(el => {
+    el.style.display = (el.dataset.client || "").toLowerCase().includes(q) ? "" : "none";
+  });
 }
 
 function renderDossierExerciceTree(clientName, ex) {
@@ -1011,10 +1038,9 @@ function renderDossierExerciceTree(clientName, ex) {
   `;
 }
 
-function toggleDossierClient(headerEl) {
-  const container = headerEl.closest(".dossier-client");
+function toggleDossierClient(container) {
   const exercicesEl = container.querySelector(".dossier-exercices");
-  const chevron = headerEl.querySelector(".chevron-icon");
+  const chevron = container.querySelector(".chevron-icon");
   const isOpen = exercicesEl.style.display !== "none";
   exercicesEl.style.display = isOpen ? "none" : "";
   if (chevron) chevron.style.transform = isOpen ? "rotate(-90deg)" : "rotate(0deg)";
@@ -1033,11 +1059,83 @@ function toggleDossierExercice(headerEl) {
 
 let currentDossierClient = "";
 
+function openDossierOverview() {
+  currentDossierClient = "";
+  const overview = $("dossier-overview");
+  const detail = $("dossier-detail");
+  if (overview) overview.style.display = "flex";
+  if (detail) detail.style.display = "none";
+  document.querySelectorAll(".dossier-client.selected").forEach(el => el.classList.remove("selected"));
+  loadDossierOverview();
+}
+
+async function loadDossierOverview() {
+  const grid = $("dossier-client-grid");
+  if (!grid) return;
+  grid.innerHTML = '<div class="spinner" style="margin:40px auto;grid-column:1/-1"></div>';
+  try {
+    const data = await apiFetch("/documents/dossiers");
+    renderDossierClientGrid(data);
+  } catch (e) {
+    grid.innerHTML = `<div class="panel-empty-hint" style="grid-column:1/-1"><p>Erreur chargement clients</p></div>`;
+  }
+}
+
+function renderDossierClientGrid(dossiers) {
+  const grid = $("dossier-client-grid");
+  const statsEl = $("dossier-overview-stats");
+  if (!grid) return;
+  if (!dossiers || dossiers.length === 0) {
+    if (statsEl) statsEl.textContent = "";
+    grid.innerHTML = `
+      <div class="panel-empty-hint" style="grid-column:1/-1">
+        <p>Aucun client pour l'instant.</p>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="setSidebarMode('flat');setStep(1)">+ Uploader un premier document</button>
+      </div>`;
+    return;
+  }
+  if (statsEl) statsEl.textContent = `${dossiers.length} client${dossiers.length > 1 ? "s" : ""}`;
+  grid.innerHTML = dossiers.map(client => {
+    const readyCount = (client.exercices || []).reduce((acc, ex) => acc + (ex.ready_count || 0), 0);
+    const total = client.total_docs || 0;
+    const pct = total > 0 ? Math.round(readyCount / total * 100) : 0;
+    const exCount = (client.exercices || []).length;
+    const lastActivity = client.last_activity ? formatDate(client.last_activity) : "";
+    return `
+      <div class="dossier-client-card" onclick="openDossierPage('${escapeHtml(client.client_name)}')">
+        <div class="dossier-client-card-icon">
+          <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
+          </svg>
+        </div>
+        <div class="dossier-client-card-body">
+          <div class="dossier-client-card-name">${escapeHtml(client.client_name)}</div>
+          <div class="dossier-client-card-meta">${total} doc${total > 1 ? "s" : ""} · ${exCount} exercice${exCount > 1 ? "s" : ""}${lastActivity ? " · " + lastActivity : ""}</div>
+          <div class="dossier-client-card-progress">
+            <div class="progress-bar-track"><div class="progress-bar-fill${pct === 100 ? " green" : ""}" style="width:${pct}%"></div></div>
+            <span class="progress-bar-label">${readyCount}/${total} prêts</span>
+          </div>
+        </div>
+        <svg class="dossier-client-card-arrow" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="9 18 15 12 9 6"/></svg>
+      </div>`;
+  }).join("");
+}
+
 function openDossierPage(clientName) {
   currentDossierClient = clientName;
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   const panel = $("panel-dossier");
   if (panel) panel.classList.add("active");
+
+  const overview = $("dossier-overview");
+  const detail = $("dossier-detail");
+  if (overview) overview.style.display = "none";
+  if (detail) { detail.style.display = "flex"; detail.style.flexDirection = "column"; detail.style.flex = "1"; detail.style.overflow = "hidden"; }
+
+  document.querySelectorAll(".dossier-client").forEach(el => {
+    el.classList.toggle("selected", el.dataset.client === clientName);
+  });
+
   setPageTitle("Dossier");
   loadDossierClientPage(clientName);
 }

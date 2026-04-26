@@ -217,15 +217,19 @@
       </div>
 
       <div class="sidebar-mode-toggle">
-        <button class="sidebar-mode-btn active" id="btn-mode-flat" onclick="setSidebarMode('flat')">Docs</button>
-        <button class="sidebar-mode-btn" id="btn-mode-dossier" onclick="setSidebarMode('dossier')">Dossiers</button>
+        <button class="sidebar-mode-btn active" id="btn-mode-flat" onclick="setSidebarMode('flat')">Liste</button>
+        <button class="sidebar-mode-btn" id="btn-mode-dossier" onclick="setSidebarMode('dossier')">Clients</button>
       </div>
 
-      <div class="sidebar-batch-row">
+      <div id="dossier-client-search-row" style="display:none;padding:8px 12px 0">
+        <input id="dossier-filter-client" class="input-sm" type="text" placeholder="Rechercher un client…" oninput="filterDossierTree(this.value)" />
+      </div>
+
+      <div id="sidebar-batch-row" class="sidebar-batch-row">
         <button id="btn-batch-toggle" class="btn-batch-toggle-inline">Sélectionner</button>
       </div>
 
-      <div class="sidebar-filters">
+      <div id="sidebar-filters" class="sidebar-filters">
         <input id="filter-client" list="clients-suggestions" class="input-sm" type="text" placeholder="Filtrer par client…" />
         <input id="filter-search" class="input-sm mt-8" type="text" placeholder="Rechercher un document…" />
         <select id="filter-status" class="input-sm mt-8">
@@ -266,23 +270,36 @@
     <!-- ── MAIN ── -->
     <main id="main-content" class="main-panel glass" style="border:none; border-radius:0;">
 
-      <!-- DOSSIER CLIENT -->
+      <!-- DOSSIER CLIENTS -->
       <div id="panel-dossier" class="panel">
-        <div class="dossier-page-header">
-          <button class="btn btn-ghost btn-sm" onclick="showDashboard()" style="flex-shrink:0">← Retour</button>
-          <div class="dossier-page-title">
-            <h2 id="dossier-page-client-name">Client</h2>
-            <span class="dossier-page-stats" id="dossier-page-stats"></span>
+
+        <!-- Vue 1 : grille de tous les clients -->
+        <div id="dossier-overview">
+          <div class="dossier-overview-header">
+            <div>
+              <h2>Dossiers clients</h2>
+              <span class="dossier-overview-subtitle" id="dossier-overview-stats"></span>
+            </div>
+            <button class="btn btn-primary btn-sm" onclick="setSidebarMode('flat');setStep(1)">+ Nouveau document</button>
           </div>
-          <button class="btn btn-primary btn-sm" id="btn-dossier-upload" onclick="openUploadForDossierClient()">
-            + Ajouter
-          </button>
-        </div>
-        <div id="dossier-page-exercices" class="dossier-page-exercices">
-          <div class="panel-empty-hint">
-            <p>Sélectionnez un client dans la sidebar pour voir son dossier.</p>
+          <div id="dossier-client-grid" class="dossier-client-grid">
+            <div class="spinner" style="margin:40px auto;grid-column:1/-1"></div>
           </div>
         </div>
+
+        <!-- Vue 2 : dossier d'un client -->
+        <div id="dossier-detail">
+          <div class="dossier-page-header">
+            <button class="btn btn-ghost btn-sm" onclick="openDossierOverview()" style="flex-shrink:0">← Clients</button>
+            <div class="dossier-page-title">
+              <h2 id="dossier-page-client-name"></h2>
+              <span class="dossier-page-stats" id="dossier-page-stats"></span>
+            </div>
+            <button class="btn btn-primary btn-sm" id="btn-dossier-upload" onclick="openUploadForDossierClient()">+ Ajouter</button>
+          </div>
+          <div id="dossier-page-exercices" class="dossier-page-exercices"></div>
+        </div>
+
       </div>
 
       <!-- DASHBOARD -->

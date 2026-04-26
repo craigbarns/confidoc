@@ -4060,7 +4060,48 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
 .sidebar-mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
 
 /* ── Dossier page (zone principale) ───────────────────────────────── */
-#panel-dossier { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+#panel-dossier { padding: 0; overflow: hidden; flex-direction: column; }
+#panel-dossier.active { display: flex !important; }
+
+/* Overview: grille des clients */
+#dossier-overview { display: flex; flex-direction: column; flex: 1; overflow: hidden; }
+.dossier-overview-header { display: flex; align-items: center; justify-content: space-between; padding: 20px 24px 16px; border-bottom: 1px solid var(--border); flex-shrink: 0; }
+.dossier-overview-header h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+.dossier-overview-subtitle { font-size: 12px; color: var(--text-muted); margin-top: 2px; }
+.dossier-client-grid {
+  padding: 20px 24px 32px; overflow-y: auto; flex: 1;
+  display: grid; grid-template-columns: repeat(auto-fill, minmax(260px, 1fr));
+  gap: 12px; align-content: start;
+}
+.dossier-client-card {
+  display: flex; align-items: center; gap: 14px; padding: 14px 16px;
+  border-radius: 10px; border: 1px solid var(--border); background: var(--bg-card);
+  cursor: pointer; transition: background var(--t), border-color var(--t), transform 0.12s;
+}
+.dossier-client-card:hover { background: var(--bg-hover); border-color: var(--accent); transform: translateY(-1px); }
+.dossier-client-card-icon {
+  width: 38px; height: 38px; border-radius: 10px; flex-shrink: 0;
+  background: rgba(99,102,241,0.12); color: var(--accent);
+  display: flex; align-items: center; justify-content: center;
+}
+.dossier-client-card-body { flex: 1; min-width: 0; }
+.dossier-client-card-name { font-size: 13px; font-weight: 700; color: var(--text); overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.dossier-client-card-meta { font-size: 11px; color: var(--text-muted); margin-top: 2px; }
+.dossier-client-card-progress { display: flex; align-items: center; gap: 8px; margin-top: 7px; }
+.progress-bar-track { flex: 1; height: 3px; border-radius: 999px; background: var(--border); }
+.progress-bar-fill { height: 100%; border-radius: 999px; background: var(--accent); transition: width 0.3s; }
+.progress-bar-fill.green { background: #22c55e; }
+.progress-bar-label { font-size: 10px; color: var(--text-muted); white-space: nowrap; flex-shrink: 0; }
+.dossier-client-card-arrow { color: var(--text-muted); flex-shrink: 0; }
+
+/* Détail client */
+#dossier-detail { display: none; flex-direction: column; flex: 1; overflow: hidden; }
+
+/* Sidebar dossier mode */
+.dossier-client.selected > .dossier-client-header { background: rgba(99,102,241,0.12); border-radius: 6px; }
+.dossier-client-toggle-btn { background: none; border: none; cursor: pointer; padding: 2px; color: var(--text-muted); display: flex; align-items: center; flex-shrink: 0; }
+.dossier-client-name-btn { flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; text-align: left; background: none; border: none; cursor: pointer; color: var(--text); font-size: 12px; padding: 0; font-weight: 500; }
+.dossier-client-name-btn:hover { color: var(--accent); }
 .dossier-page-header {
   display: flex; align-items: center; gap: 12px;
   padding: 20px 24px 16px;
