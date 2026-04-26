@@ -19,6 +19,9 @@ class DocumentResponse(BaseModel):
     storage_key: str
     tags: list[str] | None = None
     doc_type: str | None = None
+    client_name: str | None = None
+    exercice: str | None = None
+    doc_category: str | None = None
     search_snippet: str | None = None
     is_deleted: bool = False
     deleted_at: datetime | None = None
@@ -137,4 +140,44 @@ class StructuredDocumentResponse(BaseModel):
         description="Méthode utilisée: dictionary, llm:mistral-large, etc.",
     )
     created_at: datetime
+
+
+class DocumentMetadataPatch(BaseModel):
+    client_name: str | None = Field(default=None, max_length=120)
+    exercice: str | None = Field(default=None, pattern=r"^\d{4}$")
+    doc_category: str | None = Field(default=None, max_length=30)
+
+
+class DossierDoc(BaseModel):
+    id: uuid.UUID
+    original_filename: str
+    doc_category: str | None = None
+    status: str
+    size_bytes: int
+    created_at: datetime
+
+    model_config = ConfigDict(from_attributes=True)
+
+    @field_validator("status", mode="before")
+    @classmethod
+    def normalize_status(cls, v: Any) -> str:
+        if hasattr(v, "value"):
+            return str(v.value)
+        return str(v)
+
+
+class DossierExercice(BaseModel):
+    exercice: str | None
+    doc_count: int
+    ready_count: int
+    processing_count: int
+    doc_categories: list[str]
+    documents: list[DossierDoc]
+
+
+class DossierClient(BaseModel):
+    client_name: str
+    exercices: list[DossierExercice]
+    total_docs: int
+    last_activity: datetime | None
 
