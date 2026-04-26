@@ -4014,3 +4014,121 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
   align-items: center;
   margin: 0 8px;
 }
+
+/* ── Dossier sidebar tree ───────────────────────────────────────────── */
+.dossier-client { border-bottom: 1px solid var(--border); }
+.dossier-client-header {
+  display: flex; align-items: center; gap: 8px;
+  padding: 10px 14px; cursor: pointer;
+  font-size: 12px; font-weight: 700; color: var(--text);
+  letter-spacing: 0.3px; transition: background var(--t);
+  user-select: none;
+}
+.dossier-client-header:hover { background: var(--bg-hover); }
+.dossier-client-count {
+  margin-left: auto; font-size: 10px; color: var(--text-muted);
+  background: var(--border); border-radius: 999px; padding: 1px 6px;
+}
+.dossier-exercice-header {
+  display: flex; align-items: center; gap: 6px;
+  padding: 7px 14px 7px 28px; cursor: pointer;
+  font-size: 11px; color: var(--text-muted);
+  transition: background var(--t); user-select: none;
+}
+.dossier-exercice-header:hover { background: var(--bg-hover); }
+.dossier-exercice-year { font-weight: 600; color: var(--text); }
+.dossier-status-dot { width: 6px; height: 6px; border-radius: 50%; flex-shrink: 0; }
+.dossier-status-dot.green { background: #22c55e; }
+.dossier-status-dot.orange { background: #f59e0b; }
+.dossier-docs-sidebar { padding-left: 12px; }
+.dossier-doc-sidebar-item {
+  padding: 6px 14px 6px 40px; cursor: pointer;
+  font-size: 11px; color: var(--text-muted);
+  transition: background var(--t); white-space: nowrap;
+  overflow: hidden; text-overflow: ellipsis;
+}
+.dossier-doc-sidebar-item:hover { background: var(--bg-hover); color: var(--text); }
+.sidebar-mode-toggle {
+  display: flex; gap: 4px; padding: 8px 12px 0;
+}
+.sidebar-mode-btn {
+  flex: 1; padding: 4px 8px; font-size: 11px; font-weight: 600;
+  border: 1px solid var(--border); border-radius: 6px; cursor: pointer;
+  background: transparent; color: var(--text-muted);
+  transition: background var(--t), color var(--t);
+}
+.sidebar-mode-btn.active { background: var(--accent); color: #fff; border-color: var(--accent); }
+
+/* ── Dossier page (zone principale) ───────────────────────────────── */
+#panel-dossier { padding: 0; overflow: hidden; display: flex; flex-direction: column; }
+.dossier-page-header {
+  display: flex; align-items: center; gap: 12px;
+  padding: 20px 24px 16px;
+  border-bottom: 1px solid var(--border);
+  flex-shrink: 0;
+}
+.dossier-page-title { flex: 1; min-width: 0; }
+.dossier-page-title h2 { margin: 0; font-size: 18px; font-weight: 700; color: var(--text); }
+.dossier-page-stats { font-size: 12px; color: var(--text-muted); margin-top: 2px; display: block; }
+.dossier-page-exercices {
+  padding: 0 24px 32px; overflow-y: auto; flex: 1;
+}
+.dossier-exercice-section {
+  margin-top: 24px; border: 1px solid var(--border);
+  border-radius: 8px; overflow: hidden;
+}
+.dossier-exercice-section-header {
+  display: flex; align-items: center; gap: 10px;
+  padding: 12px 16px;
+  background: rgba(255,255,255,0.03);
+  border-bottom: 1px solid var(--border);
+}
+.dossier-exercice-section-header h3 {
+  margin: 0; font-size: 14px; font-weight: 700; color: var(--text);
+}
+.dossier-docs-table {
+  width: 100%; border-collapse: collapse; font-size: 12px;
+}
+.dossier-docs-table th {
+  padding: 8px 12px; text-align: left;
+  color: var(--text-muted); font-weight: 600;
+  font-size: 11px; text-transform: uppercase; letter-spacing: 0.4px;
+  border-bottom: 1px solid var(--border);
+}
+.dossier-doc-row { cursor: pointer; transition: background var(--t); }
+.dossier-doc-row:hover { background: var(--bg-hover); }
+.dossier-doc-row td {
+  padding: 10px 12px; border-bottom: 1px solid rgba(255,255,255,0.05);
+  color: var(--text);
+}
+.dossier-doc-row:last-child td { border-bottom: none; }
+.badge-category {
+  font-size: 10px; padding: 2px 7px; border-radius: 999px;
+  background: var(--border); color: var(--text-muted);
+  font-weight: 600; text-transform: uppercase; letter-spacing: 0.3px;
+}
+.badge-green { background: rgba(34,197,94,0.15); color: #22c55e; }
+.badge-orange { background: rgba(245,158,11,0.15); color: #f59e0b; }
+
+/* ── Upload metadata row ───────────────────────────────────────────── */
+.upload-meta-row {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px; margin-top: 12px;
+}
+.upload-meta-field { position: relative; }
+.upload-meta-field label {
+  display: block; font-size: 11px; font-weight: 600;
+  color: var(--text-muted); margin-bottom: 4px;
+  text-transform: uppercase; letter-spacing: 0.5px;
+}
+.auto-badge {
+  position: absolute; right: 8px; top: 2px;
+  font-size: 10px; color: var(--accent); pointer-events: none;
+}
+
+@media (max-width: 640px) {
+  .upload-meta-row { grid-template-columns: 1fr; }
+  .dossier-page-header { padding: 14px 16px 12px; flex-wrap: wrap; }
+  .dossier-page-exercices { padding: 0 12px 24px; }
+}
