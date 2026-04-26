@@ -10,6 +10,9 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_403, http_404
 from app.core.security import generate_opaque_token, hash_token
 from app.models.integration import ApiKey, WebhookEndpoint
+from app.models.membership import Membership
+from app.models.organization import Organization, PlanType, ProfessionType
+from app.models.role import Role
 from app.schemas.integration import (
     ApiKeyCreateRequest,
     ApiKeyCreateResponse,
@@ -30,11 +33,65 @@ from app.services.webhook_notify import notify_json_webhook
 router = APIRouter()
 
 
-def _current_org_id(request: Request) -> UUID:
+async def _current_org_id(request: Request, current_user: CurrentUser, db: DbSession) -> UUID:
     org_id = getattr(request.state, "org_id", None)
-    if not org_id:
+    if org_id:
+        return org_id
+
+    if not current_user.is_platform_admin:
         raise http_400("Organisation introuvable pour cet utilisateur")
-    return org_id
+
+    result = await db.execute(
+        select(Organization).where(Organization.slug == "confidoc-admin")
+    )
+    organization = result.scalar_one_or_none()
+    if not organization:
+        organization = Organization(
+            name="ConfiDoc Admin",
+            slug="confidoc-admin",
+            profession_type=ProfessionType.CABINET_COMPTABLE,
+            plan=PlanType.ENTERPRISE,
+            is_active=True,
+        )
+        db.add(organization)
+        await db.flush()
+
+    result = await db.execute(
+        select(Role).where(Role.org_id == organization.id, Role.name == "owner")
+    )
+    role = result.scalar_one_or_none()
+    if not role:
+        role = Role(
+            org_id=organization.id,
+            name="owner",
+            permissions=["*"],
+            is_system=True,
+        )
+        db.add(role)
+        await db.flush()
+
+    result = await db.execute(
+        select(Membership).where(
+            Membership.user_id == current_user.id,
+            Membership.org_id == organization.id,
+        )
+    )
+    membership = result.scalar_one_or_none()
+    if not membership:
+        membership = Membership(
+            user_id=current_user.id,
+            org_id=organization.id,
+            role_id=role.id,
+            is_active=True,
+        )
+        db.add(membership)
+    elif not membership.is_active:
+        membership.is_active = True
+
+    await db.commit()
+    request.state.org_id = organization.id
+    request.state.membership = membership
+    return organization.id
 
 
 def _require_human_session(request: Request) -> None:
@@ -83,7 +140,7 @@ async def create_api_key(
     payload: ApiKeyCreateRequest,
 ) -> ApiKeyCreateResponse:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     raw_key = generate_api_key_value()
     api_key = ApiKey(
         org_id=org_id,
@@ -120,7 +177,7 @@ async def list_api_keys(
     db: DbSession,
 ) -> list[ApiKeyResponse]:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     result = await db.execute(
         select(ApiKey)
         .where(ApiKey.org_id == org_id)
@@ -141,7 +198,7 @@ async def revoke_api_key(
     db: DbSession,
 ) -> dict:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     result = await db.execute(
         select(ApiKey).where(ApiKey.id == api_key_id, ApiKey.org_id == org_id)
     )
@@ -167,7 +224,7 @@ async def create_webhook(
     payload: WebhookCreateRequest,
 ) -> WebhookCreateResponse:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     secret = payload.signing_secret or generate_opaque_token(32)
     endpoint = WebhookEndpoint(
         org_id=org_id,
@@ -196,7 +253,7 @@ async def list_webhooks(
     db: DbSession,
 ) -> list[WebhookResponse]:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     result = await db.execute(
         select(WebhookEndpoint)
         .where(WebhookEndpoint.org_id == org_id)
@@ -217,7 +274,7 @@ async def deactivate_webhook(
     db: DbSession,
 ) -> dict:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     result = await db.execute(
         select(WebhookEndpoint).where(
             WebhookEndpoint.id == webhook_id,
@@ -245,7 +302,7 @@ async def test_webhook(
     db: DbSession,
 ) -> WebhookTestResponse:
     _require_human_session(request)
-    org_id = _current_org_id(request)
+    org_id = await _current_org_id(request, current_user, db)
     result = await db.execute(
         select(WebhookEndpoint).where(
             WebhookEndpoint.id == webhook_id,
