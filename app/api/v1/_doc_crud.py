@@ -261,6 +261,33 @@ async def get_document(document_id: str, current_user: CurrentUser, db: DbSessio
     return await _get_user_document_or_404(db, document_id, current_user.id)
 
 
+@router.get(
+    "/{document_id}/raw",
+    status_code=status.HTTP_200_OK,
+    summary="Récupérer le fichier original brut (PDF/Image)",
+)
+async def get_document_raw(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> Response:
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    
+    try:
+        from app.services.storage_service import read_document_bytes
+        content = read_document_bytes(document)
+        return Response(
+            content=content,
+            media_type=document.content_type or "application/octet-stream",
+            headers={
+                "Content-Disposition": f'inline; filename="{document.original_filename}"'
+            }
+        )
+    except Exception as exc:
+        logger.error("get_document_raw_failed", doc_id=document_id, error=str(exc))
+        raise http_404("Fichier source introuvable sur le stockage.") from exc
+
+
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,

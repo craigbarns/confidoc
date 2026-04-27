@@ -19,6 +19,8 @@ class DocumentResponse(BaseModel):
     storage_key: str
     tags: list[str] | None = None
     doc_type: str | None = None
+    client_id: uuid.UUID | None = None
+    dossier_id: uuid.UUID | None = None
     client_name: str | None = None
     exercice: str | None = None
     doc_category: str | None = None
@@ -143,6 +145,8 @@ class StructuredDocumentResponse(BaseModel):
 
 
 class DocumentMetadataPatch(BaseModel):
+    client_id: uuid.UUID | None = Field(default=None)
+    dossier_id: uuid.UUID | None = Field(default=None)
     client_name: str | None = Field(default=None, max_length=120)
     exercice: str | None = Field(default=None, pattern=r"^\d{4}$")
     doc_category: str | None = Field(default=None, max_length=30)

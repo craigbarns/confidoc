@@ -3,6 +3,8 @@
 from app.models.audit_log import AuditLog
 from app.models.base import Base, BaseModel, TenantModel, TimestampMixin
 from app.models.beta_lead import BetaLead
+from app.models.client import Client
+from app.models.dossier import Dossier
 from app.models.document import Document, DocumentStatus
 from app.models.document_chunk import DocumentChunk
 from app.models.document_version import DocumentVersion, DocumentVersionType
@@ -23,6 +25,7 @@ __all__ = [
     "Base", "BaseModel", "TenantModel", "TimestampMixin",
     "Organization", "ProfessionType", "PlanType",
     "User", "Role", "Membership", "RefreshToken",
+    "Client", "Dossier",
     "Document", "DocumentStatus",
     "DocumentChunk",
     "DocumentVersion", "DocumentVersionType",

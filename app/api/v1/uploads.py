@@ -27,6 +27,8 @@ from app.config import get_settings
 from app.core.exceptions import http_400, http_413
 from app.core.logging import get_logger
 from app.core.sandbox import SandboxError, scan_file_for_malware
+from app.models.client import Client
+from app.models.dossier import Dossier
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
 from app.rate_limit import limiter
@@ -81,14 +83,22 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
     auto_anonymize: bool = Query(default=True),
-    profile: AnonymizationProfile = Query(default="moderate"),  # noqa: B008
+    profile: str = Query(default="moderate", description="moderate|strict|internal_review|external_sharing"),  # noqa: B008
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
+    client_id: uuid.UUID | None = Query(default=None),
+    dossier_id: uuid.UUID | None = Query(default=None),
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     exercice: str = Query(default=""),
     doc_category: str = Query(default=""),
 ) -> dict:
     """Upload un document via streaming vers un fichier temporaire pour éviter l'OOM."""
+    # Map intuitive modes
+    if profile == "internal_review":
+        profile = "moderate"
+    elif profile == "external_sharing":
+        profile = "strict"
+
     filename = file.filename or ""
     if "." not in filename:
         raise http_400("Nom de fichier invalide")
@@ -163,6 +173,8 @@ async def upload_document(
             profile=profile,
             document_type=document_type,
             client_name=client_name,
+            client_id=client_id,
+            dossier_id=dossier_id,
             exercice=exercice,
             doc_category=doc_category,
             background_tasks=background_tasks,
@@ -198,6 +210,8 @@ async def _upload_document_body(
     profile: str,
     document_type: str,
     client_name: str = "",
+    client_id: uuid.UUID | None = None,
+    dossier_id: uuid.UUID | None = None,
     exercice: str = "",
     doc_category: str = "",
     background_tasks: BackgroundTasks | None = None,
@@ -207,19 +221,6 @@ async def _upload_document_body(
     idempotency_request_hash: str | None = None,
 ) -> dict:
     """Corps métier upload (utilisant le fichier temporaire)."""
-    normalized_client_name = _normalize_client_name(client_name)
-    if not normalized_client_name:
-        raise http_400("Le champ client_name est obligatoire")
-
-    # Store to external storage
-    try:
-        storage_backend, storage_key = store_file(file_path=file_path, extension=extension)
-    except Exception as exc:
-        logger.warning("external_storage_failed", error=str(exc))
-        storage_backend = "database"
-        from uuid import uuid4
-        storage_key = f"db://{sha256}.{uuid4().hex}.{extension}"
-
     org_id = org_id_override
     if org_id is None:
         membership_res = await db.execute(
@@ -230,9 +231,45 @@ async def _upload_document_body(
         )
         membership = membership_res.scalar_one_or_none()
         org_id = membership.org_id if membership else None
-    uploaded_by_snapshot = str(current_user.id)
 
-    # Auto-detect metadata from file text (best-effort, skipped on failure)
+    # Resolve Client
+    resolved_client_id = client_id
+    resolved_client_name = _normalize_client_name(client_name)
+
+    if resolved_client_id:
+        client_res = await db.execute(
+            select(Client).where(Client.id == resolved_client_id, Client.org_id == org_id)
+        )
+        client = client_res.scalar_one_or_none()
+        if not client:
+            raise http_404("Client spécifié non trouvé")
+        resolved_client_name = client.name
+    elif resolved_client_name:
+        # Try to find existing client by name in this org (case-insensitive)
+        client_res = await db.execute(
+            select(Client).where(
+                Client.name.ilike(resolved_client_name),
+                Client.org_id == org_id,
+                Client.is_deleted.is_(False)
+            )
+        )
+        client = client_res.scalar_one_or_none()
+        if client:
+            resolved_client_id = client.id
+            resolved_client_name = client.name
+        else:
+            # Auto-create client
+            client = Client(name=resolved_client_name, org_id=org_id)
+            db.add(client)
+            await db.flush()
+            resolved_client_id = client.id
+
+    if not resolved_client_name:
+        raise http_400("Le nom du client ou client_id est obligatoire")
+
+    # Resolve Dossier (Exercice)
+    resolved_dossier_id = dossier_id
+    # Best-effort text extraction for suggestions
     raw_text = ""
     try:
         from app.services.anonymization_service import extract_text_from_file
@@ -240,10 +277,51 @@ async def _upload_document_body(
     except Exception:
         pass
 
-    suggestions = build_metadata_suggestions(raw_text, filename, [])
+    # Load known clients for smarter suggestion
+    known_clients_res = await db.execute(
+        select(Client.name).where(Client.org_id == org_id, Client.is_deleted.is_(False))
+    )
+    known_clients = [str(r) for r in known_clients_res.scalars().all()]
 
+    suggestions = build_metadata_suggestions(raw_text, filename, [], known_clients=known_clients)
     resolved_exercice = exercice.strip() or suggestions["exercice"] or None
     resolved_doc_category = doc_category.strip() or suggestions["doc_category"] or None
+
+    if resolved_dossier_id:
+        dossier_res = await db.execute(
+            select(Dossier).where(Dossier.id == resolved_dossier_id, Dossier.org_id == org_id)
+        )
+        dossier = dossier_res.scalar_one_or_none()
+        if not dossier:
+            raise http_404("Dossier spécifié non trouvé")
+        resolved_exercice = dossier.exercice
+        resolved_client_id = dossier.client_id
+    elif resolved_client_id and resolved_exercice:
+        # Try to find or create dossier
+        dossier_res = await db.execute(
+            select(Dossier).where(
+                Dossier.client_id == resolved_client_id,
+                Dossier.exercice == resolved_exercice,
+                Dossier.is_deleted.is_(False)
+            )
+        )
+        dossier = dossier_res.scalar_one_or_none()
+        if not dossier:
+            dossier = Dossier(client_id=resolved_client_id, exercice=resolved_exercice, org_id=org_id)
+            db.add(dossier)
+            await db.flush()
+        resolved_dossier_id = dossier.id
+
+    # Store to external storage
+    try:
+        storage_backend, storage_key = store_file(file_path=file_path, extension=extension)
+    except Exception as exc:
+        logger.warning("external_storage_failed", error=str(exc))
+        storage_backend = "database"
+        from uuid import uuid4
+        storage_key = f"db://{sha256}.{uuid4().hex}.{extension}"
+
+    uploaded_by_snapshot = str(current_user.id)
 
     document = Document(
         org_id=org_id,
@@ -257,8 +335,10 @@ async def _upload_document_body(
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
         raw_content=file_path.read_bytes() if storage_backend == "database" else None,
-        tags=[normalized_client_name],
-        client_name=normalized_client_name,
+        tags=[resolved_client_name],
+        client_name=resolved_client_name,
+        client_id=resolved_client_id,
+        dossier_id=resolved_dossier_id,
         exercice=resolved_exercice,
         doc_category=resolved_doc_category,
     )

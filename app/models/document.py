@@ -1,13 +1,18 @@
 """ConfiDoc Backend — Document model."""
 
 from enum import Enum as PyEnum
+from typing import TYPE_CHECKING
 import uuid
 
 from sqlalchemy import Enum, ForeignKey, Index, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.models.base import BaseModel, SoftDeleteMixin
+
+if TYPE_CHECKING:
+    from app.models.client import Client
+    from app.models.dossier import Dossier
 
 
 class DocumentStatus(str, PyEnum):
@@ -84,3 +89,21 @@ class Document(SoftDeleteMixin, BaseModel):
     # Raw file bytes — stored in DB as fallback when external storage is ephemeral
     # (e.g. Railway local /tmp). Nullable for backward compat with existing rows.
     raw_content: Mapped[bytes | None] = mapped_column(LargeBinary, nullable=True, default=None)
+
+    # Formalized Dossier relationships
+    client_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("clients.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+    dossier_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True),
+        ForeignKey("dossiers.id", ondelete="SET NULL"),
+        nullable=True,
+        index=True,
+    )
+
+    # Relationships
+    client = relationship("Client", back_populates="documents")
+    dossier = relationship("Dossier", back_populates="documents")

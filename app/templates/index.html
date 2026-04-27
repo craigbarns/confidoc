@@ -8,6 +8,102 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css" />
+  <style>
+    .review-station {
+      margin-top: 20px;
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      background: var(--bg);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+    .review-toolbar {
+      padding: 8px 16px;
+      background: var(--bg-hover);
+      border-bottom: 1px solid var(--border);
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+    .review-container {
+      display: flex;
+      height: 600px;
+      transition: all 0.3s ease;
+    }
+    .review-container.mode-text .original-pane {
+      display: none;
+    }
+    .review-pane {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+    .review-pane + .review-pane {
+      border-left: 1px solid var(--border);
+    }
+    .pane-header {
+      padding: 6px 12px;
+      font-size: 11px;
+      text-transform: uppercase;
+      letter-spacing: 0.05em;
+      color: var(--text-muted);
+      background: var(--bg);
+      border-bottom: 1px solid var(--border);
+      font-weight: 600;
+    }
+    .viewer-container {
+      flex: 1;
+      position: relative;
+      background: #1a1d24;
+      overflow: auto;
+    }
+    .viewer-placeholder {
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      height: 100%;
+      color: var(--text-muted);
+      font-size: 13px;
+    }
+    .original-viewer {
+      width: 100%;
+      height: 100%;
+      border: none;
+      background: white;
+    }
+    .interactive-text {
+      padding: 24px;
+      line-height: 1.6;
+      font-family: 'Inter', sans-serif;
+      font-size: 14px;
+      color: var(--text);
+      white-space: pre-wrap;
+      outline: none;
+      min-height: 100%;
+      background: var(--bg);
+    }
+    .review-station.fullscreen {
+      position: fixed;
+      top: 0; left: 0; right: 0; bottom: 0;
+      z-index: 9999;
+      border-radius: 0;
+      margin: 0;
+    }
+    .review-station.fullscreen .review-container {
+      height: calc(100vh - 45px);
+    }
+    .spinner-overlay {
+      position: absolute;
+      inset: 0;
+      background: rgba(0,0,0,0.5);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 10;
+    }
+  </style>
   <link rel="manifest" href="/static/manifest.json" />
   <meta name="theme-color" content="#0f1117" />
   <link rel="icon" type="image/svg+xml" href="data:image/svg+xml,<svg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 24 24'><rect width='24' height='24' rx='5' fill='%237c74ff'/><path d='M12 2l7 4v5c0 5-7 9-7 9s-7-4-7-9V6z' fill='white'/></svg>">
@@ -280,7 +376,10 @@
               <h2>Dossiers clients</h2>
               <span class="dossier-overview-subtitle" id="dossier-overview-stats"></span>
             </div>
-            <button class="btn btn-primary btn-sm" onclick="setSidebarMode('flat');setStep(1)">+ Nouveau document</button>
+            <div style="display:flex;gap:8px">
+              <button class="btn btn-ghost btn-sm" onclick="openCreateClientModal()">+ Nouveau client</button>
+              <button class="btn btn-primary btn-sm" onclick="setSidebarMode('flat');setStep(1)">+ Nouveau document</button>
+            </div>
           </div>
           <div id="dossier-client-grid" class="dossier-client-grid">
             <div class="spinner" style="margin:40px auto;grid-column:1/-1"></div>
@@ -497,7 +596,10 @@
         <h2>Uploader un document</h2>
         <div class="field-inline">
           <label for="upload-client-name">Client (obligatoire)</label>
-          <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" />
+          <div style="flex:1;position:relative;display:flex;align-items:center">
+            <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" style="flex:1" />
+            <span class="auto-badge" id="badge-client" style="display:none;position:absolute;right:8px;cursor:pointer" title="Cliquer pour accepter la suggestion IA">✨ Suggéré</span>
+          </div>
         </div>
         <div class="upload-meta-row">
           <div class="upload-meta-field">
@@ -591,13 +693,15 @@
         <div class="panel-header">
           <h2>Anonymisation</h2>
           <div class="panel-actions">
-            <select id="anon-mode" class="select-sm" title="Mode de protection RGPD">
-              <option value="pseudonymization">Pseudonymisation (Réversible)</option>
-              <option value="anonymization">Anonymisation forte (Irréversible)</option>
+            <select id="anon-profile" class="select-sm" title="But de l'anonymisation">
+              <option value="internal_review">Revue interne (Prépare pour Discussion IA)</option>
+              <option value="external_sharing">Partage externe (Sécurité maximale)</option>
+              <option value="moderate">Avancé : Moteur Standard</option>
+              <option value="strict">Avancé : Moteur IA</option>
             </select>
-            <select id="anon-profile" class="select-sm" title="Moteur d'anonymisation">
-              <option value="moderate">Moteur Standard (Rapide)</option>
-              <option value="strict">Moteur IA (Exhaustif)</option>
+            <select id="anon-mode" class="select-sm" title="Technique de masquage" style="display:none">
+              <option value="pseudonymization">Pseudonymisation (Tags [NOM_1])</option>
+              <option value="anonymization">Masquage total (Xxxxx)</option>
             </select>
             <div class="info-icon-group" title="Différence des moteurs :&#10;• Standard : Rapide, déterministe (Regex + Dictionnaire). Idéal pour IBAN, SIRET, Emails.&#10;• IA : Lent, contextuel (Mistral Large). Détecte les noms propres en phrase et les adresses complexes.">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);cursor:help">
@@ -671,25 +775,45 @@
             </div>
           </div>
 
-          <div class="text-preview">
-            <div id="anon-split-view" class="split" style="display:none">
-              <div class="split-pane">
-                <h4>Original <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle;opacity:0.7"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg></h4>
-                <div id="original-loading" class="loading-state" style="display:none">
-                  <div class="spinner spinner-sm"></div>
-                  <p>Chargement…</p>
-                </div>
-                <pre id="preview-original-text" class="preview-text"></pre>
+          <!-- NOUVELLE STATION DE REVUE INTERACTIVE -->
+          <div id="interactive-review-station" class="review-station">
+            <div class="review-toolbar">
+              <div class="review-mode-switch">
+                <button class="btn btn-ghost btn-sm active" id="btn-view-split" onclick="setReviewMode('split')">Vue côte à côte</button>
+                <button class="btn btn-ghost btn-sm" id="btn-view-text" onclick="setReviewMode('text')">Texte seul</button>
               </div>
-              <div class="split-pane">
-                <div class="split-pane-header">
-                  <h4>Anonymisé</h4>
-                </div>
-                <pre id="preview-anon-text" class="preview-text"></pre>
+              <div style="margin-left:auto; display:flex; gap:8px;">
+                 <button class="btn btn-ghost btn-sm" onclick="toggleReviewFullscreen()" title="Plein écran">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
+                 </button>
               </div>
             </div>
-            <div id="entity-legend" class="entity-legend"></div>
-            <div id="tab-diff" class="tab-content" style="display:block;margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
+
+            <div id="review-container" class="review-container mode-split">
+              <!-- Pane Gauche : Original (PDF/Image) -->
+              <div class="review-pane original-pane">
+                <div class="pane-header">Document Original</div>
+                <div id="original-viewer-container" class="viewer-container">
+                   <div id="original-loading-spinner" class="spinner-overlay" style="display:none"><div class="spinner"></div></div>
+                   <!-- Sera rempli dynamiquement par un iframe ou img -->
+                   <div id="original-placeholder" class="viewer-placeholder">Chargement du document...</div>
+                </div>
+              </div>
+
+              <!-- Pane Droite : Texte Anonymisé -->
+              <div class="review-pane anonymized-pane">
+                <div class="pane-header">Texte Anonymisé (Révision)</div>
+                <div class="viewer-container">
+                   <div id="preview-anon-text" class="preview-text interactive-text" contenteditable="true" spellcheck="false"></div>
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <div id="entity-legend" class="entity-legend"></div>
+          
+          <!-- L'ancienne vue diff est conservée en repli ou masquée par défaut -->
+          <div id="tab-diff" class="tab-content" style="display:none;margin-top:14px;border:1px solid var(--border);border-radius:var(--radius-lg);overflow:hidden">
               <div class="diff-legend">
                 <span class="diff-legend-item"><span class="diff-dot diff-dot-del"></span> Document Original</span>
                 <span class="diff-legend-item"><span class="diff-dot diff-dot-ins"></span> Document Anonymisé</span>
@@ -925,6 +1049,28 @@
     IA
   </button>
 </nav>
+
+<div id="modal-client-overlay" class="confirm-overlay" style="display:none">
+  <div class="confirm-card">
+    <div class="confirm-header">
+      <h3 id="modal-client-title">Nouveau client</h3>
+    </div>
+    <div class="confirm-body">
+      <div class="form-group" style="margin-bottom:12px">
+        <label for="new-client-name" style="display:block;margin-bottom:4px;font-size:12px">Nom du client</label>
+        <input type="text" id="new-client-name" class="input-sm" style="width:100%" placeholder="ex: Cabinet Durand" />
+      </div>
+      <div class="form-group">
+        <label for="new-client-ext-id" style="display:block;margin-bottom:4px;font-size:12px">Identifiant externe (optionnel)</label>
+        <input type="text" id="new-client-ext-id" class="input-sm" style="width:100%" placeholder="ex: COMPTA-42" />
+      </div>
+    </div>
+    <div class="confirm-footer">
+      <button class="btn btn-ghost btn-sm" onclick="closeClientModal()">Annuler</button>
+      <button class="btn btn-primary btn-sm" onclick="submitCreateClient()">Créer le client</button>
+    </div>
+  </div>
+</div>
 
 <script src="/static/js/app.js" nonce="{{CSP_NONCE}}"></script>
 </body>

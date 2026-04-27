@@ -172,10 +172,18 @@ async def anonymize_document(
     background_tasks: BackgroundTasks,
     auto_extract: bool = Query(default=True),
     use_llm: bool = Query(default=False),
-    profile: str = Query(default="moderate", description="moderate | strict"),
+    profile: str = Query(default="moderate", description="moderate | strict | internal_review | external_sharing"),
     document_type: str = Query(default="auto"),
     mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
 ) -> dict:
+    # Map intuitive modes to internal ones
+    if profile == "internal_review":
+        profile = "moderate"
+        mode = "pseudonymization"
+    elif profile == "external_sharing":
+        profile = "strict"
+        mode = "anonymization"
+
     document = await _get_user_document_or_404(db, document_id, current_user.id)
 
     document.status = DocumentStatus.PROCESSING

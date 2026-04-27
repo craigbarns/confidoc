@@ -6,9 +6,12 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import desc, select
+from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import _get_user_document_or_404
+from app.models.client import Client
+from app.models.dossier import Dossier
 from app.models.document import Document, DocumentStatus
 from app.schemas.document import (
     DocumentMetadataPatch,
@@ -40,12 +43,14 @@ async def get_dossiers(
     db: DbSession,
     client_name: str = Query(default="", description="Filtrer par client (sous-chaîne, insensible à la casse)"),
 ) -> list[DossierClient]:
+    """Retourne la structure dossier. 
+    Priorise les entités Client/Dossier formelles, sinon repli sur les champs Document.client_name.
+    """
     query = (
         select(Document)
         .where(
-            Document.uploaded_by_user_id == current_user.id,
+            Document.org_id == current_user.org_id,
             Document.is_deleted.is_(False),
-            Document.client_name.isnot(None),
         )
         .order_by(Document.client_name, desc(Document.exercice), desc(Document.created_at))
     )
@@ -58,10 +63,10 @@ async def get_dossiers(
     # Group in Python: client_name → exercice → list[doc]
     clients: dict[str, dict[str | None, list[Document]]] = {}
     for doc in docs:
-        cname = doc.client_name or ""
+        cname = doc.client_name or "Sans Client"
         if cname not in clients:
             clients[cname] = {}
-        ex = doc.exercice  # may be None
+        ex = doc.exercice or "Sans Exercice"
         if ex not in clients[cname]:
             clients[cname][ex] = []
         clients[cname][ex].append(doc)
@@ -120,13 +125,31 @@ async def patch_document_metadata(
     db: DbSession,
 ) -> Document:
     doc = await _get_user_document_or_404(db, document_id, current_user.id)
+    
+    if patch.client_id is not None:
+        doc.client_id = patch.client_id
+        client = await db.get(Client, patch.client_id)
+        if client:
+            doc.client_name = client.name
+            doc.tags = [client.name]
+
+    if patch.dossier_id is not None:
+        doc.dossier_id = patch.dossier_id
+        dossier = await db.get(Dossier, patch.dossier_id)
+        if dossier:
+            doc.exercice = dossier.exercice
+            doc.client_id = dossier.client_id
+
     if patch.client_name is not None:
         doc.client_name = patch.client_name
-        doc.tags = [patch.client_name]  # keep tags in sync for backward compat
+        doc.tags = [patch.client_name]
+    
     if patch.exercice is not None:
         doc.exercice = patch.exercice
+    
     if patch.doc_category is not None:
         doc.doc_category = patch.doc_category
+        
     await db.commit()
     await db.refresh(doc)
     return doc

@@ -774,18 +774,32 @@ function renderSidebarStats(docs = []) {
   el.style.display = "";
 }
 
+let allClients = [];
+
 async function loadClientSuggestions() {
-  const el = $("clients-suggestions");
-  if (!el) return;
+  const datalist = $("clients-suggestions");
+  if (!datalist) return;
   try {
-    const qp = currentIncludeDeleted ? "?include_deleted=true" : "";
-    const clients = await apiFetch(`/documents/clients${qp}`);
-    el.innerHTML = (clients || [])
-      .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+    allClients = await apiFetch("/clients");
+    datalist.innerHTML = allClients
+      .map((c) => `<option value="${escapeHtml(c.name)}" data-id="${c.id}"></option>`)
       .join("");
   } catch (_e) {
-    el.innerHTML = "";
+    // Fallback to legacy behavior if /clients fails
+    try {
+      const names = await apiFetch("/documents/clients");
+      datalist.innerHTML = (names || [])
+        .map((name) => `<option value="${escapeHtml(name)}"></option>`)
+        .join("");
+    } catch (_e2) {
+      datalist.innerHTML = "";
+    }
   }
+}
+
+function getClientIdByName(name) {
+  const client = allClients.find(c => c.name.toLowerCase() === name.toLowerCase());
+  return client ? client.id : null;
 }
 
 function renderDocListSkeleton() {
@@ -1064,6 +1078,42 @@ function toggleDossierExercice(headerEl) {
 
 let currentDossierClient = "";
 
+function openCreateClientModal() {
+  $("modal-client-overlay").style.display = "";
+  $("new-client-name").value = "";
+  $("new-client-ext-id").value = "";
+  setTimeout(() => $("new-client-name").focus(), 100);
+}
+
+function closeClientModal() {
+  $("modal-client-overlay").style.display = "none";
+}
+
+async function submitCreateClient() {
+  const name = $("new-client-name").value.trim();
+  const external_id = $("new-client-ext-id").value.trim();
+  if (!name) {
+    toast("Le nom du client est requis", "error");
+    return;
+  }
+  try {
+    await apiFetch("/clients", {
+      method: "POST",
+      body: JSON.stringify({ name, external_id })
+    });
+    toast(`Client "${name}" créé`, "success");
+    closeClientModal();
+    await loadClientSuggestions();
+    if (sidebarMode === "dossier") {
+      if (currentDossierClient) loadDossierClientPage(currentDossierClient);
+      else loadDossierOverview();
+      loadDossierTree();
+    }
+  } catch (e) {
+    toast("Erreur : " + e.message, "error");
+  }
+}
+
 function openDossierOverview() {
   currentDossierClient = "";
   const overview = $("dossier-overview");
@@ -1243,19 +1293,40 @@ function initExerciceSelect() {
 
 function prefillUploadMetadata(suggestions) {
   if (!suggestions) return;
+  
   const fields = [
     { id: "upload-exercice", val: suggestions.exercice_detected, badgeId: "badge-exercice" },
     { id: "upload-doc-category", val: suggestions.doc_category_detected, badgeId: "badge-doc-category" },
   ];
+  
   fields.forEach(({ id, val, badgeId }) => {
     const el = $(id);
     const badge = $(badgeId);
     if (!el || !val) return;
     if (!el.value) {
       el.value = val;
-      if (badge) badge.style.display = "";
+      if (badge) {
+        badge.style.display = "";
+        badge.textContent = "✨ IA";
+        badge.title = "Détecté automatiquement par l'IA";
+      }
     }
   });
+
+  // Client suggestion is special (badge and click to accept)
+  const clientInput = $("upload-client-name");
+  const clientBadge = $("badge-client");
+  const suggestedName = suggestions.client_suggestion;
+
+  if (clientInput && clientBadge && suggestedName && !clientInput.value.trim()) {
+    clientBadge.style.display = "";
+    clientBadge.textContent = `✨ ${suggestedName.length > 15 ? suggestedName.slice(0, 13) + "…" : suggestedName}`;
+    clientBadge.onclick = () => {
+      clientInput.value = suggestedName;
+      clientBadge.style.display = "none";
+      toast("Client accepté", "success");
+    };
+  }
 }
 
 // ── Batch mode ──────────────────────────────────────────────────────────
@@ -1571,6 +1642,8 @@ async function uploadFile(file) {
   const fd = new FormData();
   fd.append("file", file);
   const clientName = ($("upload-client-name")?.value || "").trim();
+  const clientId = getClientIdByName(clientName);
+  
   if (!clientName) {
     zone.style.display = "";
     progress.style.display = "none";
@@ -1581,7 +1654,7 @@ async function uploadFile(file) {
   }
 
   try {
-    const clientQp = clientName ? `&client_name=${encodeURIComponent(clientName)}` : "";
+    const clientQp = clientId ? `&client_id=${clientId}` : `&client_name=${encodeURIComponent(clientName)}`;
     const exerciceQp = ($("upload-exercice")?.value || "").trim();
     const catQp = ($("upload-doc-category")?.value || "").trim();
     const autoAnon = $("upload-auto-anonymize")?.checked ?? true;
@@ -1713,6 +1786,53 @@ function hideAnonLoading() {
   if (spinner) spinner.style.display = "";
 }
 
+function setReviewMode(mode) {
+  const container = $("review-container");
+  if (!container) return;
+  container.className = `review-container mode-${mode}`;
+  $("btn-view-split").classList.toggle("active", mode === "split");
+  $("btn-view-text").classList.toggle("active", mode === "text");
+}
+
+function toggleReviewFullscreen() {
+  const station = $("interactive-review-station");
+  if (station) station.classList.toggle("fullscreen");
+}
+
+async function loadOriginalDocument(docId) {
+  const container = $("original-viewer-container");
+  const spinner = $("original-loading-spinner");
+  if (!container) return;
+
+  spinner.style.display = "";
+  try {
+    const doc = lastDocsList.find(d => d.id === docId);
+    const contentType = doc ? doc.content_type : "application/pdf";
+    const url = `${API}/documents/${docId}/raw?token=${token}`; // Token as query param for iframe if needed, though auth headers are preferred
+    
+    // Better: use blob URL with auth headers to avoid token in URL
+    const resp = await fetch(`${API}/documents/${docId}/raw`, {
+       headers: { "Authorization": `Bearer ${token}` }
+    });
+    if (!resp.ok) throw new Error("Impossible de charger le document d'origine");
+    
+    const blob = await resp.blob();
+    const blobUrl = URL.createObjectURL(blob);
+
+    if (contentType.includes("pdf")) {
+      container.innerHTML = `<iframe src="${blobUrl}" class="original-viewer"></iframe>`;
+    } else if (contentType.includes("image")) {
+      container.innerHTML = `<img src="${blobUrl}" class="original-viewer" style="object-fit: contain;" />`;
+    } else {
+      container.innerHTML = `<div class="viewer-placeholder">Aperçu non disponible pour ce format (${contentType})</div>`;
+    }
+  } catch (e) {
+    container.innerHTML = `<div class="viewer-placeholder" style="color:var(--error)">Erreur: ${e.message}</div>`;
+  } finally {
+    spinner.style.display = "none";
+  }
+}
+
 function showAnonResults(previewText, count, summary = {}, risk = null, mode = "pseudonymization", fullData = {}) {
   hideAnonLoading();
   const processingConsole = $("processing-console");
@@ -1720,6 +1840,11 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+
+  // Load original document in the viewer
+  if (currentDocId) {
+    loadOriginalDocument(currentDocId);
+  }
 
   // Render audit insights if available
   renderAuditInsights(fullData);

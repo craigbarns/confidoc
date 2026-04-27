@@ -56,17 +56,36 @@ def extract_exercice(text: str) -> str | None:
     return None
 
 
-def suggest_client(text: str, detections: list[dict]) -> str | None:
-    for det in detections[:20]:
+def suggest_client(text: str, detections: list[dict], known_clients: list[str] | None = None) -> str | None:
+    """Suggère un client en croisant les détections avec les clients connus de la DB."""
+    sample = text[:5000]
+
+    # 1. Priorité absolue : match exact avec un client existant dans le texte
+    if known_clients:
+        for client_name in known_clients:
+            if len(client_name) < 4:
+                continue
+            # Recherche insensible à la casse avec frontières de mots
+            pattern = rf"(?i)\b{re.escape(client_name)}\b"
+            if re.search(pattern, sample):
+                return client_name
+
+    # 2. Heuristique : Première entité de type SOCIETE trouvée
+    for det in detections[:15]:
         etype = str(det.get("entity_type") or "").upper()
         val = str(det.get("value_excerpt") or "").strip()
-        if etype in ("COMPANY", "SOCIETE", "ORGANISATION") and len(val) >= 3:
-            return val[:80]
-    for det in detections[:20]:
-        etype = str(det.get("entity_type") or "").upper()
-        val = str(det.get("value_excerpt") or "").strip()
-        if etype in ("PERSON", "PERSONNE", "PERSON_NAME") and len(val) >= 3:
-            return val[:80]
+        # On évite les termes trop génériques
+        if etype in ("SOCIETE", "ORGANISATION", "LEGAL_DENOMINATION", "COMPANY") and len(val) >= 3:
+            if val.lower() not in ("confidoc", "page", "exercice", "bilan", "client"):
+                return val[:80]
+
+    # 3. Repli : Bloc d'identité
+    for det in detections[:10]:
+        if det.get("entity_type") == "invoice_identity_block":
+            val = det.get("value_excerpt", "").split("\n")[0].strip()
+            if len(val) > 3:
+                return val[:80]
+
     return None
 
 
@@ -92,9 +111,10 @@ def build_metadata_suggestions(
     text: str,
     filename: str,
     detections: list[dict],
+    known_clients: list[str] | None = None,
 ) -> dict:
     return {
         "doc_category": classify_doc_category(text, filename),
         "exercice": extract_exercice(text),
-        "client_suggestion": suggest_client(text, detections),
+        "client_suggestion": suggest_client(text, detections, known_clients=known_clients),
     }
