@@ -291,6 +291,7 @@ async def get_document_raw(
 @router.delete(
     "/{document_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Supprimer un document (soft delete — corbeille)",
 )
 async def delete_document(
@@ -344,6 +345,7 @@ async def restore_document(
 @router.delete(
     "/{document_id}/permanent",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Suppression définitive d'un document (RGPD)",
 )
 async def permanent_delete_document(
