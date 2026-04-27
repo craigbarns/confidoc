@@ -428,6 +428,7 @@ function logout() {
   if (activeStream) { activeStream.abort(); activeStream = null; }
   // Ferme la modale de confirmation si elle était ouverte (ex: token expiré pendant un delete)
   if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
+  dismissOnboardingOverlay();
   $("screen-auth").style.display = "";
   $("screen-app").style.display = "none";
   $("btn-logout").style.display = "none";
@@ -441,6 +442,8 @@ async function initApp(email) {
   $("btn-logout").style.display = "";
   if ($("btn-security")) $("btn-security").style.display = "";
   if ($("btn-dashboard")) $("btn-dashboard").style.display = "";
+  dismissOnboardingOverlay();
+  localStorage.setItem(ONBOARDING_KEY, "true");
 
   // Afficher l'email : si non fourni, le charger depuis l'API
   if (email) {
@@ -462,10 +465,12 @@ async function initApp(email) {
   restoreFilterState();
   await loadClientSuggestions();
   await loadDocList();
+}
 
-  if (!localStorage.getItem(ONBOARDING_KEY)) {
-    setTimeout(() => showOnboarding(), 500);
-  }
+function dismissOnboardingOverlay() {
+  const overlay = $("onboarding-overlay");
+  if (overlay) overlay.remove();
+  document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
 }
 
 function updateHeaderContext() {
@@ -2085,6 +2090,7 @@ function loadChatHistory(docId) {
 // ── Onboarding ─────────────────────────────────────────────────────────
 
 function showOnboarding() {
+  dismissOnboardingOverlay();
   const steps = [
     { target: ".upload-zone", title: "📄 Uploadez un document", text: "Glissez un PDF, PNG ou JPEG — contrat, bilan, relevé bancaire. Saisissez le nom du client. Max 50 MB." },
     { target: "#btn-anonymize", title: "🔒 Anonymisation RGPD", text: "L'IA détecte noms, IBAN, SIREN, adresses… et les remplace par des balises. Mode modéré ou strict selon votre besoin." },
