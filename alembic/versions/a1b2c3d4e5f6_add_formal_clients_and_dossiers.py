@@ -69,7 +69,7 @@ def upgrade() -> None:
         INSERT INTO clients (id, org_id, name, created_at, updated_at, is_deleted)
         SELECT DISTINCT gen_random_uuid(), org_id, client_name, now(), now(), false
         FROM documents
-        WHERE client_name IS NOT NULL AND client_id IS NULL;
+        WHERE client_name IS NOT NULL AND client_id IS NULL AND org_id IS NOT NULL;
     """)
     
     op.execute("""
