@@ -128,6 +128,7 @@ async def update_client(
 @router.delete(
     "/{client_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Supprimer un client",
 )
 async def delete_client(
