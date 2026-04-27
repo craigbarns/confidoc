@@ -119,6 +119,7 @@ async def get_dossier(
 @router.delete(
     "/{dossier_id}",
     status_code=status.HTTP_204_NO_CONTENT,
+    response_model=None,
     summary="Supprimer un dossier",
 )
 async def delete_dossier(
