@@ -67,9 +67,13 @@ def upgrade() -> None:
     # We use raw SQL to ensure it works even if models change later
     op.execute("""
         INSERT INTO clients (id, org_id, name, created_at, updated_at, is_deleted)
-        SELECT DISTINCT gen_random_uuid(), org_id, client_name, now(), now(), false
-        FROM documents
-        WHERE client_name IS NOT NULL AND client_id IS NULL AND org_id IS NOT NULL;
+        SELECT gen_random_uuid(), org_id, client_name, now(), now(), false
+        FROM (
+            SELECT DISTINCT ON (org_id, client_name) org_id, client_name
+            FROM documents
+            WHERE client_name IS NOT NULL AND client_id IS NULL AND org_id IS NOT NULL
+        ) sub
+        ON CONFLICT DO NOTHING;
     """)
     
     op.execute("""
@@ -81,9 +85,13 @@ def upgrade() -> None:
     
     op.execute("""
         INSERT INTO dossiers (id, org_id, client_id, exercice, created_at, updated_at, is_deleted)
-        SELECT DISTINCT gen_random_uuid(), org_id, client_id, exercice, now(), now(), false
-        FROM documents
-        WHERE exercice IS NOT NULL AND client_id IS NOT NULL AND dossier_id IS NULL;
+        SELECT gen_random_uuid(), org_id, client_id, exercice, now(), now(), false
+        FROM (
+            SELECT DISTINCT ON (client_id, exercice) org_id, client_id, exercice
+            FROM documents
+            WHERE exercice IS NOT NULL AND client_id IS NOT NULL AND dossier_id IS NULL
+        ) sub
+        ON CONFLICT (client_id, exercice) DO NOTHING;
     """)
     
     op.execute("""
