@@ -51,9 +51,12 @@ RUN pip install --no-cache-dir torch torchvision --index-url https://download.py
 
 COPY . .
 
+COPY docker/entrypoint.sh /entrypoint.sh
+RUN chmod +x /entrypoint.sh
+
 RUN useradd -m confidoc && chown -R confidoc:confidoc /app
 USER confidoc
 
 EXPOSE 8000
 
-CMD ["sh", "-c", "alembic upgrade head && python -m uvicorn app.main:app --host 0.0.0.0 --port ${PORT:-8000}"]
+ENTRYPOINT ["/entrypoint.sh"]
