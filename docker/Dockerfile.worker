@@ -1,5 +1,7 @@
 # ==============================================================================
 # ConfiDoc Backend — Celery Worker Dockerfile
+# This image ONLY runs the Celery worker. It does NOT start Uvicorn or FastAPI.
+# Railway must use this file via railway.worker.toml (builder = "dockerfile").
 # ==============================================================================
 FROM python:3.11-slim-bookworm AS builder
 
@@ -31,6 +33,10 @@ FROM python:3.11-slim-bookworm
 
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
+# Explicit marker: this container is a Celery worker, not the API.
+# Railpack / Railway must never override this with uvicorn.
+ENV CELERY_WORKER=true
+ENV PORT=""
 
 WORKDIR /app
 
@@ -52,8 +58,12 @@ COPY . .
 # Télécharger le modèle spaCy de base (NER FR) - Optionnel mais recommandé ici
 RUN python -m spacy download fr_core_news_md
 
+COPY docker/entrypoint-worker.sh /entrypoint-worker.sh
+RUN chmod +x /entrypoint-worker.sh
+
 RUN useradd -m confidoc && chown -R confidoc:confidoc /app
 USER confidoc
 
-# Lancer le worker principal (écoute la queue par défaut celery)
-CMD ["celery", "-A", "app.workers.celery_app", "worker", "--loglevel=INFO", "--pool=threads", "--concurrency=2"]
+# ENTRYPOINT (not CMD) ensures Railway/Railpack cannot override the command.
+# The worker runs Celery exclusively — Uvicorn is never started here.
+ENTRYPOINT ["/entrypoint-worker.sh"]
