@@ -1,0 +1,429 @@
+{
+  "timestamp": 1777139361.55824,
+  "total": 47,
+  "passed": 17,
+  "failed": 30,
+  "pass_rate": 36.17021276595745,
+  "results": [
+    {
+      "case_id": "bilan_actif_passif_separes_002",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_adama_2023",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='bilan' obtenu='autre'",
+        "extractor_name: attendu='extractor_bilan' obtenu='llm:mistral-large'",
+        "critical_fields.total_actif: attendu=342271.86 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.total_passif: attendu=342271.86 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.capitaux_propres: attendu=121012.81 obtenu=None",
+        "critical_fields.dettes_financieres: attendu=31844.55 obtenu=None",
+        "critical_fields.dettes_fournisseurs: attendu=4072.3 obtenu=None",
+        "quality.needs_review: attendu=False obtenu=True",
+        "quality.ready_for_ai: attendu=True obtenu=False",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "bilan_adama_2024",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='bilan' obtenu='autre'",
+        "extractor_name: attendu='extractor_bilan' obtenu='llm:mistral-large'",
+        "critical_fields.total_actif: attendu=312593.89 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.total_passif: attendu=312593.89 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.capitaux_propres: attendu=1042.73 obtenu=None",
+        "critical_fields.dettes_financieres: attendu=190241.85 obtenu=None",
+        "critical_fields.dettes_fournisseurs: attendu=4586.59 obtenu=None",
+        "quality.needs_review: attendu=False obtenu=True",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "bilan_clean_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='bilan' obtenu='autre'",
+        "extractor_name: attendu='extractor_bilan' obtenu='llm:mistral-large'",
+        "critical_fields.total_actif: attendu=100000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.total_passif: attendu=100000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.capitaux_propres: attendu=29000.0 obtenu=None",
+        "critical_fields.dettes_financieres: attendu=70000.0 obtenu=None",
+        "critical_fields.dettes_fournisseurs: attendu=1000.0 obtenu=None",
+        "quality.needs_review: attendu=False obtenu=True",
+        "quality.ready_for_ai: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "bilan_colonnes_N_N1_003",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_liasse_2050_001",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_noisy_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='bilan' obtenu='autre'",
+        "extractor_name: attendu='extractor_bilan' obtenu='llm:mistral-large'",
+        "critical_fields.total_actif: attendu=1250000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.total_passif: attendu=1250000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.capitaux_propres: attendu=300000.0 obtenu=None",
+        "quality.critical_missing_fields: attendu=['dettes_financieres', 'dettes_fournisseurs'] obtenu=[]",
+        "quality_flags_must_include manquants=['critical_fields_missing']"
+      ]
+    },
+    {
+      "case_id": "bilan_ocr_stress_001",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_pcg_fort_005",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_plaquette_ocr_004",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_total_general_001",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "bilan_waveA_real_2024_001",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='bilan' obtenu='autre'",
+        "extractor_name: attendu='extractor_bilan' obtenu='llm:mistral-large'",
+        "critical_fields.total_actif: attendu=607665.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.total_passif: attendu=607665.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.capitaux_propres: attendu=340377.0 obtenu=None",
+        "critical_fields.resultat_exercice: attendu=5365.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.dettes_financieres: attendu=156565.0 obtenu=None",
+        "critical_fields.dettes_fournisseurs: attendu=57864.0 obtenu=None",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "bilan_wemade_2023_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='bilan' obtenu='autre'",
+        "extractor_name: attendu='extractor_bilan' obtenu='llm:mistral-large'",
+        "critical_fields.total_actif: attendu=558159.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.total_passif: attendu=558159.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.capitaux_propres: attendu=359429.0 obtenu=None",
+        "critical_fields.resultat_exercice: attendu=108567.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.dettes_financieres: attendu=31237.0 obtenu=None",
+        "critical_fields.dettes_fournisseurs: attendu=58450.0 obtenu=None",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "wemade_real_001",
+      "pass": false,
+      "diffs": [
+        "quality.needs_review: attendu=False obtenu=True",
+        "quality.ready_for_ai: attendu=True obtenu=False",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "cr_adama_2023",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='compte_resultat' obtenu='autre'",
+        "extractor_name: attendu='extractor_compte_resultat' obtenu='llm:mistral-large'",
+        "critical_fields.chiffre_affaires: attendu=26640.08 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.resultat_exploitation: attendu=7729.28 obtenu=None",
+        "critical_fields.charges_financieres: attendu=276.22 obtenu=None",
+        "critical_fields.resultat_net: attendu=7453.06 obtenu={'montant': None, 'source_snippet': None}",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "cr_adama_2024",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='compte_resultat' obtenu='autre'",
+        "extractor_name: attendu='extractor_compte_resultat' obtenu='llm:mistral-large'",
+        "critical_fields.chiffre_affaires: attendu=30327.48 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.resultat_exploitation: attendu=1081.59 obtenu=None",
+        "critical_fields.charges_financieres: attendu=38.86 obtenu=None",
+        "critical_fields.resultat_net: attendu=1042.73 obtenu={'montant': None, 'source_snippet': None}",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "cr_clean_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='compte_resultat' obtenu='autre'",
+        "extractor_name: attendu='extractor_compte_resultat' obtenu='llm:mistral-large'",
+        "critical_fields.chiffre_affaires: attendu=50000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.charges_externes: attendu=20000.0 obtenu=None",
+        "critical_fields.resultat_exploitation: attendu=8000.0 obtenu=None",
+        "critical_fields.resultat_courant: attendu=7500.0 obtenu=None",
+        "critical_fields.resultat_net: attendu=7000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "cr_lignes_to_total_005",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "cr_multi_colonnes_003",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "cr_noisy_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='compte_resultat' obtenu='autre'",
+        "extractor_name: attendu='extractor_compte_resultat' obtenu='llm:mistral-large'",
+        "critical_fields.chiffre_affaires: attendu=1200000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.charges_externes: attendu=500000.0 obtenu=None",
+        "critical_fields.resultat_exploitation: attendu=120000.0 obtenu=None",
+        "critical_fields.resultat_courant: attendu=110000.0 obtenu=None",
+        "critical_fields.resultat_net: attendu=95000.0 obtenu={'montant': None, 'source_snippet': None}",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "cr_total_ocr_sale_002",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "cr_total_only_004",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "cr_total_propre_001",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "cr_wemade_2023_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='compte_resultat' obtenu='autre'",
+        "extractor_name: attendu='extractor_compte_resultat' obtenu='llm:mistral-large'",
+        "critical_fields.chiffre_affaires: attendu=265918.0 obtenu={'montant': None, 'source_snippet': None}",
+        "critical_fields.resultat_exploitation: attendu=155302.0 obtenu=None",
+        "critical_fields.charges_financieres: attendu=796.0 obtenu=None",
+        "critical_fields.resultat_net: attendu=108567.0 obtenu={'montant': None, 'source_snippet': None}",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "2072_adama_2023",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='fiscal_2072' obtenu='autre'",
+        "extractor_name: attendu='extractor_2072' obtenu='llm:mistral-large'",
+        "critical_fields.revenus_bruts: attendu=26813.0 obtenu=None",
+        "critical_fields.frais_charges_hors_interets: attendu=6404.0 obtenu=None",
+        "critical_fields.interets_emprunts: attendu=276.0 obtenu=None",
+        "critical_fields.revenu_net_foncier: attendu=20133.0 obtenu=None",
+        "critical_fields.nombre_associes: attendu=2 obtenu=None",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "2072_annexe_forte_001",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "2072_blocage_ambigu_005",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "2072_clean_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='fiscal_2072' obtenu='autre'",
+        "extractor_name: attendu='extractor_2072' obtenu='llm:mistral-large'",
+        "critical_fields.revenus_bruts: attendu=120000.0 obtenu=None",
+        "critical_fields.frais_charges_hors_interets: attendu=30000.0 obtenu=None",
+        "critical_fields.interets_emprunts: attendu=10000.0 obtenu=None",
+        "critical_fields.revenu_net_foncier: attendu=80000.0 obtenu=None",
+        "quality_flags_must_include manquants=['low_field_coverage']",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "2072_derive_propre_004",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "2072_frais_negatifs_003",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "2072_noisy_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='fiscal_2072' obtenu='autre'",
+        "extractor_name: attendu='extractor_2072' obtenu='llm:mistral-large'",
+        "critical_fields.revenus_bruts: attendu=30371.0 obtenu=None",
+        "critical_fields.interets_emprunts: attendu=28493.0 obtenu=None",
+        "critical_fields.revenu_net_foncier: attendu=17897.0 obtenu=None",
+        "quality.critical_missing_fields: attendu=['frais_charges_hors_interets'] obtenu=[]",
+        "quality_flags_must_include manquants=['critical_fields_missing', 'low_field_coverage']"
+      ]
+    },
+    {
+      "case_id": "2072_noisy_02",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='fiscal_2072' obtenu='autre'",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "2072_toplevel_fort_002",
+      "pass": true,
+      "diffs": []
+    },
+    {
+      "case_id": "immo_weinvest_2024_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='etat_immobilisations' obtenu='autre'",
+        "extractor_name: attendu='extractor_etat_immobilisations' obtenu='llm:mistral-large'",
+        "critical_fields.total_brut_immobilisations: attendu=455683.09 obtenu=None",
+        "critical_fields.total_amortissements: attendu=20060.24 obtenu=None",
+        "critical_fields.total_net_immobilisations: attendu=20060.24 obtenu=None",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    },
+    {
+      "case_id": "ocr_docvqa_test_000",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_docvqa_test_001",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_docvqa_test_002",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_docvqa_test_012",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='facture_fournisseur' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_funsd_train_000",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_funsd_train_001",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='facture_fournisseur' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_funsd_train_002",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_funsd_train_025",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='facture_fournisseur' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_sroie_train_000",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_sroie_train_001",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_sroie_train_002",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "ocr_sroie_train_003",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='unknown_other' obtenu='autre'",
+        "extractor_name: attendu='extractor_common_fallback' obtenu='llm:mistral-large'"
+      ]
+    },
+    {
+      "case_id": "releve_clean_01",
+      "pass": false,
+      "diffs": [
+        "doc_type: attendu='releve_bancaire' obtenu='autre'",
+        "extractor_name: attendu='extractor_releve_bancaire' obtenu='llm:mistral-large'",
+        "critical_fields.solde_initial: attendu=1000.0 obtenu=None",
+        "critical_fields.solde_final: attendu=1680.0 obtenu=None",
+        "quality.needs_review: attendu=False obtenu=True",
+        "quality.ready_for_ai: attendu=True obtenu=False",
+        "quality.ready_for_ai_core: attendu=True obtenu=False"
+      ]
+    }
+  ]
+}
