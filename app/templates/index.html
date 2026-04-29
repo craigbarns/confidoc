@@ -114,7 +114,14 @@
 
 <header class="app-header glass">
   <div class="header-inner">
-    <div class="logo">
+    <button id="btn-app-nav-toggle" class="app-nav-toggle btn-icon" aria-label="Menu" style="display:none">
+      <svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+        <line x1="3" y1="6" x2="21" y2="6"/>
+        <line x1="3" y1="12" x2="21" y2="12"/>
+        <line x1="3" y1="18" x2="21" y2="18"/>
+      </svg>
+    </button>
+    <div class="logo" id="logo-btn" role="button" tabindex="0" aria-label="Retour à l'accueil">
       <div class="logo-icon">
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -122,31 +129,10 @@
       </div>
       <span class="logo-text">ConfiDoc</span>
     </div>
-    <div class="header-tagline" style="font-weight: 500; letter-spacing: 0.2px;">Dossiers clients securises avant IA</div>
     <div class="header-actions">
-      <button id="btn-sidebar-toggle" class="sidebar-toggle btn-icon" aria-label="Menu documents">
-        <svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <line x1="3" y1="6" x2="21" y2="6"/>
-          <line x1="3" y1="12" x2="21" y2="12"/>
-          <line x1="3" y1="18" x2="21" y2="18"/>
-        </svg>
-      </button>
-      <button id="btn-theme" class="btn-theme-toggle theme-switch" aria-label="Changer le thème" role="switch" aria-checked="false"></button>
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
-      <a href="/security" target="_blank" class="btn btn-icon" id="btn-security" style="display:none" title="Securite &amp; Conformite RGPD" aria-label="Securite et conformite RGPD">
-        <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-        </svg>
-      </a>
-      <button id="btn-dashboard" class="btn btn-icon" style="display:none" title="Accueil" aria-label="Accueil">
-        <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-          <rect x="3" y="3" width="7" height="7"/>
-          <rect x="14" y="3" width="7" height="7"/>
-          <rect x="14" y="14" width="7" height="7"/>
-          <rect x="3" y="14" width="7" height="7"/>
-        </svg>
-      </button>
+      <button id="btn-theme" class="btn-theme-toggle theme-switch" aria-label="Changer le thème" role="switch" aria-checked="false"></button>
       <span id="user-info" class="user-info"></span>
       <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">
         <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -254,33 +240,85 @@
 <!-- ════════════ APP ════════════ -->
 <div id="screen-app" class="screen" style="display:none">
 
-  <!-- PIPELINE STEPS -->
-  <div class="pipeline">
-    <button class="step active" id="step-1" type="button">
-      <div class="step-num">1</div>
-      <div class="step-label">Ajouter</div>
-    </button>
-    <div class="step-arrow">
-      <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="9 18 15 12 9 6"/>
-      </svg>
-    </div>
-    <button class="step" id="step-2" type="button">
-      <div class="step-num">2</div>
-      <div class="step-label">Sécuriser</div>
-    </button>
-    <div class="step-arrow">
-      <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <polyline points="9 18 15 12 9 6"/>
-      </svg>
-    </div>
-    <button class="step" id="step-3" type="button">
-      <div class="step-num">3</div>
-      <div class="step-label">Analyser</div>
-    </button>
-  </div>
-
   <div class="app-body">
+
+    <!-- ── APP NAV (navigation principale) ── -->
+    <div id="app-nav-backdrop" class="app-nav-backdrop"></div>
+    <nav id="app-nav" class="app-nav" aria-label="Navigation principale">
+      <ul class="app-nav-list">
+        <li>
+          <button class="nav-item" data-nav="home" type="button" aria-current="page">
+            <span class="nav-item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M3 12l9-9 9 9"/><path d="M5 10v10a1 1 0 0 0 1 1h4v-7h4v7h4a1 1 0 0 0 1-1V10"/>
+              </svg>
+            </span>
+            <span class="nav-item-label">Accueil</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-nav="documents" type="button">
+            <span class="nav-item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/>
+                <polyline points="14 2 14 8 20 8"/>
+                <line x1="16" y1="13" x2="8" y2="13"/>
+                <line x1="16" y1="17" x2="8" y2="17"/>
+              </svg>
+            </span>
+            <span class="nav-item-label">Documents</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-nav="clients" type="button">
+            <span class="nav-item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+                <circle cx="9" cy="7" r="4"/>
+                <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+                <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+              </svg>
+            </span>
+            <span class="nav-item-label">Dossiers clients</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-nav="quality" type="button">
+            <span class="nav-item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <line x1="18" y1="20" x2="18" y2="10"/>
+                <line x1="12" y1="20" x2="12" y2="4"/>
+                <line x1="6" y1="20" x2="6" y2="14"/>
+              </svg>
+            </span>
+            <span class="nav-item-label">Qualité</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-nav="compliance" type="button">
+            <span class="nav-item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                <polyline points="9 12 11 14 15 10"/>
+              </svg>
+            </span>
+            <span class="nav-item-label">Conformité</span>
+          </button>
+        </li>
+        <li>
+          <button class="nav-item" data-nav="settings" type="button">
+            <span class="nav-item-icon" aria-hidden="true">
+              <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="3"/>
+                <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+              </svg>
+            </span>
+            <span class="nav-item-label">Paramètres</span>
+          </button>
+        </li>
+      </ul>
+    </nav>
+
 
     <button id="btn-sidebar-expand" class="sidebar-expand-btn" aria-label="Afficher la liste des documents" title="Afficher" style="display:none">
       <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
@@ -310,11 +348,6 @@
             </svg>
           </button>
         </div>
-      </div>
-
-      <div class="sidebar-mode-toggle">
-        <button class="sidebar-mode-btn active" id="btn-mode-flat" data-action="sidebar-mode" data-mode="flat">Documents</button>
-        <button class="sidebar-mode-btn" id="btn-mode-dossier" data-action="sidebar-mode" data-mode="dossier">Clients</button>
       </div>
 
       <div id="dossier-client-search-row" style="display:none;padding:8px 12px 0">
@@ -662,15 +695,6 @@
             Sécuriser automatiquement après ajout
           </label>
         </div>
-        <div style="margin: 12px 0; text-align: center">
-          <button id="btn-demo" class="btn btn-primary" type="button" title="Démo instantanée pour les investisseurs">
-            <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <polygon points="5 3 19 12 5 21 5 3"/>
-            </svg>
-            Essayer avec un document de démo
-          </button>
-        </div>
-
         <div class="upload-zone" id="upload-zone">
           <div class="upload-icon">
             <svg aria-hidden="true" focusable="false" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
@@ -1031,6 +1055,52 @@
         </div>
       </div>
 
+      <!-- QUALITÉ (stub) -->
+      <div id="panel-quality" class="panel">
+        <div class="panel-stub">
+          <div class="panel-stub-icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <line x1="18" y1="20" x2="18" y2="10"/>
+              <line x1="12" y1="20" x2="12" y2="4"/>
+              <line x1="6" y1="20" x2="6" y2="14"/>
+            </svg>
+          </div>
+          <h2>Qualité</h2>
+          <p class="panel-stub-text">Bientôt connecté au tableau de bord qualité.<br>Volumes, temps de validation, corrections par champ et drafts produits.</p>
+          <p class="panel-stub-meta">Capacité backend déjà disponible — l'écran arrivera dans une PR ultérieure.</p>
+        </div>
+      </div>
+
+      <!-- CONFORMITÉ (stub) -->
+      <div id="panel-compliance" class="panel">
+        <div class="panel-stub">
+          <div class="panel-stub-icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+              <polyline points="9 12 11 14 15 10"/>
+            </svg>
+          </div>
+          <h2>Conformité</h2>
+          <p class="panel-stub-text">Bientôt connecté au score RGPD et à la preuve DPO.<br>Drafts à reviewer, audit RGPD agrégé, accès au Trust Center.</p>
+          <p class="panel-stub-meta">En attendant, le Trust Center public reste accessible — <a href="/security" target="_blank" rel="noopener">l'ouvrir</a>.</p>
+        </div>
+      </div>
+
+      <!-- PARAMÈTRES (stub) -->
+      <div id="panel-settings" class="panel">
+        <div class="panel-stub">
+          <div class="panel-stub-icon" aria-hidden="true">
+            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
+              <circle cx="12" cy="12" r="3"/>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"/>
+            </svg>
+          </div>
+          <h2>Paramètres</h2>
+          <p class="panel-stub-text">Bientôt : préférences utilisateur et options avancées.<br>Profil, thème, options d'anonymisation, Copilot, comparaison automatique.</p>
+          <p class="panel-stub-meta">Pour l'instant, le thème est dans l'en-tête et la déconnexion est disponible en haut à droite.</p>
+        </div>
+      </div>
+
     </main>
   </div>
 </div>
@@ -1049,38 +1119,6 @@
 
 <!-- ════════════ TOAST ════════════ -->
 <div id="toast-container" class="toast-container" role="status" aria-live="polite"></div>
-
-<!-- ════════════ MOBILE NAV ════════════ -->
-<nav id="mobile-bottom-nav" class="mobile-bottom-nav" aria-label="Navigation principale">
-  <button class="mobile-nav-btn" data-nav="dashboard">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <rect x="3" y="3" width="7" height="7"/><rect x="14" y="3" width="7" height="7"/>
-      <rect x="14" y="14" width="7" height="7"/><rect x="3" y="14" width="7" height="7"/>
-    </svg>
-    Accueil
-  </button>
-  <button class="mobile-nav-btn" data-nav="clients">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
-      <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
-      <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
-    </svg>
-    Clients
-  </button>
-  <button class="mobile-nav-btn" data-nav="upload">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-      <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
-    </svg>
-    Ajouter
-  </button>
-  <button class="mobile-nav-btn" data-nav="ai">
-    <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-      <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
-    </svg>
-    Analyse
-  </button>
-</nav>
 
 <div id="modal-client-overlay" class="confirm-overlay" style="display:none">
   <div class="confirm-card">
