@@ -36,6 +36,7 @@ dependencies = [
 
     # Logging & Monitoring
     "structlog>=24.1.0",
+    "prometheus-client>=0.20.0",
 
     # Rate limiting
     "slowapi>=0.1.9",
