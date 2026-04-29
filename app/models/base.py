@@ -1,7 +1,7 @@
 """ConfiDoc Backend — Base model SQLAlchemy."""
 
 import uuid
-from datetime import datetime
+from datetime import UTC, datetime
 
 from sqlalchemy import DateTime, func, Boolean
 from sqlalchemy.dialects.postgresql import UUID
@@ -15,17 +15,25 @@ class Base(DeclarativeBase):
 
 
 class TimestampMixin:
-    """Mixin pour timestamps automatiques."""
+    """Mixin pour timestamps automatiques.
+
+    We set both an application-level Python default and a Postgres
+    ``server_default`` so timestamps are populated even when a row is
+    inserted via raw SQL (migrations, fixtures) or when the column is not
+    explicitly provided in code.
+    """
 
     created_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
         server_default=func.now(),
         nullable=False,
     )
     updated_at: Mapped[datetime] = mapped_column(
         DateTime(timezone=True),
+        default=lambda: datetime.now(UTC),
         server_default=func.now(),
-        onupdate=func.now(),
+        onupdate=lambda: datetime.now(UTC),
         nullable=False,
     )
 
