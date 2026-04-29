@@ -1,7 +1,7 @@
 """Add golden_case_drafts table (Data Flywheel)
 
 Revision ID: c3d4e5f6a7b8
-Revises: b2c3d4e5f6a7
+Revises: a1b2c3d4e5f6
 Create Date: 2026-04-29 12:50:00.000000
 
 """
@@ -11,7 +11,9 @@ from alembic import op
 from sqlalchemy.dialects import postgresql
 
 revision = "c3d4e5f6a7b8"
-down_revision = "b2c3d4e5f6a7"
+# NOTE: previously chained on b2c3d4e5f6a7 (an untracked local-only revision).
+# Re-pointed to a1b2c3d4e5f6 which is the real Alembic head on main.
+down_revision = "a1b2c3d4e5f6"
 branch_labels = None
 depends_on = None
 
