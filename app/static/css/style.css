@@ -2143,6 +2143,100 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
   font-weight: 500;
 }
 
+.workspace-overview {
+  display: grid;
+  grid-template-columns: minmax(0, 0.95fr) minmax(360px, 1.6fr);
+  gap: 16px;
+  align-items: stretch;
+  margin-bottom: 20px;
+}
+.workspace-copy {
+  border-left: 3px solid var(--accent);
+  border-radius: 8px;
+  padding: 14px 16px;
+  background: rgba(124, 116, 255, 0.08);
+}
+.workspace-eyebrow {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+.workspace-copy h3 {
+  margin: 0;
+  font-size: 20px;
+  line-height: 1.22;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.workspace-copy p {
+  margin: 8px 0 0;
+  color: var(--text-muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+.workspace-actions {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+.workspace-action {
+  min-width: 0;
+  min-height: 96px;
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  padding: 14px;
+  border-radius: 8px;
+  border: 1px solid var(--border);
+  background: var(--bg-card);
+  color: var(--text);
+  text-align: left;
+  cursor: pointer;
+  font: inherit;
+  transition: border-color var(--t), background var(--t), transform var(--t), box-shadow var(--t);
+}
+.workspace-action:hover {
+  border-color: var(--border-accent);
+  background: var(--bg-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
+}
+.workspace-action.primary {
+  border-color: var(--border-accent);
+  background: linear-gradient(135deg, rgba(124, 116, 255, 0.16), var(--bg-card));
+}
+.workspace-action-index {
+  width: 24px;
+  height: 24px;
+  flex: 0 0 24px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 50%;
+  background: var(--accent-dim);
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 800;
+}
+.workspace-action strong {
+  display: block;
+  font-size: 13px;
+  line-height: 1.25;
+  letter-spacing: 0;
+  color: var(--text);
+}
+.workspace-action small {
+  display: block;
+  margin-top: 5px;
+  font-size: 11px;
+  line-height: 1.35;
+  color: var(--text-muted);
+}
+
 .dash-buckets {
   display: grid;
   grid-template-columns: repeat(auto-fill, minmax(100px, 1fr));
@@ -3097,6 +3191,9 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
   #mobile-bottom-nav { display: flex; }
   .app-body { height: calc(100vh - 58px - 46px - 64px); }
   .panel { padding: 20px 16px; }
+  .workspace-overview {
+    grid-template-columns: 1fr;
+  }
   .dash-kpi-grid { grid-template-columns: repeat(2, 1fr); }
   .split { grid-template-columns: 1fr; }
   .ai-insights { grid-template-columns: repeat(2, 1fr); }
@@ -3165,6 +3262,26 @@ del.diff-highlight { text-decoration: line-through; background: rgba(239, 68, 68
   .step { min-width: 32px; }
 
   /* ── Dashboard ── */
+  .workspace-overview {
+    gap: 10px;
+    margin-bottom: 14px;
+  }
+  .workspace-copy {
+    padding: 12px 14px;
+  }
+  .workspace-copy h3 {
+    font-size: 16px;
+  }
+  .workspace-copy p {
+    font-size: 12px;
+  }
+  .workspace-actions {
+    grid-template-columns: 1fr;
+  }
+  .workspace-action {
+    min-height: 0;
+    padding: 12px;
+  }
   .dash-kpi-grid { grid-template-columns: 1fr 1fr; gap: 10px; }
   .dash-kpi-card { padding: 14px 12px; }
   .dash-kpi-value { font-size: 28px; }

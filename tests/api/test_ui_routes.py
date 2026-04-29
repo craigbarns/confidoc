@@ -44,3 +44,6 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert "google_translate_element" not in resp.text
     assert "onclick=" not in resp.text
     assert "oninput=" not in resp.text
+    assert "Accueil cabinet" in resp.text
+    assert 'id="btn-work-clients"' in resp.text
+    assert 'data-action="open-clients"' in resp.text

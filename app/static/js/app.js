@@ -65,11 +65,11 @@ function formatElapsed(seconds) {
 
 function documentStatusLabel(status) {
   const map = {
-    uploaded: "Uploadé",
+    uploaded: "Ajouté",
     processing: "Traitement",
     extracting: "OCR",
     extracted: "OCR terminé",
-    anonymizing: "Anonymisation",
+    anonymizing: "Sécurisation",
     anonymized: "Prêt IA",
     ready: "Prêt IA",
     failed: "Erreur",
@@ -386,12 +386,51 @@ function setStep(n) {
   const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
   if (el) el.classList.add("active");
-  const titles = { 1: "Upload", 2: "Anonymisation", 3: "Discussion IA" };
+  const titles = { 1: "Ajouter", 2: "Sécuriser", 3: "Analyser" };
   setPageTitle(titles[n] || "");
 }
 
 function goHome() {
   showDashboard();
+}
+
+function revealSidebar() {
+  const sidebar = document.querySelector(".sidebar");
+  if (!sidebar) return;
+  const isMobile = window.innerWidth <= 1024;
+  if (isMobile) {
+    sidebar.classList.add("open");
+    const backdrop = $("sidebar-backdrop");
+    if (backdrop) backdrop.classList.add("visible");
+    return;
+  }
+  sidebar.scrollIntoView({ behavior: "smooth", inline: "start" });
+  if (typeof sidebar.animate === "function") {
+    sidebar.animate([
+      { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" },
+      { boxShadow: "inset 4px 0 0 0 rgba(124,116,255,0.6)" },
+      { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" }
+    ], { duration: 700, iterations: 2 });
+  }
+}
+
+function openDocumentWorkspace() {
+  setSidebarMode("flat");
+  revealSidebar();
+}
+
+function openClientWorkspace() {
+  setSidebarMode("dossier");
+  revealSidebar();
+}
+
+function resumeWorkspaceReview() {
+  if (currentDocId) {
+    setStep(3);
+    return;
+  }
+  openDocumentWorkspace();
+  toast("Sélectionnez un document prêt IA pour lancer l'analyse.", "warning");
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────
@@ -477,7 +516,7 @@ function updateHeaderContext() {
   const docPill = $("header-doc-pill");
   const providerPill = $("header-provider-pill");
   if (currentDocId && currentDocName) {
-    const labelMap = { uploaded: "Uploadé", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
+    const labelMap = { uploaded: "Ajouté", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
     docPill.textContent = `${currentDocName} · ${labelMap[currentDocStatus] || currentDocStatus || "—"}`;
     docPill.style.display = "";
   } else {
@@ -494,10 +533,12 @@ function setPageTitle(section) {
   if (!titleEl) return;
   const titles = {
     "": "ConfiDoc — Documents confidentiels anonymisés",
-    "Dashboard": "ConfiDoc — Dashboard",
-    "Upload": "ConfiDoc — Uploader un document",
-    "Anonymisation": "ConfiDoc — Anonymisation",
-    "Discussion IA": "ConfiDoc — Discussion IA",
+    "Accueil": "ConfiDoc — Accueil cabinet",
+    "Ajouter": "ConfiDoc — Ajouter un document",
+    "Sécuriser": "ConfiDoc — Sécuriser le document",
+    "Analyser": "ConfiDoc — Analyse IA",
+    "Clients": "ConfiDoc — Dossiers clients",
+    "Dossier": "ConfiDoc — Dossier client",
   };
   titleEl.textContent = titles[section] || titles[""];
   if (currentDocName && section) {
@@ -594,7 +635,7 @@ async function refreshAIDocInsights(docId) {
     if (statusResult.status === "rejected") throw statusResult.reason;
     const st = statusResult.value;
     const risk = riskResult.status === "fulfilled" ? riskResult.value : {};
-    const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Discussion IA";
+    const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Analyse IA";
     updatePipelineTimeline({
       status: st.status || currentDocStatus,
       extractDone: !!st?.extraction?.done,
@@ -673,7 +714,7 @@ function updateProcessingConsole(payload = {}) {
   const activeIndex = phase === "failed" ? 0 : Math.max(0, order.indexOf(phase));
   const widths = { upload: 12, ocr: 38, detect: 58, mask: 78, ready: 100, failed: 100 };
   const labels = {
-    upload: "Upload sécurisé",
+    upload: "Ajout sécurisé",
     ocr: "Mistral OCR en cours",
     detect: "Détection des données sensibles",
     mask: "Masquage RGPD",
@@ -834,7 +875,7 @@ function renderDocList(docs) {
   renderSidebarStats(docs);
 
   if (!docs.length) {
-    list.innerHTML = '<div class="empty-state">Aucun document.<br>Uploadez-en un.</div>';
+    list.innerHTML = '<div class="empty-state">Aucun document.<br>Ajoutez-en un.</div>';
     if (count) count.textContent = "";
     return;
   }
@@ -868,10 +909,10 @@ function renderDocList(docs) {
     const riskDotTitle = {
       ready: "Anonymisé — prêt pour l'IA",
       anonymized: "Anonymisé — prêt pour l'IA",
-      processing: "Anonymisation en cours…",
+      processing: "Sécurisation en cours…",
       extracting: "OCR en cours…",
       extracted: "OCR terminé",
-      anonymizing: "Anonymisation en cours…",
+      anonymizing: "Sécurisation en cours…",
       uploaded: "Non anonymisé — risque RGPD",
       failed: "Erreur de traitement",
     }[d.status] || "";
@@ -1010,7 +1051,7 @@ function renderDossierTree(dossiers) {
   const list = $("doc-list");
   if (!list) return;
   if (!dossiers || dossiers.length === 0) {
-    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun client. Uploadez un document avec un nom client.</p>`;
+    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun client. Ajoutez un document avec un nom client.</p>`;
     return;
   }
   list.innerHTML = dossiers.map(client => `
@@ -1121,6 +1162,7 @@ function openDossierOverview() {
   if (overview) overview.style.display = "flex";
   if (detail) detail.style.display = "none";
   document.querySelectorAll(".dossier-client.selected").forEach(el => el.classList.remove("selected"));
+  setPageTitle("Clients");
   loadDossierOverview();
 }
 
@@ -1145,7 +1187,7 @@ function renderDossierClientGrid(dossiers) {
     grid.innerHTML = `
       <div class="panel-empty-hint" style="grid-column:1/-1">
         <p>Aucun client pour l'instant.</p>
-        <button class="btn btn-primary btn-sm" style="margin-top:12px" data-action="new-document">+ Uploader un premier document</button>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px" data-action="new-document">+ Ajouter un premier document</button>
       </div>`;
     return;
   }
@@ -1536,8 +1578,8 @@ async function selectDoc(id, status, name, sizeBytes) {
     el.classList.toggle("selected", el.dataset.id === id)
   );
 
-  // Si le document est prêt, aller directement à l'étape 3 (Discussion IA)
-  // pour un flux naturel. Sinon, étape 2 (Anonymisation).
+  // Si le document est prêt, aller directement à l'étape 3.
+  // Sinon, étape 2 pour la sécurisation.
   const targetStep = isReadyStatus(status) ? 3 : 2;
   setStep(targetStep);
 
@@ -1553,7 +1595,7 @@ async function selectDoc(id, status, name, sizeBytes) {
     } else if (status === "uploaded") {
       $("anon-empty").style.display = "";
       $("anon-empty").querySelector("p").innerHTML =
-        "Document uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
+        "Document ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
     } else if (status === "failed") {
       $("anon-empty").style.display = "";
       $("anon-empty").querySelector(".hint-icon").innerHTML = `<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
@@ -1612,7 +1654,7 @@ function uploadWithProgress(formData, path, fillEl, statusEl) {
     xhr.addEventListener("load", () => {
       if (xhr.status >= 200 && xhr.status < 300) {
         fillEl.style.width = "100%";
-        statusEl.textContent = "Upload réussi !";
+        statusEl.textContent = "Ajout réussi !";
         try { resolve(JSON.parse(xhr.responseText)); }
         catch (_e) { resolve({}); }
       } else {
@@ -1622,7 +1664,7 @@ function uploadWithProgress(formData, path, fillEl, statusEl) {
       }
     });
     xhr.addEventListener("error", () => reject(new Error("Erreur réseau")));
-    xhr.addEventListener("abort", () => reject(new Error("Upload annulé")));
+    xhr.addEventListener("abort", () => reject(new Error("Ajout annulé")));
     xhr.open("POST", API + path);
     if (token) xhr.setRequestHeader("Authorization", `Bearer ${token}`);
     xhr.send(formData);
@@ -1742,8 +1784,8 @@ async function uploadFile(file) {
         '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
       if (autoAnon) {
         $("anon-empty").querySelector("p").innerHTML =
-          `<strong>${file.name}</strong> uploadé.<br>Anonymisation en cours en arrière-plan…`;
-        showAnonLoading("Mistral OCR et anonymisation en cours…");
+          `<strong>${file.name}</strong> ajouté.<br>Sécurisation en cours en arrière-plan…`;
+        showAnonLoading("Mistral OCR et sécurisation en cours…");
         updateProcessingConsole({
           status: currentDocStatus,
           backend: (data.processing?.background_processing || "api").toUpperCase(),
@@ -1751,18 +1793,18 @@ async function uploadFile(file) {
         pollDocStatus(currentDocId);
       } else {
         $("anon-empty").querySelector("p").innerHTML =
-          `<strong>${file.name}</strong> uploadé.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+          `<strong>${file.name}</strong> ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
       }
     }, 600);
 
-    toast(`${file.name} uploadé`, "success");
+    toast(`${file.name} ajouté`, "success");
   } catch (e) {
     console.error("uploadFile error:", e);
     zone.style.display = "";
     progress.style.display = "none";
     fill.style.width = "0";
     if (e.message !== "client_name_required") {
-      toast(`Erreur upload: ${e.message}`, "error");
+      toast(`Erreur ajout: ${e.message}`, "error");
       // Rafraîchir la liste même en cas d'erreur : le doc peut être en DB
       loadDocList().catch(() => {});
     }
@@ -1788,11 +1830,11 @@ async function createDemoDocument() {
     $("anon-empty").querySelector(".hint-icon").innerHTML =
       '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
     $("anon-empty").querySelector("p").innerHTML =
-      `<strong>${res.original_filename}</strong> créé.<br>Anonymisation en cours en arrière-plan…`;
-    showAnonLoading("Anonymisation en cours…");
+      `<strong>${res.original_filename}</strong> créé.<br>Sécurisation en cours en arrière-plan…`;
+    showAnonLoading("Sécurisation en cours…");
     pollDocStatus(currentDocId);
 
-    toast("Document de démo créé — anonymisation lancée", "success");
+    toast("Document de démo créé — sécurisation lancée", "success");
   } catch (e) {
     console.error("demo error:", e);
     toast(`Erreur démo: ${e.message}`, "error");
@@ -1820,7 +1862,7 @@ function resetAnonPanel() {
 
 function showAnonLoading(msg) {
   $("anon-loading").style.display = "";
-  $("anon-loading-msg").textContent = msg || "Anonymisation en cours…";
+  $("anon-loading-msg").textContent = msg || "Sécurisation en cours…";
   $("anon-results").style.display = "none";
   $("anon-empty").style.display = "none";
   $("btn-anonymize").disabled = true;
@@ -1970,7 +2012,7 @@ async function anonymize() {
   if (!currentDocId) { toast("Aucun document sélectionné", "error"); return; }
   const profile = $("anon-profile").value;
   const mode = $("anon-mode") ? $("anon-mode").value : "pseudonymization";
-  showAnonLoading(mode === "anonymization" ? "Anonymisation forte en cours…" : "Pseudonymisation en cours…");
+  showAnonLoading(mode === "anonymization" ? "Anonymisation forte en cours…" : "Sécurisation en cours…");
 
   try {
     const res = await fetch(
@@ -1979,7 +2021,7 @@ async function anonymize() {
     );
 
     if (res.status === 202) {
-      toast("Anonymisation lancée… (peut prendre 30-60 s)", "info");
+      toast("Sécurisation lancée… (peut prendre 30-60 s)", "info");
       showAnonLoading("Traitement en arrière-plan…");
       await loadDocList();
       pollDocStatus(currentDocId);
@@ -2036,7 +2078,7 @@ function pollDocStatus(docId) {
         status: status || "—",
         ocrLength: Number.isFinite(ocrLength) ? ocrLength : "—",
         detections: Number.isFinite(detections) ? detections : "—",
-        nextAction: anonymDone ? "Discussion IA" : "Anonymisation",
+        nextAction: anonymDone ? "Analyse IA" : "Sécurisation",
       });
 
       if (isReadyStatus(status) || anonymDone) {
@@ -2048,7 +2090,7 @@ function pollDocStatus(docId) {
         } catch (e) {
           console.warn("preview load after poll:", e);
           hideAnonLoading();
-          toast("Anonymisation terminée.", "success");
+          toast("Sécurisation terminée.", "success");
         }
         currentDocStatus = "ready";
         updateHeaderContext();
@@ -2269,10 +2311,10 @@ function loadChatHistory(docId) {
 function showOnboarding() {
   dismissOnboardingOverlay();
   const steps = [
-    { target: ".upload-zone", title: "📄 Uploadez un document", text: "Glissez un PDF, PNG ou JPEG — contrat, bilan, relevé bancaire. Saisissez le nom du client. Max 50 MB." },
-    { target: "#btn-anonymize", title: "🔒 Anonymisation RGPD", text: "L'IA détecte noms, IBAN, SIREN, adresses… et les remplace par des balises. Mode modéré ou strict selon votre besoin." },
-    { target: ".quick-actions", title: "💬 Discussion IA sécurisée", text: "Posez vos questions métier. L'IA ne voit que le texte masqué — vos données confidentielles ne sortent jamais." },
-    { target: "#btn-export-txt", title: "⬇ Export & Audit", text: "Téléchargez le texte anonymisé, le PDF rédacté, ou le rapport d'audit RGPD complet pour vos dossiers." },
+    { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque pièce à un client, un exercice et un type de document." },
+    { target: "#btn-anonymize", title: "Sécuriser la pièce", text: "Les données sensibles sont détectées puis remplacées par des balises." },
+    { target: ".quick-actions", title: "Analyser le dossier", text: "Les questions IA utilisent le texte sécurisé du document sélectionné." },
+    { target: "#btn-export-txt", title: "Exporter", text: "Téléchargez le texte sécurisé, le PDF rédigé ou le rapport d'audit." },
   ];
   let current = 0;
   const overlay = document.createElement("div");
@@ -2293,7 +2335,7 @@ function showOnboarding() {
       '<div class="onboarding-actions">' +
       '<button class="btn btn-ghost btn-sm" id="onboarding-skip">Ignorer</button>' +
       (current > 0 ? '<button class="btn btn-ghost btn-sm" id="onboarding-prev">← Précédent</button>' : '') +
-      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant →' : '🚀 Commencer !') + '</button>' +
+      '<button class="btn btn-primary btn-sm" id="onboarding-next">' + (current < steps.length-1 ? 'Suivant →' : 'Commencer') + '</button>' +
       '</div></div>';
     document.body.appendChild(overlay);
     const card = overlay.querySelector(".onboarding-card");
@@ -2334,7 +2376,7 @@ function showOnboarding() {
     overlay.remove();
     document.querySelectorAll(".onboarding-highlight").forEach(el => el.classList.remove("onboarding-highlight"));
     localStorage.setItem(ONBOARDING_KEY, "true");
-    toast("Bienvenue sur ConfiDoc ! Uploadez votre premier document.", "success");
+    toast("Bienvenue sur ConfiDoc. Ajoutez votre premier document.", "success");
     setStep(1);
   }
 
@@ -2961,7 +3003,7 @@ function showDashboard() {
     const s = $(`step-${i}`);
     if (s) s.className = "step";
   });
-  setPageTitle("Dashboard");
+  setPageTitle("Accueil");
   if (!dashboardLoaded) loadDashboard();
 }
 
@@ -3036,7 +3078,7 @@ async function loadDashboard() {
             ? summaryResult.reason
             : dossierResult.reason;
       console.warn("loadDashboard partial:", failed);
-      toast(`Dashboard partiel: ${dashboardErrorMessage(failed)}`, "warning");
+      toast(`Accueil partiel: ${dashboardErrorMessage(failed)}`, "warning");
     }
   } catch (e) {
     console.warn("loadDashboard failed:", e);
@@ -3186,7 +3228,7 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
     const statuses = [
       { key: "ready", label: "Pret IA", dot: "ready" },
       { key: "processing", label: "Traitement", dot: "processing" },
-      { key: "uploaded", label: "Uploade", dot: "uploaded" },
+      { key: "uploaded", label: "Ajouté", dot: "uploaded" },
       { key: "failed", label: "Erreur", dot: "failed" },
     ];
     statusEl.innerHTML = statuses.map(s => {
@@ -3676,6 +3718,9 @@ function handleDelegatedAction(e) {
 
   if (action === "sidebar-mode") setSidebarMode(control.dataset.mode || "flat");
   else if (action === "new-document") startNewDocument();
+  else if (action === "open-documents") openDocumentWorkspace();
+  else if (action === "open-clients") openClientWorkspace();
+  else if (action === "resume-review") resumeWorkspaceReview();
   else if (action === "create-client") openCreateClientModal();
   else if (action === "dossier-overview") openDossierOverview();
   else if (action === "upload-for-dossier") openUploadForDossierClient();
@@ -3886,28 +3931,9 @@ document.addEventListener("DOMContentLoaded", () => {
   // Dashboard
   if ($("btn-dashboard")) $("btn-dashboard").addEventListener("click", showDashboard);
   if ($("btn-home")) $("btn-home").addEventListener("click", goHome);
-  if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", () => setStep(1));
-  if ($("btn-dash-list")) {
-    $("btn-dash-list").addEventListener("click", () => {
-      const sidebar = document.querySelector(".sidebar");
-      if (!sidebar) return;
-      const isMobile = window.innerWidth <= 768;
-      if (isMobile) {
-        // Ouvrir le drawer sur mobile/tablette avec backdrop
-        sidebar.classList.add("open");
-        const backdrop = $("sidebar-backdrop");
-        if (backdrop) backdrop.classList.add("visible");
-      } else {
-        // Sur desktop, scroll + highlight temporaire pour guider l'utilisateur
-        sidebar.scrollIntoView({ behavior: "smooth", inline: "start" });
-        sidebar.animate([
-          { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" },
-          { boxShadow: "inset 4px 0 0 0 rgba(124,116,255,0.6)" },
-          { boxShadow: "inset 0 0 0 0 rgba(124,116,255,0)" }
-        ], { duration: 700, iterations: 2 });
-      }
-    });
-  }
+  if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", startNewDocument);
+  if ($("btn-dash-clients")) $("btn-dash-clients").addEventListener("click", openClientWorkspace);
+  if ($("btn-dash-list")) $("btn-dash-list").addEventListener("click", openDocumentWorkspace);
   if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {
     dashboardLoaded = false;
     loadDashboard();
@@ -4194,9 +4220,9 @@ document.addEventListener("DOMContentLoaded", () => {
     btn.addEventListener("click", () => {
       const nav = btn.dataset.nav;
       if (nav === "dashboard") showDashboard();
-      if (nav === "list") document.querySelector(".sidebar")?.classList.add("open");
-      if (nav === "upload") setStep(1);
-      if (nav === "ai") setStep(3);
+      if (nav === "clients") openClientWorkspace();
+      if (nav === "upload") startNewDocument();
+      if (nav === "ai") resumeWorkspaceReview();
     });
   });
 

@@ -122,7 +122,7 @@
       </div>
       <span class="logo-text">ConfiDoc</span>
     </div>
-    <div class="header-tagline" style="font-weight: 500; letter-spacing: 0.2px;">Securite de niveau bancaire pour vos documents IA</div>
+    <div class="header-tagline" style="font-weight: 500; letter-spacing: 0.2px;">Dossiers clients securises avant IA</div>
     <div class="header-actions">
       <button id="btn-sidebar-toggle" class="sidebar-toggle btn-icon" aria-label="Menu documents">
         <svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -139,7 +139,7 @@
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
       </a>
-      <button id="btn-dashboard" class="btn btn-icon" style="display:none" title="Dashboard" aria-label="Dashboard">
+      <button id="btn-dashboard" class="btn btn-icon" style="display:none" title="Accueil" aria-label="Accueil">
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <rect x="3" y="3" width="7" height="7"/>
           <rect x="14" y="3" width="7" height="7"/>
@@ -258,7 +258,7 @@
   <div class="pipeline">
     <button class="step active" id="step-1" type="button">
       <div class="step-num">1</div>
-      <div class="step-label">Upload</div>
+      <div class="step-label">Ajouter</div>
     </button>
     <div class="step-arrow">
       <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -267,7 +267,7 @@
     </div>
     <button class="step" id="step-2" type="button">
       <div class="step-num">2</div>
-      <div class="step-label">Anonymisation</div>
+      <div class="step-label">Sécuriser</div>
     </button>
     <div class="step-arrow">
       <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -276,7 +276,7 @@
     </div>
     <button class="step" id="step-3" type="button">
       <div class="step-num">3</div>
-      <div class="step-label">Revue &amp; IA</div>
+      <div class="step-label">Analyser</div>
     </button>
   </div>
 
@@ -313,7 +313,7 @@
       </div>
 
       <div class="sidebar-mode-toggle">
-        <button class="sidebar-mode-btn active" id="btn-mode-flat" data-action="sidebar-mode" data-mode="flat">Liste</button>
+        <button class="sidebar-mode-btn active" id="btn-mode-flat" data-action="sidebar-mode" data-mode="flat">Documents</button>
         <button class="sidebar-mode-btn" id="btn-mode-dossier" data-action="sidebar-mode" data-mode="dossier">Clients</button>
       </div>
 
@@ -332,7 +332,7 @@
           <option value="">Tous les statuts</option>
           <option value="ready">Prêt IA</option>
           <option value="processing">En traitement</option>
-          <option value="uploaded">Uploadé</option>
+          <option value="uploaded">Ajouté</option>
           <option value="failed">Erreur</option>
           <option value="deleted">Corbeille</option>
         </select>
@@ -351,7 +351,7 @@
             <polyline points="14 2 14 8 20 8"/>
             <line x1="12" y1="18" x2="12" y2="12"/><line x1="9" y1="15" x2="15" y2="15"/>
           </svg>
-          Aucun document.<br>Uploadez-en un.
+          Aucun document.<br>Ajoutez-en un.
         </div>
       </div>
 
@@ -404,16 +404,17 @@
       <!-- DASHBOARD -->
       <div id="panel-dashboard" class="panel">
         <div class="panel-header">
-          <h2>Dashboard</h2>
+          <h2>Accueil cabinet</h2>
           <div class="panel-actions">
             <button id="btn-dash-upload" class="btn btn-primary btn-sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
-              Uploader
+              Ajouter
             </button>
-            <button id="btn-dash-list" class="btn btn-ghost btn-sm">Voir la liste</button>
+            <button id="btn-dash-clients" class="btn btn-secondary btn-sm">Clients</button>
+            <button id="btn-dash-list" class="btn btn-ghost btn-sm">Documents</button>
             <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -429,6 +430,37 @@
         </div>
 
         <div id="dash-content" style="display:none">
+          <section class="workspace-overview" aria-label="Parcours principal">
+            <div class="workspace-copy">
+              <span class="workspace-eyebrow">Parcours principal</span>
+              <h3>Client, exercice, pièces, analyse IA.</h3>
+              <p>Chaque dossier regroupe les documents du client, leur statut de sécurité et les actions restantes.</p>
+            </div>
+            <div class="workspace-actions">
+              <button id="btn-work-upload" class="workspace-action primary" type="button" data-action="new-document">
+                <span class="workspace-action-index">1</span>
+                <span>
+                  <strong>Ajouter une pièce</strong>
+                  <small>Client, exercice, type</small>
+                </span>
+              </button>
+              <button id="btn-work-clients" class="workspace-action" type="button" data-action="open-clients">
+                <span class="workspace-action-index">2</span>
+                <span>
+                  <strong>Ouvrir les dossiers clients</strong>
+                  <small>Vue par client et exercice</small>
+                </span>
+              </button>
+              <button id="btn-work-review" class="workspace-action" type="button" data-action="resume-review">
+                <span class="workspace-action-index">3</span>
+                <span>
+                  <strong>Reprendre l'analyse</strong>
+                  <small>Document sélectionné</small>
+                </span>
+              </button>
+            </div>
+          </section>
+
           <div class="dash-kpi-grid">
             <div class="dash-kpi-card">
               <div class="dash-kpi-icon kpi-violet">
@@ -479,9 +511,9 @@
           <div class="dash-buckets">
             <div class="dash-bucket"><span>Prêts IA</span><strong id="dash-bucket-ready">0</strong></div>
             <div class="dash-bucket"><span>Traitement</span><strong id="dash-bucket-processing">0</strong></div>
-            <div class="dash-bucket"><span>Uploadés</span><strong id="dash-bucket-uploaded">0</strong></div>
+            <div class="dash-bucket"><span>Ajoutés</span><strong id="dash-bucket-uploaded">0</strong></div>
             <div class="dash-bucket"><span>Échecs</span><strong id="dash-bucket-failed">0</strong></div>
-            <div class="dash-bucket"><span>Uploads 24h</span><strong id="dash-uploads-24h">0</strong></div>
+            <div class="dash-bucket"><span>Ajouts 24h</span><strong id="dash-uploads-24h">0</strong></div>
           </div>
 
           <div class="dash-ready-progress">
@@ -591,9 +623,9 @@
         </div>
       </div>
 
-      <!-- UPLOAD -->
+      <!-- AJOUT -->
       <div id="panel-upload" class="panel active">
-        <h2>Uploader un document</h2>
+        <h2>Ajouter un document</h2>
         <div class="field-inline">
           <label for="upload-client-name">Client (obligatoire)</label>
           <div style="flex:1;position:relative;display:flex;align-items:center">
@@ -627,7 +659,7 @@
         <div class="field-inline" style="margin-top:4px">
           <label style="display:flex;align-items:center;gap:8px;cursor:pointer;text-transform:none;font-size:13px;letter-spacing:0;color:var(--text-muted);font-weight:500">
             <input id="upload-auto-anonymize" type="checkbox" checked style="accent-color:var(--accent)" />
-            Anonymiser automatiquement après upload
+            Sécuriser automatiquement après ajout
           </label>
         </div>
         <div style="margin: 12px 0; text-align: center">
@@ -681,20 +713,20 @@
         </div>
 
         <div id="pipeline-timeline" class="pipeline-timeline" style="display:none">
-          <div class="pipe-step" data-step="upload"><span>1</span> Upload</div>
+          <div class="pipe-step" data-step="upload"><span>1</span> Ajout</div>
           <div class="pipe-link"></div>
           <div class="pipe-step" data-step="extract"><span>2</span> OCR</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="anonymize"><span>3</span> Anonymisation</div>
+          <div class="pipe-step" data-step="anonymize"><span>3</span> Sécurisation</div>
           <div class="pipe-link"></div>
           <div class="pipe-step" data-step="ai"><span>4</span> IA</div>
         </div>
 
         <div class="panel-header">
-          <h2>Anonymisation</h2>
+          <h2>Sécuriser le document</h2>
           <div class="panel-actions">
             <select id="anon-profile" class="select-sm" title="But de l'anonymisation">
-              <option value="internal_review">Revue interne (Prépare pour Discussion IA)</option>
+              <option value="internal_review">Revue interne (prépare l'analyse IA)</option>
               <option value="external_sharing">Partage externe (Sécurité maximale)</option>
               <option value="moderate">Avancé : Moteur Standard</option>
               <option value="strict">Avancé : Moteur IA</option>
@@ -730,7 +762,7 @@
 
         <div id="anon-loading" class="loading-state" style="display:none">
           <div class="spinner spinner-lg"></div>
-          <p id="anon-loading-msg">Anonymisation en cours…</p>
+          <p id="anon-loading-msg">Sécurisation en cours…</p>
           <div id="processing-console" class="processing-console" style="display:none">
             <div class="processing-console-top">
               <span id="processing-phase-label">Initialisation</span>
@@ -740,7 +772,7 @@
               <div id="processing-track-fill"></div>
             </div>
             <div class="processing-steps">
-              <span data-phase="upload">Upload</span>
+              <span data-phase="upload">Ajout</span>
               <span data-phase="ocr">Mistral OCR</span>
               <span data-phase="detect">Détection</span>
               <span data-phase="mask">Masquage</span>
@@ -770,7 +802,7 @@
               <p id="risk-recommendation" class="risk-recommendation"></p>
             </div>
             <div class="stat-actions">
-              <button id="btn-go-ai" class="btn btn-ghost btn-sm">Discussion directe</button>
+              <button id="btn-go-ai" class="btn btn-ghost btn-sm">Analyse directe</button>
               <button id="btn-validate" class="btn btn-success">Valider et continuer <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><polyline points="9 18 15 12 9 6"/></svg></button>
             </div>
           </div>
@@ -831,7 +863,7 @@
         </div>
       </div>
 
-      <!-- DISCUSSION IA -->
+      <!-- ANALYSE IA -->
       <div id="panel-ai" class="panel">
         <div id="ai-doc-bar" class="anon-doc-bar" style="display:none;margin-bottom:12px">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent);flex-shrink:0">
@@ -844,7 +876,7 @@
         </div>
 
         <div class="panel-header">
-          <h2>Discussion IA</h2>
+          <h2>Analyse IA</h2>
           <div class="panel-actions">
             <button id="btn-export-txt" class="btn btn-ghost btn-sm">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1027,26 +1059,26 @@
     </svg>
     Accueil
   </button>
-  <button class="mobile-nav-btn" data-nav="list">
+  <button class="mobile-nav-btn" data-nav="clients">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <line x1="8" y1="6" x2="21" y2="6"/><line x1="8" y1="12" x2="21" y2="12"/>
       <line x1="8" y1="18" x2="21" y2="18"/><line x1="3" y1="6" x2="3.01" y2="6"/>
       <line x1="3" y1="12" x2="3.01" y2="12"/><line x1="3" y1="18" x2="3.01" y2="18"/>
     </svg>
-    Docs
+    Clients
   </button>
   <button class="mobile-nav-btn" data-nav="upload">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
       <polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/>
     </svg>
-    Upload
+    Ajouter
   </button>
   <button class="mobile-nav-btn" data-nav="ai">
     <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
       <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
     </svg>
-    IA
+    Analyse
   </button>
 </nav>
 

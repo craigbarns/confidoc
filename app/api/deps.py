@@ -42,6 +42,7 @@ async def get_current_user(
         request.state.membership = membership
         request.state.api_key = api_key
         request.state.auth_type = "api_key"
+        setattr(user, "org_id", api_key.org_id)
         return user
 
     if not token:
@@ -84,6 +85,7 @@ async def get_current_user(
     request.state.org_id = org_id
     request.state.membership = membership
     request.state.auth_type = "jwt"
+    setattr(user, "org_id", org_id)
 
     return user
 
