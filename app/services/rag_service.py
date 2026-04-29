@@ -18,6 +18,7 @@ from sqlalchemy import delete, select
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
+from app.config import get_settings
 from app.core.logging import get_logger
 from app.models.document_chunk import DocumentChunk
 
@@ -26,7 +27,8 @@ logger = get_logger(__name__)
 # ── Embedding model (lazy singleton) ────────────────────────────────────
 
 _EMBED_MODEL: Any | None = None
-_EMBED_MODEL_NAME = "BAAI/bge-m3"  # 1024d, multilingual, SOTA open-source
+_EMBED_MODEL_NAME: str | None = None
+_DEFAULT_EMBED_MODEL_NAME = "BAAI/bge-m3"  # 1024d, multilingual, SOTA open-source
 
 
 def _get_embed_model() -> Any | None:
@@ -35,20 +37,29 @@ def _get_embed_model() -> Any | None:
     Returns None if the library is not installed (e.g. on Railway Starter
     where the model download would be too heavy).
     """
-    global _EMBED_MODEL
-    if _EMBED_MODEL is not None:
+    global _EMBED_MODEL, _EMBED_MODEL_NAME
+
+    settings = get_settings()
+    if not settings.RAG_EMBEDDINGS_ENABLED:
+        logger.info("rag_embed_disabled")
+        return None
+
+    model_name = settings.RAG_EMBED_MODEL.strip() or _DEFAULT_EMBED_MODEL_NAME
+    if _EMBED_MODEL is not None and model_name == _EMBED_MODEL_NAME:
         return _EMBED_MODEL
+
     try:
         from sentence_transformers import SentenceTransformer
 
-        logger.info("rag_embed_model_loading", model=_EMBED_MODEL_NAME)
-        _EMBED_MODEL = SentenceTransformer(_EMBED_MODEL_NAME)
-        logger.info("rag_embed_model_ready", model=_EMBED_MODEL_NAME)
+        logger.info("rag_embed_model_loading", model=model_name)
+        _EMBED_MODEL = SentenceTransformer(model_name)
+        _EMBED_MODEL_NAME = model_name
+        logger.info("rag_embed_model_ready", model=model_name)
         return _EMBED_MODEL
     except Exception as exc:
         logger.warning(
             "rag_embed_model_unavailable",
-            model=_EMBED_MODEL_NAME,
+            model=model_name,
             error=str(exc),
         )
         return None
@@ -60,7 +71,11 @@ CHUNK_SIZE = 512      # target chars per chunk
 CHUNK_OVERLAP = 128   # overlap between chunks for context continuity
 
 
-def _chunk_text(text: str, chunk_size: int = CHUNK_SIZE, overlap: int = CHUNK_OVERLAP) -> list[dict[str, Any]]:
+def _chunk_text(
+    text: str,
+    chunk_size: int = CHUNK_SIZE,
+    overlap: int = CHUNK_OVERLAP,
+) -> list[dict[str, Any]]:
     """Split text into overlapping chunks by paragraphs, then by characters."""
     paragraphs = [p.strip() for p in text.split("\n\n") if len(p.strip()) > 20]
     chunks: list[dict[str, Any]] = []
@@ -136,7 +151,7 @@ async def embed_document(
             "chunk_index": c["index"],
             "embedding": emb.tolist(),
         }
-        for c, emb in zip(chunks, embeddings)
+        for c, emb in zip(chunks, embeddings, strict=True)
     ]
     await db.execute(insert(DocumentChunk), rows)
     await db.commit()
@@ -164,7 +179,11 @@ async def search_similar(
         return []
 
     try:
-        query_vec = model.encode([query], normalize_embeddings=True, show_progress_bar=False)[0].tolist()
+        query_vec = model.encode(
+            [query],
+            normalize_embeddings=True,
+            show_progress_bar=False,
+        )[0].tolist()
     except Exception as exc:
         logger.error("rag_search_encode_failed", error=str(exc))
         return []

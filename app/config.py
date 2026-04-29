@@ -175,6 +175,12 @@ class Settings(BaseSettings):
     EXTRACT_AGGREGATE_REL_TOLERANCE: float | None = None
     EXTRACT_AGGREGATE_ABS_TOLERANCE_MIN: float | None = None
 
+    # ---- Semantic RAG embeddings ----
+    # Disabled by default: the default BGE-M3 model is several GB and should not
+    # be downloaded implicitly during local demos or constrained deployments.
+    RAG_EMBEDDINGS_ENABLED: bool = False
+    RAG_EMBED_MODEL: str = "BAAI/bge-m3"
+
     @field_validator("APP_ENV", mode="before")
     @classmethod
     def normalize_app_env(cls, value: str) -> str:
@@ -256,9 +262,10 @@ class Settings(BaseSettings):
                 if getattr(self, key) == "CHANGE-ME":
                     insecure.append(key)
 
-            if self.JWT_ALGORITHM.startswith("RS"):
-                if not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY:
-                    insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")
+            if self.JWT_ALGORITHM.startswith("RS") and (
+                not self.JWT_PRIVATE_KEY or not self.JWT_PUBLIC_KEY
+            ):
+                insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")
             if insecure:
                 from app.core.logging import get_logger
                 get_logger("config").error("production_blocked_insecure_config", missing=insecure)

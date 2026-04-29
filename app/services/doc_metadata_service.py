@@ -4,6 +4,10 @@ from __future__ import annotations
 
 import re
 
+COMPANY_ENTITY_TYPES = {"SOCIETE", "ORGANISATION", "LEGAL_DENOMINATION", "COMPANY"}
+PERSON_ENTITY_TYPES = {"PERSON", "PERSONNE", "ASSOCIE", "SIGNATAIRE"}
+GENERIC_CLIENT_VALUES = {"confidoc", "page", "exercice", "bilan", "client"}
+
 EXERCICE_PATTERNS = [
     r"exercice\s+clos?\s+le\s+\d{1,2}[/.-]\d{1,2}[/.-](\d{4})",
     r"bilan\s+au\s+\d{1,2}\s+\w+\s+(\d{4})",
@@ -56,7 +60,19 @@ def extract_exercice(text: str) -> str | None:
     return None
 
 
-def suggest_client(text: str, detections: list[dict], known_clients: list[str] | None = None) -> str | None:
+def _detection_value(det: dict) -> str:
+    return str(det.get("value_excerpt") or "").strip()
+
+
+def _is_usable_client_value(value: str) -> bool:
+    return len(value) >= 3 and value.lower() not in GENERIC_CLIENT_VALUES
+
+
+def suggest_client(
+    text: str,
+    detections: list[dict],
+    known_clients: list[str] | None = None,
+) -> str | None:
     """Suggère un client en croisant les détections avec les clients connus de la DB."""
     sample = text[:5000]
 
@@ -73,18 +89,23 @@ def suggest_client(text: str, detections: list[dict], known_clients: list[str] |
     # 2. Heuristique : Première entité de type SOCIETE trouvée
     for det in detections[:15]:
         etype = str(det.get("entity_type") or "").upper()
-        val = str(det.get("value_excerpt") or "").strip()
-        # On évite les termes trop génériques
-        if etype in ("SOCIETE", "ORGANISATION", "LEGAL_DENOMINATION", "COMPANY") and len(val) >= 3:
-            if val.lower() not in ("confidoc", "page", "exercice", "bilan", "client"):
-                return val[:80]
+        val = _detection_value(det)
+        if etype in COMPANY_ENTITY_TYPES and _is_usable_client_value(val):
+            return val[:80]
 
     # 3. Repli : Bloc d'identité
     for det in detections[:10]:
         if det.get("entity_type") == "invoice_identity_block":
-            val = det.get("value_excerpt", "").split("\n")[0].strip()
-            if len(val) > 3:
+            val = _detection_value(det).split("\n")[0].strip()
+            if _is_usable_client_value(val):
                 return val[:80]
+
+    # 4. Dernier repli : personne détectée, utile pour les dossiers de particuliers.
+    for det in detections[:15]:
+        etype = str(det.get("entity_type") or "").upper()
+        val = _detection_value(det)
+        if etype in PERSON_ENTITY_TYPES and _is_usable_client_value(val):
+            return val[:80]
 
     return None
 

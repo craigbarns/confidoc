@@ -131,3 +131,9 @@ def test_ocr_lang_override():
     s = Settings(OCR_LANG="fra")
     assert s.OCR_LANG == "fra"
 
+
+def test_rag_embeddings_are_opt_in():
+    """RAG embeddings must not download heavy models unless explicitly enabled."""
+    s = Settings()
+    assert s.RAG_EMBEDDINGS_ENABLED is False
+    assert s.RAG_EMBED_MODEL == "BAAI/bge-m3"

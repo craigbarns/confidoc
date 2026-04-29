@@ -31,3 +31,14 @@ async def test_landing_links_to_trust_center(client):
     assert '<meta property="og:title"' in resp.text
     assert 'name="twitter:card" content="summary_large_image"' in resp.text
     assert "/api/v1/leads/beta" in resp.text
+
+
+@pytest.mark.anyio
+async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
+    resp = await client.get("/ui")
+
+    assert resp.status_code == 200
+    assert resp.text.count('<main id="main-content"') == 1
+    assert resp.text.count("</main>") == 1
+    assert "translate.google.com" not in resp.text
+    assert "google_translate_element" not in resp.text

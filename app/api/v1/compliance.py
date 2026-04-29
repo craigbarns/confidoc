@@ -1,17 +1,16 @@
 """ConfiDoc Backend — Compliance & GDPR Endpoints."""
 
 from datetime import UTC, datetime
-from typing import Any
 
-from fastapi import APIRouter, Depends, Request, status
+from fastapi import APIRouter, HTTPException, Request, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.core.feature_flags import feature_flags
 from app.core.logging import get_logger
 from app.models.gdpr_consent import GDPRConsent
 from app.models.gdpr_register import GDPRProcessingRegister
 from app.schemas.common import GenericResponse
-from app.core.feature_flags import feature_flags
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -30,9 +29,9 @@ async def list_feature_flags(current_user: CurrentUser):
 
 @router.post("/feature-flags/{flag_name}", summary="Mettre à jour un feature flag")
 async def update_feature_flag(
-    flag_name: str, 
-    enabled: bool, 
-    current_user: CurrentUser
+    flag_name: str,
+    enabled: bool,
+    current_user: CurrentUser,
 ):
     """Active ou désactive un flag."""
     if not current_user.is_platform_admin:
@@ -55,7 +54,7 @@ async def record_consent(
     granted: bool = True,
 ) -> GenericResponse:
     """Enregistre le consentement de l'utilisateur pour le traitement des données."""
-    
+
     # Optional: check if already exists to update or keep history
     consent = GDPRConsent(
         user_id=current_user.id,
@@ -67,15 +66,15 @@ async def record_consent(
         user_agent=request.headers.get("user-agent"),
         version="1.0",
     )
-    
+
     db.add(consent)
     await db.commit()
-    
+
     logger.info("gdpr_consent_recorded", user_id=str(current_user.id), granted=granted)
-    
+
     return GenericResponse(
         success=True,
-        message="Consentement enregistré avec succès." if granted else "Consentement révoqué."
+        message="Consentement enregistré avec succès." if granted else "Consentement révoqué.",
     )
 
 
@@ -94,7 +93,7 @@ async def check_consent_status(
         .order_by(GDPRConsent.granted_at.desc())
     )
     consent = result.scalar_one_or_none()
-    
+
     return {
         "is_granted": consent.is_granted if consent else False,
         "granted_at": consent.granted_at.isoformat() if consent and consent.granted_at else None,
@@ -113,15 +112,13 @@ async def get_processing_register(
 ) -> list[dict]:
     """Retourne le registre des activités de traitement (Article 30)."""
     if not current_user.is_platform_admin:
-        from fastapi import HTTPException
         raise HTTPException(status_code=403, detail="Réservé aux administrateurs plateforme")
-        
+
     result = await db.execute(
-        select(GDPRProcessingRegister)
-        .where(GDPRProcessingRegister.is_active == True)
+        select(GDPRProcessingRegister).where(GDPRProcessingRegister.is_active.is_(True))
     )
     records = result.scalars().all()
-    
+
     return [
         {
             "id": str(record.id),
@@ -148,8 +145,9 @@ async def get_audit_logs(
     limit: int = 50,
 ) -> list[dict]:
     """Retourne l'historique complet des actions pour la data room."""
-    from app.models.audit_log import AuditLog
     from sqlalchemy import desc
+
+    from app.models.audit_log import AuditLog
 
     result = await db.execute(
         select(AuditLog)
@@ -158,7 +156,7 @@ async def get_audit_logs(
         .limit(limit)
     )
     logs = result.scalars().all()
-    
+
     return [
         {
             "id": str(log.id),

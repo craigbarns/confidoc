@@ -1902,14 +1902,14 @@ function highlightTags(text) {
     .replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;")
     .replace(/\[([A-Z][A-Z0-9_]*)\]/g, (match, tag) => {
       let colorClass = "";
-      if (tag.includes("PERSONNE") || tag.includes("ASSOCIE")) colorClass = "tag-person";
-      else if (tag.includes("SOCIETE") || tag.includes("CABINET")) colorClass = "tag-org";
-      else if (tag.includes("ADRESSE") || tag.includes("VILLE") || tag.includes("NAISSANCE")) colorClass = "tag-geo";
-      else if (tag.includes("IBAN") || tag.includes("BANQUE") || tag.includes("MONTANT") || tag.includes("EMPRUNT") || tag.includes("REF")) colorClass = "tag-bank";
-      else if (tag.includes("DATE")) colorClass = "tag-date";
-      else if (tag.includes("EMAIL")) colorClass = "tag-email";
-      else if (tag.includes("TELEPHONE")) colorClass = "tag-phone";
-      else if (tag.includes("NSS") || tag.includes("SIRET") || tag.includes("SIREN") || tag.includes("TVA") || tag.includes("CADASTRE")) colorClass = "tag-id";
+      if (tag.includes("PERSONNE") || tag.includes("ASSOCIE")) colorClass = "anon-tag-personne";
+      else if (tag.includes("SOCIETE") || tag.includes("CABINET")) colorClass = "anon-tag-societe";
+      else if (tag.includes("ADRESSE") || tag.includes("VILLE") || tag.includes("NAISSANCE")) colorClass = "anon-tag-adresse";
+      else if (tag.includes("IBAN") || tag.includes("BANQUE") || tag.includes("MONTANT") || tag.includes("EMPRUNT") || tag.includes("REF")) colorClass = "anon-tag-montant";
+      else if (tag.includes("DATE")) colorClass = "anon-tag-date";
+      else if (tag.includes("EMAIL")) colorClass = "anon-tag-email";
+      else if (tag.includes("TELEPHONE")) colorClass = "anon-tag-telephone";
+      else if (tag.includes("NSS") || tag.includes("SIRET") || tag.includes("SIREN") || tag.includes("TVA") || tag.includes("CADASTRE")) colorClass = "anon-tag-siret";
       return `<mark class="anon-tag ${colorClass}">${match}</mark>`;
     });
 }
