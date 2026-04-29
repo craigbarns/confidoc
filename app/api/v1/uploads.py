@@ -25,7 +25,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
-from app.core.exceptions import http_400, http_413
+from app.core.exceptions import http_400, http_404, http_413
 from app.core.logging import get_logger
 from app.core.sandbox import SandboxError, scan_file_for_malware
 from app.models.client import Client
@@ -353,7 +353,7 @@ async def _upload_document_body(
         filename=filename,
         size=size,
         backend=storage_backend,
-        client_name=normalized_client_name,
+        client_name=resolved_client_name,
         exercice=resolved_exercice,
         doc_category=resolved_doc_category,
     )
@@ -412,7 +412,7 @@ async def _upload_document_body(
         "content_type": file.content_type,
         "size_bytes": size,
         "uploaded_by": uploaded_by_snapshot,
-        "client_name": normalized_client_name,
+        "client_name": resolved_client_name,
         "exercice": resolved_exercice,
         "doc_category": resolved_doc_category,
         "processing": processing,
