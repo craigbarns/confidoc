@@ -19,7 +19,9 @@ from app.api.deps import CurrentUser, DbSession
 from app.core.database import async_session_factory
 from app.core.logging import get_logger
 from app.models.document import Document
+from app.schemas.quality_metrics import QualityDashboardResponse
 from app.services.dossier_360_service import build_dossier_360
+from app.services.quality_metrics_service import compute_quality_metrics
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -262,6 +264,40 @@ async def get_dossier_360_report(
         content=pdf,
         media_type="application/pdf",
         headers={"Content-Disposition": 'attachment; filename="dossier-360.pdf"'},
+    )
+
+
+@router.get(
+    "/quality-dashboard",
+    response_model=QualityDashboardResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Tableau de bord qualité / business (Data Flywheel)",
+)
+async def get_quality_dashboard(
+    current_user: CurrentUser,
+    db: DbSession,
+) -> QualityDashboardResponse:
+    """Org-scoped quality + business metrics (volume, time-to-value, drafts).
+
+    Filtre strictement sur ``current_user.org_id``. Aucun agrégat cross-org.
+    """
+    org_id = getattr(current_user, "org_id", None)
+    metrics = await compute_quality_metrics(db, org_id)
+    return QualityDashboardResponse(
+        org_id=metrics.org_id,
+        as_of=metrics.as_of,
+        total_documents=metrics.total_documents,
+        processed_documents=metrics.processed_documents,
+        validated_documents=metrics.validated_documents,
+        avg_processing_seconds=metrics.avg_processing_seconds,
+        avg_time_to_validation_seconds=metrics.avg_time_to_validation_seconds,
+        one_shot_full_ready_rate=metrics.one_shot_full_ready_rate,
+        avg_human_overrides_per_document=metrics.avg_human_overrides_per_document,
+        total_golden_case_drafts=metrics.total_golden_case_drafts,
+        accepted_golden_case_drafts=metrics.accepted_golden_case_drafts,
+        corrections_by_field=metrics.corrections_by_field,
+        corrections_by_error_type=metrics.corrections_by_error_type,
+        documents_by_status=metrics.documents_by_status,
     )
 
 
