@@ -374,20 +374,52 @@ function confirm(message, title = "Confirmer", okLabel = "Confirmer") {
   });
 }
 
-// ── Pipeline step / panel navigation ──────────────────────────────────
+// ── App nav (sidebar unifiée) + panel routing ─────────────────────────
+
+function setActiveNav(key) {
+  document.querySelectorAll("#app-nav .nav-item").forEach((el) => {
+    const isActive = el.dataset.nav === key;
+    el.classList.toggle("active", isActive);
+    if (isActive) {
+      el.setAttribute("aria-current", "page");
+    } else {
+      el.removeAttribute("aria-current");
+    }
+  });
+}
+
+function closeAppNavDrawer() {
+  const nav = $("app-nav");
+  const backdrop = $("app-nav-backdrop");
+  if (nav) nav.classList.remove("open");
+  if (backdrop) backdrop.classList.remove("visible");
+}
+
+function toggleAppNavDrawer() {
+  const nav = $("app-nav");
+  const backdrop = $("app-nav-backdrop");
+  if (!nav) return;
+  const open = nav.classList.toggle("open");
+  if (backdrop) backdrop.classList.toggle("visible", open);
+}
+
+function showStubPanel(panelId, navKey, title) {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  const panel = $(panelId);
+  if (panel) panel.classList.add("active");
+  if (navKey) setActiveNav(navKey);
+  if (title) setPageTitle(title);
+  closeAppNavDrawer();
+}
 
 function setStep(n) {
-  [1, 2, 3].forEach(i => {
-    const s = $(`step-${i}`);
-    if (!s) return;
-    s.className = "step" + (i === n ? " active" : i < n ? " done" : "");
-  });
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
   if (el) el.classList.add("active");
   const titles = { 1: "Ajouter", 2: "Sécuriser", 3: "Analyser" };
   setPageTitle(titles[n] || "");
+  setActiveNav("documents");
 }
 
 function goHome() {
@@ -479,8 +511,6 @@ async function initApp(email) {
   $("screen-auth").style.display = "none";
   $("screen-app").style.display = "";
   $("btn-logout").style.display = "";
-  if ($("btn-security")) $("btn-security").style.display = "";
-  if ($("btn-dashboard")) $("btn-dashboard").style.display = "";
   dismissOnboardingOverlay();
   localStorage.setItem(ONBOARDING_KEY, "true");
 
@@ -1006,10 +1036,6 @@ let sidebarMode = "flat"; // "flat" | "dossier"
 
 function setSidebarMode(mode) {
   sidebarMode = mode;
-  const btnFlat = $("btn-mode-flat");
-  const btnDossier = $("btn-mode-dossier");
-  if (btnFlat) btnFlat.classList.toggle("active", mode === "flat");
-  if (btnDossier) btnDossier.classList.toggle("active", mode === "dossier");
 
   const filters = $("sidebar-filters");
   const batchRow = $("sidebar-batch-row");
@@ -1024,6 +1050,9 @@ function setSidebarMode(mode) {
     if (panel) panel.classList.add("active");
     openDossierOverview();
     loadDossierTree();
+    setActiveNav("clients");
+    setPageTitle("Dossiers clients");
+    closeAppNavDrawer();
   } else {
     if (filters) filters.style.display = "";
     if (batchRow) batchRow.style.display = "";
@@ -2999,11 +3028,9 @@ function showDashboard() {
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
   const dash = $("panel-dashboard");
   if (dash) dash.classList.add("active");
-  [1, 2, 3].forEach(i => {
-    const s = $(`step-${i}`);
-    if (s) s.className = "step";
-  });
   setPageTitle("Accueil");
+  setActiveNav("home");
+  closeAppNavDrawer();
   if (!dashboardLoaded) loadDashboard();
 }
 
@@ -3928,8 +3955,38 @@ document.addEventListener("DOMContentLoaded", () => {
 
   $("btn-logout").addEventListener("click", logout);
 
-  // Dashboard
-  if ($("btn-dashboard")) $("btn-dashboard").addEventListener("click", showDashboard);
+  // App nav (sidebar unifiée)
+  document.querySelectorAll("#app-nav .nav-item").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const key = btn.dataset.nav;
+      switch (key) {
+        case "home":
+          showDashboard();
+          break;
+        case "documents":
+          setSidebarMode("flat");
+          setStep(1);
+          closeAppNavDrawer();
+          break;
+        case "clients":
+          openClientWorkspace();
+          break;
+        case "quality":
+          showStubPanel("panel-quality", "quality", "Qualité");
+          break;
+        case "compliance":
+          showStubPanel("panel-compliance", "compliance", "Conformité");
+          break;
+        case "settings":
+          showStubPanel("panel-settings", "settings", "Paramètres");
+          break;
+      }
+    });
+  });
+  if ($("btn-app-nav-toggle")) $("btn-app-nav-toggle").addEventListener("click", toggleAppNavDrawer);
+  if ($("app-nav-backdrop")) $("app-nav-backdrop").addEventListener("click", closeAppNavDrawer);
+
+  // Dashboard quick-actions (boutons internes du panel-dashboard)
   if ($("btn-home")) $("btn-home").addEventListener("click", goHome);
   if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", startNewDocument);
   if ($("btn-dash-clients")) $("btn-dash-clients").addEventListener("click", openClientWorkspace);
@@ -3939,10 +3996,6 @@ document.addEventListener("DOMContentLoaded", () => {
     loadDashboard();
   });
   if ($("btn-d360-pdf")) $("btn-d360-pdf").addEventListener("click", downloadDossier360Report);
-  [1, 2, 3].forEach((n) => {
-    const stepBtn = $(`step-${n}`);
-    if (stepBtn) stepBtn.addEventListener("click", () => setStep(n));
-  });
 
   // Batch mode
   if ($("btn-batch-toggle")) $("btn-batch-toggle").addEventListener("click", toggleBatchMode);
@@ -4010,7 +4063,6 @@ document.addEventListener("DOMContentLoaded", () => {
   });
 
   // Anonymiser
-  $("btn-demo")?.addEventListener("click", createDemoDocument);
   $("btn-anonymize").addEventListener("click", anonymize);
 
   // Valider → discussion IA (avec validation)
@@ -4188,8 +4240,7 @@ document.addEventListener("DOMContentLoaded", () => {
   initTheme();
   if ($("btn-theme")) $("btn-theme").addEventListener("click", toggleTheme);
 
-  // Mobile sidebar toggle
-  if ($("btn-sidebar-toggle")) $("btn-sidebar-toggle").addEventListener("click", toggleSidebar);
+  // Backdrop de la sidebar documents (le bouton burger principal vit dans le header → toggleAppNavDrawer)
   if ($("sidebar-backdrop")) $("sidebar-backdrop").addEventListener("click", closeSidebar);
 
   // Desktop/tablet sidebar collapse
@@ -4215,15 +4266,6 @@ document.addEventListener("DOMContentLoaded", () => {
 
   document.querySelectorAll(".sidebar .doc-item").forEach(el => {
     el.addEventListener("click", closeSidebar);
-  });
-  document.querySelectorAll(".mobile-nav-btn").forEach((btn) => {
-    btn.addEventListener("click", () => {
-      const nav = btn.dataset.nav;
-      if (nav === "dashboard") showDashboard();
-      if (nav === "clients") openClientWorkspace();
-      if (nav === "upload") startNewDocument();
-      if (nav === "ai") resumeWorkspaceReview();
-    });
   });
 
   // Notification permission
