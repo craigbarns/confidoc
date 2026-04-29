@@ -44,7 +44,13 @@ async def test_readiness_endpoint_responds_with_known_shape(client: AsyncClient)
 
 @pytest.mark.anyio
 async def test_metrics_endpoint_exposes_prometheus_payload(client: AsyncClient):
-    """/metrics doit servir un payload Prometheus en text/plain."""
+    """/metrics doit servir un payload Prometheus en text/plain.
+
+    ``prometheus_client`` is a runtime dependency. If the test environment
+    is missing it (e.g. an old image rebuild), we skip rather than
+    pretend the route is broken.
+    """
+    pytest.importorskip("prometheus_client")
     response = await client.get("/metrics")
     assert response.status_code == 200
     content_type = response.headers.get("content-type", "")

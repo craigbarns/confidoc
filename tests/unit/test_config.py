@@ -20,20 +20,33 @@ def test_settings_max_upload():
     assert settings.max_upload_size_bytes == 50 * 1024 * 1024
 
 
+_PROD_SECRETS_OK = {
+    # All four secrets must be non-default to satisfy the production
+    # safety validator (cf. app/config.py::_block_insecure_defaults).
+    "SECRET_KEY": "real-secret-key-32-chars-long-enough-ok",
+    "JWT_SECRET_KEY": "real-jwt-secret-32-chars-long-enough-ok",
+    "ENCRYPTION_MASTER_KEY": "real-key-32-chars-long-enough-ok",
+    "PSEUDO_MAPPING_KEY": "real-pseudo-32-chars-long-enough!",
+}
+
+
 def test_settings_environment_flags():
     """Les flags d'environnement fonctionnent."""
     dev = Settings(APP_ENV="development")
     assert dev.is_development is True
     assert dev.is_production is False
 
-    prod = Settings(APP_ENV="production", STORAGE_BACKEND="database")
+    prod = Settings(APP_ENV="production", STORAGE_BACKEND="database", **_PROD_SECRETS_OK)
     assert prod.is_production is True
     assert prod.is_development is False
 
 
 def test_settings_env_aliases():
     """APP_ENV accepts common aliases."""
-    assert Settings(APP_ENV="prod", STORAGE_BACKEND="database").APP_ENV == "production"
+    assert (
+        Settings(APP_ENV="prod", STORAGE_BACKEND="database", **_PROD_SECRETS_OK).APP_ENV
+        == "production"
+    )
     assert Settings(APP_ENV="dev").APP_ENV == "development"
     assert Settings(APP_ENV="stage").APP_ENV == "staging"
     assert Settings(APP_ENV="local").APP_ENV == "development"
