@@ -10,6 +10,7 @@ from app.models.document_chunk import DocumentChunk
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.gdpr_consent import GDPRConsent
+from app.models.golden_case_draft import GoldenCaseDraft, GoldenDraftStatus
 from app.models.gdpr_register import GDPRProcessingRegister
 from app.models.integration import ApiKey, IdempotencyRecord, WebhookDelivery, WebhookEndpoint
 from app.models.llm_request import LlmRequest
@@ -30,6 +31,7 @@ __all__ = [
     "DocumentChunk",
     "DocumentVersion", "DocumentVersionType",
     "EntityDetection",
+    "GoldenCaseDraft", "GoldenDraftStatus",
     "LlmRequest",
     "AuditLog",
     "GDPRConsent",

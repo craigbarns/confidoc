@@ -466,6 +466,40 @@ async def validate_document(
             )
         except Exception as exc:
             logger.error("auto_golden_draft_failed", error=str(exc))
+
+        # --- Data Flywheel: structured DB-backed draft ----------------
+        # We mirror the file-based golden draft above into a DB row per
+        # corrected field. Failures are non-blocking: validation must keep
+        # working even if the flywheel write fails.
+        try:
+            from app.models.golden_case_draft import SOURCE_SNIPPET_MAX_CHARS
+            from app.services.golden_draft_service import (
+                create_drafts_from_corrections,
+            )
+
+            org_id = getattr(current_user, "org_id", None) or document.org_id
+            if org_id is not None:
+                # The snippet is taken from the *anonymized* final_text, never
+                # from the raw document, and capped to a short window.
+                snippet = (final_text or "")[:SOURCE_SNIPPET_MAX_CHARS] or None
+                await create_drafts_from_corrections(
+                    db,
+                    org_id=org_id,
+                    document_id=document.id,
+                    created_by_user_id=current_user.id,
+                    document_type=args.doc_type,
+                    corrected_data=args.corrected_data,
+                    source_snippet=snippet,
+                    error_type="manual_correction",
+                )
+                logger.info(
+                    "golden_draft_db_persisted",
+                    document_id=str(document.id),
+                    doc_type=args.doc_type,
+                    fields=len(args.corrected_data),
+                )
+        except Exception as exc:
+            logger.error("golden_draft_db_persist_failed", error=str(exc))
     # ---------------------------
 
     from app.config import get_settings

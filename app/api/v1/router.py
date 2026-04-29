@@ -13,6 +13,7 @@ from app.api.v1 import (
     dossiers,
     integrations,
     leads,
+    quality,
     uploads,
     users,
 )
@@ -33,3 +34,4 @@ router.include_router(copilot.router, prefix="/copilot", tags=["copilot"])
 router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 router.include_router(demo.router, prefix="/demo", tags=["demo"])
 router.include_router(leads.router, prefix="/leads", tags=["leads"])
+router.include_router(quality.router, prefix="/quality", tags=["quality"])
