@@ -1014,12 +1014,12 @@ function renderDossierTree(dossiers) {
     return;
   }
   list.innerHTML = dossiers.map(client => `
-    <div class="dossier-client" data-client="${escapeHtml(client.client_name)}">
+    <div class="dossier-client" data-client="${escapeAttr(client.client_name)}">
       <div class="dossier-client-header">
-        <button class="dossier-client-toggle-btn" onclick="toggleDossierClient(this.closest('.dossier-client'))">
+        <button class="dossier-client-toggle-btn" data-action="toggle-dossier-client">
           <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
         </button>
-        <button class="dossier-client-name-btn" onclick="openDossierPage('${escapeHtml(client.client_name)}')">${escapeHtml(client.client_name)}</button>
+        <button class="dossier-client-name-btn" data-action="open-dossier-page" data-client="${escapeAttr(client.client_name)}">${escapeHtml(client.client_name)}</button>
         <span class="dossier-client-count">${client.total_docs}</span>
       </div>
       <div class="dossier-exercices" style="display:none">
@@ -1040,7 +1040,7 @@ function renderDossierExerciceTree(clientName, ex) {
   const allReady = ex.ready_count === ex.doc_count;
   return `
     <div class="dossier-exercice-tree">
-      <div class="dossier-exercice-header" onclick="toggleDossierExercice(this)">
+      <div class="dossier-exercice-header" data-action="toggle-dossier-exercice">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
         <span class="dossier-exercice-year">${escapeHtml(ex.exercice || "Sans exercice")}</span>
         <span class="dossier-status-dot ${allReady ? "green" : "orange"}"></span>
@@ -1048,7 +1048,7 @@ function renderDossierExerciceTree(clientName, ex) {
       </div>
       <div class="dossier-docs-sidebar" style="display:none">
         ${(ex.documents || []).map(doc => `
-          <div class="dossier-doc-sidebar-item" onclick="selectDoc('${escapeHtml(doc.id)}')" title="${escapeHtml(doc.original_filename)}">
+          <div class="dossier-doc-sidebar-item" data-action="select-doc" data-doc-id="${escapeAttr(doc.id)}" title="${escapeAttr(doc.original_filename)}">
             ${escapeHtml(doc.original_filename)}
           </div>
         `).join("")}
@@ -1145,7 +1145,7 @@ function renderDossierClientGrid(dossiers) {
     grid.innerHTML = `
       <div class="panel-empty-hint" style="grid-column:1/-1">
         <p>Aucun client pour l'instant.</p>
-        <button class="btn btn-primary btn-sm" style="margin-top:12px" onclick="setSidebarMode('flat');setStep(1)">+ Uploader un premier document</button>
+        <button class="btn btn-primary btn-sm" style="margin-top:12px" data-action="new-document">+ Uploader un premier document</button>
       </div>`;
     return;
   }
@@ -1157,7 +1157,7 @@ function renderDossierClientGrid(dossiers) {
     const exCount = (client.exercices || []).length;
     const lastActivity = client.last_activity ? formatDate(client.last_activity) : "";
     return `
-      <div class="dossier-client-card" onclick="openDossierPage('${escapeHtml(client.client_name)}')">
+      <div class="dossier-client-card" data-action="open-dossier-page" data-client="${escapeAttr(client.client_name)}">
         <div class="dossier-client-card-icon">
           <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
             <path d="M22 19a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h5l2 3h9a2 2 0 0 1 2 2z"/>
@@ -1211,11 +1211,49 @@ async function loadDossierClientPage(clientName) {
       exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Aucun document trouvé pour ce client.</p>`;
       return;
     }
-    if (statsEl) statsEl.textContent = `${client.total_docs} document${client.total_docs > 1 ? "s" : ""} · ${client.exercices.length} exercice${client.exercices.length > 1 ? "s" : ""}`;
-    exercicesEl.innerHTML = (client.exercices || []).map(ex => renderDossierExerciceSection(ex)).join("");
+    const exercices = client.exercices || [];
+    const readyCount = exercices.reduce((acc, ex) => acc + (ex.ready_count || 0), 0);
+    const totalDocs = client.total_docs || 0;
+    if (statsEl) {
+      statsEl.textContent = `${totalDocs} document${totalDocs > 1 ? "s" : ""} · ${exercices.length} exercice${exercices.length > 1 ? "s" : ""} · ${readyCount} prêt${readyCount > 1 ? "s" : ""} IA`;
+    }
+    exercicesEl.innerHTML = [
+      renderDossierClientSummary(client, readyCount),
+      ...exercices.map(ex => renderDossierExerciceSection(ex)),
+    ].join("");
   } catch (e) {
     exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Erreur chargement dossier.</p>`;
   }
+}
+
+function renderDossierClientSummary(client, readyCount) {
+  const exercices = client.exercices || [];
+  const totalDocs = client.total_docs || 0;
+  const pendingCount = Math.max(0, totalDocs - readyCount);
+  const categories = [...new Set(exercices.flatMap(ex => ex.doc_categories || []).filter(Boolean))];
+  const lastActivity = client.last_activity ? formatDate(client.last_activity) : "—";
+  return `
+    <section class="dossier-client-summary" aria-label="Synthèse du dossier client">
+      <div class="dossier-summary-main">
+        <span class="dossier-summary-label">Vue client</span>
+        <strong>${escapeHtml(client.client_name || currentDossierClient || "Client")}</strong>
+        <span>${totalDocs} document${totalDocs > 1 ? "s" : ""} réparti${totalDocs > 1 ? "s" : ""} sur ${exercices.length} exercice${exercices.length > 1 ? "s" : ""}</span>
+      </div>
+      <div class="dossier-summary-metrics">
+        <span><strong>${readyCount}</strong> prêts IA</span>
+        <span><strong>${pendingCount}</strong> à traiter</span>
+        <span><strong>${lastActivity}</strong> dernière activité</span>
+      </div>
+      ${categories.length ? `<div class="dossier-summary-tags">${categories.slice(0, 6).map(c => `<span>${escapeHtml(c)}</span>`).join("")}</div>` : ""}
+    </section>
+  `;
+}
+
+function dossierDocStatusClass(status) {
+  if (isReadyStatus(status)) return "is-ready";
+  if (isProcessingStatus(status)) return "is-processing";
+  if ((status || "").toLowerCase() === "failed") return "is-error";
+  return "is-neutral";
 }
 
 function renderDossierExerciceSection(ex) {
@@ -1224,33 +1262,47 @@ function renderDossierExerciceSection(ex) {
     ? `<span class="badge-category badge-green">Complet</span>`
     : `<span class="badge-category badge-orange">${ex.ready_count}/${ex.doc_count} prêts</span>`;
   const catsText = (ex.doc_categories || []).map(c => escapeHtml(c)).join(" · ");
+  const docs = ex.documents || [];
   return `
     <div class="dossier-exercice-section">
       <div class="dossier-exercice-section-header">
-        <h3>Exercice ${escapeHtml(ex.exercice || "Sans exercice")}</h3>
-        ${statusBadge}
-        ${catsText ? `<span style="font-size:11px;color:var(--text-muted)">${catsText}</span>` : ""}
+        <div class="dossier-exercice-title">
+          <h3>Exercice ${escapeHtml(ex.exercice || "Sans exercice")}</h3>
+          <span>${docs.length} document${docs.length > 1 ? "s" : ""}${catsText ? " · " + catsText : ""}</span>
+        </div>
+        <div class="dossier-exercice-actions">${statusBadge}</div>
       </div>
-      <table class="dossier-docs-table">
-        <thead><tr>
-          <th>Document</th><th>Type</th><th>Taille</th><th>Date</th><th>Statut</th><th></th>
-        </tr></thead>
-        <tbody>
-          ${(ex.documents || []).map(doc => `
-            <tr class="dossier-doc-row" onclick="selectDoc('${escapeHtml(doc.id)}')">
-              <td style="max-width:200px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap" title="${escapeHtml(doc.original_filename)}">${escapeHtml(doc.original_filename)}</td>
-              <td><span class="badge-category">${escapeHtml(doc.doc_category || "—")}</span></td>
-              <td style="color:var(--text-muted)">${formatBytes(doc.size_bytes)}</td>
-              <td style="color:var(--text-muted)">${formatDate(doc.created_at)}</td>
-              <td>${escapeHtml(documentStatusLabel(doc.status))}</td>
-              <td>
-                <button class="btn btn-ghost" style="font-size:11px;padding:2px 6px" onclick="event.stopPropagation();openEditMetadataModal('${escapeHtml(doc.id)}')">✏️</button>
-              </td>
-            </tr>
-          `).join("")}
-        </tbody>
-      </table>
+      <div class="dossier-doc-card-list">
+        ${docs.map(doc => renderDossierDocCard(doc)).join("")}
+      </div>
     </div>
+  `;
+}
+
+function renderDossierDocCard(doc) {
+  const statusClass = dossierDocStatusClass(doc.status);
+  return `
+    <article class="dossier-doc-card ${statusClass}" data-action="select-doc" data-doc-id="${escapeAttr(doc.id)}">
+      <div class="dossier-doc-status-dot" aria-hidden="true"></div>
+      <div class="dossier-doc-card-body">
+        <div class="dossier-doc-card-title" title="${escapeAttr(doc.original_filename)}">${escapeHtml(doc.original_filename)}</div>
+        <div class="dossier-doc-card-meta">
+          <span>${escapeHtml(doc.doc_category || "Non classé")}</span>
+          <span>${formatDate(doc.created_at)}</span>
+          <span>${formatBytes(doc.size_bytes)}</span>
+        </div>
+      </div>
+      <div class="dossier-doc-card-actions">
+        <span class="dossier-doc-status-label">${escapeHtml(documentStatusLabel(doc.status))}</span>
+        <button class="btn btn-ghost btn-sm" data-action="select-doc" data-doc-id="${escapeAttr(doc.id)}">Ouvrir</button>
+        <button class="btn btn-icon btn-sm" data-action="edit-metadata" data-doc-id="${escapeAttr(doc.id)}" aria-label="Modifier les métadonnées" title="Modifier">
+          <svg aria-hidden="true" focusable="false" width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 20h9"/>
+            <path d="M16.5 3.5a2.12 2.12 0 0 1 3 3L7 19l-4 1 1-4Z"/>
+          </svg>
+        </button>
+      </div>
+    </article>
   `;
 }
 
@@ -2365,6 +2417,10 @@ function escapeHtml(text) {
     .replace(/&/g, "&amp;")
     .replace(/</g, "&lt;")
     .replace(/>/g, "&gt;");
+}
+
+function escapeAttr(text) {
+  return escapeHtml(text).replace(/"/g, "&quot;");
 }
 
 function renderStructuredAnswer(bodyEl, text) {
@@ -3588,6 +3644,57 @@ function exportReviewResult() {
   toast("Analyse exportee", "success");
 }
 
+function startNewDocument() {
+  currentDocId = null;
+  currentDocName = "";
+  currentDocStatus = "";
+  currentDocSize = 0;
+  document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
+  updateHeaderContext();
+  renderAIDocInsights({});
+  renderExportGuard({});
+  updatePipelineTimeline({});
+  setSidebarMode("flat");
+  setStep(1);
+}
+
+function handleDelegatedAction(e) {
+  const target = e.target instanceof Element ? e.target : null;
+  const control = target?.closest("[data-action]");
+  if (!control) return;
+
+  const action = control.dataset.action;
+  if (!action) return;
+
+  e.preventDefault();
+
+  if (action === "edit-metadata") {
+    e.stopPropagation();
+    openEditMetadataModal(control.dataset.docId || "");
+    return;
+  }
+
+  if (action === "sidebar-mode") setSidebarMode(control.dataset.mode || "flat");
+  else if (action === "new-document") startNewDocument();
+  else if (action === "create-client") openCreateClientModal();
+  else if (action === "dossier-overview") openDossierOverview();
+  else if (action === "upload-for-dossier") openUploadForDossierClient();
+  else if (action === "review-mode") setReviewMode(control.dataset.mode || "split");
+  else if (action === "review-fullscreen") toggleReviewFullscreen();
+  else if (action === "close-client-modal") closeClientModal();
+  else if (action === "submit-client-modal") submitCreateClient();
+  else if (action === "toggle-dossier-client") {
+    const container = control.closest(".dossier-client");
+    if (container) toggleDossierClient(container);
+  } else if (action === "open-dossier-page") {
+    openDossierPage(control.dataset.client || "");
+  } else if (action === "toggle-dossier-exercice") {
+    toggleDossierExercice(control);
+  } else if (action === "select-doc") {
+    selectDoc(control.dataset.docId || "");
+  }
+}
+
 
 // ── Event listeners ────────────────────────────────────────────────────
 
@@ -3824,19 +3931,13 @@ document.addEventListener("DOMContentLoaded", () => {
   if ($("btn-batch-delete")) $("btn-batch-delete").addEventListener("click", batchDeleteSelected);
   if ($("btn-batch-anonymize")) $("btn-batch-anonymize").addEventListener("click", batchAnonymizeSelected);
 
+  document.addEventListener("click", handleDelegatedAction);
+
   // Sidebar: nouveau document
-  $("btn-new-doc").addEventListener("click", () => {
-    currentDocId = null;
-    currentDocName = "";
-    currentDocStatus = "";
-    currentDocSize = 0;
-    document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
-    updateHeaderContext();
-    renderAIDocInsights({});
-    renderExportGuard({});
-    updatePipelineTimeline({});
-    setStep(1);
-  });
+  $("btn-new-doc").addEventListener("click", startNewDocument);
+  if ($("dossier-filter-client")) {
+    $("dossier-filter-client").addEventListener("input", e => filterDossierTree(e.target.value));
+  }
   $("filter-client").addEventListener("input", (e) => {
     currentClientFilter = (e.target.value || "").trim();
     saveFilterState();

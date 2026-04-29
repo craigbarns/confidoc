@@ -42,3 +42,5 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert resp.text.count("</main>") == 1
     assert "translate.google.com" not in resp.text
     assert "google_translate_element" not in resp.text
+    assert "onclick=" not in resp.text
+    assert "oninput=" not in resp.text

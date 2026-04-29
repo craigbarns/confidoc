@@ -313,12 +313,12 @@
       </div>
 
       <div class="sidebar-mode-toggle">
-        <button class="sidebar-mode-btn active" id="btn-mode-flat" onclick="setSidebarMode('flat')">Liste</button>
-        <button class="sidebar-mode-btn" id="btn-mode-dossier" onclick="setSidebarMode('dossier')">Clients</button>
+        <button class="sidebar-mode-btn active" id="btn-mode-flat" data-action="sidebar-mode" data-mode="flat">Liste</button>
+        <button class="sidebar-mode-btn" id="btn-mode-dossier" data-action="sidebar-mode" data-mode="dossier">Clients</button>
       </div>
 
       <div id="dossier-client-search-row" style="display:none;padding:8px 12px 0">
-        <input id="dossier-filter-client" class="input-sm" type="text" placeholder="Rechercher un client…" oninput="filterDossierTree(this.value)" />
+        <input id="dossier-filter-client" class="input-sm" type="text" placeholder="Rechercher un client…" />
       </div>
 
       <div id="sidebar-batch-row" class="sidebar-batch-row">
@@ -377,8 +377,8 @@
               <span class="dossier-overview-subtitle" id="dossier-overview-stats"></span>
             </div>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" onclick="openCreateClientModal()">+ Nouveau client</button>
-              <button class="btn btn-primary btn-sm" onclick="setSidebarMode('flat');setStep(1)">+ Nouveau document</button>
+              <button class="btn btn-ghost btn-sm" data-action="create-client">+ Nouveau client</button>
+              <button class="btn btn-primary btn-sm" data-action="new-document">+ Nouveau document</button>
             </div>
           </div>
           <div id="dossier-client-grid" class="dossier-client-grid">
@@ -389,12 +389,12 @@
         <!-- Vue 2 : dossier d'un client -->
         <div id="dossier-detail">
           <div class="dossier-page-header">
-            <button class="btn btn-ghost btn-sm" onclick="openDossierOverview()" style="flex-shrink:0">← Clients</button>
+            <button class="btn btn-ghost btn-sm" data-action="dossier-overview" style="flex-shrink:0">← Clients</button>
             <div class="dossier-page-title">
               <h2 id="dossier-page-client-name"></h2>
               <span class="dossier-page-stats" id="dossier-page-stats"></span>
             </div>
-            <button class="btn btn-primary btn-sm" id="btn-dossier-upload" onclick="openUploadForDossierClient()">+ Ajouter</button>
+            <button class="btn btn-primary btn-sm" id="btn-dossier-upload" data-action="upload-for-dossier">+ Ajouter</button>
           </div>
           <div id="dossier-page-exercices" class="dossier-page-exercices"></div>
         </div>
@@ -779,11 +779,11 @@
           <div id="interactive-review-station" class="review-station">
             <div class="review-toolbar">
               <div class="review-mode-switch">
-                <button class="btn btn-ghost btn-sm active" id="btn-view-split" onclick="setReviewMode('split')">Vue côte à côte</button>
-                <button class="btn btn-ghost btn-sm" id="btn-view-text" onclick="setReviewMode('text')">Texte seul</button>
+                <button class="btn btn-ghost btn-sm active" id="btn-view-split" data-action="review-mode" data-mode="split">Vue côte à côte</button>
+                <button class="btn btn-ghost btn-sm" id="btn-view-text" data-action="review-mode" data-mode="text">Texte seul</button>
               </div>
               <div style="margin-left:auto; display:flex; gap:8px;">
-                 <button class="btn btn-ghost btn-sm" onclick="toggleReviewFullscreen()" title="Plein écran">
+                 <button class="btn btn-ghost btn-sm" data-action="review-fullscreen" title="Plein écran">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
                  </button>
               </div>
@@ -1066,8 +1066,8 @@
       </div>
     </div>
     <div class="confirm-footer">
-      <button class="btn btn-ghost btn-sm" onclick="closeClientModal()">Annuler</button>
-      <button class="btn btn-primary btn-sm" onclick="submitCreateClient()">Créer le client</button>
+      <button class="btn btn-ghost btn-sm" data-action="close-client-modal">Annuler</button>
+      <button class="btn btn-primary btn-sm" data-action="submit-client-modal">Créer le client</button>
     </div>
   </div>
 </div>
