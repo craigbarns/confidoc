@@ -18,10 +18,23 @@ def _key_func(request: Request) -> str:
 
 settings = get_settings()
 
+
+def _limiter_storage_uri() -> str:
+    """Backend slowapi : utiliser Redis hors dev pour multi-instance.
+
+    En développement local, Redis est souvent absent : le stockage Redis faisait
+    planter le middleware de rate limit (ConnectionError → HTTP 500), notamment
+    sur POST /uploads avant même d'atteindre le handler.
+    """
+    if settings.APP_ENV == "development":
+        return "memory://"
+    return settings.REDIS_URL
+
+
 limiter = Limiter(
     key_func=_key_func,
     default_limits=[settings.RATE_LIMIT_DEFAULT],
-    storage_uri=settings.REDIS_URL,
+    storage_uri=_limiter_storage_uri(),
     strategy="fixed-window",
 )
 

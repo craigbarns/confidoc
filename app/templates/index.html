@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=2.1" />
+  <link rel="stylesheet" href="/static/css/style.css?v=2.2" />
   <style>
     .review-station {
       margin-top: 20px;
@@ -658,17 +658,19 @@
           </label>
         </div>
         <div class="upload-zone" id="upload-zone">
-          <div class="upload-icon">
-            <svg aria-hidden="true" focusable="false" width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
-              <polyline points="16 16 12 12 8 16"/>
-              <line x1="12" y1="12" x2="12" y2="21"/>
-              <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
-            </svg>
+          <div class="upload-zone-inner">
+            <div class="upload-icon" aria-hidden="true">
+              <svg aria-hidden="true" focusable="false" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round">
+                <polyline points="16 16 12 12 8 16"/>
+                <line x1="12" y1="12" x2="12" y2="21"/>
+                <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
+              </svg>
+            </div>
+            <p class="upload-main">Glissez votre fichier ici ou</p>
+            <label class="btn btn-secondary" for="file-input" style="cursor:pointer">Choisir un fichier</label>
+            <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
+            <p class="upload-hint">PDF, PNG, JPG, TIFF — max 50 MB</p>
           </div>
-          <p class="upload-main">Glissez votre fichier ici ou</p>
-          <label class="btn btn-secondary" for="file-input" style="cursor:pointer">Choisir un fichier</label>
-          <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
-          <p class="upload-hint">PDF, PNG, JPG, TIFF — max 50 MB</p>
         </div>
 
         <div id="upload-progress" style="display:none">
@@ -694,8 +696,15 @@
             <polyline points="14 2 14 8 20 8"/>
           </svg>
           <span id="anon-doc-name" class="anon-doc-name"></span>
+          <span id="anon-doc-client" class="anon-doc-client"></span>
           <span id="anon-doc-size" class="anon-doc-size"></span>
           <span id="anon-doc-status" class="doc-stage-badge"></span>
+        </div>
+
+        <div id="anon-context-actions" class="doc-context-actions" style="display:none" aria-label="Actions document">
+          <button type="button" id="btn-context-anonymize" class="btn btn-primary btn-sm">Sécuriser</button>
+          <button type="button" id="btn-context-ai" class="btn btn-ghost btn-sm">Analyse IA</button>
+          <a href="/trust" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Preuve DPO</a>
         </div>
 
         <div id="pipeline-timeline" class="pipeline-timeline" style="display:none">
@@ -857,8 +866,19 @@
             <polyline points="14 2 14 8 20 8"/>
           </svg>
           <span id="ai-doc-name" class="anon-doc-name"></span>
+          <span id="ai-doc-client" class="anon-doc-client"></span>
           <span id="ai-doc-size" class="anon-doc-size"></span>
           <span id="ai-doc-status" class="doc-stage-badge"></span>
+        </div>
+
+        <div id="ai-context-actions" class="doc-context-actions" style="display:none;margin-bottom:12px" aria-label="Raccourcis document">
+          <button type="button" id="btn-ai-back-anon" class="btn btn-ghost btn-sm">Sécuriser / revoir</button>
+          <button type="button" id="btn-ai-audit-shortcut" class="btn btn-ghost btn-sm">Audit RGPD</button>
+          <a href="/trust" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Preuve DPO</a>
+        </div>
+
+        <div id="ai-preview-error" class="panel-empty-hint" style="display:none;margin-bottom:12px;max-width:100%">
+          <p id="ai-preview-error-msg" class="upload-hint" style="margin:0">Aperçu indisponible — le chat et les exports restent disponibles.</p>
         </div>
 
         <div class="panel-header">

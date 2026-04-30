@@ -1082,6 +1082,25 @@ body {
 }
 .anon-doc-size { color: var(--text-muted); flex-shrink: 0; }
 
+.anon-doc-client {
+  color: var(--text-dim);
+  flex-shrink: 0;
+  max-width: 160px;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 11px;
+}
+.anon-doc-client:empty { display: none; }
+
+.doc-context-actions {
+  display: none;
+  flex-wrap: wrap;
+  gap: 8px;
+  align-items: center;
+  margin-bottom: 16px;
+}
+
 .doc-stage-badge {
   flex-shrink: 0;
   border-radius: 999px;
@@ -1183,25 +1202,24 @@ body {
 .upload-zone {
   border: 2px dashed rgba(124,116,255,0.25);
   border-radius: var(--radius-lg);
-  padding: 40px 24px;
+  padding: 28px 24px;
   text-align: center;
   cursor: pointer;
-  transition: all var(--t-slow);
+  transition: border-color var(--t-slow), background var(--t-slow);
   background: transparent;
   max-width: 560px;
   position: relative;
   overflow: hidden;
 }
-.upload-zone::before {
-  content: "";
-  position: absolute;
-  inset: 0;
-  background: var(--grad-glow);
-  opacity: 0;
-  transition: opacity var(--t-slow);
+/* Pas de calque radial (::before) : il pouvait dominer visuellement toute la zone. */
+.upload-zone-inner {
+  position: relative;
+  z-index: 1;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
 }
-.upload-zone:hover::before,
-.upload-zone.drag-over::before { opacity: 1; }
 .upload-zone:hover,
 .upload-zone.drag-over {
   border-color: var(--accent);
@@ -1224,14 +1242,14 @@ body {
   100% { top: 0; }
 }
 .upload-icon {
-  width: 60px;
-  height: 60px;
+  width: 44px;
+  height: 44px;
   background: var(--accent-dim);
-  border-radius: var(--radius-lg);
+  border-radius: var(--radius);
   display: flex;
   align-items: center;
   justify-content: center;
-  margin: 0 auto 16px;
+  margin: 0 auto 10px;
   color: var(--accent);
 }
 .upload-main { color: var(--text-muted); margin-bottom: 12px; }

@@ -77,6 +77,16 @@ function documentStatusLabel(status) {
   return map[(status || "").toLowerCase()] || status || "—";
 }
 
+function normalizeClientFieldInput(raw) {
+  if (raw == null) return "";
+  return String(raw).replace(/\u00a0/g, " ").replace(/\s+/g, " ").trim();
+}
+
+function getUploadClientName() {
+  const el = $("upload-client-name");
+  return normalizeClientFieldInput(el && "value" in el ? el.value : "");
+}
+
 function saveFilterState() {
   const payload = {
     client: currentClientFilter,
@@ -430,6 +440,19 @@ function setStep(n) {
   const titles = { 1: "Ajouter", 2: "Sécuriser", 3: "Analyser" };
   setPageTitle(titles[n] || "");
   setActiveNav("documents");
+  syncDocContextActions();
+}
+
+function syncDocContextActions() {
+  const anonEl = $("anon-context-actions");
+  const aiEl = $("ai-context-actions");
+  if (!anonEl || !aiEl) return;
+  const panelAnon = $("panel-anon");
+  const panelAi = $("panel-ai");
+  const showAnon = !!currentDocId && panelAnon && panelAnon.classList.contains("active");
+  const showAi = !!currentDocId && panelAi && panelAi.classList.contains("active");
+  anonEl.style.display = showAnon ? "flex" : "none";
+  aiEl.style.display = showAi ? "flex" : "none";
 }
 
 function goHome() {
@@ -879,8 +902,17 @@ async function loadClientSuggestions() {
 }
 
 function getClientIdByName(name) {
-  const client = allClients.find(c => c.name.toLowerCase() === name.toLowerCase());
+  const n = normalizeClientFieldInput(name);
+  if (!n) return null;
+  const client = allClients.find(c => c.name.toLowerCase() === n.toLowerCase());
   return client ? client.id : null;
+}
+
+function getDocClientLabel(docId) {
+  if (!docId) return "";
+  const d = lastDocsList.find((x) => x.id === docId);
+  if (!d || !Array.isArray(d.tags) || !d.tags.length) return "";
+  return String(d.tags[0] || "");
 }
 
 function renderDocListSkeleton() {
@@ -1613,70 +1645,118 @@ async function selectDoc(id, status, name, sizeBytes) {
   delete originalTextCache[id]; // invalide le cache si on recharge
   updateHeaderContext();
 
+  const clientLabel = getDocClientLabel(id);
+
   document.querySelectorAll(".doc-item").forEach(el =>
     el.classList.toggle("selected", el.dataset.id === id)
   );
 
   // Si le document est prêt, aller directement à l'étape 3.
   // Sinon, étape 2 pour la sécurisation.
-  const targetStep = isReadyStatus(status) ? 3 : 2;
+  const st = (status || "").toLowerCase();
+  const targetStep = isReadyStatus(st) ? 3 : 2;
   setStep(targetStep);
 
   if (targetStep === 2) {
     resetAnonPanel();
-    updateAnonDocBar(name, sizeBytes);
-    updatePipelineTimeline({ status, extractDone: status !== "uploaded", anonymDone: isReadyStatus(status) });
+    updateAnonDocBar(name, sizeBytes, clientLabel);
+    updatePipelineTimeline({ status: st, extractDone: st !== "uploaded", anonymDone: isReadyStatus(st) });
     await refreshAIDocInsights(id);
 
-    if (isProcessingStatus(status)) {
+    if (isProcessingStatus(st)) {
       showAnonLoading("Traitement en cours…");
       pollDocStatus(id);
-    } else if (status === "uploaded") {
-      $("anon-empty").style.display = "";
-      $("anon-empty").querySelector("p").innerHTML =
+    } else if (st === "uploaded") {
+      const empty = $("anon-empty");
+      if (empty) {
+        empty.style.display = "";
+        const p = empty.querySelector("p");
+        if (p) p.innerHTML =
         "Document ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
-    } else if (status === "failed") {
-      $("anon-empty").style.display = "";
-      $("anon-empty").querySelector(".hint-icon").innerHTML = `<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
-      $("anon-empty").querySelector("p").innerHTML =
+      }
+    } else if (st === "failed") {
+      const empty = $("anon-empty");
+      if (empty) {
+        empty.style.display = "";
+        const icon = empty.querySelector(".hint-icon");
+        if (icon) icon.innerHTML = `<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
+        const p = empty.querySelector("p");
+        if (p) p.innerHTML =
         "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
+      }
+    } else {
+      const empty = $("anon-empty");
+      if (empty) {
+        empty.style.display = "";
+        const p = empty.querySelector("p");
+        if (p) {
+          const label = documentStatusLabel(st);
+          p.innerHTML =
+            `État : <strong>${escapeHtml(label)}</strong>.<br>Utilisez les actions ci-dessus ou patientez.`;
+        }
+      }
     }
   } else {
     // targetStep === 3 (ready doc)
-    updateAIDocBar(name, sizeBytes);
-    updatePipelineTimeline({ status, extractDone: true, anonymDone: true });
+    const errBox = $("ai-preview-error");
+    const errMsg = $("ai-preview-error-msg");
+    if (errBox) errBox.style.display = "none";
+
+    updateAIDocBar(name, sizeBytes, clientLabel);
+    updatePipelineTimeline({ status: st, extractDone: true, anonymDone: true });
     await refreshAIDocInsights(id);
-    // Pre-fill quick insights if possible, but don't block on preview
     try {
       const preview = await apiFetch(`/documents/${id}/preview`);
       showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
     } catch (e) {
-      console.error("preview load error:", e);
+      if (errBox && errMsg) {
+        errMsg.textContent =
+          `Aperçu indisponible (${e.message || "erreur"}). Le chat et les exports restent disponibles.`;
+        errBox.style.display = "";
+      }
     }
   }
   refreshCompareDocSelect();
 }
 
-function updateAnonDocBar(name, sizeBytes) {
-  if (!name) { $("anon-doc-bar").style.display = "none"; return; }
-  $("anon-doc-name").textContent = name;
+function updateAnonDocBar(name, sizeBytes, clientLabel) {
+  const bar = $("anon-doc-bar");
+  if (!bar) return;
+  const displayName = (name && String(name).trim()) || currentDocName || "Document";
+  const label = clientLabel !== undefined && clientLabel !== null
+    ? clientLabel
+    : getDocClientLabel(currentDocId);
+  $("anon-doc-name").textContent = displayName;
+  const clientEl = $("anon-doc-client");
+  if (clientEl) {
+    clientEl.textContent = label || "—";
+  }
   $("anon-doc-size").textContent = formatBytes(sizeBytes);
   const st = $("anon-doc-status");
-  const status = currentDocStatus || "uploaded";
+  const status = (currentDocStatus || "uploaded").toLowerCase();
   st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
-  $("anon-doc-bar").style.display = "";
+  bar.style.display = "";
 }
 
-function updateAIDocBar(name, sizeBytes) {
-  if (!name) { $("ai-doc-bar").style.display = "none"; return; }
-  $("ai-doc-name").textContent = name;
+function updateAIDocBar(name, sizeBytes, clientLabel) {
+  const bar = $("ai-doc-bar");
+  if (!bar) return;
+  const displayName = (name && String(name).trim()) || currentDocName || "Document";
+  const label = clientLabel !== undefined && clientLabel !== null
+    ? clientLabel
+    : getDocClientLabel(currentDocId);
+  $("ai-doc-name").textContent = displayName;
+  const clientEl = $("ai-doc-client");
+  if (clientEl) {
+    clientEl.textContent = label || "—";
+  }
   $("ai-doc-size").textContent = formatBytes(sizeBytes);
   const st = $("ai-doc-status");
-  const status = currentDocStatus || "uploaded";
+  const status = (currentDocStatus || "uploaded").toLowerCase();
   st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
-  $("ai-doc-bar").style.display = "";
+  bar.style.display = "";
 }
 
 
@@ -1730,6 +1810,12 @@ function renderUploadQueue() {
 }
 
 function enqueueUpload(files) {
+  const clientName = getUploadClientName();
+  if (!clientName) {
+    toast("Le nom client est obligatoire à l'upload.", "error");
+    $("upload-client-name")?.focus();
+    return;
+  }
   files.forEach((file) => {
     uploadQueue.push({ file, status: "queued", status_label: "En attente" });
   });
@@ -1774,9 +1860,10 @@ async function uploadFile(file) {
 
   const fd = new FormData();
   fd.append("file", file);
-  const clientName = ($("upload-client-name")?.value || "").trim();
+  const clientName = getUploadClientName();
   const clientId = getClientIdByName(clientName);
-  
+  const autoAnon = $("upload-auto-anonymize")?.checked ?? true;
+
   if (!clientName) {
     zone.style.display = "";
     progress.style.display = "none";
@@ -1787,17 +1874,17 @@ async function uploadFile(file) {
   }
 
   try {
-    const clientQp = clientId ? `&client_id=${clientId}` : `&client_name=${encodeURIComponent(clientName)}`;
+    const params = new URLSearchParams();
+    params.set("auto_anonymize", String(autoAnon));
+    if (clientId) params.set("client_id", String(clientId));
+    else params.set("client_name", clientName);
     const exerciceQp = ($("upload-exercice")?.value || "").trim();
     const catQp = ($("upload-doc-category")?.value || "").trim();
-    const autoAnon = $("upload-auto-anonymize")?.checked ?? true;
-    const extraQp = [
-      exerciceQp && `exercice=${encodeURIComponent(exerciceQp)}`,
-      catQp && `doc_category=${encodeURIComponent(catQp)}`,
-    ].filter(Boolean).join("&");
+    if (exerciceQp) params.set("exercice", exerciceQp);
+    if (catQp) params.set("doc_category", catQp);
     const data = await uploadWithProgress(
       fd,
-      `/uploads?auto_anonymize=${autoAnon}${clientQp}${extraQp ? "&" + extraQp : ""}`,
+      `/uploads?${params.toString()}`,
       fill, statusEl
     );
     currentDocId = data.document_id;
@@ -1816,23 +1903,34 @@ async function uploadFile(file) {
       fill.style.width = "0";
       setStep(2);
       resetAnonPanel();
-      updateAnonDocBar(file.name, file.size);
+      updateAnonDocBar(file.name, file.size, clientName);
       refreshAIDocInsights(currentDocId);
-      $("anon-empty").style.display = "";
-      $("anon-empty").querySelector(".hint-icon").innerHTML =
+      const anonEmpty = $("anon-empty");
+      if (anonEmpty) {
+        anonEmpty.style.display = "";
+        const hintIcon = anonEmpty.querySelector(".hint-icon");
+        if (hintIcon) {
+          hintIcon.innerHTML =
         '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+        }
+        const pEl = anonEmpty.querySelector("p");
+        if (pEl) {
+          if (autoAnon) {
+            pEl.innerHTML =
+          `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Sécurisation en cours en arrière-plan…`;
+          } else {
+            pEl.innerHTML =
+          `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+          }
+        }
+      }
       if (autoAnon) {
-        $("anon-empty").querySelector("p").innerHTML =
-          `<strong>${file.name}</strong> ajouté.<br>Sécurisation en cours en arrière-plan…`;
         showAnonLoading("Mistral OCR et sécurisation en cours…");
         updateProcessingConsole({
           status: currentDocStatus,
           backend: (data.processing?.background_processing || "api").toUpperCase(),
         });
         pollDocStatus(currentDocId);
-      } else {
-        $("anon-empty").querySelector("p").innerHTML =
-          `<strong>${file.name}</strong> ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
       }
     }, 600);
 
@@ -4170,6 +4268,25 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Anonymiser
   $("btn-anonymize").addEventListener("click", anonymize);
+  if ($("btn-context-anonymize")) {
+    $("btn-context-anonymize").addEventListener("click", () => {
+      $("btn-anonymize")?.click();
+    });
+  }
+  if ($("btn-context-ai")) {
+    $("btn-context-ai").addEventListener("click", () => {
+      if (!currentDocId) return;
+      goToChat();
+    });
+  }
+  if ($("btn-ai-back-anon")) {
+    $("btn-ai-back-anon").addEventListener("click", () => setStep(2));
+  }
+  if ($("btn-ai-audit-shortcut")) {
+    $("btn-ai-audit-shortcut").addEventListener("click", () => {
+      $("btn-audit-report")?.click();
+    });
+  }
 
   // Valider → discussion IA (avec validation)
   $("btn-validate").addEventListener("click", validate);
