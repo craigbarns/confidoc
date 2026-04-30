@@ -403,6 +403,16 @@ function toggleAppNavDrawer() {
   if (backdrop) backdrop.classList.toggle("visible", open);
 }
 
+function showCompliancePanel() {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  const panel = $("panel-compliance");
+  if (panel) panel.classList.add("active");
+  setActiveNav("compliance");
+  setPageTitle("Conformité");
+  closeAppNavDrawer();
+  if (!dashboardLoaded) loadDashboard();
+}
+
 function showStubPanel(panelId, navKey, title) {
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   const panel = $(panelId);
@@ -2983,11 +2993,13 @@ function emptyDashboardData() {
     trashed_documents: 0,
     status_counts: {},
     gdpr_score: {
-      score: 0,
-      color: "warning",
-      grade: "-",
-      status: "Indisponible",
-      recommendations: ["Les statistiques completes n'ont pas pu etre chargees."],
+      score: null,
+      color: "neutral",
+      grade: null,
+      status: "Score RGPD non disponible",
+      recommendations: [
+        "Ajoutez un premier document pour calculer votre posture RGPD.",
+      ],
       breakdown: {},
     },
     risk_distribution: {},
@@ -3047,15 +3059,6 @@ function renderDashboardSkeleton() {
           <div class="skeleton-line w60" style="height: 12px;"></div>
         </div>
       `).join("")}
-    </div>
-    <div class="dash-gdpr-section">
-      <div class="dash-gdpr-card skeleton-wrap">
-        <div class="skeleton-line" style="height: 72px; width: 72px; border-radius: 50%;"></div>
-        <div style="flex:1">
-          <div class="skeleton-line w60" style="height: 24px;"></div>
-          <div class="skeleton-line w90" style="height: 12px; margin-top: 8px;"></div>
-        </div>
-      </div>
     </div>
   `;
 }
@@ -3118,6 +3121,134 @@ async function loadDashboard() {
   }
 }
 
+/** Recommandations : pas de message « haut risque » sans agrégat réel. */
+function filterComplianceRecommendations(recos, totalDocs, riskDistribution) {
+  if (!Array.isArray(recos)) return [];
+  const rd = riskDistribution || {};
+  const riskSum = ["low", "medium", "high", "critical"].reduce(
+    (s, k) => s + (Number(rd[k]) || 0),
+    0
+  );
+  let out = recos.map(String).filter(Boolean);
+  if (totalDocs > 0 && riskSum === 0) {
+    out = out.filter((r) => !/trop de mappings|mappings à haut risque/i.test(r));
+  }
+  if (!out.length && totalDocs > 0) {
+    return ["Aucune recommandation pour le moment."];
+  }
+  return out;
+}
+
+/**
+ * Score RGPD + recos (panneau Conformité). États vides si aucune pièce ou score absent.
+ */
+function renderGdprDashboardSection(gdpr, totalDocs, riskDistribution) {
+  const gdprUnavailable =
+    totalDocs <= 0 || gdpr.score == null || gdpr.score === undefined;
+  const suffix = $("dash-gdpr-score-suffix");
+  const gradeEl = $("dash-gdpr-grade");
+  const ring = $("dash-gdpr-ring-fill");
+
+  if (gdprUnavailable) {
+    const scoreEl = $("dash-gdpr-score");
+    if (scoreEl) scoreEl.textContent = "—";
+    if (suffix) suffix.style.display = "none";
+    if (gradeEl) {
+      gradeEl.textContent = "";
+      gradeEl.style.display = "none";
+      gradeEl.className = "dash-gdpr-grade";
+    }
+    if (ring) {
+      ring.setAttribute("stroke-dasharray", "0, 100");
+      ring.className = "dash-gdpr-ring-fill color-neutral";
+    }
+    const statusElG = $("dash-gdpr-status");
+    if (statusElG) {
+      statusElG.textContent = gdpr.status || "Score RGPD non disponible";
+      statusElG.className = "dash-gdpr-status color-neutral";
+    }
+    const breakEl = $("dash-gdpr-breakdown");
+    if (breakEl) breakEl.innerHTML = "";
+    const recos =
+      gdpr.recommendations && gdpr.recommendations.length
+        ? gdpr.recommendations
+        : ["Ajoutez un premier document pour calculer votre posture RGPD."];
+    const recosEl = $("dash-gdpr-recos");
+    if (recosEl) {
+      recosEl.innerHTML =
+        `<h4>Recommandations conformité</h4><ul>` +
+        recos.map((r) => `<li class="reco-neutral">${escapeHtml(r)}</li>`).join("") +
+        `</ul>`;
+      recosEl.style.display = "";
+    }
+    return;
+  }
+
+  if (suffix) suffix.style.display = "";
+  if (gradeEl) {
+    gradeEl.style.display = "";
+  }
+
+  const gdprScoreVal = Number(gdpr.score);
+  const gdprColor = gdpr.color || "success";
+  const gdprGrade = gdpr.grade || "-";
+  const gdprStatus = gdpr.status || "En attente";
+  const filteredRecos = filterComplianceRecommendations(
+    gdpr.recommendations || [],
+    totalDocs,
+    riskDistribution
+  );
+  const gdprBreak = gdpr.breakdown || {};
+
+  if ($("dash-gdpr-score")) {
+    animateNumber($("dash-gdpr-score"), gdprScoreVal);
+  }
+  if (ring) {
+    ring.setAttribute("stroke-dasharray", `${gdprScoreVal}, 100`);
+    ring.className = `dash-gdpr-ring-fill color-${gdprColor}`;
+  }
+  if (gradeEl) {
+    gradeEl.textContent =
+      gdprGrade && gdprGrade !== "-"
+        ? `Note ${gdprGrade}`
+        : "—";
+    gradeEl.className = `dash-gdpr-grade color-${gdprColor}`;
+  }
+  const statusElG = $("dash-gdpr-status");
+  if (statusElG) {
+    statusElG.textContent = gdprStatus;
+    statusElG.className = `dash-gdpr-status color-${gdprColor}`;
+  }
+  const breakEl = $("dash-gdpr-breakdown");
+  if (breakEl) {
+    const b = gdprBreak;
+    const parts = [];
+    if (b.success_rate != null) parts.push(`Succès ${Math.round(b.success_rate)}%`);
+    if (b.risk_score != null) parts.push(`Risque ${Math.round(b.risk_score)}%`);
+    if (b.failure_resilience != null) parts.push(`Resilience ${Math.round(b.failure_resilience)}%`);
+    if (b.activity_momentum != null) parts.push(`Activité ${Math.round(b.activity_momentum)}%`);
+    breakEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
+  }
+  const recosEl = $("dash-gdpr-recos");
+  if (recosEl) {
+    if (filteredRecos.length) {
+      recosEl.innerHTML =
+        `<h4>Recommandations conformité</h4><ul>` +
+        filteredRecos
+          .map((r) => {
+            const low = r.toLowerCase();
+            const good = low.includes("bonne") || low.includes("continuez");
+            return `<li class="${good ? "good" : ""}">${escapeHtml(r)}</li>`;
+          })
+          .join("") +
+        `</ul>`;
+      recosEl.style.display = "";
+    } else {
+      recosEl.style.display = "none";
+    }
+  }
+}
+
 function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const content = $("dash-content");
   if (!content) return;
@@ -3142,6 +3273,7 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   animateNumber($("dash-bucket-failed"), summary.failed ?? sc.failed ?? 0);
   animateNumber($("dash-uploads-24h"), summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
   const total = Math.max(0, summary.total ?? data.total_documents ?? 0);
+  const totalDocs = Math.max(0, Number(data.total_documents) || 0);
   const ready = Math.max(0, summaryReady);
   if ($("dash-ready-ratio")) $("dash-ready-ratio").textContent = `${ready} / ${total}`;
   if ($("dash-ready-fill")) $("dash-ready-fill").style.width = total ? `${Math.round((ready / total) * 100)}%` : "0%";
@@ -3149,77 +3281,40 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   renderDossier360(dossier360);
   renderMissionControl(dossier360);
 
-  // GDPR Score
-  const gdpr = data.gdpr_score || {};
-  const gdprScoreVal = gdpr.score ?? 0;
-  const gdprColor = gdpr.color || "success";
-  const gdprGrade = gdpr.grade || "-";
-  const gdprStatus = gdpr.status || "En attente";
-  const gdprRecos = gdpr.recommendations || [];
-  const gdprBreak = gdpr.breakdown || {};
-
-  if ($("dash-gdpr-score")) {
-    animateNumber($("dash-gdpr-score"), gdprScoreVal);
-  }
-  const ring = $("dash-gdpr-ring-fill");
-  if (ring) {
-    ring.setAttribute("stroke-dasharray", `${gdprScoreVal}, 100`);
-    ring.className = `dash-gdpr-ring-fill color-${gdprColor}`;
-  }
-  const gradeEl = $("dash-gdpr-grade");
-  if (gradeEl) {
-    gradeEl.textContent = `Note ${gdprGrade}`;
-    gradeEl.className = `dash-gdpr-grade color-${gdprColor}`;
-  }
-  const statusElG = $("dash-gdpr-status");
-  if (statusElG) {
-    statusElG.textContent = gdprStatus;
-    statusElG.className = `dash-gdpr-status color-${gdprColor}`;
-  }
-  const breakEl = $("dash-gdpr-breakdown");
-  if (breakEl) {
-    const b = gdprBreak;
-    const parts = [];
-    if (b.success_rate != null) parts.push(`Succès ${Math.round(b.success_rate)}%`);
-    if (b.risk_score != null) parts.push(`Risque ${Math.round(b.risk_score)}%`);
-    if (b.failure_resilience != null) parts.push(`Resilience ${Math.round(b.failure_resilience)}%`);
-    if (b.activity_momentum != null) parts.push(`Activité ${Math.round(b.activity_momentum)}%`);
-    breakEl.innerHTML = parts.map(p => `<span>${p}</span>`).join("");
-  }
-  const recosEl = $("dash-gdpr-recos");
-  if (recosEl) {
-    if (gdprRecos.length) {
-      recosEl.innerHTML = `<h4>Recommandations conformité</h4><ul>` +
-        gdprRecos.map(r => `<li class="${r.toLowerCase().includes('bonne') || r.toLowerCase().includes('continuez') ? 'good' : ''}">${escapeHtml(r)}</li>`).join("") +
-        `</ul>`;
-      recosEl.style.display = "";
-    } else {
-      recosEl.style.display = "none";
-    }
-  }
+  const rdRisk = data.risk_distribution || {};
+  renderGdprDashboardSection(data.gdpr_score || {}, totalDocs, rdRisk);
 
   // Risk distribution
   const riskEl = $("dash-risk-chart");
   if (riskEl) {
-    const rd = data.risk_distribution || {};
-    const maxRisk = Math.max(1, ...Object.values(rd));
-    const levels = ["low", "medium", "high", "critical"];
-    const labels = { low: "Faible", medium: "Moyen", high: "Eleve", critical: "Critique" };
-    riskEl.innerHTML = levels.map(lvl => {
-      const count = rd[lvl] || 0;
-      const pct = (count / maxRisk) * 100;
-      return `<div class="dash-risk-row">
+    const rd = rdRisk;
+    const riskSum = ["low", "medium", "high", "critical"].reduce(
+      (s, lvl) => s + (Number(rd[lvl]) || 0),
+      0
+    );
+    if (totalDocs <= 0 || riskSum === 0) {
+      riskEl.innerHTML =
+        '<div class="dash-chart-empty">Aucune donnée de risque à afficher pour le moment.</div>';
+    } else {
+      const maxRisk = Math.max(1, ...Object.values(rd));
+      const levels = ["low", "medium", "high", "critical"];
+      const labels = { low: "Faible", medium: "Moyen", high: "Eleve", critical: "Critique" };
+      riskEl.innerHTML = levels.map(lvl => {
+        const count = rd[lvl] || 0;
+        const pct = (count / maxRisk) * 100;
+        return `<div class="dash-risk-row">
         <span class="dash-risk-label risk-label-${lvl}">${labels[lvl]}</span>
         <div class="dash-risk-bar-bg">
           <div class="dash-risk-bar-fill dash-risk-bar-${lvl}" style="width:0%" data-target="${pct}" data-count="${count}"></div>
         </div>
       </div>`;
-    }).join("");
-    setTimeout(() => {
-      riskEl.querySelectorAll(".dash-risk-bar-fill").forEach(bar => {
-        bar.style.width = bar.dataset.target + "%";
-      });
-    }, 100);
+      }).join("");
+      setTimeout(() => {
+        riskEl.querySelectorAll(".dash-risk-bar-fill").forEach(bar => {
+          bar.style.width = bar.dataset.target + "%";
+        });
+      }, 100);
+    }
   }
 
   // Entity distribution
@@ -3228,8 +3323,9 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
     const ed = data.entity_distribution || {};
     const sorted = Object.entries(ed).sort((a, b) => b[1] - a[1]).slice(0, 8);
     const maxEnt = Math.max(1, ...sorted.map(x => x[1]));
-    if (!sorted.length) {
-      entityEl.innerHTML = '<div class="empty-state" style="padding:16px">Aucune entite detectee</div>';
+    if (!sorted.length || totalDocs <= 0) {
+      entityEl.innerHTML =
+        '<div class="dash-chart-empty">Aucune entité détectée pour le moment.</div>';
     } else {
       entityEl.innerHTML = sorted.map(([type, count]) => {
         const pct = (count / maxEnt) * 100;
@@ -3289,12 +3385,18 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const trendEl = $("dash-trend-7d");
   const trendData = summary.created_last_7_days || [];
   if (trendEl) {
-    const max = Math.max(1, ...trendData.map((d) => d.count || 0));
-    trendEl.innerHTML = trendData.map((d) => {
-      const h = Math.max(2, ((d.count || 0) / max) * 80);
-      const day = d.date ? new Date(d.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "";
-      return `<div class="dash-activity-col"><div class="dash-activity-bar" style="height:${h}px"></div><span class="dash-activity-label">${day}</span></div>`;
-    }).join("");
+    const trendSum = trendData.reduce((s, d) => s + (Number(d.count) || 0), 0);
+    if (totalDocs <= 0 || trendSum === 0) {
+      trendEl.innerHTML =
+        '<div class="dash-chart-empty">Aucune activité sur les 7 derniers jours.</div>';
+    } else {
+      const max = Math.max(1, ...trendData.map((d) => d.count || 0));
+      trendEl.innerHTML = trendData.map((d) => {
+        const h = Math.max(2, ((d.count || 0) / max) * 80);
+        const day = d.date ? new Date(d.date).toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" }) : "";
+        return `<div class="dash-activity-col"><div class="dash-activity-bar" style="height:${h}px"></div><span class="dash-activity-label">${day}</span></div>`;
+      }).join("");
+    }
   }
 }
 
@@ -3324,9 +3426,13 @@ function renderMissionControl(payload = emptyDossier360()) {
   const actionItems = mission.next_best_actions?.length
     ? mission.next_best_actions
     : ["Importer les pieces client et lancer l'anonymisation."];
+  const portfolio = payload.portfolio || {};
+  const docCount = portfolio.documents_count ?? 0;
   const focusItems = mission.audit_focus?.length
     ? mission.audit_focus
-    : ["Completeness des pieces", "Qualite OCR et anonymisation"];
+    : docCount === 0
+      ? ["Aucune recommandation pour le moment."]
+      : ["Completeness des pieces", "Qualite OCR et anonymisation"];
 
   headline.textContent = mission.headline || "Dossiers a qualifier";
   summary.textContent = mission.summary || "Priorites cabinet en attente.";
@@ -3975,7 +4081,7 @@ document.addEventListener("DOMContentLoaded", () => {
           showStubPanel("panel-quality", "quality", "Qualité");
           break;
         case "compliance":
-          showStubPanel("panel-compliance", "compliance", "Conformité");
+          showCompliancePanel();
           break;
         case "settings":
           showStubPanel("panel-settings", "settings", "Paramètres");
