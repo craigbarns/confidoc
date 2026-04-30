@@ -604,44 +604,6 @@
             <div id="dash-d360-list" class="dash-d360-list"></div>
           </div>
 
-          <!-- GDPR Score -->
-          <div class="dash-gdpr-section">
-            <div class="dash-gdpr-card" id="dash-gdpr-card">
-              <div class="dash-gdpr-score-ring">
-                <svg viewBox="0 0 36 36">
-                  <path class="dash-gdpr-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                  <path id="dash-gdpr-ring-fill" class="dash-gdpr-ring-fill" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
-                </svg>
-                <div class="dash-gdpr-score-text">
-                  <span id="dash-gdpr-score">0</span>
-                  <small>/ 100</small>
-                </div>
-              </div>
-              <div class="dash-gdpr-info">
-                <div class="dash-gdpr-grade" id="dash-gdpr-grade">—</div>
-                <div class="dash-gdpr-status" id="dash-gdpr-status">En attente</div>
-                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown"></div>
-              </div>
-            </div>
-            <div class="dash-gdpr-recos" id="dash-gdpr-recos"></div>
-          </div>
-
-          <div class="dash-trend">
-            <h3>Tendance — 7 derniers jours</h3>
-            <div id="dash-trend-7d" class="dash-activity-bars"></div>
-          </div>
-
-          <div class="dash-charts-row">
-            <div class="dash-chart-card">
-              <h3>Distribution du risque</h3>
-              <div id="dash-risk-chart" class="dash-risk-bars"></div>
-            </div>
-            <div class="dash-chart-card">
-              <h3>Entités par type</h3>
-              <div id="dash-entity-chart" class="dash-entity-list"></div>
-            </div>
-          </div>
-
           <div class="dash-charts-row">
             <div class="dash-chart-card" style="flex:1">
               <h3>Statut des documents</h3>
@@ -1071,18 +1033,53 @@
         </div>
       </div>
 
-      <!-- CONFORMITÉ (stub) -->
+      <!-- CONFORMITÉ : détail score RGPD + graphiques (rempli par le même chargement que l'accueil) -->
       <div id="panel-compliance" class="panel">
-        <div class="panel-stub">
-          <div class="panel-stub-icon" aria-hidden="true">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
-              <polyline points="9 12 11 14 15 10"/>
-            </svg>
+        <div class="panel-compliance-inner">
+          <header class="panel-compliance-head">
+            <h2>Conformité RGPD</h2>
+            <p class="panel-compliance-lead">
+              Score agrégé, tendance et répartition des risques lorsque des documents sont traités.
+              Le <a href="/security" target="_blank" rel="noopener">Trust Center</a> décrit le cadre technique.
+            </p>
+          </header>
+
+          <div class="dash-gdpr-section">
+            <div class="dash-gdpr-card" id="dash-gdpr-card">
+              <div class="dash-gdpr-score-ring">
+                <svg viewBox="0 0 36 36" aria-hidden="true">
+                  <path class="dash-gdpr-ring-bg" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                  <path id="dash-gdpr-ring-fill" class="dash-gdpr-ring-fill" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
+                </svg>
+                <div class="dash-gdpr-score-text">
+                  <span id="dash-gdpr-score">0</span>
+                  <small id="dash-gdpr-score-suffix">/ 100</small>
+                </div>
+              </div>
+              <div class="dash-gdpr-info">
+                <div class="dash-gdpr-grade" id="dash-gdpr-grade">—</div>
+                <div class="dash-gdpr-status" id="dash-gdpr-status">En attente</div>
+                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown"></div>
+              </div>
+            </div>
+            <div class="dash-gdpr-recos" id="dash-gdpr-recos"></div>
           </div>
-          <h2>Conformité</h2>
-          <p class="panel-stub-text">Bientôt connecté au score RGPD et à la preuve DPO.<br>Drafts à reviewer, audit RGPD agrégé, accès au Trust Center.</p>
-          <p class="panel-stub-meta">En attendant, le Trust Center public reste accessible — <a href="/security" target="_blank" rel="noopener">l'ouvrir</a>.</p>
+
+          <div class="dash-trend">
+            <h3>Tendance — 7 derniers jours</h3>
+            <div id="dash-trend-7d" class="dash-activity-bars"></div>
+          </div>
+
+          <div class="dash-charts-row">
+            <div class="dash-chart-card">
+              <h3>Distribution du risque</h3>
+              <div id="dash-risk-chart" class="dash-risk-bars"></div>
+            </div>
+            <div class="dash-chart-card">
+              <h3>Entités par type</h3>
+              <div id="dash-entity-chart" class="dash-entity-list"></div>
+            </div>
+          </div>
         </div>
       </div>
 

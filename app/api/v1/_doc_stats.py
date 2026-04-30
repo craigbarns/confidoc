@@ -34,6 +34,19 @@ def _calculate_gdpr_score(
     recent_activity: list,
 ) -> dict:
     """Calcule un score de readiness RGPD (0–100) avec recommandations."""
+    if total_docs <= 0:
+        # Sans pièce, aucun agrégat réel : ne pas inventer un score / une « note » (risque produit).
+        return {
+            "score": None,
+            "grade": None,
+            "status": "Score RGPD non disponible",
+            "color": "neutral",
+            "breakdown": {},
+            "recommendations": [
+                "Ajoutez un premier document pour calculer votre posture RGPD.",
+            ],
+        }
+
     ready = status_counts.get("ready", 0) + status_counts.get("anonymized", 0)
     failed = status_counts.get("failed", 0)
     processing = (

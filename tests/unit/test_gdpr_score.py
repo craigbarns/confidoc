@@ -5,7 +5,7 @@ Vérifie :
 - Grade A (≥85), B (≥70), C (≥50), D (<50)
 - Chaque composante du breakdown (success_rate, risk_score, ...)
 - Recommandations contextuelles générées correctement
-- Cas limites : zéro documents, 100% prêts, 100% en échec
+- Cas zéro document : score/grade null, message « non disponible » (pas de note fictive)
 """
 
 from __future__ import annotations
@@ -55,10 +55,14 @@ class TestScoreBounds:
         )
         assert result["score"] <= 100
 
-    def test_zero_documents_returns_valid_score(self):
+    def test_zero_documents_no_numeric_score(self):
+        """Aucune pièce : pas de score chiffré ni de note (évite un faux 50/100)."""
         result = _score(0, {})
-        assert 0 <= result["score"] <= 100
-        assert result["grade"] in ("A", "B", "C", "D")
+        assert result["score"] is None
+        assert result["grade"] is None
+        assert result["color"] == "neutral"
+        assert "non disponible" in (result.get("status") or "").lower()
+        assert any("premier document" in r.lower() for r in result["recommendations"])
 
 
 # ══════════════════════════════════════════════════════════════════════
