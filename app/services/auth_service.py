@@ -87,8 +87,13 @@ async def refresh_access_token(
     if rt.expires_at < datetime.now(timezone.utc):
         raise http_401("Refresh token expiré")
 
-    # Rotation de token : on supprime l'ancien
-    await db.delete(rt)
+    # Rotation : DELETE explicite (évite SAWarning "0 rows matched" en course
+    # parallèle / double refresh) + expunge pour ne pas re-émettre un DELETE ORM au flush.
+    res = await db.execute(delete(RefreshToken).where(RefreshToken.id == rt.id))
+    if res.rowcount == 0:
+        await db.rollback()
+        raise http_401("Refresh token déjà utilisé")
+    await db.run_sync(lambda s: s.expunge(rt))
 
     # Récupérer user
     stmt_user = select(User).where(User.id == rt.user_id)
