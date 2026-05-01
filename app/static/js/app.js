@@ -427,7 +427,18 @@ function showCompliancePanel() {
   setActiveNav("compliance");
   setPageTitle("Conformité");
   closeAppNavDrawer();
-  if (!dashboardLoaded) loadDashboard();
+  updateComplianceProofState();
+  loadCompliancePanel();
+}
+
+function showQualityPanel() {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  const panel = $("panel-quality");
+  if (panel) panel.classList.add("active");
+  setActiveNav("quality");
+  setPageTitle("Qualité");
+  closeAppNavDrawer();
+  loadQualityPanel();
 }
 
 function showStubPanel(panelId, navKey, title) {
@@ -448,6 +459,7 @@ function setStep(n) {
   setPageTitle(titles[n] || "");
   setActiveNav("documents");
   syncDocContextActions();
+  updateComplianceProofState();
 }
 
 function syncDocContextActions() {
@@ -3134,9 +3146,9 @@ async function downloadComplianceReport() {
     const data = await apiFetch(`/documents/${currentDocId}/compliance-report`);
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     triggerDownload(blob, `conformite_rgpd_${currentDocId.slice(0, 8)}.json`);
-    toast("Rapport de conformite telecharge", "success");
+    toast("Rapport de conformité téléchargé", "success");
   } catch (e) {
-    toast(`Erreur conformite: ${e.message}`, "error");
+    toast(`Erreur conformité: ${e.message}`, "error");
   }
 }
 
@@ -3161,6 +3173,259 @@ function triggerDownload(blob, filename) {
   a.click();
   a.remove();
   setTimeout(() => URL.revokeObjectURL(url), 1500);
+}
+
+// ── Qualité / Conformité ───────────────────────────────────────────────
+
+let qualityLoaded = false;
+let qualityLoading = false;
+
+const QUALITY_FIELD_LABELS = {
+  amount: "Montant",
+  total: "Total",
+  total_ht: "Total HT",
+  total_ttc: "Total TTC",
+  tva: "TVA",
+  siret: "SIRET",
+  siren: "SIREN",
+  iban: "IBAN",
+  name: "Nom",
+  client: "Client",
+  date: "Date",
+  invoice_number: "Numéro de facture",
+  vendor: "Fournisseur",
+};
+
+const QUALITY_ERROR_LABELS = {
+  missed_field: "Champ non détecté",
+  wrong_extraction: "Valeur mal extraite",
+  wrong_type: "Type de donnée incorrect",
+  false_positive: "Donnée masquée à tort",
+  false_negative: "Donnée sensible non masquée",
+  low_confidence: "Confiance insuffisante",
+};
+
+const QUALITY_STATUS_LABELS = {
+  uploaded: "Ajouté",
+  processing: "Traitement",
+  extracting: "OCR",
+  extracted: "OCR terminé",
+  anonymizing: "Sécurisation",
+  anonymized: "Prêt IA",
+  ready: "Prêt IA",
+  failed: "Erreur",
+};
+
+function humanizeKey(value, labels = {}) {
+  const raw = String(value || "").trim();
+  if (!raw) return "Non renseigné";
+  const lower = raw.toLowerCase();
+  if (labels[lower]) return labels[lower];
+  return raw
+    .replace(/[_-]+/g, " ")
+    .replace(/\s+/g, " ")
+    .replace(/^./, (c) => c.toUpperCase());
+}
+
+function formatNullableNumber(value, suffix = "") {
+  if (value === null || value === undefined || value === "") return "Non disponible";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "Non disponible";
+  return `${numeric.toLocaleString("fr-FR", { maximumFractionDigits: 1 })}${suffix}`;
+}
+
+function formatNullablePercent(value) {
+  if (value === null || value === undefined || value === "") return "Non disponible";
+  const numeric = Number(value);
+  if (!Number.isFinite(numeric)) return "Non disponible";
+  return `${Math.round(numeric <= 1 ? numeric * 100 : numeric)}%`;
+}
+
+function formatDurationSeconds(value) {
+  if (value === null || value === undefined || value === "") return "Non disponible";
+  const seconds = Number(value);
+  if (!Number.isFinite(seconds)) return "Non disponible";
+  if (seconds < 60) return `${Math.round(seconds)} s`;
+  if (seconds < 3600) return `${Math.round(seconds / 60)} min`;
+  return `${(seconds / 3600).toLocaleString("fr-FR", { maximumFractionDigits: 1 })} h`;
+}
+
+function formatDateTime(value) {
+  if (!value) return "Date non disponible";
+  const date = new Date(value);
+  if (Number.isNaN(date.getTime())) return "Date non disponible";
+  return date.toLocaleDateString("fr-FR", {
+    day: "2-digit",
+    month: "2-digit",
+    year: "numeric",
+    hour: "2-digit",
+    minute: "2-digit",
+  });
+}
+
+function truncateSnippet(value, max = 120) {
+  const text = String(value || "").replace(/\s+/g, " ").trim();
+  if (!text) return "";
+  return text.length > max ? `${text.slice(0, max - 1)}…` : text;
+}
+
+function renderDistributionList(el, data, labels = {}) {
+  if (!el) return;
+  const entries = Object.entries(data || {})
+    .filter(([, count]) => Number(count) > 0)
+    .sort((a, b) => Number(b[1]) - Number(a[1]))
+    .slice(0, 8);
+  if (!entries.length) {
+    el.innerHTML = '<div class="quality-empty-line">Non disponible</div>';
+    return;
+  }
+  const max = Math.max(1, ...entries.map(([, count]) => Number(count) || 0));
+  el.innerHTML = entries.map(([key, count]) => {
+    const pct = Math.max(4, ((Number(count) || 0) / max) * 100);
+    return `<div class="quality-row">
+      <span>${escapeHtml(humanizeKey(key, labels))}</span>
+      <div class="quality-row-bar"><div style="width:${pct}%"></div></div>
+      <strong>${Number(count).toLocaleString("fr-FR")}</strong>
+    </div>`;
+  }).join("");
+}
+
+function renderGoldenDrafts(containerId, drafts, options = {}) {
+  const el = $(containerId);
+  if (!el) return;
+  const list = Array.isArray(drafts) ? drafts : [];
+  if (!list.length) {
+    el.innerHTML = `<div class="quality-empty-line">${escapeHtml(options.emptyText || "Aucune correction en attente.")}</div>`;
+    return;
+  }
+  el.innerHTML = list.slice(0, options.limit || 6).map((draft) => {
+    const snippet = truncateSnippet(draft.source_snippet || "");
+    return `<article class="quality-draft" data-draft-id="${escapeAttr(draft.id)}">
+      <div class="quality-draft-main">
+        <div class="quality-draft-title">
+          <strong>${escapeHtml(humanizeKey(draft.field_name, QUALITY_FIELD_LABELS))}</strong>
+          <span>${escapeHtml(humanizeKey(draft.document_type))}</span>
+        </div>
+        <p>${escapeHtml(humanizeKey(draft.error_type, QUALITY_ERROR_LABELS))} · ${escapeHtml(formatDateTime(draft.created_at))}</p>
+        ${snippet ? `<blockquote>${escapeHtml(snippet)}</blockquote>` : ""}
+      </div>
+      <div class="quality-draft-actions">
+        <button type="button" class="btn btn-ghost btn-sm" data-draft-action="accepted" data-draft-id="${escapeAttr(draft.id)}">Accepter</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-draft-action="rejected" data-draft-id="${escapeAttr(draft.id)}">Rejeter</button>
+      </div>
+    </article>`;
+  }).join("");
+}
+
+function setQualityState(state, message = "") {
+  const loading = $("quality-loading");
+  const error = $("quality-error");
+  const empty = $("quality-empty");
+  const content = $("quality-content");
+  if (loading) loading.style.display = state === "loading" ? "" : "none";
+  if (error) error.style.display = state === "error" ? "" : "none";
+  if (empty) empty.style.display = state === "empty" ? "" : "none";
+  if (content) content.style.display = state === "content" ? "" : "none";
+  if (message && $("quality-error-msg")) $("quality-error-msg").textContent = message;
+}
+
+async function loadGoldenDrafts() {
+  return apiFetch("/quality/golden-drafts?status=draft&limit=20");
+}
+
+async function updateGoldenDraftStatus(draftId, status) {
+  await apiFetch(`/quality/golden-drafts/${draftId}/status`, {
+    method: "PATCH",
+    body: JSON.stringify({ status }),
+  });
+  toast(status === "accepted" ? "Correction acceptée" : "Correction rejetée", "success");
+  qualityLoaded = false;
+  await Promise.allSettled([loadQualityPanel(), loadComplianceDrafts()]);
+}
+
+async function loadQualityPanel(force = false) {
+  if (qualityLoading || (qualityLoaded && !force)) return;
+  qualityLoading = true;
+  setQualityState("loading");
+  try {
+    const [metrics, drafts] = await Promise.all([
+      apiFetch("/stats/quality-dashboard"),
+      loadGoldenDrafts().catch(() => []),
+    ]);
+    const totalDocs = Number(metrics.total_documents) || 0;
+    if (totalDocs <= 0) {
+      setQualityState("empty");
+    } else {
+      setQualityState("content");
+    }
+    if ($("quality-docs-analyzed")) $("quality-docs-analyzed").textContent = formatNullableNumber(metrics.processed_documents);
+    if ($("quality-docs-validated")) $("quality-docs-validated").textContent = formatNullableNumber(metrics.validated_documents);
+    if ($("quality-avg-processing")) $("quality-avg-processing").textContent = formatDurationSeconds(metrics.avg_processing_seconds);
+    if ($("quality-avg-validation")) $("quality-avg-validation").textContent = formatDurationSeconds(metrics.avg_time_to_validation_seconds);
+    if ($("quality-one-shot")) $("quality-one-shot").textContent = formatNullablePercent(metrics.one_shot_full_ready_rate);
+    if ($("quality-overrides")) $("quality-overrides").textContent = formatNullableNumber(metrics.avg_human_overrides_per_document);
+    if ($("quality-drafts-pending")) $("quality-drafts-pending").textContent = formatNullableNumber(Array.isArray(drafts) ? drafts.length : null);
+    if ($("quality-drafts-accepted")) $("quality-drafts-accepted").textContent = formatNullableNumber(metrics.accepted_golden_case_drafts);
+    renderDistributionList($("quality-status-list"), metrics.documents_by_status, QUALITY_STATUS_LABELS);
+    renderDistributionList($("quality-field-list"), metrics.corrections_by_field, QUALITY_FIELD_LABELS);
+    renderDistributionList($("quality-error-type-list"), metrics.corrections_by_error_type, QUALITY_ERROR_LABELS);
+    renderGoldenDrafts("quality-drafts-list", drafts, { emptyText: "Aucune correction en attente." });
+    qualityLoaded = true;
+  } catch (e) {
+    console.warn("loadQualityPanel failed:", e);
+    setQualityState("error", `Impossible de charger les métriques qualité. ${dashboardErrorMessage(e)}`);
+  } finally {
+    qualityLoading = false;
+  }
+}
+
+function updateComplianceProofState() {
+  const btn = $("btn-compliance-proof");
+  const copy = $("compliance-proof-copy");
+  if (!btn || !copy) return;
+  const ready = !!currentDocId && isReadyStatus(currentDocStatus);
+  btn.disabled = !ready;
+  copy.textContent = ready
+    ? `Preuve DPO disponible pour ${currentDocName || "le document sélectionné"}.`
+    : "Sélectionnez un document prêt IA pour télécharger une preuve DPO liée à ce document.";
+}
+
+function setComplianceState(state, message = "") {
+  const loading = $("compliance-loading");
+  const error = $("compliance-error");
+  if (loading) loading.style.display = state === "loading" ? "" : "none";
+  if (error) error.style.display = state === "error" ? "" : "none";
+  if (message && $("compliance-error-msg")) $("compliance-error-msg").textContent = message;
+}
+
+async function loadComplianceDrafts() {
+  try {
+    const drafts = await loadGoldenDrafts();
+    renderGoldenDrafts("compliance-drafts-list", drafts, {
+      emptyText: "Aucune correction en attente.",
+      limit: 5,
+    });
+  } catch (e) {
+    console.warn("loadComplianceDrafts failed:", e);
+    const el = $("compliance-drafts-list");
+    if (el) {
+      el.innerHTML = '<div class="quality-empty-line">Corrections indisponibles. <button type="button" class="btn btn-ghost btn-sm" data-quality-retry="compliance">Réessayer</button></div>';
+    }
+  }
+}
+
+async function loadCompliancePanel() {
+  setComplianceState("loading");
+  try {
+    await Promise.allSettled([
+      loadDashboard(),
+      loadComplianceDrafts(),
+    ]);
+    setComplianceState("content");
+  } catch (e) {
+    console.warn("loadCompliancePanel failed:", e);
+    setComplianceState("error", `Impossible de charger la conformité. ${dashboardErrorMessage(e)}`);
+  }
 }
 
 // ── Dashboard ──────────────────────────────────────────────────────────
@@ -3310,9 +3575,16 @@ function filterComplianceRecommendations(recos, totalDocs, riskDistribution) {
     (s, k) => s + (Number(rd[k]) || 0),
     0
   );
-  let out = recos.map(String).filter(Boolean);
+  let out = recos.map((r) =>
+    String(r)
+      .replace(/GoldenCaseDraft/gi, "correction en attente")
+      .replace(/golden drafts?/gi, "corrections en attente")
+      .replace(/drafts?/gi, "corrections")
+      .replace(/mappings?/gi, "données masquées")
+      .replace(/pipeline/gi, "parcours de traitement")
+  ).filter(Boolean);
   if (totalDocs > 0 && riskSum === 0) {
-    out = out.filter((r) => !/trop de mappings|mappings à haut risque/i.test(r));
+    out = out.filter((r) => !/trop de données masquées|données masquées à haut risque/i.test(r));
   }
   if (!out.length && totalDocs > 0) {
     return ["Aucune recommandation pour le moment."];
@@ -4256,7 +4528,7 @@ document.addEventListener("DOMContentLoaded", () => {
           openClientWorkspace();
           break;
         case "quality":
-          showStubPanel("panel-quality", "quality", "Qualité");
+          showQualityPanel();
           break;
         case "compliance":
           showCompliancePanel();
@@ -4367,6 +4639,27 @@ document.addEventListener("DOMContentLoaded", () => {
       $("btn-audit-report")?.click();
     });
   }
+  if ($("btn-quality-retry")) {
+    $("btn-quality-retry").addEventListener("click", () => {
+      qualityLoaded = false;
+      loadQualityPanel(true);
+    });
+  }
+  if ($("btn-compliance-retry")) {
+    $("btn-compliance-retry").addEventListener("click", loadCompliancePanel);
+  }
+  if ($("btn-compliance-proof")) {
+    $("btn-compliance-proof").addEventListener("click", downloadComplianceReport);
+  }
+  document.addEventListener("click", (e) => {
+    const draftBtn = e.target.closest("[data-draft-action][data-draft-id]");
+    if (draftBtn) {
+      updateGoldenDraftStatus(draftBtn.dataset.draftId, draftBtn.dataset.draftAction);
+      return;
+    }
+    const retryBtn = e.target.closest("[data-quality-retry='compliance']");
+    if (retryBtn) loadComplianceDrafts();
+  });
 
   // Valider → discussion IA (avec validation)
   $("btn-validate").addEventListener("click", validate);

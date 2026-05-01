@@ -58,3 +58,10 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert "Score RGPD non disponible" in resp.text
     assert "Ajoutez un premier document pour calculer votre posture RGPD." in resp.text
     assert "Aucune recommandation pour le moment." in resp.text
+    assert "Les métriques qualité apparaîtront" in resp.text
+    assert "Ouvrir le Trust Center" in resp.text
+    assert "ConfiDoc aide à documenter et réduire le risque" in resp.text
+    assert "Corrections en attente" in resp.text
+    assert "Bientôt connecté" not in resp.text
+    assert "PDF redacté" not in resp.text
+    assert "Conformite" not in resp.text
