@@ -877,6 +877,14 @@
           <a href="/trust" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Preuve DPO</a>
         </div>
 
+        <section id="ai-ready-summary" class="ai-ready-summary" aria-live="polite" style="display:none">
+          <div class="ai-ready-copy">
+            <p class="ai-ready-eyebrow">Document sélectionné</p>
+            <h3>Document anonymisé et prêt pour l’IA</h3>
+            <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve DPO ou revenir à la revue.</p>
+          </div>
+        </section>
+
         <div id="ai-preview-error" class="panel-empty-hint" style="display:none;margin-bottom:12px;max-width:100%">
           <p id="ai-preview-error-msg" class="upload-hint" style="margin:0">Aperçu indisponible — le chat et les exports restent disponibles.</p>
         </div>
@@ -996,7 +1004,15 @@
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
           </div>
-            <p>Document anonymisé. Posez vos questions en toute sécurité.</p>
+            <h3>Document prêt pour l’analyse IA</h3>
+            <p>Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité.</p>
+            <div class="chat-suggestions" aria-label="Suggestions de questions">
+              <button type="button" data-chat-suggestion="Résumer le document">Résumer le document</button>
+              <button type="button" data-chat-suggestion="Identifier les points clés">Identifier les points clés</button>
+              <button type="button" data-chat-suggestion="Détecter les anomalies">Détecter les anomalies</button>
+              <button type="button" data-chat-suggestion="Lister les chiffres importants">Lister les chiffres importants</button>
+              <button type="button" data-chat-suggestion="Préparer une note de revue">Préparer une note de revue</button>
+            </div>
           </div>
         </div>
 
@@ -1072,17 +1088,20 @@
                   <path id="dash-gdpr-ring-fill" class="dash-gdpr-ring-fill" stroke-dasharray="0, 100" d="M18 2.0845 a 15.9155 15.9155 0 0 1 0 31.831 a 15.9155 15.9155 0 0 1 0 -31.831" />
                 </svg>
                 <div class="dash-gdpr-score-text">
-                  <span id="dash-gdpr-score">0</span>
-                  <small id="dash-gdpr-score-suffix">/ 100</small>
+                  <span id="dash-gdpr-score">—</span>
+                  <small id="dash-gdpr-score-suffix" style="display:none">/ 100</small>
                 </div>
               </div>
               <div class="dash-gdpr-info">
-                <div class="dash-gdpr-grade" id="dash-gdpr-grade">—</div>
-                <div class="dash-gdpr-status" id="dash-gdpr-status">En attente</div>
-                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown"></div>
+                <div class="dash-gdpr-grade" id="dash-gdpr-grade" style="display:none"></div>
+                <div class="dash-gdpr-status color-neutral" id="dash-gdpr-status">Score RGPD non disponible</div>
+                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown">Ajoutez un premier document pour calculer votre posture RGPD.</div>
               </div>
             </div>
-            <div class="dash-gdpr-recos" id="dash-gdpr-recos"></div>
+            <div class="dash-gdpr-recos" id="dash-gdpr-recos">
+              <h4>Recommandations conformité</h4>
+              <ul><li class="reco-neutral">Aucune recommandation pour le moment.</li></ul>
+            </div>
           </div>
 
           <div class="dash-trend">

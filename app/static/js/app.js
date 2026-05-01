@@ -49,6 +49,13 @@ const CHAT_STORAGE_PREFIX = "confidoc_chat_";
 const ONBOARDING_KEY = "confidoc_onboarding_done";
 const READY_STATUSES = new Set(["ready", "anonymized"]);
 const PROCESSING_STATUSES = new Set(["processing", "extracting", "extracted", "anonymizing"]);
+const AI_CHAT_SUGGESTIONS = [
+  "Résumer le document",
+  "Identifier les points clés",
+  "Détecter les anomalies",
+  "Lister les chiffres importants",
+  "Préparer une note de revue",
+];
 
 function isReadyStatus(status) {
   return READY_STATUSES.has((status || "").toLowerCase());
@@ -682,6 +689,7 @@ function renderExportGuard(payload = {}) {
   if (titleEl) titleEl.textContent = title;
   if (detailEl) detailEl.textContent = detail;
   if (approveBtn) approveBtn.style.display = canApprove ? "" : "none";
+  renderAIReadySummary();
 }
 
 async function refreshAIDocInsights(docId) {
@@ -1703,17 +1711,29 @@ async function selectDoc(id, status, name, sizeBytes) {
     if (errBox) errBox.style.display = "none";
 
     updateAIDocBar(name, sizeBytes, clientLabel);
+    renderAIReadySummary({ name, client: clientLabel, status: st, sizeBytes });
     updatePipelineTimeline({ status: st, extractDone: true, anonymDone: true });
     await refreshAIDocInsights(id);
+    resetChat();
+    loadChatHistory(id);
     try {
       const preview = await apiFetch(`/documents/${id}/preview`);
       showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
+      renderAIReadySummary({
+        name,
+        client: clientLabel,
+        status: st,
+        sizeBytes,
+        entitiesText: `${preview.detections_count ?? 0} entité(s)`,
+        entitySummary: preview.entity_summary || {},
+      });
     } catch (e) {
+      const msg = `Aperçu indisponible (${e.message || "erreur"}). Le chat et les exports restent disponibles.`;
       if (errBox && errMsg) {
-        errMsg.textContent =
-          `Aperçu indisponible (${e.message || "erreur"}). Le chat et les exports restent disponibles.`;
+        errMsg.textContent = msg;
         errBox.style.display = "";
       }
+      renderAIReadySummary({ name, client: clientLabel, status: st, sizeBytes, previewError: msg });
     }
   }
   refreshCompareDocSelect();
@@ -1757,6 +1777,72 @@ function updateAIDocBar(name, sizeBytes, clientLabel) {
   st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
   bar.style.display = "";
+}
+
+function buildAIChatIntroHtml() {
+  const suggestions = AI_CHAT_SUGGESTIONS.map(label =>
+    `<button type="button" data-chat-suggestion="${escapeAttr(label)}">${escapeHtml(label)}</button>`
+  ).join("");
+  return '<div class="chat-intro">' +
+    '<div class="chat-intro-icon" role="img" aria-label="Cadenas">' +
+    '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
+    '</div>' +
+    '<h3>Document prêt pour l’analyse IA</h3>' +
+    '<p>Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité.</p>' +
+    `<div class="chat-suggestions" aria-label="Suggestions de questions">${suggestions}</div>` +
+    '</div>';
+}
+
+function formatEntitySummary(summary) {
+  if (!summary || typeof summary !== "object") return "Non disponible";
+  const items = Object.entries(summary)
+    .filter(([, value]) => Number(value) > 0)
+    .map(([key, value]) => `${escapeHtml(key)}: ${Number(value)}`);
+  return items.length ? items.join(" · ") : "Non disponible";
+}
+
+function renderAIReadySummary(details = {}) {
+  const card = $("ai-ready-summary");
+  if (!card) return;
+  if (!currentDocId) {
+    card.style.display = "none";
+    card.innerHTML = "";
+    return;
+  }
+
+  const name = details.name || currentDocName || "Document";
+  const client = details.client || getDocClientLabel(currentDocId) || "Client non renseigné";
+  const status = documentStatusLabel(details.status || currentDocStatus || "ready");
+  const size = formatBytes(details.sizeBytes ?? currentDocSize);
+  const entities = details.entitiesText || formatEntitySummary(details.entitySummary);
+  const exportTitle = $("export-guard-title")?.textContent || "Export prêt";
+  const exportDetail = $("export-guard-detail")?.textContent || "Document anonymisé.";
+  const previewNote = details.previewError
+    ? `<p class="ai-ready-note">${escapeHtml(details.previewError)}</p>`
+    : "";
+
+  card.innerHTML = `
+    <div class="ai-ready-copy">
+      <p class="ai-ready-eyebrow">${details.justValidated ? "Validation terminée" : "Document sélectionné"}</p>
+      <h3>Document anonymisé et prêt pour l’IA</h3>
+      <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve DPO ou revenir à la revue.</p>
+      ${previewNote}
+    </div>
+    <dl class="ai-ready-meta">
+      <div><dt>Fichier</dt><dd>${escapeHtml(name)}</dd></div>
+      <div><dt>Client</dt><dd>${escapeHtml(client)}</dd></div>
+      <div><dt>Statut</dt><dd>${escapeHtml(status)}</dd></div>
+      <div><dt>Taille</dt><dd>${escapeHtml(size)}</dd></div>
+      <div><dt>Entités masquées</dt><dd>${entities}</dd></div>
+      <div><dt>Score / export</dt><dd>${escapeHtml(exportTitle)} · ${escapeHtml(exportDetail)}</dd></div>
+    </dl>
+    <div class="ai-ready-actions">
+      <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Analyser ce document</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger preuve DPO</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir l’anonymisation</button>
+    </div>`;
+  card.style.display = "";
 }
 
 
@@ -2534,11 +2620,12 @@ async function validate() {
     });
     setStep(3);
     updateAIDocBar(currentDocName, currentDocSize);
-    refreshAIDocInsights(currentDocId);
+    await refreshAIDocInsights(currentDocId);
+    renderAIReadySummary({ justValidated: true });
     resetChat();
     loadChatHistory(currentDocId);
     await loadDocList();
-    toast("Document validé — posez vos questions !", "success");
+    toast("Document anonymisé et prêt pour l’IA", "success");
   } catch (e) {
     console.error("validate error:", e);
     toast(`Erreur validation: ${e.message}`, "error");
@@ -2563,11 +2650,7 @@ function goToChat() {
 function resetChat() {
   latestAssistantText = "";
   $("btn-copy-answer").disabled = true;
-  $("chat-messages").innerHTML =
-    '<div class="chat-intro"><div class="chat-intro-icon" role="img" aria-label="Cadenas">' +
-    '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-    '</div><p>Document anonymisé. Posez vos questions en toute sécurité.</p></div>';
+  $("chat-messages").innerHTML = buildAIChatIntroHtml();
 }
 
 function appendUserMsg(text) {
@@ -3262,15 +3345,12 @@ function renderGdprDashboardSection(gdpr, totalDocs, riskDistribution) {
     }
     const statusElG = $("dash-gdpr-status");
     if (statusElG) {
-      statusElG.textContent = gdpr.status || "Score RGPD non disponible";
+      statusElG.textContent = "Score RGPD non disponible";
       statusElG.className = "dash-gdpr-status color-neutral";
     }
     const breakEl = $("dash-gdpr-breakdown");
-    if (breakEl) breakEl.innerHTML = "";
-    const recos =
-      gdpr.recommendations && gdpr.recommendations.length
-        ? gdpr.recommendations
-        : ["Ajoutez un premier document pour calculer votre posture RGPD."];
+    if (breakEl) breakEl.textContent = "Ajoutez un premier document pour calculer votre posture RGPD.";
+    const recos = ["Aucune recommandation pour le moment."];
     const recosEl = $("dash-gdpr-recos");
     if (recosEl) {
       recosEl.innerHTML =
@@ -4308,8 +4388,30 @@ document.addEventListener("DOMContentLoaded", () => {
   $("chat-input").addEventListener("keydown", e => {
     if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); }
   });
+  $("chat-messages").addEventListener("click", e => {
+    const btn = e.target.closest("[data-chat-suggestion]");
+    if (!btn) return;
+    $("chat-input").value = btn.dataset.chatSuggestion || "";
+    sendMessage();
+  });
   $("btn-stop-stream").addEventListener("click", stopStream);
   $("btn-copy-answer").addEventListener("click", copyLatestAnswer);
+
+  if ($("ai-ready-summary")) {
+    $("ai-ready-summary").addEventListener("click", e => {
+      const btn = e.target.closest("[data-ai-ready-action]");
+      if (!btn) return;
+      const action = btn.dataset.aiReadyAction;
+      if (action === "analyze") {
+        $("chat-input")?.focus();
+        document.querySelector(".chat-input-zone")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else if (action === "proof") {
+        $("btn-compliance-report")?.click();
+      } else if (action === "review") {
+        setStep(2);
+      }
+    });
+  }
 
   // Quick actions
   const skipQuickIds = new Set(["btn-report-mode", "btn-copilot-mode", "btn-review-agent", "btn-revue-associe"]);
