@@ -2422,8 +2422,8 @@ function loadChatHistory(docId) {
     const messages = JSON.parse(raw);
     if (!Array.isArray(messages) || !messages.length) return;
     const msgs = $("chat-messages");
-    const intro = msgs.querySelector(".chat-intro");
-    if (intro) intro.remove();
+    const emptyWelcome = msgs.querySelector("#chat-empty-welcome");
+    if (emptyWelcome) emptyWelcome.remove();
     messages.forEach(m => {
       if (m.role === "user") {
         const div = document.createElement("div");
@@ -2560,20 +2560,39 @@ function goToChat() {
 
 // ── AI Chat ────────────────────────────────────────────────────────────
 
+function getChatEmptyWelcomeHtml() {
+  const lockSvg =
+    '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
+    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>';
+  return (
+    '<div id="chat-empty-welcome" class="chat-empty-welcome">' +
+    '<div class="chat-empty-welcome-head">' +
+    '<div class="chat-intro-icon" role="img" aria-label="Cadenas">' +
+    lockSvg +
+    "</div>" +
+    '<h3 class="chat-empty-title">Document prêt pour l\'analyse IA</h3>' +
+    '<p class="chat-empty-text">Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité.</p>' +
+    "</div>" +
+    '<div class="chat-suggestion-list" role="group" aria-label="Suggestions">' +
+    '<button type="button" class="chat-suggestion-btn" data-q="Fais un résumé de ce document.">Résumer le document</button>' +
+    '<button type="button" class="chat-suggestion-btn" data-q="Quels sont les points clés ?">Identifier les points clés</button>' +
+    '<button type="button" class="chat-suggestion-btn" data-q="Y a-t-il des anomalies ou alertes ?">Détecter les anomalies</button>' +
+    '<button type="button" class="chat-suggestion-btn" data-q="Donne-moi les chiffres principaux.">Lister les chiffres importants</button>' +
+    '<button type="button" class="chat-suggestion-btn" data-action="revue-associe">Préparer une note de revue</button>' +
+    "</div></div>"
+  );
+}
+
 function resetChat() {
   latestAssistantText = "";
   $("btn-copy-answer").disabled = true;
-  $("chat-messages").innerHTML =
-    '<div class="chat-intro"><div class="chat-intro-icon" role="img" aria-label="Cadenas">' +
-    '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
-    '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
-    '</div><p>Document anonymisé. Posez vos questions en toute sécurité.</p></div>';
+  $("chat-messages").innerHTML = getChatEmptyWelcomeHtml();
 }
 
 function appendUserMsg(text) {
   const msgs = $("chat-messages");
-  const intro = msgs.querySelector(".chat-intro");
-  if (intro) intro.remove();
+  const emptyWelcome = msgs.querySelector("#chat-empty-welcome");
+  if (emptyWelcome) emptyWelcome.remove();
   const div = document.createElement("div");
   div.className = "msg msg-user";
   div.textContent = text;
@@ -4319,6 +4338,21 @@ document.addEventListener("DOMContentLoaded", () => {
       $("chat-input").value = btn.dataset.q;
       sendMessage();
     });
+  });
+  $("chat-messages").addEventListener("click", e => {
+    const btn = e.target.closest(".chat-suggestion-btn");
+    if (!btn) return;
+    e.preventDefault();
+    if (btn.dataset.action === "revue-associe") {
+      toast("Revue associé : analyse structurée en cours…", "info");
+      startReview();
+      return;
+    }
+    const q = btn.dataset.q;
+    if (q) {
+      $("chat-input").value = q;
+      sendMessage();
+    }
   });
   // Review agent
   if ($("btn-review-agent")) $("btn-review-agent").addEventListener("click", startReview);

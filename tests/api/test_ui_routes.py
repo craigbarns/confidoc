@@ -51,3 +51,4 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert 'class="upload-zone-inner"' in resp.text
     assert 'id="upload-client-name"' in resp.text
     assert 'for="upload-client-name"' in resp.text
+    assert "Document prêt pour l'analyse IA" in resp.text

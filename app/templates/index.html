@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=2.2" />
+  <link rel="stylesheet" href="/static/css/style.css?v=2.3" />
   <style>
     .review-station {
       margin-top: 20px;
@@ -989,14 +989,24 @@
         </div>
 
         <div id="chat-messages" class="chat-messages">
-          <div class="chat-intro">
-            <div class="chat-intro-icon" role="img" aria-label="Cadenas">
-            <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
-              <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
-            </svg>
-          </div>
-            <p>Document anonymisé. Posez vos questions en toute sécurité.</p>
+          <div id="chat-empty-welcome" class="chat-empty-welcome">
+            <div class="chat-empty-welcome-head">
+              <div class="chat-intro-icon" role="img" aria-label="Cadenas">
+                <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                  <rect x="3" y="11" width="18" height="11" rx="2" ry="2"/>
+                  <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
+                </svg>
+              </div>
+              <h3 class="chat-empty-title">Document prêt pour l'analyse IA</h3>
+              <p class="chat-empty-text">Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité.</p>
+            </div>
+            <div class="chat-suggestion-list" role="group" aria-label="Suggestions">
+              <button type="button" class="chat-suggestion-btn" data-q="Fais un résumé de ce document.">Résumer le document</button>
+              <button type="button" class="chat-suggestion-btn" data-q="Quels sont les points clés ?">Identifier les points clés</button>
+              <button type="button" class="chat-suggestion-btn" data-q="Y a-t-il des anomalies ou alertes ?">Détecter les anomalies</button>
+              <button type="button" class="chat-suggestion-btn" data-q="Donne-moi les chiffres principaux.">Lister les chiffres importants</button>
+              <button type="button" class="chat-suggestion-btn" data-action="revue-associe">Préparer une note de revue</button>
+            </div>
           </div>
         </div>
 
