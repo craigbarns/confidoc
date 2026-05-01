@@ -898,7 +898,7 @@
             </button>
             <button id="btn-export-pdf" class="btn btn-ghost btn-sm">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-              PDF redacté
+              PDF anonymisé
             </button>
             <button id="btn-audit-report" class="btn btn-ghost btn-sm">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
@@ -906,7 +906,7 @@
             </button>
             <button id="btn-compliance-report" class="btn btn-ghost btn-sm">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-              Conformite
+              Conformité
             </button>
           </div>
         </div>
@@ -1053,19 +1053,61 @@
         </div>
       </div>
 
-      <!-- QUALITÉ (stub) -->
+      <!-- QUALITÉ -->
       <div id="panel-quality" class="panel">
-        <div class="panel-stub">
-          <div class="panel-stub-icon" aria-hidden="true">
-            <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">
-              <line x1="18" y1="20" x2="18" y2="10"/>
-              <line x1="12" y1="20" x2="12" y2="4"/>
-              <line x1="6" y1="20" x2="6" y2="14"/>
-            </svg>
+        <div class="quality-panel-inner">
+          <header class="panel-compliance-head">
+            <h2>Qualité documentaire</h2>
+            <p class="panel-compliance-lead">
+              Suivez les validations, les corrections humaines et la boucle d’amélioration qualité.
+            </p>
+          </header>
+
+          <div id="quality-loading" class="quality-state" style="display:none">
+            <div class="spinner spinner-sm"></div>
+            <p>Chargement des métriques qualité…</p>
           </div>
-          <h2>Qualité</h2>
-          <p class="panel-stub-text">Bientôt connecté au tableau de bord qualité.<br>Volumes, temps de validation, corrections par champ et drafts produits.</p>
-          <p class="panel-stub-meta">Capacité backend déjà disponible — l'écran arrivera dans une PR ultérieure.</p>
+          <div id="quality-error" class="quality-state error" style="display:none">
+            <p id="quality-error-msg">Impossible de charger les métriques qualité.</p>
+            <button type="button" id="btn-quality-retry" class="btn btn-ghost btn-sm">Réessayer</button>
+          </div>
+          <div id="quality-empty" class="quality-state" style="display:none">
+            <h3>Les métriques qualité apparaîtront après vos premières validations documentaires.</h3>
+            <p>Importez un document, sécurisez-le puis validez l’anonymisation pour alimenter la boucle d’amélioration qualité.</p>
+          </div>
+
+          <div id="quality-content" style="display:none">
+            <div class="quality-metric-grid">
+              <div class="quality-metric"><span>Documents analysés</span><strong id="quality-docs-analyzed">Non disponible</strong></div>
+              <div class="quality-metric"><span>Documents validés</span><strong id="quality-docs-validated">Non disponible</strong></div>
+              <div class="quality-metric"><span>Temps moyen de traitement</span><strong id="quality-avg-processing">Non disponible</strong></div>
+              <div class="quality-metric"><span>Temps moyen de validation</span><strong id="quality-avg-validation">Non disponible</strong></div>
+              <div class="quality-metric"><span>Prêt sans correction</span><strong id="quality-one-shot">Non disponible</strong></div>
+              <div class="quality-metric"><span>Corrections humaines moyennes</span><strong id="quality-overrides">Non disponible</strong></div>
+              <div class="quality-metric"><span>Corrections en attente</span><strong id="quality-drafts-pending">Non disponible</strong></div>
+              <div class="quality-metric"><span>Corrections acceptées</span><strong id="quality-drafts-accepted">Non disponible</strong></div>
+            </div>
+
+            <div class="quality-grid">
+              <section class="quality-card">
+                <h3>Documents par statut</h3>
+                <div id="quality-status-list" class="quality-list"></div>
+              </section>
+              <section class="quality-card">
+                <h3>Corrections par champ</h3>
+                <div id="quality-field-list" class="quality-list"></div>
+              </section>
+              <section class="quality-card">
+                <h3>Corrections par type d’erreur</h3>
+                <div id="quality-error-type-list" class="quality-list"></div>
+              </section>
+              <section class="quality-card quality-card-wide">
+                <h3>Corrections en attente</h3>
+                <p class="quality-card-note">Les corrections proposées restent courtes et masquées pour éviter d’exposer des données sensibles.</p>
+                <div id="quality-drafts-list" class="quality-drafts-list"></div>
+              </section>
+            </div>
+          </div>
         </div>
       </div>
 
@@ -1075,10 +1117,27 @@
           <header class="panel-compliance-head">
             <h2>Conformité RGPD</h2>
             <p class="panel-compliance-lead">
-              Score agrégé, tendance et répartition des risques lorsque des documents sont traités.
-              Le <a href="/security" target="_blank" rel="noopener">Trust Center</a> décrit le cadre technique.
+              ConfiDoc aide à documenter et réduire le risque avant usage IA. Il ne remplace pas l’avis d’un DPO.
+              Le <a href="/trust" target="_blank" rel="noopener">Ouvrir le Trust Center</a> détaille l’approche RGPD-first.
             </p>
           </header>
+
+          <div id="compliance-loading" class="quality-state" style="display:none">
+            <div class="spinner spinner-sm"></div>
+            <p>Chargement de la posture conformité…</p>
+          </div>
+          <div id="compliance-error" class="quality-state error" style="display:none">
+            <p id="compliance-error-msg">Impossible de charger la conformité.</p>
+            <button type="button" id="btn-compliance-retry" class="btn btn-ghost btn-sm">Réessayer</button>
+          </div>
+
+          <div class="compliance-proof-card">
+            <div>
+              <h3>Preuve DPO</h3>
+              <p id="compliance-proof-copy">Sélectionnez un document prêt IA pour télécharger une preuve DPO liée à ce document.</p>
+            </div>
+            <button type="button" id="btn-compliance-proof" class="btn btn-ghost btn-sm" disabled>Télécharger preuve DPO</button>
+          </div>
 
           <div class="dash-gdpr-section">
             <div class="dash-gdpr-card" id="dash-gdpr-card">
@@ -1119,6 +1178,12 @@
               <div id="dash-entity-chart" class="dash-entity-list"></div>
             </div>
           </div>
+
+          <section class="quality-card quality-card-wide">
+            <h3>Corrections en attente de revue</h3>
+            <p class="quality-card-note">Ces corrections alimentent la boucle d’amélioration qualité après revue humaine.</p>
+            <div id="compliance-drafts-list" class="quality-drafts-list"></div>
+          </section>
         </div>
       </div>
 
@@ -1132,7 +1197,7 @@
             </svg>
           </div>
           <h2>Paramètres</h2>
-          <p class="panel-stub-text">Bientôt : préférences utilisateur et options avancées.<br>Profil, thème, options d'anonymisation, Copilot, comparaison automatique.</p>
+          <p class="panel-stub-text">Préférences utilisateur et options avancées.<br>Profil, thème, options d'anonymisation, Copilot, comparaison automatique.</p>
           <p class="panel-stub-meta">Pour l'instant, le thème est dans l'en-tête et la déconnexion est disponible en haut à droite.</p>
         </div>
       </div>
