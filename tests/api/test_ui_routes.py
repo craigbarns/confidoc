@@ -51,3 +51,10 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert 'class="upload-zone-inner"' in resp.text
     assert 'id="upload-client-name"' in resp.text
     assert 'for="upload-client-name"' in resp.text
+    assert "Document prêt pour l’analyse IA" in resp.text
+    assert "Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité." in resp.text
+    assert "Résumer le document" in resp.text
+    assert "Document anonymisé et prêt pour l’IA" in resp.text
+    assert "Score RGPD non disponible" in resp.text
+    assert "Ajoutez un premier document pour calculer votre posture RGPD." in resp.text
+    assert "Aucune recommandation pour le moment." in resp.text
