@@ -59,6 +59,18 @@ async def test_compute_demo_result_returns_public_payload(tmp_path):
         result = await demo_service._compute_demo_result()
 
     assert result["status"] == "ready"
+    assert result["demo_mode"] == "investor"
+    assert result["workflow_steps"] == [
+        "upload",
+        "ocr",
+        "entity_detection",
+        "anonymization",
+        "risk_score",
+        "trust_score",
+        "ai_readiness",
+        "audit_trail",
+        "export",
+    ]
     assert result["filename"] == "demo.pdf"
     assert result["detections_count"] == 2
     assert result["entity_summary"] == {"EMAIL": 1, "PERSONNE": 1}
@@ -67,6 +79,10 @@ async def test_compute_demo_result_returns_public_payload(tmp_path):
     assert result["extraction_provider"] == "mistral"
     assert "[EMAIL]" in result["anonymized_excerpt"]
     assert result["proof"]["export_policy"]["label"] == "Export autorise"
+    assert (
+        result["decision_notice"]
+        == "Score d'aide à la décision, ne remplace pas une validation juridique/DPO."
+    )
 
 
 def test_build_demo_audit_pdf_returns_pdf_bytes():
@@ -117,5 +133,6 @@ async def test_get_demo_result_falls_back_to_mock_payload_when_cache_unavailable
     assert result is not None
     assert result["status"] == "ready"
     assert result["is_mock"] is True
+    assert result["demo_mode"] == "investor"
     assert result["source"] == "mock_demo_fallback"
     demo_service._memory_demo_cache = None

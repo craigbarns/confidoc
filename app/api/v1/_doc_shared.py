@@ -10,7 +10,7 @@ import hashlib
 import re
 import uuid
 
-from sqlalchemy import select
+from sqlalchemy import or_, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.exceptions import http_400, http_404
@@ -19,6 +19,7 @@ from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.schemas.document import DetectionResponse
+from app.services.rbac_service import require_document_permission, user_active_org_ids
 
 logger = get_logger(__name__)
 
@@ -88,23 +89,37 @@ def _infer_semantic_type(placeholder: str) -> str:
 # ── Document access ───────────────────────────────────────────────────
 
 async def _get_user_document_or_404(
-    db: AsyncSession, document_id: str, user_id: uuid.UUID
+    db: AsyncSession,
+    document_id: str,
+    user_id: uuid.UUID,
+    permission: str = "documents.read",
 ) -> Document:
     try:
         document_uuid = uuid.UUID(document_id)
     except ValueError as exc:
         raise http_404("Document introuvable") from exc
 
+    active_org_ids = await user_active_org_ids(db, user_id)
+    ownership_filters = [Document.uploaded_by_user_id == user_id]
+    if active_org_ids:
+        ownership_filters.append(Document.org_id.in_(active_org_ids))
+
     result = await db.execute(
         select(Document).where(
             Document.id == document_uuid,
-            Document.uploaded_by_user_id == user_id,
+            or_(*ownership_filters),
             Document.is_deleted.is_(False),
         )
     )
     document = result.scalar_one_or_none()
     if not document:
         raise http_404("Document introuvable")
+    await require_document_permission(
+        db,
+        user_id=user_id,
+        document=document,
+        permission=permission,
+    )
     return document
 
 

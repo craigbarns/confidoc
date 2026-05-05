@@ -55,7 +55,9 @@ async def _extract_text_from_file_raw(
     from app.config import get_settings
     settings = get_settings()
     
-    if settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY:
+    if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True:
+        logger.info("mistral_ocr_skipped_sensitive_client_mode", extension=extension)
+    elif settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY:
         try:
             logger.info("attempting_mistral_ocr", extension=extension)
             text, meta = await extract_with_mistral(content, extension)
@@ -131,7 +133,6 @@ async def _extract_pdf_text(content: bytes, meta: dict[str, Any]) -> str:
     # 4. OCR Fallback for scanned PDFs (Tesseract / docTR)
     if len(ext_text.split()) < 10:
         try:
-            ocr_dpi = getattr(settings, "OCR_DPI", 300)
             ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
             ocr_engine = getattr(settings, "OCR_ENGINE", "auto")
             

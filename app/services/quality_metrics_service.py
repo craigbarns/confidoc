@@ -45,6 +45,8 @@ class QualityMetrics:
     corrections_by_field: dict[str, int] = field(default_factory=dict)
     corrections_by_error_type: dict[str, int] = field(default_factory=dict)
     documents_by_status: dict[str, int] = field(default_factory=dict)
+    ai_readiness_score: int | None = None
+    ai_readiness_level: str | None = None
 
 
 def _empty(org_id: uuid.UUID | None) -> QualityMetrics:
@@ -250,6 +252,38 @@ async def compute_quality_metrics(
     else:
         one_shot_rate = None
 
+    ai_readiness_score: int | None = None
+    ai_readiness_level: str | None = None
+    if total_documents > 0:
+        processed_rate = processed / total_documents
+        validation_rate = validated / total_documents
+        one_shot_component = one_shot_rate if one_shot_rate is not None else 0.0
+        failed = by_status.get("failed", 0)
+        failure_penalty = (failed / total_documents) * 25
+        ai_readiness_score = int(
+            max(
+                0,
+                min(
+                    100,
+                    round(
+                        processed_rate * 45
+                        + validation_rate * 30
+                        + one_shot_component * 20
+                        + (5 if accepted_drafts > 0 else 0)
+                        - failure_penalty
+                    ),
+                ),
+            )
+        )
+        if ai_readiness_score >= 80:
+            ai_readiness_level = "ready_for_ai"
+        elif ai_readiness_score >= 60:
+            ai_readiness_level = "internal_review"
+        elif ai_readiness_score >= 35:
+            ai_readiness_level = "needs_review"
+        else:
+            ai_readiness_level = "not_ready"
+
     return QualityMetrics(
         org_id=org_id,
         as_of=datetime.now(UTC),
@@ -265,4 +299,6 @@ async def compute_quality_metrics(
         corrections_by_field=by_field,
         corrections_by_error_type=by_err,
         documents_by_status=by_status,
+        ai_readiness_score=ai_readiness_score,
+        ai_readiness_level=ai_readiness_level,
     )

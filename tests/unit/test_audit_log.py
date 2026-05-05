@@ -21,6 +21,9 @@ class TestAuditLogModel:
         assert "path" in cols
         assert "status_code" in cols
         assert "ip_address" in cols
+        assert "actor_type" in cols
+        assert "request_id" in cols
+        assert "event_hash" in cols
         assert "details" in cols
 
     def test_action_is_indexed(self):

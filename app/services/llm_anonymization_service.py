@@ -3,23 +3,45 @@
 Pas de regex, pas de patterns — uniquement un LLM qui identifie et remplace les PII.
 """
 
+# ruff: noqa: E501
+
 from __future__ import annotations
 
-import json
+import hashlib
 import re
 from typing import Any
 
 from app.config import get_settings
+from app.core.json_utils import extract_json as _clean_json_response
 from app.core.logging import get_logger
 from app.core.tokens import (
-    TOKEN_PERSONNE, TOKEN_EMAIL, TOKEN_TELEPHONE, TOKEN_ADRESSE,
-    TOKEN_SIRET, TOKEN_SIREN, TOKEN_IBAN, TOKEN_SOCIETE,
-    TOKEN_DATE_NAISSANCE, TOKEN_NSS, TOKEN_MONTANT, TOKEN_ID,
-    TOKEN_DATE, TOKEN_VILLE, TOKEN_TVA,
+    TOKEN_ADRESSE,
+    TOKEN_DATE,
+    TOKEN_DATE_NAISSANCE,
+    TOKEN_EMAIL,
+    TOKEN_IBAN,
+    TOKEN_ID,
+    TOKEN_MONTANT,
+    TOKEN_NSS,
+    TOKEN_PERSONNE,
+    TOKEN_SIREN,
+    TOKEN_SIRET,
+    TOKEN_SOCIETE,
+    TOKEN_TELEPHONE,
+    TOKEN_TVA,
+    TOKEN_VILLE,
 )
 from app.services.mistral_service import _chat_completion
 
 logger = get_logger(__name__)
+
+
+def _response_fingerprint(raw: str | None) -> dict[str, object]:
+    payload = raw or ""
+    return {
+        "response_sha256": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        "response_chars": len(payload),
+    }
 
 ANONYMIZATION_PROMPT = f"""Tu es un système d'anonymisation de documents confidentiels.
 
@@ -68,9 +90,6 @@ Document à anonymiser:
 Réponds UNIQUEMENT avec le JSON, sans texte avant ou après:"""
 
 
-from app.core.json_utils import extract_json as _clean_json_response
-
-
 def _fallback_anonymize(text: str) -> str:
     """Anonymisation fallback deterministe si LLM echoue."""
     try:
@@ -86,7 +105,7 @@ def _fallback_anonymize(text: str) -> str:
         (r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b', TOKEN_IBAN),
         (r'\b\d{3}[\s.-]?\d{3}[\s.-]?\d{3}[\s.-]?\d{5}\b', TOKEN_SIRET),
     ]
-    
+
     result = text
     for pattern, replacement in patterns:
         result = re.sub(pattern, replacement, result)
@@ -95,10 +114,10 @@ def _fallback_anonymize(text: str) -> str:
 
 async def anonymize_with_llm(text: str) -> dict[str, Any]:
     """Anonymise un texte via Mistral Large.
-    
+
     Args:
         text: Texte brut à anonymiser
-        
+
     Returns:
         {
             "anonymized_text": "texte avec tokens",
@@ -108,7 +127,17 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
         }
     """
     settings = get_settings()
-    
+
+    if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True:
+        logger.info("llm_anonymization_skipped", reason="sensitive_client_mode")
+        return {
+            "anonymized_text": _fallback_anonymize(text),
+            "entities": [],
+            "confidence": "low",
+            "count": 0,
+            "method": "fallback:regex_sensitive_client_mode"
+        }
+
     if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:
         logger.warning("llm_anonymization_skipped", reason="mistral_not_configured")
         # Fallback sur regex basiques
@@ -119,17 +148,17 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "count": 0,
             "method": "fallback:regex"
         }
-    
+
     # Limite la taille (coût + contexte)
     max_chars = 12000
     truncated_text = text[:max_chars]
     is_truncated = len(text) > max_chars
-    
+
     if is_truncated:
         truncated_text += "\n...[suite du document tronquée pour l'anonymisation]..."
-    
+
     prompt = ANONYMIZATION_PROMPT.format(text=truncated_text)
-    
+
     try:
         raw_response = await _chat_completion(prompt, temperature=0.1)
     except Exception as exc:
@@ -141,10 +170,10 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "count": 0,
             "method": "fallback:regex_after_error"
         }
-    
+
     parsed = _clean_json_response(raw_response)
     if parsed is None:
-        logger.warning("llm_anonymization_parse_failed", raw=raw_response[:200])
+        logger.warning("llm_anonymization_parse_failed", **_response_fingerprint(raw_response))
         return {
             "anonymized_text": _fallback_anonymize(text),
             "entities": [],
@@ -152,10 +181,10 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "count": 0,
             "method": "fallback:regex_after_parse_error"
         }
-    
+
     # Extrait le texte anonymisé
     anonymized_text = parsed.get("texte_anonymise", _fallback_anonymize(text))
-    
+
     # Normalise les entités
     entities = []
     for e in parsed.get("entites_detectees", []):
@@ -168,14 +197,14 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
                 "replacement": e.get("token", "[REDACTED]"),
                 "confidence": 0.9 if parsed.get("confiance") == "high" else 0.7
             })
-    
+
     logger.info(
         "llm_anonymization_complete",
         nb_entites=len(entities),
         confiance=parsed.get("confiance", "unknown"),
         tronque=is_truncated
     )
-    
+
     return {
         "anonymized_text": anonymized_text,
         "entities": entities,
@@ -187,7 +216,7 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
 
 async def anonymize_document_full(text: str) -> tuple[str, list[dict]]:
     """Interface compatible avec l'ancien système.
-    
+
     Returns:
         (anonymized_text, detections_list)
     """

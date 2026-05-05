@@ -3,7 +3,7 @@
 import re
 from typing import Any
 
-from app.core.tokens import TOKEN_DATE_NAISSANCE, TOKEN_PERSONNE, TOKEN_SOCIETE
+from app.core.tokens import TOKEN_ADRESSE, TOKEN_DATE_NAISSANCE, TOKEN_PERSONNE, TOKEN_SOCIETE
 from app.services.anonymization.patterns import (
     ACCOUNTING_GUARD_PATTERNS,
     BIC_LABELED_PATTERN,
@@ -377,13 +377,27 @@ def _detect_identity_block(text: str, matches: list[dict[str, Any]]) -> None:
         if start < 0:
             continue
         end = start + len(line)
+        replacement = "[IDENTITY]"
+        if re.search(
+            r"\b(?:M\.|Mr\.|Monsieur|Mme|Madame|Mlle|Mademoiselle|Dr\.?|Me|Ma[iî]tre)"
+            r"\s+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ''\-]+",
+            clean,
+        ):
+            replacement = TOKEN_PERSONNE
+        elif any(
+            kw in clean.lower()
+            for kw in ("rue", "avenue", "boulevard", "résidence", "residence")
+        ):
+            replacement = TOKEN_ADRESSE
+        elif any(kw in clean.lower() for kw in ("sci", "sas", "sarl", "eurl", "selarl")):
+            replacement = TOKEN_SOCIETE
         matches.append(
             {
                 "entity_type": "invoice_identity_block",
                 "start_index": start,
                 "end_index": end,
                 "value_excerpt": line,
-                "replacement": "[IDENTITY]",
+                "replacement": replacement,
             }
         )
 

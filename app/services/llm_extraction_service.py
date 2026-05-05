@@ -6,6 +6,7 @@ Uniquement un prompt structuré + validation JSON.
 
 from __future__ import annotations
 
+import hashlib
 import json
 import re
 from contextlib import suppress
@@ -19,6 +20,14 @@ from app.services.mistral_service import _chat_completion
 from app.services.pcg_mapping_service import suggest_pcg_code
 
 logger = get_logger(__name__)
+
+
+def _response_fingerprint(raw: str | None) -> dict[str, object]:
+    payload = raw or ""
+    return {
+        "response_sha256": hashlib.sha256(payload.encode("utf-8")).hexdigest(),
+        "response_chars": len(payload),
+    }
 
 EXTRACTION_PROMPT = """Tu es un expert-comptable français.
 Extrais les informations clés du document ci-dessous.
@@ -138,7 +147,7 @@ def _validate_and_normalize(data: dict[str, Any]) -> dict[str, Any]:
             "chiffre_affaires": {"montant": None, "source_snippet": None},
         },
         "confiance": data.get("confiance") or "low",
-        "source": "llm:mistral-large",
+        "source": data.get("source") or "llm:mistral-large",
         "business_rules": {}
     }
 
@@ -252,6 +261,10 @@ async def extract_with_llm(text: str, doc_type: str | None = None) -> dict[str, 
     """
     settings = get_settings()
 
+    if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True:
+        logger.info("llm_extraction_skipped", reason="sensitive_client_mode")
+        return _validate_and_normalize({"source": "disabled:sensitive_client_mode"})
+
     if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:
         logger.warning("llm_extraction_skipped", reason="mistral_not_configured")
         return _validate_and_normalize({})
@@ -271,7 +284,7 @@ async def extract_with_llm(text: str, doc_type: str | None = None) -> dict[str, 
 
     parsed = _clean_json_response(raw_response)
     if parsed is None:
-        logger.warning("llm_extraction_parse_failed", raw=raw_response[:200])
+        logger.warning("llm_extraction_parse_failed", **_response_fingerprint(raw_response))
         return _validate_and_normalize({})
 
     result = _validate_and_normalize(parsed)

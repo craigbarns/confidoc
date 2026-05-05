@@ -81,6 +81,17 @@ def test_risk_score_percent_normalizes_fractional_and_percent_scores() -> None:
     assert _doc_export._risk_score_percent(82) == 82
 
 
+def test_raw_document_content_disposition_sanitizes_filename() -> None:
+    from app.api.v1._doc_crud import _safe_content_disposition_filename
+
+    header = _safe_content_disposition_filename('evil"\r\nX-Bad: 1.pdf')
+
+    assert "\r" not in header
+    assert "\n" not in header
+    assert "X-Bad:" not in header.split("filename=", 1)[0]
+    assert "filename*=" in header
+
+
 @pytest.mark.asyncio
 async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch) -> None:
     document_id = str(uuid.uuid4())
@@ -92,9 +103,15 @@ async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch)
     user = SimpleNamespace(id=uuid.uuid4())
     calls: dict[str, Any] = {}
 
-    async def fake_get_document(_db: Any, requested_id: str, user_id: uuid.UUID) -> Any:
+    async def fake_get_document(
+        _db: Any,
+        requested_id: str,
+        user_id: uuid.UUID,
+        permission: str = "documents.read",
+    ) -> Any:
         calls["requested_id"] = requested_id
         calls["user_id"] = user_id
+        calls["permission"] = permission
         return document
 
     async def fake_check_gate(_db: Any, checked_document: Any, checked_user: Any) -> None:
@@ -128,6 +145,7 @@ async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch)
 
     assert calls["requested_id"] == document_id
     assert calls["user_id"] == user.id
+    assert calls["permission"] == "exports.download"
     assert calls["gate_document"] is document
     assert calls["gate_user"] is user
     assert calls["text_document"] is document

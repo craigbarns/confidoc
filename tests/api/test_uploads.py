@@ -79,7 +79,7 @@ class _EmptyResult:
     def scalar_one_or_none(self) -> None:
         return None
 
-    def scalars(self) -> "_EmptyResult":
+    def scalars(self) -> _EmptyResult:
         return self
 
     def all(self) -> list[Any]:
@@ -196,6 +196,12 @@ class TestUploadHappyPath:
             "should_dispatch_document_task_to_celery",
             lambda **kw: False,
         )
+
+        async def _allow_upload_permission(*_args, **_kwargs):
+            return None
+
+        monkeypatch.setattr(uploads_mod, "require_org_permission", _allow_upload_permission)
+
         # OCR/text extraction is heavy and irrelevant here.
         async def _empty_extract(_data, _ext):
             return ""

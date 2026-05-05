@@ -22,6 +22,7 @@ from app.models.document import Document
 from app.schemas.quality_metrics import QualityDashboardResponse
 from app.services.dossier_360_service import build_dossier_360
 from app.services.quality_metrics_service import compute_quality_metrics
+from app.services.trust_score_service import compute_portfolio_trust_score
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -143,7 +144,7 @@ async def get_golden_report(current_user: CurrentUser) -> dict:
         }
 
     try:
-        with open(report_path, "r", encoding="utf-8") as f:
+        with open(report_path, encoding="utf-8") as f:
             return json.load(f)
     except Exception as exc:
         logger.error("golden_report_read_failed", error=str(exc))
@@ -224,18 +225,30 @@ async def get_dashboard_stats(
     )
     trashed = trash_result.scalar() or 0
 
+    gdpr_score = _calculate_gdpr_score(
+        total_docs,
+        status_counts,
+        risk_distribution,
+        recent_activity,
+    )
+    ready_docs = status_counts.get("ready", 0) + status_counts.get("anonymized", 0)
+    high_or_critical = risk_distribution.get("high", 0) + risk_distribution.get("critical", 0)
+    trust_score = compute_portfolio_trust_score(
+        total_documents=total_docs,
+        gdpr_score=gdpr_score.get("score"),
+        ready_documents=ready_docs,
+        failed_documents=status_counts.get("failed", 0),
+        high_or_critical_risks=high_or_critical,
+    )
+
     return {
         "total_documents": total_docs,
         "status_counts": status_counts,
         "risk_distribution": risk_distribution,
         "recent_activity": recent_activity,
         "trashed_documents": trashed,
-        "gdpr_score": _calculate_gdpr_score(
-            total_docs,
-            status_counts,
-            risk_distribution,
-            recent_activity,
-        ),
+        "gdpr_score": gdpr_score,
+        "trust_score": trust_score,
     }
 
 
@@ -306,6 +319,8 @@ async def get_quality_dashboard(
         avg_time_to_validation_seconds=metrics.avg_time_to_validation_seconds,
         one_shot_full_ready_rate=metrics.one_shot_full_ready_rate,
         avg_human_overrides_per_document=metrics.avg_human_overrides_per_document,
+        ai_readiness_score=metrics.ai_readiness_score,
+        ai_readiness_level=metrics.ai_readiness_level,
         total_golden_case_drafts=metrics.total_golden_case_drafts,
         accepted_golden_case_drafts=metrics.accepted_golden_case_drafts,
         corrections_by_field=metrics.corrections_by_field,

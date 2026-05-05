@@ -17,7 +17,8 @@ ConfiDoc aide les cabinets comptables et professions reglementees a traiter des 
 
 - **Deux modes RGPD** : pseudonymisation (interne) et anonymisation forte (export/IA) avec scoring de risque de reidentification
 - **Score de reidentification** : analyse automatique des quasi-identifiants residuels, combinaisons, et risque de recoupement (CNIL)
-- **Journal d'audit RGPD** : tracabilite complete (qui, quand, quel document, quel mode, quel score de risque)
+- **Journal d'audit RGPD** : tracabilite horodatee des uploads, exports, validations, OCR, anonymisation, scoring et etapes systeme
+- **Trust Score / AI Readiness Score** : score visible par document et au dashboard pour savoir si le document est exploitable par IA
 - **Anonymisation automatique** : detection et masquage des identifiants directs (noms, SIRET, IBAN, emails) et indirects (adresses, filiales, pourcentages, refs locales)
 - **Extraction structuree** : extraction automatique des champs comptables (actif, passif, CA, resultat) avec scoring de qualite
 - **Types de documents** : bilan, compte de resultat, declaration 2072, releve bancaire, liasse simplifiee
@@ -115,8 +116,92 @@ L'API est documentee via Swagger UI : `http://localhost:8000/docs`
 | GET | `/api/v1/documents/{id}/preview` | Preview de l'anonymisation |
 | POST | `/api/v1/documents/{id}/validate` | Valider et figer la version finale |
 | GET | `/api/v1/documents/{id}/structured` | JSON IA/RAG : entités, tags sémantiques, texte anonymisé (`?include_text=`) |
+| GET | `/api/v1/documents/{id}/risk-score` | Risque RGPD, Trust Score et AI Readiness Score |
+| GET | `/api/v1/documents/{id}/audit-report` | Journal d'audit et preuve de traitement |
+| GET | `/api/v1/stats/quality-dashboard` | Qualite, validation humaine, golden drafts et readiness IA |
 | GET | `/health` | Health check |
 | GET | `/readiness` | Readiness probe |
+| GET | `/version` | Version applicative et metadata Railway non sensibles |
+
+## Production readiness
+
+ConfiDoc bloque le demarrage en production si des secrets restent aux valeurs par defaut ou si `STORAGE_BACKEND=local`.
+
+Variables minimales a fournir en production :
+
+- `APP_ENV=production`
+- `SECRET_KEY`, `JWT_SECRET_KEY`, `ENCRYPTION_MASTER_KEY`, `PSEUDO_MAPPING_KEY`
+- `DATABASE_URL`, `REDIS_URL`, `CELERY_BROKER_URL`, `CELERY_RESULT_BACKEND`
+- `STORAGE_BACKEND=minio` ou `database`
+- `ALLOWED_ORIGINS` limite aux domaines reels du front
+- `BOOTSTRAP_SECRET` pour l'initialisation admin controlee
+
+Checks operationnels :
+
+- `GET /health` : liveness rapide.
+- `GET /readiness` : PostgreSQL, Redis, stockage et workers Celery informatifs.
+- `GET /version` : version, environnement et metadata Railway non sensibles.
+- Docker : healthcheck integre sur `/health`.
+- Audit : les details sensibles sont minimises, les champs suspects sont hashes, et chaque entree recoit un `event_hash`.
+
+### Railway production checklist
+
+- Configurer `APP_ENV=production` et `APP_VERSION`.
+- Fournir `DATABASE_URL` PostgreSQL Railway et `REDIS_URL` Redis Railway.
+- Fournir `SECRET_KEY`, `JWT_SECRET_KEY`, `ENCRYPTION_MASTER_KEY`, `PSEUDO_MAPPING_KEY`, `BOOTSTRAP_SECRET`.
+- Configurer `SENSITIVE_CLIENT_MODE=true` pour les clients pilotes qui refusent les appels IA externes.
+- Utiliser `STORAGE_BACKEND=database` pour un premier pilote Railway simple, ou `STORAGE_BACKEND=minio` avec bucket S3/R2/MinIO persistant; `local` est bloque en production.
+- Restreindre `ALLOWED_ORIGINS` au domaine Railway/front reel.
+- Lancer les migrations Alembic avant demo client : `alembic upgrade head`.
+- Tests locaux avant deploy : `pytest tests/ -q` puis `ruff check app tests scripts`.
+- Smoke test post-deploy : `python scripts/smoke_test.py --base-url https://VOTRE-APP.up.railway.app`.
+- Smoke test avec compte demo : `CONFIDOC_DEMO_EMAIL=demo@confidoc.fr CONFIDOC_DEMO_PASSWORD=... python scripts/smoke_test.py --base-url https://VOTRE-APP.up.railway.app`.
+- Verifier `/health`, `/readiness`, `/version` apres deploy.
+- Si `scripts/seed.py` est utilise en production, fournir `CONFIDOC_SEED_ADMIN_PASSWORD`.
+
+Variables Railway obligatoires pour une demo live :
+
+- `APP_ENV=production`
+- `DATABASE_URL`
+- `REDIS_URL`
+- `SECRET_KEY`
+- `JWT_SECRET_KEY`
+- `ENCRYPTION_MASTER_KEY`
+- `PSEUDO_MAPPING_KEY`
+- `BOOTSTRAP_SECRET`
+- `ALLOWED_ORIGINS`
+- `STORAGE_BACKEND`
+- `DOCUMENT_PROCESSING_BACKEND=api` pour une demo mono-service, `celery` seulement si workers Railway dedies.
+
+Checklist avant demo investisseur :
+
+- `alembic upgrade head` execute.
+- `/health` retourne `healthy`.
+- `/readiness` retourne `ready`.
+- `/version` affiche la version, la branche et la policy IA sans secret.
+- Bouton `Charger une démo` disponible sur le dashboard.
+- Export `Rapport d'audit PDF` disponible après traitement.
+- `SENSITIVE_CLIENT_MODE` positionne selon le contexte client.
+
+### Documentation due diligence
+
+- `docs/ARCHITECTURE.md`
+- `docs/SECURITY.md`
+- `docs/AI_SECURITY.md`
+- `docs/DUE_DILIGENCE.md`
+- `docs/ROADMAP_INVESTOR.md`
+- `docs/DEMO_SCRIPT.md`
+
+## Positionnement investisseur
+
+La demonstration doit raconter cette sequence :
+
+1. Upload authentifie avec scan, hash SHA-256, stockage non local en production et audit.
+2. OCR/extraction puis anonymisation avant tout usage IA.
+3. Score RGPD, Trust Score et AI Readiness visibles.
+4. Validation humaine et export gates pour les risques eleves.
+5. Audit trail et rapport PDF disponibles pour preuve DPO.
+6. Tests de non-regression sur anonymisation, extraction et quality dashboard.
 
 ## Securite
 

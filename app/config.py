@@ -22,6 +22,7 @@ class Settings(BaseSettings):
 
     # ---- Application ----
     APP_NAME: str = "ConfiDoc"
+    APP_VERSION: str = "0.3.0"
     APP_ENV: Literal["development", "staging", "production"] = "development"
     DEBUG: bool = False
     SECRET_KEY: str = "CHANGE-ME"
@@ -129,6 +130,7 @@ class Settings(BaseSettings):
     HF_TASK: str = "ner"
 
     # Contraintes RGPD / minimisation
+    SENSITIVE_CLIENT_MODE: bool = False
     LLM_MIN_DETECTIONS: int = 2
     LLM_CONFIDENCE_THRESHOLD: float = 0.75
     LLM_MAX_SNIPPETS: int = 3

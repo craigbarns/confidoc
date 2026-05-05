@@ -16,10 +16,11 @@ from contextlib import suppress
 from datetime import UTC, datetime
 from types import SimpleNamespace
 from typing import Any
+from urllib.parse import quote
 
 from fastapi import APIRouter, Body, status
 from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
-from sqlalchemy import select
+from sqlalchemy import func, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import (
@@ -31,8 +32,10 @@ from app.api.v1._doc_shared import (
 )
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
-from app.models.document import Document, DocumentStatus
+from app.models.document import DocumentStatus
 from app.models.entity_detection import EntityDetection
+from app.services.audit_trail_service import record_audit_event
+from app.services.trust_score_service import compute_document_trust_score
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -45,6 +48,13 @@ def _risk_score_percent(score: float | None) -> float:
     return value * 100 if 0 <= value <= 1 else value
 
 
+def _safe_attachment_disposition(filename: str | None) -> str:
+    safe = (filename or "document").replace("\r", " ").replace("\n", " ").replace('"', "")
+    safe = safe.strip() or "document"
+    ascii_safe = safe.encode("ascii", "ignore").decode("ascii") or "document"
+    return f'attachment; filename="{ascii_safe}"; filename*=UTF-8\'\'{quote(safe)}'
+
+
 @router.get(
     "/{document_id}/export",
     response_class=PlainTextResponse,
@@ -55,7 +65,12 @@ async def export_document(
     document_id: str, current_user: CurrentUser, db: DbSession
 ):
     try:
-        document = await _get_user_document_or_404(db, document_id, current_user.id)
+        document = await _get_user_document_or_404(
+            db,
+            document_id,
+            current_user.id,
+            permission="exports.download",
+        )
         _doc_id = str(document.id)
         _user_id = current_user.id
         _org_id = document.org_id
@@ -66,13 +81,15 @@ async def export_document(
         await db.commit()
 
         try:
-            from app.models.audit_log import AuditLog
-            db.add(AuditLog(
-                user_id=_user_id, org_id=_org_id,
+            await record_audit_event(
+                db,
+                user_id=_user_id,
+                org_id=_org_id,
                 action="export:text", resource_type="document",
                 resource_id=_doc_id, method="GET",
                 path=f"/api/v1/documents/{document_id}/export", status_code=200,
-            ))
+                actor_type="user",
+            )
             await db.commit()
         except __import__("sqlalchemy").exc.SQLAlchemyError as db_err:
             logger.warning("export_audit_log_failed", error=str(db_err))
@@ -85,7 +102,7 @@ async def export_document(
         logger.error("export_text_failed", error=str(exc))
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Export failed: {type(exc).__name__}: {str(exc)[:500]}"},
+            content={"detail": "Export temporairement indisponible."},
         )
 
 
@@ -99,7 +116,12 @@ async def export_fec(
     document_id: str, current_user: CurrentUser, db: DbSession
 ):
     """Génère un fichier FEC simplifié pour intégration logicielle comptable."""
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="exports.download",
+    )
     await _check_export_gate(db, document, current_user)
 
     anonymized_text = await _get_anonymized_text(db, document)
@@ -180,16 +202,20 @@ async def export_fec(
 
     # Audit log
     try:
-        from app.models.audit_log import AuditLog
-        db.add(AuditLog(
-            user_id=current_user.id, org_id=document.org_id,
+        await record_audit_event(
+            db,
+            user_id=current_user.id,
+            org_id=document.org_id,
             action="export:fec", resource_type="document",
             resource_id=str(document.id), method="GET",
             path=f"/api/v1/documents/{document_id}/export-fec", status_code=200,
-        ))
+            actor_type="user",
+        )
         await db.commit()
-    except Exception:
-        pass
+    except Exception as exc:
+        logger.warning("export_fec_audit_log_failed", error=str(exc))
+        with suppress(Exception):
+            await db.rollback()
 
     return PlainTextResponse(
         fec_content,
@@ -207,7 +233,12 @@ async def export_redacted_pdf(
     document_id: str, current_user: CurrentUser, db: DbSession
 ):
     try:
-        document = await _get_user_document_or_404(db, document_id, current_user.id)
+        document = await _get_user_document_or_404(
+            db,
+            document_id,
+            current_user.id,
+            permission="exports.download",
+        )
         await _check_export_gate(db, document, current_user)
 
         if document.extension.lower() != "pdf":
@@ -257,7 +288,9 @@ async def export_redacted_pdf(
                     yield chunk
 
         headers = {
-            "Content-Disposition": f'attachment; filename="redacted_{document.original_filename}"'
+            "Content-Disposition": _safe_attachment_disposition(
+                f"redacted_{document.original_filename}"
+            )
         }
         return StreamingResponse(iterfile(), media_type="application/pdf", headers=headers)
     except Exception as exc:
@@ -266,7 +299,7 @@ async def export_redacted_pdf(
         logger.error("export_pdf_failed", error=str(exc))
         return JSONResponse(
             status_code=500,
-            content={"detail": f"Export PDF failed: {type(exc).__name__}: {str(exc)[:500]}"},
+            content={"detail": "Export PDF temporairement indisponible."},
         )
 
 
@@ -280,7 +313,12 @@ async def get_audit_report(
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="audit.read",
+    )
 
     entries: list[dict] = []
     try:
@@ -307,6 +345,9 @@ async def get_audit_report(
         logger.warning("audit_report_query_failed", error=str(exc))
 
     risk_info = None
+    risk_score_for_trust = 0.0
+    risk_level_for_trust = "low"
+    human_validated_for_trust = False
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
         mr = await db.execute(
@@ -316,8 +357,12 @@ async def get_audit_report(
         )
         mapping = mr.scalar_one_or_none()
         if mapping:
+            risk_score_for_trust = _risk_score_percent(mapping.risk_score)
+            risk_level_for_trust = mapping.risk_level or "low"
+            human_validated_for_trust = bool(mapping.human_validated)
             risk_info = {
                 "score": mapping.risk_score,
+                "score_percent": round(risk_score_for_trust, 1),
                 "level": mapping.risk_level,
                 "human_validated": mapping.human_validated,
                 "validated_at": mapping.validated_at.isoformat() if mapping.validated_at else None,
@@ -326,13 +371,58 @@ async def get_audit_report(
     except (__import__("sqlalchemy").exc.SQLAlchemyError, ValueError) as exc:
         logger.warning("risk_info_query_failed", error=str(exc))
 
+    audit_count = len(entries)
+    detections_count = 0
+    try:
+        detections_count_result = await db.execute(
+            select(func.count()).select_from(EntityDetection).where(
+                EntityDetection.document_id == document.id
+            )
+        )
+        detections_count = int(detections_count_result.scalar() or 0)
+    except Exception:
+        detections_count = 0
+
+    anonymized_text = ""
+    with suppress(Exception):
+        anonymized_text = await _get_anonymized_text(db, document)
+    trust = compute_document_trust_score(
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        risk_score=risk_score_for_trust,
+        risk_level=risk_level_for_trust,
+        human_validated=human_validated_for_trust,
+        detections_count=detections_count,
+        audit_events_count=audit_count,
+        has_anonymized_text=bool(anonymized_text),
+    )
+
     return {
         "document_id": str(document.id),
         "filename": document.original_filename,
         "created_at": document.created_at.isoformat() if document.created_at else None,
+        "report_summary": {
+            "processing_status": (
+                document.status.value
+                if hasattr(document.status, "value")
+                else str(document.status)
+            ),
+            "entities_detected": detections_count,
+            "audit_events": audit_count,
+            "human_validation": (
+                "validated" if human_validated_for_trust else "review_recommended"
+            ),
+        },
         "risk": risk_info,
+        "trust": trust.to_dict(),
         "audit_entries": entries,
         "total_actions": len(entries),
+        "decision_notice": (
+            "Score d'aide à la décision, ne remplace pas une validation juridique/DPO."
+        ),
+        "dpo_recommendation": (
+            "Exporter uniquement une version anonymisée, conserver ce rapport et "
+            "demander une revue DPO/juridique si le risque résiduel dépasse le niveau faible."
+        ),
     }
 
 
@@ -363,7 +453,12 @@ async def get_audit_report_pdf(
 
     anonymized_preview = ""
     try:
-        document = await _get_user_document_or_404(db, document_id, current_user.id)
+        document = await _get_user_document_or_404(
+            db,
+            document_id,
+            current_user.id,
+            permission="audit.read",
+        )
         anonymized_preview = await _get_anonymized_text(db, document)
     except Exception:
         pass
@@ -380,6 +475,13 @@ async def get_audit_report_pdf(
         "created_at": report_data.get("created_at", ""),
         "doc_type": "Auto",
         "status": "ready",
+        "trust": report_data.get("trust") or {},
+        "export_policy": (
+            "Export autorisé"
+            if (risk_info or {}).get("level") in (None, "low", "medium")
+            else "Revue humaine requise"
+        ),
+        "dpo_recommendation": report_data.get("dpo_recommendation", ""),
     }
 
     from app.services.pdf_audit_report_service import generate_audit_pdf
@@ -409,20 +511,8 @@ async def get_document_risk_score(
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    try:
-        doc_uuid = uuid.UUID(document_id)
-    except ValueError as exc:
-        raise http_404("Document introuvable") from exc
-
-    result = await db.execute(
-        select(Document).where(
-            Document.id == doc_uuid,
-            Document.uploaded_by_user_id == current_user.id,
-        )
-    )
-    document = result.scalar_one_or_none()
-    if not document:
-        raise http_404("Document introuvable")
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    doc_uuid = document.id
 
     from app.models.pseudonym_mapping import PseudonymMapping
     pm_result = await db.execute(
@@ -440,7 +530,7 @@ async def get_document_risk_score(
         ent_result = await db.execute(
             select(EntityDetection.entity_type).where(EntityDetection.document_id == doc_uuid)
         )
-        entities = [row[0] for row in ent_result.all()]
+        entities = [str(row[0] or "").upper() for row in ent_result.all()]
         unique_types = set(entities)
         count = len(entities)
 
@@ -467,7 +557,35 @@ async def get_document_risk_score(
     ent_result = await db.execute(
         select(EntityDetection.entity_type).where(EntityDetection.document_id == doc_uuid)
     )
-    unique_types = {row[0] for row in ent_result.all()}
+    entity_types = [str(row[0] or "").upper() for row in ent_result.all()]
+    unique_types = set(entity_types)
+
+    audit_count = 0
+    try:
+        from app.models.audit_log import AuditLog
+
+        audit_count_result = await db.execute(
+            select(func.count()).select_from(AuditLog).where(
+                AuditLog.resource_id == str(document.id)
+            )
+        )
+        audit_count = int(audit_count_result.scalar() or 0)
+    except Exception:
+        audit_count = 0
+
+    anonymized_text = ""
+    with suppress(Exception):
+        anonymized_text = await _get_anonymized_text(db, document)
+
+    trust = compute_document_trust_score(
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        risk_score=risk_score,
+        risk_level=risk_level,
+        human_validated=bool(mapping and mapping.human_validated),
+        detections_count=len(entity_types),
+        audit_events_count=audit_count,
+        has_anonymized_text=bool(anonymized_text),
+    )
 
     recommendations: list[str] = []
     if "CARTE_BANCAIRE" in unique_types or "IBAN" in unique_types:
@@ -494,8 +612,13 @@ async def get_document_risk_score(
         "risk_score": round(risk_score, 1),
         "risk_level": risk_level,
         "human_validated": bool(mapping and mapping.human_validated),
+        "trust_score": trust.trust_score,
+        "ai_readiness_score": trust.ai_readiness_score,
+        "ai_readiness_level": trust.ai_readiness_level,
+        "trust": trust.to_dict(),
         "recommendations": recommendations,
         "entity_types_found": sorted(unique_types) if unique_types else [],
+        "audit_events_count": audit_count,
     }
 
 
@@ -520,15 +643,7 @@ async def get_compliance_report(
     except ValueError as exc:
         raise http_404("Document introuvable") from exc
 
-    result = await db.execute(
-        select(Document).where(
-            Document.id == doc_uuid,
-            Document.uploaded_by_user_id == current_user.id,
-        )
-    )
-    document = result.scalar_one_or_none()
-    if not document:
-        raise http_404("Document introuvable")
+    document = await _get_user_document_or_404(db, document_id, current_user.id)
 
     # Entity counts
     ent_result = await db.execute(
@@ -548,7 +663,7 @@ async def get_compliance_report(
     )
     mapping = pm_result.scalar_one_or_none()
     risk_score_val = (
-        round(mapping.risk_score, 1)
+        round(_risk_score_percent(mapping.risk_score), 1)
         if mapping and mapping.risk_score is not None
         else 0.0
     )
@@ -580,7 +695,7 @@ async def get_compliance_report(
             pass
 
     # Algorithmic conformity score
-    risk_pts = max(0, 60 - int(risk_score_val * 60))
+    risk_pts = max(0, 60 - int((risk_score_val / 100) * 60))
     validation_pts = 20 if human_validated else 0
     entity_pts = 10 if total_entities > 0 else 0
     audit_pts = 10
@@ -596,7 +711,7 @@ async def get_compliance_report(
         grade, status_label, color = "D", "Non conforme", "danger"
 
     actions_required: list[str] = []
-    if risk_score_val > 0.5 and not human_validated:
+    if risk_score_val > 50 and not human_validated:
         actions_required.append("Validation humaine obligatoire avant export (risque élevé).")
     if total_entities == 0:
         actions_required.append("Aucune entité détectée. Vérifiez la qualité du document source.")
@@ -626,6 +741,16 @@ async def get_compliance_report(
     except Exception:
         pass
 
+    trust = compute_document_trust_score(
+        status=document.status.value if hasattr(document.status, "value") else str(document.status),
+        risk_score=risk_score_val,
+        risk_level=risk_level,
+        human_validated=human_validated,
+        detections_count=total_entities,
+        audit_events_count=len(audit_entries),
+        has_anonymized_text=bool(anonymized_preview),
+    )
+
     # Optional LLM narrative report
     llm_report: dict[str, Any] = {
         "summary": "Rapport généré automatiquement.",
@@ -638,7 +763,21 @@ async def get_compliance_report(
     }
     from app.config import get_settings
     settings = get_settings()
-    if settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY and anonymized_preview:
+    if (
+        settings.SENSITIVE_CLIENT_MODE
+        and settings.MISTRAL_ENABLED
+        and settings.MISTRAL_API_KEY
+    ):
+        logger.info(
+            "compliance_llm_skipped_sensitive_client_mode",
+            document_id=str(document.id),
+        )
+    if (
+        not settings.SENSITIVE_CLIENT_MODE
+        and settings.MISTRAL_ENABLED
+        and settings.MISTRAL_API_KEY
+        and anonymized_preview
+    ):
         try:
             prompt = (
                 f"Tu es un DPO. Rédige un rapport de compliance RGPD concis en JSON strict:\n"
@@ -693,7 +832,25 @@ async def get_compliance_report(
             "total_actions": len(audit_entries),
             "last_action_at": audit_entries[0]["timestamp"] if audit_entries else None,
         },
+        "trust": trust.to_dict(),
         "narrative_report": llm_report,
+        "decision_notice": (
+            "Score d'aide à la décision, ne remplace pas une validation juridique/DPO."
+        ),
+        "dpo_recommendation": (
+            "Conserver le rapport d'audit, vérifier la base légale et valider humainement "
+            "avant tout partage externe lorsque le risque est moyen ou élevé."
+        ),
+        "ai_policy": {
+            "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
+            "external_llm_used": bool(
+                not settings.SENSITIVE_CLIENT_MODE
+                and settings.MISTRAL_ENABLED
+                and settings.MISTRAL_API_KEY
+                and anonymized_preview
+                and llm_report.get("summary") != "Rapport généré automatiquement."
+            ),
+        },
         "certifications": {
             "pseudonymisation_separated": True,
             "audit_trail_enabled": True,

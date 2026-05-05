@@ -60,6 +60,19 @@ class QualityDashboardResponse(BaseModel):
             "Null if no document has been validated yet."
         ),
     )
+    ai_readiness_score: int | None = Field(
+        default=None,
+        ge=0,
+        le=100,
+        description=(
+            "Portfolio-level AI readiness score based on processing, validation, "
+            "one-shot quality, accepted golden drafts, and pipeline failures."
+        ),
+    )
+    ai_readiness_level: str | None = Field(
+        default=None,
+        description="ready_for_ai|internal_review|needs_review|not_ready, or null with no data.",
+    )
 
     # ---- Flywheel volume ----
     total_golden_case_drafts: int = Field(default=0, ge=0)

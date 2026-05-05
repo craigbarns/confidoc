@@ -19,7 +19,8 @@ logger = get_logger(__name__)
 @router.get("/feature-flags", summary="Lister les feature flags")
 async def list_feature_flags(current_user: CurrentUser):
     """Retourne l'état des flags principaux (Admin uniquement en prod)."""
-    # Simple check for now, should ideally be is_platform_admin
+    if not getattr(current_user, "is_platform_admin", False):
+        raise HTTPException(status_code=403, detail="Réservé aux administrateurs plateforme")
     flags = ["use_mistral_ocr", "enable_advanced_review", "debug_mode"]
     res = {}
     for f in flags:
@@ -144,14 +145,25 @@ async def get_audit_logs(
     db: DbSession,
     limit: int = 50,
 ) -> list[dict]:
-    """Retourne l'historique complet des actions pour la data room."""
+    """Retourne l'historique d'audit de l'organisation courante."""
     from sqlalchemy import desc
 
     from app.models.audit_log import AuditLog
+    from app.services.rbac_service import require_org_permission
+
+    org_id = getattr(current_user, "org_id", None)
+    if org_id is None:
+        raise HTTPException(status_code=403, detail="Organisation requise")
+    await require_org_permission(
+        db,
+        user_id=current_user.id,
+        org_id=org_id,
+        permission="audit.read",
+    )
 
     result = await db.execute(
         select(AuditLog)
-        .where(AuditLog.user_id == current_user.id)
+        .where(AuditLog.org_id == org_id)
         .order_by(desc(AuditLog.created_at))
         .limit(limit)
     )
@@ -165,7 +177,8 @@ async def get_audit_logs(
             "resource_type": log.resource_type,
             "resource_id": log.resource_id,
             "status_code": log.status_code,
-            "ip_address": log.ip_address,
+            "request_id": log.request_id,
+            "event_hash": log.event_hash,
             "details": log.details,
         }
         for log in logs

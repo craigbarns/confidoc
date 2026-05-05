@@ -2,6 +2,7 @@
 
 import asyncio
 import logging
+import os
 
 from sqlalchemy.ext.asyncio import AsyncSession
 from sqlalchemy.future import select
@@ -34,14 +35,34 @@ SYSTEM_ROLES = [
         "is_system": True,
     },
     {
+        "name": "member",
+        "permissions": [
+            "documents.upload",
+            "documents.read",
+            "documents.raw",
+            "documents.process",
+            "documents.validate",
+            "documents.metadata",
+            "detections.manage",
+            "exports.create",
+            "exports.download",
+            "audit.read",
+        ],
+        "is_system": True,
+    },
+    {
         "name": "operator",
         "permissions": [
             "documents.upload",
             "documents.read",
+            "documents.raw",
             "documents.process",
+            "documents.validate",
+            "documents.metadata",
             "detections.manage",
             "exports.create",
             "exports.download",
+            "audit.read",
         ],
         "is_system": True,
     },
@@ -90,15 +111,27 @@ async def create_system_roles(db: AsyncSession) -> None:
 
 async def create_superadmin(db: AsyncSession) -> None:
     """Crée l'utilisateur superadmin s'il n'existe pas."""
-    email = "admin@confidoc.fr"
+    email = os.getenv("CONFIDOC_SEED_ADMIN_EMAIL", "admin@confidoc.fr")
     result = await db.execute(select(User).where(User.email == email))
     admin = result.scalars().first()
 
     if not admin:
+        password = os.getenv("CONFIDOC_SEED_ADMIN_PASSWORD")
+        app_env = os.getenv("APP_ENV", "development").strip().lower()
+        if not password:
+            if app_env in {"prod", "production"}:
+                raise RuntimeError(
+                    "CONFIDOC_SEED_ADMIN_PASSWORD is required when seeding production."
+                )
+            logger.warning(
+                "CONFIDOC_SEED_ADMIN_PASSWORD absent; using development-only seed password."
+            )
+            password = "Admin123!"
+
         logger.info(f"Création de l'utilisateur admin: {email}")
         user = User(
             email=email,
-            password_hash=get_password_hash("Admin123!"),  # Mot de passe par défaut
+            password_hash=get_password_hash(password),
             first_name="Super",
             last_name="Admin",
             is_active=True,

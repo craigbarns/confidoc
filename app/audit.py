@@ -1,7 +1,7 @@
 """ConfiDoc Backend — Audit log middleware and helpers.
 
-Records every mutating API action (POST/PUT/PATCH/DELETE) to audit_logs table
-for full RGPD traceability.
+Records every mutating API action and sensitive document reads to audit_logs
+for RGPD traceability.
 """
 
 from __future__ import annotations
@@ -13,6 +13,7 @@ from starlette.requests import Request
 from starlette.responses import Response
 
 from app.core.logging import get_logger
+from app.services.audit_trail_service import record_audit_event
 
 logger = get_logger(__name__)
 
@@ -105,7 +106,8 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
     _SENSITIVE_GET_RE = re.compile(
         r"/api/v1/documents/[0-9a-f-]{36}/"
-        r"(preview|export|export-pdf|extracted-text|structured|audit-report)"
+        r"(raw|preview|export|export-pdf|export-fec|extracted-text|structured|"
+        r"audit-report|audit-report-pdf|risk-score|compliance-report)"
     )
 
     async def dispatch(self, request: Request, call_next: RequestResponseEndpoint) -> Response:
@@ -132,7 +134,6 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
     async def _record_audit(self, request: Request, response: Response) -> None:
         from app.core.database import async_session_factory
-        from app.models.audit_log import AuditLog
 
         user_id = _extract_user_id_from_request(request)
         org_id = None
@@ -144,11 +145,15 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
 
         ip_address = request.client.host if request.client else None
         user_agent = request.headers.get("user-agent", "")[:500]
+        request_id = getattr(request.state, "request_id", None)
+        actor_type = "api_key" if getattr(request.state, "auth_type", "") == "api_key" else "user"
 
         async with async_session_factory() as session:
-            session.add(AuditLog(
+            await record_audit_event(
+                session,
                 user_id=user_id,
                 org_id=org_id,
+                actor_type=actor_type,
                 action=action,
                 resource_type=resource_type,
                 resource_id=resource_id,
@@ -157,6 +162,10 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
                 status_code=response.status_code,
                 ip_address=ip_address,
                 user_agent=user_agent,
-                details=None,
-            ))
+                request_id=request_id,
+                details={
+                    "query_present": bool(request.url.query),
+                    "api_key_auth": actor_type == "api_key",
+                },
+            )
             await session.commit()

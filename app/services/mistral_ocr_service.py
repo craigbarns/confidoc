@@ -89,6 +89,16 @@ async def extract_text_with_mistral_ocr(
     """
     settings = get_settings()
     
+    if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True:
+        logger.info("mistral_ocr_skipped", reason="sensitive_client_mode")
+        return {
+            "text": "",
+            "pages": [],
+            "model": "none",
+            "confidence": "low",
+            "error": "Sensitive client mode disables external OCR"
+        }
+
     if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:
         logger.warning("mistral_ocr_skipped", reason="not_configured")
         return {
@@ -137,14 +147,14 @@ async def extract_text_with_mistral_ocr(
             result = resp.json()
             logger.info("mistral_ocr_response", status=resp.status_code, keys=list(result.keys()))
     except httpx.HTTPStatusError as exc:
-        error_body = exc.response.text if exc.response else "no response"
-        logger.error("mistral_ocr_http_error", status=exc.response.status_code if exc.response else 0, error=error_body)
+        status_code = exc.response.status_code if exc.response else 0
+        logger.error("mistral_ocr_http_error", status=status_code)
         return {
             "text": "",
             "pages": [],
             "model": ocr_model,
             "confidence": "low",
-            "error": f"HTTP {exc.response.status_code if exc.response else '?'}: {error_body[:500]}"
+            "error": f"HTTP {status_code or '?'}"
         }
     except Exception as exc:
         logger.error("mistral_ocr_api_error", error=str(exc), error_type=type(exc).__name__)
@@ -201,6 +211,16 @@ async def extract_text_from_file(
         (texte, metadata)
     """
     file_hash = hashlib.sha256(content).hexdigest()
+    settings = get_settings()
+    if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True:
+        logger.info("mistral_ocr_file_skipped", reason="sensitive_client_mode")
+        return "", {
+            "extension": extension,
+            "method": "disabled:sensitive_client_mode",
+            "model": "none",
+            "pages": 0,
+            "error": "Sensitive client mode disables external OCR",
+        }
 
     # ── Cache hit ──
     cached = await _fetch_ocr_from_cache(file_hash)

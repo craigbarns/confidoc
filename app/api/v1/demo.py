@@ -15,6 +15,8 @@ from app.config import get_settings
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
 from app.models.membership import Membership
+from app.services.audit_trail_service import record_document_audit_event
+from app.services.rbac_service import require_org_permission
 from app.services.storage_service import store_bytes
 from app.workers.tasks import (
     anonymize_document_task,
@@ -155,6 +157,13 @@ async def create_demo_document(
     )
     membership = membership_res.scalar_one_or_none()
     org_id = membership.org_id if membership else None
+    if org_id is not None:
+        await require_org_permission(
+            db,
+            user_id=current_user.id,
+            org_id=org_id,
+            permission="documents.upload",
+        )
 
     document = Document(
         org_id=org_id,
@@ -168,7 +177,10 @@ async def create_demo_document(
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
         raw_content=content if storage_backend == "database" else None,
-        tags=["Démonstration"],
+        tags=["Démonstration", "Investor Demo"],
+        client_name="Démo Investisseur",
+        exercice="2025",
+        doc_category="bilan",
     )
     db.add(document)
     await db.commit()
@@ -196,12 +208,57 @@ async def create_demo_document(
         doc_id=doc_id,
         user_id=str(current_user.id),
         background_processing=background_processing,
+        sensitive_client_mode=settings.SENSITIVE_CLIENT_MODE,
     )
+    try:
+        await record_document_audit_event(
+            db,
+            document=document,
+            action="document:demo_investor_loaded",
+            details={
+                "demo_mode": "investor",
+                "synthetic": True,
+                "background_processing": background_processing,
+                "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
+                "workflow": [
+                    "upload",
+                    "ocr",
+                    "anonymization",
+                    "risk_score",
+                    "trust_score",
+                    "ai_readiness",
+                    "audit_trail",
+                    "export",
+                ],
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.warning("demo_document_audit_failed", doc_id=doc_id, error=str(exc))
+        await db.rollback()
 
     return {
         "status": "processing",
         "document_id": doc_id,
         "original_filename": document.original_filename,
+        "size_bytes": document.size_bytes,
+        "demo_mode": "investor",
+        "client_name": document.client_name,
+        "synthetic": True,
         "background_processing": background_processing,
-        "message": "Document de démo créé. Anonymisation en cours en arrière-plan…",
+        "workflow": [
+            "upload",
+            "ocr",
+            "anonymization",
+            "risk_score",
+            "trust_score",
+            "ai_readiness",
+            "audit_trail",
+            "export",
+        ],
+        "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
+        "message": (
+            "Demo Investor chargée : document synthétique, OCR/anonymisation, "
+            "scores et rapport d'audit en préparation."
+        ),
     }
