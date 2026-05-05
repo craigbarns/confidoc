@@ -15,6 +15,7 @@ from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.services.anonymization.detector import deduplicate, detect_entities
 from app.services.anonymization.pseudonymizer import apply_business_pseudonyms
+from app.services.audit_trail_service import record_document_audit_event
 from app.services.entity_registry import EntityRegistry
 from app.services.extraction.service import extract_text_from_file_with_meta
 from app.services.llm_anonymization_service import anonymize_with_llm
@@ -43,6 +44,16 @@ async def build_extraction_ocr(
     except Exception as exc:
         logger.error("extraction_pipeline_failed", doc_id=str(document.id), error=str(exc))
         document.status = DocumentStatus.FAILED
+        try:
+            await record_document_audit_event(
+                db,
+                document=document,
+                action="pipeline:extract_failed",
+                status_code=500,
+                details={"error_type": type(exc).__name__},
+            )
+        except Exception as audit_exc:
+            logger.warning("audit_extract_failure_event_failed", error=str(audit_exc))
         await db.commit()
         raise ValueError(f"Échec de l'extraction : {str(exc)}") from exc
 
@@ -61,6 +72,20 @@ async def build_extraction_ocr(
     )
     db.add(original_version)
     document.status = DocumentStatus.EXTRACTED
+    try:
+        await record_document_audit_event(
+            db,
+            document=document,
+            action="pipeline:extract",
+            details={
+                "method": extraction_meta.get("method"),
+                "provider": extraction_meta.get("provider"),
+                "pages": extraction_meta.get("pages"),
+                "ocr_chars": len(original_text),
+            },
+        )
+    except Exception as exc:
+        logger.warning("audit_extract_event_failed", doc_id=str(document.id), error=str(exc))
     await db.flush()
 
     return original_text, extraction_meta
@@ -155,6 +180,21 @@ async def build_anonymization_llm(
         await db.execute(insert(EntityDetection), rows)
 
     document.status = DocumentStatus.READY
+    try:
+        await record_document_audit_event(
+            db,
+            document=document,
+            action="pipeline:anonymize",
+            details={
+                "method": method,
+                "profile": profile,
+                "document_type": document_type,
+                "detections_count": len(detections),
+                "entity_summary": registry.export_entity_summary(),
+            },
+        )
+    except Exception as exc:
+        logger.warning("audit_anonymize_event_failed", doc_id=str(document.id), error=str(exc))
     await db.flush()
 
     # RAG embedding

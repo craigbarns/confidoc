@@ -17,6 +17,10 @@ logger = get_logger(__name__)
 _MAX_VALIDATION_ATTEMPTS = 3
 
 
+def _sensitive_mode_enabled(settings: Any) -> bool:
+    return getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True
+
+
 def _extract_json_object(raw_text: str) -> dict[str, Any] | None:
     if not raw_text:
         return None
@@ -44,6 +48,9 @@ def _format_validation_error(exc: ValidationError) -> str:
 
 async def _chat_completion(prompt: str, *, temperature: float) -> str:
     settings = get_settings()
+    if _sensitive_mode_enabled(settings):
+        logger.info("mistral_chat_blocked_sensitive_mode", prompt_length=len(prompt))
+        raise RuntimeError("SENSITIVE_CLIENT_MODE=true")
     if not settings.MISTRAL_ENABLED:
         raise RuntimeError("MISTRAL_ENABLED=false")
     if not settings.MISTRAL_API_KEY:
@@ -222,6 +229,10 @@ async def stream_mistral_response(
 ):
     """Async generator — yield text chunks from a streaming Mistral completion."""
     settings = get_settings()
+    if _sensitive_mode_enabled(settings):
+        logger.info("mistral_stream_blocked_sensitive_mode", prompt_length=len(user_content))
+        yield "Mode client sensible actif : IA externe désactivée."
+        return
     if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:
         yield "Mode streaming non disponible (MISTRAL_ENABLED=false ou clé manquante)."
         return
@@ -262,8 +273,8 @@ async def stream_mistral_response(
                 json=body,
             ) as resp:
                 if resp.status_code != 200:
-                    error_body = await resp.aread()
-                    yield f"[Erreur Mistral {resp.status_code}: {error_body.decode(errors='replace')[:200]}]"
+                    await resp.aread()
+                    yield f"[Erreur Mistral {resp.status_code}: réponse fournisseur indisponible]"
                     return
                 async for line in resp.aiter_lines():
                     if not line.startswith("data: "):

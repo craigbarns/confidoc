@@ -233,8 +233,10 @@ def _draw_cover_page(
     items = [
         "Informations du document analyse",
         "Score de risque de reidentification",
+        "Trust Score et AI Readiness",
         "Entites personnelles detectees et masquees",
         "Journal d'audit horodate (tracabilite RGPD)",
+        "Recommandation DPO et statut d'export",
         "Declaration de conformite RGPD",
     ]
     y_item = 155.0
@@ -301,7 +303,8 @@ def generate_audit_pdf(
     pdf.section_title("2. Score de risque de reidentification")
 
     if risk_info:
-        score = float(risk_info.get("score") or 0)
+        score_raw = float(risk_info.get("score") or 0)
+        score = score_raw / 100 if score_raw > 1 else score_raw
         level = str(risk_info.get("level") or "low")
         color = _RISK_COLORS.get(level, _GRAY)
         label = _RISK_LABELS.get(level, level.upper())
@@ -337,7 +340,8 @@ def generate_audit_pdf(
             pdf.multi_cell(0, 5, recommendation)
             pdf.ln(2)
 
-        pdf.kv_row("Validation humaine :", "Oui" if risk_info.get("human_validated") else "Non")
+        validation_label = "Oui" if risk_info.get("human_validated") else "Non - revue recommandee"
+        pdf.kv_row("Validation humaine :", validation_label)
         if risk_info.get("validated_at"):
             pdf.kv_row("Date validation :", _fmt_date(str(risk_info["validated_at"])))
         if risk_info.get("expires_at"):
@@ -346,6 +350,23 @@ def generate_audit_pdf(
         pdf.set_font("Helvetica", "I", 9)
         pdf.set_text_color(*_GRAY)
         pdf.cell(0, 6, "Aucune evaluation de risque disponible.", new_x="LMARGIN", new_y="NEXT")
+
+    # 2b. Trust / AI readiness
+    trust_info = document_info.get("trust")
+    if isinstance(trust_info, dict):
+        pdf.section_title("2b. Trust Score et AI Readiness")
+        pdf.kv_row("Trust Score :", f"{trust_info.get('trust_score', '--')}/100")
+        pdf.kv_row("AI Readiness :", f"{trust_info.get('ai_readiness_score', '--')}/100")
+        pdf.kv_row("Niveau readiness :", str(trust_info.get("ai_readiness_level") or "--"))
+        export_label = str(document_info.get("export_policy") or "--")
+        pdf.kv_row("Statut export :", export_label)
+        dpo = str(
+            document_info.get("dpo_recommendation")
+            or "Revue DPO recommandee avant diffusion externe si le risque n'est pas faible."
+        )
+        pdf.set_font("Helvetica", "", 9)
+        pdf.set_text_color(80, 80, 100)
+        pdf.multi_cell(0, 5, dpo)
 
     # 3. Entity summary
     pdf.section_title("3. Entites detectees")
@@ -512,6 +533,7 @@ def generate_audit_pdf(
     pdf.set_xy(20, notice_y + 10)
     pdf.multi_cell(
         165, 4,
+        "Score d'aide a la decision, ne remplace pas une validation juridique/DPO. "
         "ConfiDoc aide a la conformite RGPD mais ne constitue pas un avis juridique. "
         "Une analyse de risque (AIPD) specifique peut etre necessaire selon le contexte.",
     )

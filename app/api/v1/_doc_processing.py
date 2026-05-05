@@ -29,6 +29,7 @@ from app.schemas.document import (
     StructuredDocumentResponse,
     ValidateDocumentRequest,
 )
+from app.services.audit_trail_service import record_document_audit_event
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -42,7 +43,12 @@ logger = get_logger(__name__)
 async def document_status(
     document_id: str, current_user: CurrentUser, db: DbSession
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.read",
+    )
 
     result = await db.execute(
         select(DocumentVersion).where(
@@ -99,7 +105,12 @@ async def extract_document(
     db: DbSession,
     background_tasks: BackgroundTasks,
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.process",
+    )
 
     document.status = DocumentStatus.PROCESSING
     await db.commit()
@@ -138,7 +149,12 @@ async def get_extracted_text(
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.raw",
+    )
 
     result = await db.execute(
         select(DocumentVersion).where(
@@ -172,7 +188,10 @@ async def anonymize_document(
     background_tasks: BackgroundTasks,
     auto_extract: bool = Query(default=True),
     use_llm: bool = Query(default=False),
-    profile: str = Query(default="moderate", description="moderate | strict | internal_review | external_sharing"),
+    profile: str = Query(
+        default="moderate",
+        description="moderate | strict | internal_review | external_sharing",
+    ),
     document_type: str = Query(default="auto"),
     mode: str = Query(default="pseudonymization", description="pseudonymization | anonymization"),
 ) -> dict:
@@ -184,7 +203,12 @@ async def anonymize_document(
         profile = "strict"
         mode = "anonymization"
 
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.process",
+    )
 
     document.status = DocumentStatus.PROCESSING
     await db.commit()
@@ -239,7 +263,12 @@ async def process_document_legacy(
     profile: str = Query(default="moderate"),
     document_type: str = Query(default="auto"),
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.process",
+    )
     document.status = DocumentStatus.PROCESSING
     await db.commit()
     from app.workers.tasks import (
@@ -284,7 +313,12 @@ async def process_document_legacy(
 async def preview_document(
     document_id: str, current_user: CurrentUser, db: DbSession
 ) -> DocumentPreviewResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.read",
+    )
 
     preview_result = await db.execute(
         select(DocumentVersion).where(
@@ -326,7 +360,12 @@ async def get_structured_document(
     db: DbSession,
     include_text: bool = Query(default=True),
 ) -> StructuredDocumentResponse:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.read",
+    )
     anonymized_text = await _get_anonymized_text(db, document)
 
     det_result = await db.execute(
@@ -376,9 +415,14 @@ async def validate_document(
     current_user: CurrentUser,
     db: DbSession,
     background_tasks: BackgroundTasks,
-    args: ValidateDocumentRequest = Body(default_factory=ValidateDocumentRequest),
+    args: ValidateDocumentRequest = Body(default_factory=ValidateDocumentRequest),  # noqa: B008
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.validate",
+    )
 
     preview_result = await db.execute(
         select(DocumentVersion).where(
@@ -404,15 +448,28 @@ async def validate_document(
         version_type=DocumentVersionType.FINAL_ANONYMIZED,
         content_text=final_text,
     ))
+    try:
+        await record_document_audit_event(
+            db,
+            document=document,
+            action="document:validated",
+            details={
+                "final_chars": len(final_text or ""),
+                "has_corrected_data": bool(args.corrected_data),
+                "doc_type": args.doc_type,
+            },
+        )
+    except Exception as exc:
+        logger.warning("audit_validate_event_failed", doc_id=str(document.id), error=str(exc))
     await db.commit()
 
     # --- Auto-Golden Webhook ---
     if args.corrected_data and args.doc_type:
         try:
-            import os
             import json
+            import os
+            from datetime import UTC, datetime
             from pathlib import Path
-            from datetime import datetime, UTC
 
             root_dir = Path(os.getcwd())
             draft_dir = (
@@ -533,7 +590,12 @@ async def approve_export(
     current_user: CurrentUser,
     db: DbSession,
 ) -> dict:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="exports.create",
+    )
 
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
@@ -551,6 +613,22 @@ async def approve_export(
         mapping.human_validated = True
         mapping.validated_by_user_id = current_user.id
         mapping.validated_at = datetime.now(UTC)
+        try:
+            await record_document_audit_event(
+                db,
+                document=document,
+                action="document:export_approved",
+                details={
+                    "risk_level": mapping.risk_level,
+                    "risk_score": mapping.risk_score,
+                },
+            )
+        except Exception as audit_exc:
+            logger.warning(
+                "audit_export_approval_event_failed",
+                doc_id=str(document.id),
+                error=str(audit_exc),
+            )
         await db.commit()
     except Exception as exc:
         if hasattr(exc, "status_code"):

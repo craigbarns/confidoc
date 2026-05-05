@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Health check & readiness endpoints."""
 
 import asyncio
+import os
 import time
 from datetime import UTC, datetime
 from typing import Any
@@ -22,6 +23,12 @@ _celery_probe_cache: dict[str, Any] = {
     "checked_at": 0.0,
     "payload": None,
 }
+
+
+def _safe_dependency_error(exc: Exception, *, production: bool) -> str:
+    if production:
+        return type(exc).__name__
+    return str(exc)
 
 
 def _inspect_celery_workers() -> dict[str, Any]:
@@ -55,7 +62,11 @@ async def _check_celery_workers() -> dict[str, Any]:
             timeout=_CELERY_PROBE_TIMEOUT_SECONDS,
         )
     except Exception as exc:
-        payload = {"status": "warning", "detail": str(exc)}
+        settings = get_settings()
+        payload = {
+            "status": "warning",
+            "detail": _safe_dependency_error(exc, production=settings.is_production),
+        }
 
     _celery_probe_cache["checked_at"] = now
     _celery_probe_cache["payload"] = payload
@@ -70,12 +81,15 @@ async def _check_celery_workers() -> dict[str, Any]:
 )
 async def root() -> dict:
     """Endpoint racine pour éviter le 404 sur le domaine principal."""
+    settings = get_settings()
     return {
         "service": "confidoc-backend",
         "status": "ok",
         "health": "/health",
+        "readiness": "/readiness",
+        "version": "/version",
         "ui": "/ui",
-        "release": "v8.2-mistral-ocr",
+        "release": settings.APP_VERSION,
     }
 
 
@@ -87,10 +101,47 @@ async def root() -> dict:
 )
 async def health_check() -> dict:
     """Liveness probe — l'application répond."""
+    settings = get_settings()
     return {
         "status": "healthy",
         "service": "confidoc-backend",
-        "release": "v8.2-mistral-ocr",
+        "release": settings.APP_VERSION,
+    }
+
+
+@router.get(
+    "/version",
+    status_code=status.HTTP_200_OK,
+    summary="Version and Railway build metadata",
+    description="Expose des métadonnées de build non sensibles pour support et observabilité.",
+)
+async def version_check() -> dict:
+    """Build metadata for Railway/Vercel-style deployments."""
+    settings = get_settings()
+    return {
+        "service": "confidoc-backend",
+        "app_name": settings.APP_NAME,
+        "version": settings.APP_VERSION,
+        "environment": settings.APP_ENV,
+        "railway": {
+            "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID"),
+            "environment_id": os.getenv("RAILWAY_ENVIRONMENT_ID"),
+            "service_id": os.getenv("RAILWAY_SERVICE_ID"),
+            "git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+            "git_branch": os.getenv("RAILWAY_GIT_BRANCH"),
+        },
+        "build": {
+            "build_version": os.getenv("BUILD_VERSION") or os.getenv("SOURCE_VERSION"),
+            "build_time": os.getenv("BUILD_TIME"),
+        },
+        "ai_policy": {
+            "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
+            "external_ai_enabled": bool(
+                not settings.SENSITIVE_CLIENT_MODE
+                and settings.MISTRAL_ENABLED
+                and settings.MISTRAL_API_KEY
+            ),
+        },
     }
 
 
@@ -120,7 +171,10 @@ async def readiness_check() -> JSONResponse:
         }
     except Exception as e:
         logger.error("database_readiness_failed", error=str(e))
-        checks["database"] = {"status": "error", "detail": str(e)}
+        checks["database"] = {
+            "status": "error",
+            "detail": _safe_dependency_error(e, production=settings.is_production),
+        }
 
     # ── Redis (critique) ──
     try:
@@ -136,7 +190,10 @@ async def readiness_check() -> JSONResponse:
         }
     except Exception as e:
         logger.error("redis_readiness_failed", error=str(e))
-        checks["redis"] = {"status": "error", "detail": str(e)}
+        checks["redis"] = {
+            "status": "error",
+            "detail": _safe_dependency_error(e, production=settings.is_production),
+        }
 
     # ── Celery workers (informationnel, non bloquant) ──
     checks["celery"] = await _check_celery_workers()
@@ -156,7 +213,10 @@ async def readiness_check() -> JSONResponse:
             checks["storage"] = {"status": "ok"}
         except Exception as e:
             logger.error("minio_readiness_failed", error=str(e))
-            checks["storage"] = {"status": "error", "detail": str(e)}
+            checks["storage"] = {
+                "status": "error",
+                "detail": _safe_dependency_error(e, production=settings.is_production),
+            }
     else:
         checks["storage"] = {"status": "skipped", "detail": f"backend={settings.STORAGE_BACKEND}"}
 

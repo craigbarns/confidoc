@@ -1,14 +1,12 @@
 """ConfiDoc Backend — Review Agent LLM Helpers with Circuit Breaker & Cache."""
 
 import hashlib
-import json
 import time
-from typing import Any, Dict
+from typing import Any
 
 import httpx
 
 from app.config import get_settings
-from app.core.json_utils import extract_json as parse_json
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
@@ -29,7 +27,7 @@ class ReviewAgentTransientError(RuntimeError):
 
 # ── Simple In-Memory Cache (L1) ───────────────────────────────────────
 # In production, this should be backed by Redis (L2).
-_llm_cache: Dict[str, Dict[str, Any]] = {}
+_llm_cache: dict[str, dict[str, Any]] = {}
 _CACHE_TTL = 3600 * 24 * 7  # 7 days
 
 
@@ -74,6 +72,15 @@ _mistral_breaker = CircuitBreaker()
 
 async def llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) -> str:
     settings = get_settings()
+    if (
+        getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True
+        and not settings.OLLAMA_ENABLED
+    ):
+        logger.info("review_llm_skipped_sensitive_client_mode")
+        raise ReviewAgentTransientError(
+            "Mode client sensible actif : IA externe désactivée.",
+            code="external_ai_disabled",
+        )
     
     # 1. Check Cache
     cache_key = _get_cache_key(prompt, system, settings.MISTRAL_MODEL)
@@ -83,7 +90,11 @@ async def llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) -
         return cached["content"]
 
     # 2. Try Mistral with Circuit Breaker
-    if _mistral_breaker.can_proceed() and settings.MISTRAL_ENABLED:
+    if (
+        getattr(settings, "SENSITIVE_CLIENT_MODE", False) is not True
+        and _mistral_breaker.can_proceed()
+        and settings.MISTRAL_ENABLED
+    ):
         try:
             content = await _call_mistral(prompt, system, temperature)
             _mistral_breaker.record_success()

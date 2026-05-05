@@ -7,9 +7,10 @@ from __future__ import annotations
 
 import uuid
 from datetime import UTC, datetime
+from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Response, status
-from sqlalchemy import delete, desc, func, select
+from sqlalchemy import delete, desc, func, or_, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import (
@@ -22,9 +23,17 @@ from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion
 from app.models.entity_detection import EntityDetection
 from app.schemas.document import DocumentResponse
+from app.services.rbac_service import require_document_permission, user_active_org_ids
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _safe_content_disposition_filename(filename: str | None) -> str:
+    safe = (filename or "document").replace("\r", " ").replace("\n", " ").replace('"', "")
+    safe = safe.strip() or "document"
+    ascii_safe = safe.encode("ascii", "ignore").decode("ascii") or "document"
+    return f'inline; filename="{ascii_safe}"; filename*=UTF-8\'\'{quote(safe)}'
 
 
 @router.get(
@@ -52,24 +61,42 @@ async def list_documents(
     client_norm = _normalize_client_name(client_name)
     q_norm = _normalize_client_name(q)
     status_norm = _normalize_client_name(status_filter)
+    active_org_ids = await user_active_org_ids(db, current_user.id)
+    visibility_filters = [Document.uploaded_by_user_id == current_user.id]
+    if active_org_ids:
+        visibility_filters.append(Document.org_id.in_(active_org_ids))
+    visibility_clause = or_(*visibility_filters)
 
     # ── Full-Text Search (FTS) logic ──
     if q_norm:
         from app.models.document_version import DocumentVersion, DocumentVersionType
-        ts_query = func.plainto_tsquery('french', q_norm)
-        snippet_expr = func.ts_headline('french', DocumentVersion.content_text, ts_query, 'MaxWords=15, MinWords=5').label('snippet')
-        
-        query = select(Document, snippet_expr).join(DocumentVersion, Document.id == DocumentVersion.document_id).where(
-            Document.uploaded_by_user_id == current_user.id,
-            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
-            func.to_tsvector('french', DocumentVersion.content_text).op('@@')(ts_query) | 
-            Document.original_filename.ilike(f"%{q_norm}%")
+
+        ts_query = func.plainto_tsquery("french", q_norm)
+        snippet_expr = func.ts_headline(
+            "french",
+            DocumentVersion.content_text,
+            ts_query,
+            "MaxWords=15, MinWords=5",
+        ).label("snippet")
+
+        query = (
+            select(Document, snippet_expr)
+            .join(DocumentVersion, Document.id == DocumentVersion.document_id)
+            .where(
+                visibility_clause,
+                DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+                func.to_tsvector("french", DocumentVersion.content_text).op("@@")(ts_query)
+                | Document.original_filename.ilike(f"%{q_norm}%"),
+            )
         )
     else:
-        query = select(Document).where(Document.uploaded_by_user_id == current_user.id)
+        query = select(Document).where(visibility_clause)
 
     if not include_deleted:
         query = query.where(Document.is_deleted.is_(False))
+
+    if client_norm:
+        query = query.where(Document.client_name.ilike(f"%{client_norm}%"))
 
     if status_norm and status_norm != "deleted":
         if status_norm == "ready":
@@ -99,7 +126,7 @@ async def list_documents(
     query = query.order_by(desc(Document.created_at)).offset(offset).limit(limit)
 
     result = await db.execute(query)
-    
+
     if q_norm:
         documents_all = []
         for row in result.all():
@@ -109,10 +136,10 @@ async def list_documents(
     else:
         documents_all = list(result.scalars().all())
 
-    # Filter by client_name (tags) in memory for now 
-    # (Removed for brevity, we assume tags are handled via FTS or client-side, 
+    # Filter by client_name (tags) in memory for now
+    # (Removed for brevity, we assume tags are handled via FTS or client-side,
     # but we can add back the loop if needed.)
-    
+
     return documents_all
 
 
@@ -127,11 +154,17 @@ async def list_clients(
     db: DbSession,
     include_deleted: bool = Query(default=False),
 ) -> list[str]:
+    active_org_ids = await user_active_org_ids(db, current_user.id)
+    visibility_filters = [Document.uploaded_by_user_id == current_user.id]
+    if active_org_ids:
+        visibility_filters.append(Document.org_id.in_(active_org_ids))
+    visibility_clause = or_(*visibility_filters)
+
     # Primary: collect from client_name column
     cn_query = (
         select(Document.client_name)
         .where(
-            Document.uploaded_by_user_id == current_user.id,
+            visibility_clause,
             Document.client_name.isnot(None),
         )
         .distinct()
@@ -145,7 +178,7 @@ async def list_clients(
     fb_query = (
         select(Document)
         .where(
-            Document.uploaded_by_user_id == current_user.id,
+            visibility_clause,
             Document.client_name.is_(None),
             Document.tags.isnot(None),
         )
@@ -182,10 +215,14 @@ async def list_trash(
     limit: int = Query(default=50, ge=1, le=200),
     offset: int = Query(default=0, ge=0),
 ) -> dict:
+    active_org_ids = await user_active_org_ids(db, current_user.id)
+    visibility_filters = [Document.uploaded_by_user_id == current_user.id]
+    if active_org_ids:
+        visibility_filters.append(Document.org_id.in_(active_org_ids))
     result = await db.execute(
         select(Document)
         .where(
-            Document.uploaded_by_user_id == current_user.id,
+            or_(*visibility_filters),
             Document.is_deleted.is_(True),
         )
         .order_by(desc(Document.deleted_at))
@@ -198,7 +235,7 @@ async def list_trash(
         select(func.count())
         .select_from(Document)
         .where(
-            Document.uploaded_by_user_id == current_user.id,
+            or_(*visibility_filters),
             Document.is_deleted.is_(True),
         )
     )
@@ -242,6 +279,12 @@ async def delete_all_my_documents(
     docs = list(result.scalars().all())
     now = datetime.now(UTC)
     for doc in docs:
+        await require_document_permission(
+            db,
+            user_id=current_user.id,
+            document=doc,
+            permission="documents.delete",
+        )
         doc.is_deleted = True
         doc.deleted_at = now
     await db.commit()
@@ -271,8 +314,13 @@ async def get_document_raw(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Response:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
-    
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.raw",
+    )
+
     try:
         from app.services.storage_service import read_document_bytes
         content = read_document_bytes(document)
@@ -280,7 +328,9 @@ async def get_document_raw(
             content=content,
             media_type=document.content_type or "application/octet-stream",
             headers={
-                "Content-Disposition": f'inline; filename="{document.original_filename}"'
+                "Content-Disposition": _safe_content_disposition_filename(
+                    document.original_filename
+                )
             }
         )
     except Exception as exc:
@@ -299,7 +349,12 @@ async def delete_document(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Response:
-    document = await _get_user_document_or_404(db, document_id, current_user.id)
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.delete",
+    )
     document.is_deleted = True
     document.deleted_at = datetime.now(UTC)
     await db.commit()
@@ -321,16 +376,26 @@ async def restore_document(
     except ValueError as exc:
         raise http_404("Document introuvable") from exc
 
+    active_org_ids = await user_active_org_ids(db, current_user.id)
+    visibility_filters = [Document.uploaded_by_user_id == current_user.id]
+    if active_org_ids:
+        visibility_filters.append(Document.org_id.in_(active_org_ids))
     result = await db.execute(
         select(Document).where(
             Document.id == doc_uuid,
-            Document.uploaded_by_user_id == current_user.id,
+            or_(*visibility_filters),
             Document.is_deleted.is_(True),
         )
     )
     document = result.scalar_one_or_none()
     if not document:
         raise http_404("Document non trouvé dans la corbeille")
+    await require_document_permission(
+        db,
+        user_id=current_user.id,
+        document=document,
+        permission="documents.delete",
+    )
 
     document.is_deleted = False
     document.deleted_at = None
@@ -358,15 +423,25 @@ async def permanent_delete_document(
     except ValueError as exc:
         raise http_404("Document introuvable") from exc
 
+    active_org_ids = await user_active_org_ids(db, current_user.id)
+    visibility_filters = [Document.uploaded_by_user_id == current_user.id]
+    if active_org_ids:
+        visibility_filters.append(Document.org_id.in_(active_org_ids))
     result = await db.execute(
         select(Document).where(
             Document.id == doc_uuid,
-            Document.uploaded_by_user_id == current_user.id,
+            or_(*visibility_filters),
         )
     )
     document = result.scalar_one_or_none()
     if not document:
         raise http_404("Document introuvable")
+    await require_document_permission(
+        db,
+        user_id=current_user.id,
+        document=document,
+        permission="documents.delete",
+    )
 
     _storage_backend = document.storage_backend
     _storage_key = document.storage_key
@@ -388,7 +463,7 @@ async def permanent_delete_document(
             from app.services.storage_service import delete_bytes
 
             delete_bytes(_storage_backend, _storage_key)
-    except (IOError, OSError) as exc:
+    except OSError as exc:
         logger.warning("permanent_delete_storage_failed", doc_id=_doc_id_str, error=str(exc))
 
     return Response(status_code=status.HTTP_204_NO_CONTENT)

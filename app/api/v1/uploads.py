@@ -29,17 +29,19 @@ from app.core.exceptions import http_400, http_404, http_413
 from app.core.logging import get_logger
 from app.core.sandbox import SandboxError, scan_file_for_malware
 from app.models.client import Client
-from app.models.dossier import Dossier
 from app.models.document import Document, DocumentStatus
+from app.models.dossier import Dossier
 from app.models.membership import Membership
 from app.rate_limit import limiter
 from app.services.anonymization_service import HAS_OCR
+from app.services.audit_trail_service import record_document_audit_event
 from app.services.doc_metadata_service import build_metadata_suggestions
 from app.services.integration_service import (
     build_request_hash,
     get_idempotency_replay,
     store_idempotency_response,
 )
+from app.services.rbac_service import require_org_permission
 from app.services.storage_service import store_file
 from app.workers.tasks import (
     anonymize_document_task,
@@ -84,11 +86,14 @@ async def upload_document(
     background_tasks: BackgroundTasks,
     file: UploadFile = File(...),  # noqa: B008
     auto_anonymize: bool = Query(default=True),
-    profile: str = Query(default="moderate", description="moderate|strict|internal_review|external_sharing"),  # noqa: B008
+    profile: str = Query(
+        default="moderate",
+        description="moderate|strict|internal_review|external_sharing",
+    ),  # noqa: B008
     document_type: str = Query(default="auto"),
     client_name: str = Query(default=""),
-    client_id: uuid.UUID | None = Query(default=None),
-    dossier_id: uuid.UUID | None = Query(default=None),
+    client_id: uuid.UUID | None = Query(default=None),  # noqa: B008
+    dossier_id: uuid.UUID | None = Query(default=None),  # noqa: B008
     idempotency_key: str | None = Header(default=None, alias="Idempotency-Key"),
     exercice: str = Query(default=""),
     doc_category: str = Query(default=""),
@@ -224,6 +229,8 @@ async def _upload_document_body(
     """Corps métier upload (utilisant le fichier temporaire)."""
     org_id = org_id_override
     if org_id is None:
+        org_id = getattr(current_user, "org_id", None)
+    if org_id is None:
         membership_res = await db.execute(
             select(Membership).where(
                 Membership.user_id == current_user.id,
@@ -232,6 +239,15 @@ async def _upload_document_body(
         )
         membership = membership_res.scalar_one_or_none()
         org_id = membership.org_id if membership else None
+    if org_id is None and settings.is_production:
+        raise http_400("Organisation requise pour uploader un document.")
+    if org_id is not None:
+        await require_org_permission(
+            db,
+            user_id=current_user.id,
+            org_id=org_id,
+            permission="documents.upload",
+        )
 
     # Resolve Client
     resolved_client_id = client_id
@@ -308,7 +324,11 @@ async def _upload_document_body(
         )
         dossier = dossier_res.scalar_one_or_none()
         if not dossier:
-            dossier = Dossier(client_id=resolved_client_id, exercice=resolved_exercice, org_id=org_id)
+            dossier = Dossier(
+                client_id=resolved_client_id,
+                exercice=resolved_exercice,
+                org_id=org_id,
+            )
             db.add(dossier)
             await db.flush()
         resolved_dossier_id = dossier.id
@@ -346,6 +366,27 @@ async def _upload_document_body(
     db.add(document)
     await db.commit()
     await db.refresh(document)
+    try:
+        await record_document_audit_event(
+            db,
+            document=document,
+            action="document:uploaded",
+            details={
+                "extension": extension,
+                "size_bytes": size,
+                "storage_backend": storage_backend,
+                "auto_anonymize": auto_anonymize,
+                "profile": profile,
+                "document_type": document_type,
+                "has_client_id": resolved_client_id is not None,
+                "has_dossier_id": resolved_dossier_id is not None,
+                "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
+            },
+        )
+        await db.commit()
+    except Exception as exc:
+        logger.warning("upload_audit_event_failed", doc_id=str(document.id), error=str(exc))
+        await db.rollback()
 
     logger.info(
         "document_uploaded",
@@ -565,13 +606,13 @@ async def upload_batch(
                     )
                     batch_results.append(result)
                     succeeded += 1
-                except Exception as exc:
+                except Exception:
                     await db.rollback()
                     failed += 1
                     batch_results.append({
                         "status": "error",
                         "original_filename": item["filename"],
-                        "error": str(exc)[:500],
+                        "error": "Upload impossible pour ce fichier.",
                     })
 
             final_result = {
@@ -664,7 +705,7 @@ async def upload_batch(
             results.append({
                 "status": "error",
                 "original_filename": filename,
-                "error": str(exc)[:500],
+                "error": "Upload impossible pour ce fichier.",
             })
             failed += 1
         finally:

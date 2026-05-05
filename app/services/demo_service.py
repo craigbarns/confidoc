@@ -15,6 +15,7 @@ from app.core.logging import get_logger
 from app.services.anonymization_service import anonymize_text, classify_document_type
 from app.services.extraction.service import extract_text_from_file_with_meta
 from app.services.reidentification_risk_service import analyze_reidentification_risk
+from app.services.trust_score_service import compute_document_trust_score
 
 logger = get_logger(__name__)
 
@@ -82,16 +83,24 @@ def _build_demo_proof(result: dict[str, Any]) -> dict[str, Any]:
     )
 
     return {
+        "demo_mode": "investor",
         "title": "Preuve DPO ConfiDoc",
         "generated_at": datetime.now(UTC).isoformat(),
         "export_policy": policy,
         "residual_signals_count": signal_count,
+        "decision_notice": (
+            "Score d'aide à la décision, ne remplace pas une validation juridique/DPO."
+        ),
+        "dpo_recommendation": (
+            "Valider le contexte de diffusion avec le DPO avant partage externe."
+        ),
         "control_points": [
             "Document de demonstration traite en lecture seule, sans upload utilisateur.",
             "Extraction texte puis anonymisation avant tout usage IA.",
             "Entites sensibles remplacees par des tokens explicites et auditables.",
             "Score de risque de reidentification calcule avant export.",
             "Rapport PDF generable pour tracer la methode, les entites et la politique d'export.",
+            "Score d'aide a la decision, ne remplace pas une validation juridique/DPO.",
         ],
     }
 
@@ -137,6 +146,20 @@ def _build_mock_demo_result(reason: str | None = None) -> dict[str, Any]:
     ]
     result = {
         "status": "ready",
+        "demo_mode": "investor",
+        "workflow_steps": [
+            "upload",
+            "ocr",
+            "entity_detection",
+            "anonymization",
+            "risk_score",
+            "trust_score",
+            "ai_readiness",
+            "audit_trail",
+            "export",
+        ],
+        "ocr_status": "ready",
+        "anonymization_status": "ready",
         "source": "mock_demo_fallback",
         "is_mock": True,
         "filename": "demo_doc.pdf",
@@ -191,7 +214,27 @@ def _build_mock_demo_result(reason: str | None = None) -> dict[str, Any]:
             "Tokens stables pour conserver le sens metier.",
             "Score de risque calcule avant export.",
         ],
+        "human_validation": {
+            "status": "review_recommended",
+            "label": "Revue humaine recommandée avant partage externe",
+        },
+        "decision_notice": (
+            "Score d'aide à la décision, ne remplace pas une validation juridique/DPO."
+        ),
     }
+    trust = compute_document_trust_score(
+        status="ready",
+        risk_score=result["risk"]["score"],
+        risk_level=result["risk"]["level"],
+        human_validated=False,
+        detections_count=len(detections),
+        audit_events_count=4,
+        has_anonymized_text=True,
+    )
+    result["trust"] = trust.to_dict()
+    result["trust_score"] = trust.trust_score
+    result["ai_readiness_score"] = trust.ai_readiness_score
+    result["ai_readiness_level"] = trust.ai_readiness_level
     if reason:
         result["fallback_reason"] = reason
     result["proof"] = _build_demo_proof(result)
@@ -232,6 +275,20 @@ async def _compute_demo_result() -> dict[str, Any]:
 
     result = {
         "status": "ready",
+        "demo_mode": "investor",
+        "workflow_steps": [
+            "upload",
+            "ocr",
+            "entity_detection",
+            "anonymization",
+            "risk_score",
+            "trust_score",
+            "ai_readiness",
+            "audit_trail",
+            "export",
+        ],
+        "ocr_status": "ready",
+        "anonymization_status": "ready",
         "source": "bundled_demo_doc",
         "is_mock": False,
         "filename": DEMO_DOC_PATH.name,
@@ -258,7 +315,27 @@ async def _compute_demo_result() -> dict[str, Any]:
             "Tokens stables pour conserver le sens metier.",
             "Score de risque calcule avant export.",
         ],
+        "human_validation": {
+            "status": "review_recommended",
+            "label": "Revue humaine recommandée avant partage externe",
+        },
+        "decision_notice": (
+            "Score d'aide à la décision, ne remplace pas une validation juridique/DPO."
+        ),
     }
+    trust = compute_document_trust_score(
+        status="ready",
+        risk_score=risk_payload.get("score"),
+        risk_level=str(risk_payload.get("level") or "low"),
+        human_validated=False,
+        detections_count=len(detections),
+        audit_events_count=4,
+        has_anonymized_text=bool(anonymized_text),
+    )
+    result["trust"] = trust.to_dict()
+    result["trust_score"] = trust.trust_score
+    result["ai_readiness_score"] = trust.ai_readiness_score
+    result["ai_readiness_level"] = trust.ai_readiness_level
     result["proof"] = _build_demo_proof(result)
     return result
 
@@ -341,6 +418,9 @@ def build_demo_audit_pdf(result: dict[str, Any]) -> bytes:
         "created_at": generated_at,
         "doc_type": str(result.get("document_type") or "auto"),
         "status": "demo_ready",
+        "trust": result.get("trust") if isinstance(result.get("trust"), dict) else {},
+        "export_policy": proof.get("export_policy", {}).get("label", "Export autorise"),
+        "dpo_recommendation": proof.get("dpo_recommendation", ""),
     }
 
     pdf_output = generate_audit_pdf(

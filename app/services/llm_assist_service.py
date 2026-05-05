@@ -58,7 +58,10 @@ def snippet_sha256(text: str) -> str:
 
 async def propose_spans_mistral(snippet_text: str) -> list[dict[str, Any]]:
     """Appelle Mistral et renvoie des spans proposées avec start/end relatifs au snippet."""
-    if not settings.MISTRAL_API_KEY:
+    current_settings = get_settings()
+    if getattr(current_settings, "SENSITIVE_CLIENT_MODE", False) is True:
+        return []
+    if not current_settings.MISTRAL_API_KEY:
         return []
 
     system = (
@@ -86,7 +89,7 @@ Snippet:
 """.strip()
 
     payload = {
-        "model": settings.MISTRAL_MODEL,
+        "model": current_settings.MISTRAL_MODEL,
         "temperature": 0,
         "max_tokens": 300,
         "messages": [
@@ -98,8 +101,8 @@ Snippet:
     try:
         async with httpx.AsyncClient(timeout=25.0) as client:
             resp = await client.post(
-                f"{settings.MISTRAL_BASE_URL}/v1/chat/completions",
-                headers={"Authorization": f"Bearer {settings.MISTRAL_API_KEY}"},
+                f"{current_settings.MISTRAL_BASE_URL}/v1/chat/completions",
+                headers={"Authorization": f"Bearer {current_settings.MISTRAL_API_KEY}"},
                 json=payload,
             )
         resp.raise_for_status()
@@ -189,4 +192,3 @@ def build_snippets(text: str, max_snippets: int, snippet_chars: int) -> list[dic
             }
         )
     return selected
-

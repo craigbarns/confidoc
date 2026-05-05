@@ -6,13 +6,13 @@ from datetime import datetime
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import desc, select
-from sqlalchemy.orm import selectinload
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import _get_user_document_or_404
+from app.core.exceptions import http_404
 from app.models.client import Client
-from app.models.dossier import Dossier
 from app.models.document import Document, DocumentStatus
+from app.models.dossier import Dossier
 from app.schemas.document import (
     DocumentMetadataPatch,
     DocumentResponse,
@@ -41,15 +41,30 @@ _PROCESSING_STATUSES = {
 async def get_dossiers(
     current_user: CurrentUser,
     db: DbSession,
-    client_name: str = Query(default="", description="Filtrer par client (sous-chaîne, insensible à la casse)"),
+    client_name: str = Query(
+        default="",
+        description="Filtrer par client (sous-chaîne, insensible à la casse)",
+    ),
 ) -> list[DossierClient]:
-    """Retourne la structure dossier. 
+    """Retourne la structure dossier.
     Priorise les entités Client/Dossier formelles, sinon repli sur les champs Document.client_name.
     """
+    from app.services.rbac_service import require_org_permission
+
+    org_id = getattr(current_user, "org_id", None)
+    if org_id is None:
+        return []
+    await require_org_permission(
+        db,
+        user_id=current_user.id,
+        org_id=org_id,
+        permission="documents.read",
+    )
+
     query = (
         select(Document)
         .where(
-            Document.org_id == current_user.org_id,
+            Document.org_id == org_id,
             Document.is_deleted.is_(False),
         )
         .order_by(Document.client_name, desc(Document.exercice), desc(Document.created_at))
@@ -124,32 +139,39 @@ async def patch_document_metadata(
     current_user: CurrentUser,
     db: DbSession,
 ) -> Document:
-    doc = await _get_user_document_or_404(db, document_id, current_user.id)
-    
+    doc = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.metadata",
+    )
+
     if patch.client_id is not None:
-        doc.client_id = patch.client_id
         client = await db.get(Client, patch.client_id)
-        if client:
-            doc.client_name = client.name
-            doc.tags = [client.name]
+        if not client or client.org_id != doc.org_id:
+            raise http_404("Client spécifié non trouvé")
+        doc.client_id = patch.client_id
+        doc.client_name = client.name
+        doc.tags = [client.name]
 
     if patch.dossier_id is not None:
-        doc.dossier_id = patch.dossier_id
         dossier = await db.get(Dossier, patch.dossier_id)
-        if dossier:
-            doc.exercice = dossier.exercice
-            doc.client_id = dossier.client_id
+        if not dossier or dossier.org_id != doc.org_id:
+            raise http_404("Dossier spécifié non trouvé")
+        doc.dossier_id = patch.dossier_id
+        doc.exercice = dossier.exercice
+        doc.client_id = dossier.client_id
 
     if patch.client_name is not None:
         doc.client_name = patch.client_name
         doc.tags = [patch.client_name]
-    
+
     if patch.exercice is not None:
         doc.exercice = patch.exercice
-    
+
     if patch.doc_category is not None:
         doc.doc_category = patch.doc_category
-        
+
     await db.commit()
     await db.refresh(doc)
     return doc

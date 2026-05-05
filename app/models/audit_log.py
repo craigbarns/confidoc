@@ -2,8 +2,8 @@
 
 import uuid
 
-from sqlalchemy import String, Text, Integer, ForeignKey
-from sqlalchemy.dialects.postgresql import UUID, JSONB
+from sqlalchemy import ForeignKey, Integer, String
+from sqlalchemy.dialects.postgresql import JSONB, UUID
 from sqlalchemy.orm import Mapped, mapped_column
 
 from app.models.base import BaseModel
@@ -13,6 +13,13 @@ class AuditLog(BaseModel):
     __tablename__ = "audit_logs"
 
     # Who
+    actor_type: Mapped[str] = mapped_column(
+        String(20),
+        nullable=False,
+        default="user",
+        server_default="user",
+        index=True,
+    )
     user_id: Mapped[uuid.UUID | None] = mapped_column(
         UUID(as_uuid=True),
         ForeignKey("users.id", ondelete="SET NULL"),
@@ -36,6 +43,8 @@ class AuditLog(BaseModel):
     status_code: Mapped[int] = mapped_column(Integer, nullable=False)
     ip_address: Mapped[str | None] = mapped_column(String(45), nullable=True)
     user_agent: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    request_id: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
+    event_hash: Mapped[str | None] = mapped_column(String(64), nullable=True, index=True)
 
     # Details (metadata, never raw PII)
     details: Mapped[dict | None] = mapped_column(JSONB, nullable=True)

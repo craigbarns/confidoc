@@ -89,6 +89,12 @@ async def init_database() -> None:
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS tags text[];",
             "ALTER TABLE documents ADD COLUMN IF NOT EXISTS doc_type varchar(40);",
             "ALTER TABLE organizations ADD COLUMN IF NOT EXISTS siret varchar(200);",
+            (
+                "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS "
+                "actor_type varchar(20) NOT NULL DEFAULT 'user';"
+            ),
+            "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS request_id varchar(64);",
+            "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS event_hash varchar(64);",
         ]
 
         for sql in manual_migrations:
@@ -116,6 +122,9 @@ async def init_database() -> None:
             "CREATE INDEX IF NOT EXISTS ix_documents_org_status ON documents (org_id, status);",
             "CREATE INDEX IF NOT EXISTS ix_documents_doc_type ON documents (doc_type);",
             "CREATE INDEX IF NOT EXISTS ix_documents_tags ON documents USING GIN (tags);",
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_actor_type ON audit_logs (actor_type);",
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_request_id ON audit_logs (request_id);",
+            "CREATE INDEX IF NOT EXISTS ix_audit_logs_event_hash ON audit_logs (event_hash);",
             # FTS index on document content (using gin and to_tsvector)
             (
                 "CREATE INDEX IF NOT EXISTS ix_document_versions_content_fts "

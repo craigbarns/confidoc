@@ -20,3 +20,12 @@ def test_metadata_registers_document_chunks_table():
     from app.models import Base
 
     assert "document_chunks" in Base.metadata.tables
+
+
+def test_metadata_registers_hardened_audit_trail_columns():
+    from app.models import Base
+
+    audit_table = Base.metadata.tables["audit_logs"]
+    assert "actor_type" in audit_table.c
+    assert "request_id" in audit_table.c
+    assert "event_hash" in audit_table.c

@@ -398,6 +398,10 @@
 
     <!-- ── MAIN ── -->
     <main id="main-content" class="main-panel glass" style="border:none; border-radius:0;">
+      <div id="sensitive-mode-banner" class="sensitive-mode-banner" style="display:none">
+        <strong>Mode client sensible</strong>
+        <span>IA externe désactivée. OCR local/fallbacks déterministes et traitement anonymisé uniquement.</span>
+      </div>
 
       <!-- DOSSIER CLIENTS -->
       <div id="panel-dossier" class="panel">
@@ -448,6 +452,7 @@
             </button>
             <button id="btn-dash-clients" class="btn btn-secondary btn-sm">Clients</button>
             <button id="btn-dash-list" class="btn btn-ghost btn-sm">Documents</button>
+            <button id="btn-dash-demo" class="btn btn-primary btn-sm" type="button">Charger une démo</button>
             <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/>
@@ -489,6 +494,13 @@
                 <span>
                   <strong>Reprendre l'analyse</strong>
                   <small>Document sélectionné</small>
+                </span>
+              </button>
+              <button id="btn-work-demo" class="workspace-action investor" type="button" data-action="demo-investor">
+                <span class="workspace-action-index">4</span>
+                <span>
+                  <strong>Demo Investor</strong>
+                  <small>Document synthétique, scores, audit, export</small>
                 </span>
               </button>
             </div>
@@ -796,6 +808,14 @@
               </div>
               <p id="risk-recommendation" class="risk-recommendation"></p>
             </div>
+            <div id="trust-indicator" class="trust-indicator" style="display:none;margin-left:14px;border-left:1px solid var(--border);padding-left:14px;">
+              <div class="trust-score-badge" id="trust-badge">
+                <span class="risk-label">Prêt IA</span>
+                <span id="ai-readiness-score" class="risk-score">—</span>
+                <span id="trust-score" class="risk-level">Trust —</span>
+              </div>
+              <p id="trust-status" class="risk-recommendation"></p>
+            </div>
             <div class="stat-actions">
               <button id="btn-go-ai" class="btn btn-ghost btn-sm">Analyse directe</button>
               <button id="btn-validate" class="btn btn-success">Valider et continuer <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><polyline points="9 18 15 12 9 6"/></svg></button>
@@ -975,14 +995,38 @@
             <div id="kpi-doc-status" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Texte OCR</div>
-            <div id="kpi-ocr-length" class="kpi-value">—</div>
+            <div class="kpi-label">Statut OCR</div>
+            <div id="kpi-ocr-status" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Entités masquées</div>
+            <div class="kpi-label">Anonymisation</div>
+            <div id="kpi-anonymization-status" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">Risk Score</div>
+            <div id="kpi-risk-score" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">Trust Score</div>
+            <div id="kpi-trust-score" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">AI Readiness</div>
+            <div id="kpi-ai-readiness" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi">
+            <div class="kpi-label">Entités détectées</div>
             <div id="kpi-detections" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
+            <div class="kpi-label">Export</div>
+            <div id="kpi-export-status" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi ai-kpi-wide">
+            <div class="kpi-label">Dernier audit</div>
+            <div id="kpi-last-audit" class="kpi-value">—</div>
+          </div>
+          <div class="ai-kpi ai-kpi-wide">
             <div class="kpi-label">Prochaine action</div>
             <div id="kpi-next-action" class="kpi-value">—</div>
           </div>
@@ -1090,6 +1134,7 @@
                 <div class="dash-gdpr-grade" id="dash-gdpr-grade">—</div>
                 <div class="dash-gdpr-status" id="dash-gdpr-status">En attente</div>
                 <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown"></div>
+                <div class="dash-gdpr-breakdown" id="dash-trust-breakdown"></div>
               </div>
             </div>
             <div class="dash-gdpr-recos" id="dash-gdpr-recos"></div>

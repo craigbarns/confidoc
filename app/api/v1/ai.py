@@ -26,9 +26,18 @@ logger = get_logger(__name__)
 def _select_llm_provider(requested: str) -> str:
     """Sélectionne le meilleur provider disponible. Priorité: Mistral → Ollama."""
     s = get_settings()
-    mistral_ok = bool(getattr(s, "MISTRAL_ENABLED", False) and getattr(s, "MISTRAL_API_KEY", ""))
+    sensitive_mode = bool(getattr(s, "SENSITIVE_CLIENT_MODE", False))
+    mistral_ok = bool(
+        not sensitive_mode
+        and getattr(s, "MISTRAL_ENABLED", False)
+        and getattr(s, "MISTRAL_API_KEY", "")
+    )
     ollama_ok = bool(getattr(s, "OLLAMA_ENABLED", True))
 
+    if sensitive_mode:
+        if requested == "ollama" and ollama_ok:
+            return "ollama"
+        return "disabled"
     if requested == "mistral" and mistral_ok:
         return "mistral"
     if requested == "ollama" and ollama_ok:
@@ -37,7 +46,7 @@ def _select_llm_provider(requested: str) -> str:
         return "mistral"
     if ollama_ok:
         return "ollama"
-    return "mistral"
+    return "disabled"
 
 
 async def _get_document_or_404(db: DbSession, document_id: str, user_id: uuid.UUID) -> Document:
@@ -90,10 +99,22 @@ async def _get_anonymized_text(db: DbSession, document: Document) -> str:
 async def ai_providers(current_user: CurrentUser) -> JSONResponse:
     s = get_settings()
     selected = _select_llm_provider("auto")
+    sensitive_mode = bool(getattr(s, "SENSITIVE_CLIENT_MODE", False))
     return JSONResponse({
         "selected_provider": selected,
+        "sensitive_client_mode": sensitive_mode,
+        "external_ai_enabled": bool(
+            not sensitive_mode
+            and getattr(s, "MISTRAL_ENABLED", False)
+            and getattr(s, "MISTRAL_API_KEY", "")
+        ),
+        "policy_message": (
+            "Mode client sensible actif : les appels IA externes sont désactivés."
+            if sensitive_mode
+            else "Analyse IA sur texte anonymisé uniquement."
+        ),
         "mistral": {
-            "enabled": bool(getattr(s, "MISTRAL_ENABLED", False)),
+            "enabled": bool(not sensitive_mode and getattr(s, "MISTRAL_ENABLED", False)),
             "key_set": bool(getattr(s, "MISTRAL_API_KEY", "")),
             "model": getattr(s, "MISTRAL_MODEL", ""),
         },
@@ -150,6 +171,27 @@ async def ai_summary(
     }
 
     selected_provider = _select_llm_provider(llm_provider)
+    if selected_provider == "disabled":
+        logger.info(
+            "ai_summary_blocked_sensitive_mode",
+            document_id=str(document.id),
+            mode=mode,
+        )
+        return JSONResponse({
+            "document_id": str(document.id),
+            "provider": "disabled",
+            "model": None,
+            "mode": mode,
+            "summary": (
+                "Mode client sensible actif : l'analyse IA externe est désactivée. "
+                "Le document anonymisé reste disponible pour revue humaine et export sécurisé."
+            ),
+            "payload_policy": {
+                "raw_text_sent": False,
+                "anonymized_only": True,
+                "external_ai_disabled": True,
+            },
+        })
 
     try:
         if selected_provider == "mistral":
@@ -212,6 +254,22 @@ async def ai_stream(
 
     async def _event_stream():
         try:
+            if stream_provider == "disabled":
+                logger.info(
+                    "ai_stream_blocked_sensitive_mode",
+                    document_id=str(document.id),
+                )
+                payload = json.dumps(
+                    {
+                        "error": (
+                            "Mode client sensible actif : streaming IA externe désactivé."
+                        )
+                    },
+                    ensure_ascii=False,
+                )
+                yield f"data: {payload}\n\n"
+                yield "data: [DONE]\n\n"
+                return
             if stream_provider == "mistral":
                 gen = stream_mistral_response(user_content, temperature=0.3)
             else:
@@ -264,14 +322,34 @@ async def ai_extract(
     if not anonymized_text:
         raise http_400("Aucun texte anonymisé disponible. Lancez d'abord l'anonymisation.")
 
-    extraction = await extract_with_llm(anonymized_text)
+    selected_provider = _select_llm_provider("auto")
+    if selected_provider == "disabled":
+        logger.info("ai_extract_blocked_sensitive_mode", document_id=str(document.id))
+        extraction = {
+            "type_document": "autre",
+            "societe": {"denomination": None, "siret": None, "forme_juridique": None},
+            "exercice": {"date_debut": None, "date_fin": None, "date_arrete": None},
+            "montants_cles": [],
+            "totaux": {
+                "total_actif": {"montant": None, "source_snippet": None},
+                "total_passif": {"montant": None, "source_snippet": None},
+                "resultat_net": {"montant": None, "source_snippet": None},
+                "chiffre_affaires": {"montant": None, "source_snippet": None},
+            },
+            "confiance": "low",
+            "source": "disabled:sensitive_client_mode",
+            "business_rules": {},
+        }
+    else:
+        extraction = await extract_with_llm(anonymized_text)
 
     return JSONResponse({
         "document_id": str(document.id),
         "extraction": extraction,
         "payload_policy": {
-            "method": "llm:mistral-large",
+            "method": extraction.get("source", "llm:mistral-large"),
             "anonymized_only": True,
+            "external_ai_disabled": selected_provider == "disabled",
         },
     })
 

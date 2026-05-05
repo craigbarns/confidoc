@@ -24,6 +24,19 @@ async def test_health_response_structure(client: AsyncClient):
 
 
 @pytest.mark.anyio
+async def test_version_endpoint_exposes_non_sensitive_build_metadata(client: AsyncClient):
+    response = await client.get("/version")
+    assert response.status_code == 200
+    data = response.json()
+    assert data["service"] == "confidoc-backend"
+    assert "version" in data
+    assert "environment" in data
+    assert "railway" in data
+    assert "build" in data
+    assert "secret" not in str(data).lower()
+
+
+@pytest.mark.anyio
 async def test_readiness_endpoint_responds_with_known_shape(client: AsyncClient):
     """/readiness doit toujours répondre (200 si OK, 503 si une dépendance KO).
 

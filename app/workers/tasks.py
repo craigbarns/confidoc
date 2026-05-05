@@ -7,11 +7,12 @@ import uuid
 from typing import Any
 
 from celery import shared_task
-from sqlalchemy import select, update
+from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.core.logging import get_logger
 from app.models.document import Document, DocumentStatus
+from app.services.audit_trail_service import record_document_audit_event
 from app.services.document_processing_service import (
     build_anonymization_llm,
     build_extraction_ocr,
@@ -138,11 +139,22 @@ async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
     """Set document status after a background failure."""
     try:
         async with async_session_factory() as db:
-            await db.execute(
-                update(Document)
-                .where(Document.id == uuid.UUID(doc_id))
-                .values(status=status)
-            )
+            result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
+            document = result.scalar_one_or_none()
+            if not document:
+                return
+            document.status = status
+            if status == DocumentStatus.FAILED:
+                try:
+                    await record_document_audit_event(
+                        db,
+                        document=document,
+                        action="pipeline:failed",
+                        status_code=500,
+                        details={"source": "background_task"},
+                    )
+                except Exception as audit_exc:
+                    logger.warning("audit_pipeline_failed_event_failed", error=str(audit_exc))
             await db.commit()
         if status == DocumentStatus.FAILED:
             try:
@@ -292,6 +304,19 @@ async def _anonymize_document_async_v2(
 
         # Risk analysis
         risk_report = analyze_reidentification_risk(preview_text, meta.get("entity_summary", {}))
+        try:
+            await record_document_audit_event(
+                db,
+                document=document,
+                action="pipeline:risk_score",
+                details={
+                    "risk_score": risk_report.score,
+                    "risk_level": risk_report.level,
+                    "quasi_identifiers_count": risk_report.quasi_identifiers_count,
+                },
+            )
+        except Exception as exc:
+            logger.warning("audit_risk_score_event_failed", doc_id=doc_id, error=str(exc))
 
         # Pseudonym mapping if needed
         if mode == "pseudonymization":
@@ -321,6 +346,20 @@ async def _anonymize_document_async_v2(
         # Checkpoint: READY. The UI and downstream export gates use "ready"
         # as the terminal state for documents with an available preview.
         document.status = DocumentStatus.READY
+        try:
+            await record_document_audit_event(
+                db,
+                document=document,
+                action="pipeline:ready",
+                details={
+                    "mode": mode,
+                    "profile": effective_profile,
+                    "document_type": document_type,
+                    "detections_count": len(detections),
+                },
+            )
+        except Exception as exc:
+            logger.warning("audit_ready_event_failed", doc_id=doc_id, error=str(exc))
         await db.commit()
 
         try:

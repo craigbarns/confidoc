@@ -9,6 +9,7 @@ let currentDocName = "";
 let currentDocStatus = "";
 let currentDocSize = 0;
 let currentProvider = "—";
+let sensitiveClientMode = false;
 let latestAssistantText = "";
 let reportMode = false;
 let copilotMode = false;
@@ -522,6 +523,7 @@ function logout() {
   currentDocStatus = "";
   currentDocSize = 0;
   currentProvider = "—";
+  sensitiveClientMode = false;
   latestAssistantText = "";
   renderExportGuard({});
   originalTextCache = {};
@@ -586,6 +588,7 @@ function updateHeaderContext() {
     docPill.style.display = "none";
   }
   providerPill.textContent = `Provider IA: ${currentProvider || "—"}`;
+  providerPill.classList.toggle("warning", sensitiveClientMode);
   providerPill.style.display = "";
 }
 
@@ -612,17 +615,43 @@ function setPageTitle(section) {
 async function loadProviderInfo() {
   try {
     const data = await apiFetch("/ai/providers");
-    currentProvider = (data.selected_provider || "mistral").toUpperCase();
+    sensitiveClientMode = !!data.sensitive_client_mode;
+    currentProvider = sensitiveClientMode
+      ? "IA externe OFF"
+      : (data.selected_provider || "mistral").toUpperCase();
+    renderSensitiveModeBanner(data.policy_message || "");
   } catch (_e) {
+    sensitiveClientMode = false;
     currentProvider = "MISTRAL";
+    renderSensitiveModeBanner("");
+  }
+}
+
+function renderSensitiveModeBanner(message = "") {
+  const banner = $("sensitive-mode-banner");
+  if (!banner) return;
+  banner.style.display = sensitiveClientMode ? "flex" : "none";
+  const text = banner.querySelector("span");
+  if (text) {
+    text.textContent = message || "IA externe désactivée. OCR local/fallbacks déterministes et traitement anonymisé uniquement.";
   }
 }
 
 function renderAIDocInsights(payload = {}) {
-  $("kpi-doc-status").textContent = payload.status || "—";
-  $("kpi-ocr-length").textContent = payload.ocrLength ?? "—";
-  $("kpi-detections").textContent = payload.detections ?? "—";
-  $("kpi-next-action").textContent = payload.nextAction || "—";
+  const setText = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value ?? "—";
+  };
+  setText("kpi-doc-status", payload.status || "—");
+  setText("kpi-ocr-status", payload.ocrStatus || "—");
+  setText("kpi-anonymization-status", payload.anonymizationStatus || "—");
+  setText("kpi-risk-score", payload.riskScore || "—");
+  setText("kpi-trust-score", payload.trustScore || "—");
+  setText("kpi-ai-readiness", payload.aiReadiness || "—");
+  setText("kpi-detections", payload.detections ?? "—");
+  setText("kpi-export-status", payload.exportStatus || "—");
+  setText("kpi-last-audit", payload.lastAudit || "—");
+  setText("kpi-next-action", payload.nextAction || "—");
 }
 
 function normalizeRiskPercent(value) {
@@ -630,6 +659,35 @@ function normalizeRiskPercent(value) {
   const numeric = Number(value);
   if (!Number.isFinite(numeric)) return null;
   return Math.round(numeric <= 1 ? numeric * 100 : numeric);
+}
+
+function renderTrustIndicator(payload = {}) {
+  const box = $("trust-indicator");
+  if (!box) return;
+  const trust = payload.trust || payload || {};
+  const aiScore = Number(trust.ai_readiness_score ?? payload.ai_readiness_score);
+  const trustScore = Number(trust.trust_score ?? payload.trust_score);
+  if (!Number.isFinite(aiScore) && !Number.isFinite(trustScore)) {
+    box.style.display = "none";
+    return;
+  }
+
+  box.style.display = "";
+  const aiEl = $("ai-readiness-score");
+  const trustEl = $("trust-score");
+  const statusEl = $("trust-status");
+  const level = String(trust.ai_readiness_level || payload.ai_readiness_level || "");
+  const labels = {
+    ready_for_ai: "Prêt pour IA",
+    internal_review: "Usage interne",
+    human_review_required: "Revue humaine",
+    needs_review: "À contrôler",
+    not_ready: "Non prêt",
+    blocked: "Bloqué",
+  };
+  if (aiEl) aiEl.textContent = Number.isFinite(aiScore) ? `${Math.round(aiScore)}/100` : "—";
+  if (trustEl) trustEl.textContent = Number.isFinite(trustScore) ? `Trust ${Math.round(trustScore)}` : "Trust —";
+  if (statusEl) statusEl.textContent = labels[level] || level || "Score de confiance disponible.";
 }
 
 function renderExportGuard(payload = {}) {
@@ -684,45 +742,83 @@ function renderExportGuard(payload = {}) {
   if (approveBtn) approveBtn.style.display = canApprove ? "" : "none";
 }
 
+function exportDecisionFromRisk(risk = {}, status = "") {
+  const ready = isReadyStatus(status || currentDocStatus);
+  const level = String(risk.risk_level || risk.level || currentRiskLevel || "low").toLowerCase();
+  const validated = !!(risk.human_validated ?? risk.humanValidated);
+  if (!ready) return "En attente";
+  if (level === "critical") return "Export bloqué";
+  if (level === "high" && !validated) return "Revue humaine requise";
+  if (level === "high" && validated) return "Export validé";
+  if (level === "medium") return "Revue conseillée";
+  return "Export autorisé";
+}
+
 async function refreshAIDocInsights(docId) {
   if (!docId) {
     renderAIDocInsights({});
     renderExportGuard({});
+    renderTrustIndicator({});
     return;
   }
   try {
-    const [statusResult, riskResult] = await Promise.allSettled([
+    const [statusResult, riskResult, auditResult] = await Promise.allSettled([
       apiFetch(`/documents/${docId}/status`),
       apiFetch(`/documents/${docId}/risk-score`),
+      apiFetch(`/documents/${docId}/audit-report`),
     ]);
     if (statusResult.status === "rejected") throw statusResult.reason;
     const st = statusResult.value;
     const risk = riskResult.status === "fulfilled" ? riskResult.value : {};
+    const auditData = auditResult.status === "fulfilled" ? auditResult.value : {};
+    const auditEntries = Array.isArray(auditData.audit_entries) ? auditData.audit_entries : [];
     const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Analyse IA";
     updatePipelineTimeline({
       status: st.status || currentDocStatus,
       extractDone: !!st?.extraction?.done,
       anonymDone: !!st?.anonymization?.done,
     });
+    currentRiskLevel = risk.risk_level || risk.risk?.level || currentRiskLevel;
+    const trust = risk.trust || {};
+    const score = normalizeRiskPercent(risk.risk_score ?? risk.risk?.score);
+    const lastAudit = auditEntries.length ? auditEntries[0] : null;
     renderAIDocInsights({
-      status: st.status || "—",
-      ocrLength: st?.extraction?.text_length ?? 0,
+      status: documentStatusLabel(st.status || currentDocStatus),
+      ocrStatus: st?.extraction?.done ? `OK · ${st?.extraction?.text_length ?? 0} car.` : "À lancer",
+      anonymizationStatus: st?.anonymization?.done ? "OK" : "À lancer",
+      riskScore: score === null ? "—" : `${score}/100`,
+      trustScore: Number.isFinite(Number(risk.trust_score ?? trust.trust_score))
+        ? `${Math.round(Number(risk.trust_score ?? trust.trust_score))}/100`
+        : "—",
+      aiReadiness: Number.isFinite(Number(risk.ai_readiness_score ?? trust.ai_readiness_score))
+        ? `${Math.round(Number(risk.ai_readiness_score ?? trust.ai_readiness_score))}/100`
+        : "—",
       detections: st?.anonymization?.detections_count ?? 0,
+      exportStatus: exportDecisionFromRisk(risk, st.status || currentDocStatus),
+      lastAudit: lastAudit ? `${lastAudit.action || "audit"} · ${(lastAudit.timestamp || "").slice(0, 16).replace("T", " ")}` : "—",
       nextAction: next,
     });
     renderExportGuard({
       ...risk,
       status: st.status || currentDocStatus,
     });
+    renderTrustIndicator(risk);
   } catch (_e) {
     updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: isReadyStatus(currentDocStatus) });
     renderAIDocInsights({
-      status: currentDocStatus || "—",
-      ocrLength: "—",
+      status: documentStatusLabel(currentDocStatus || "—"),
+      ocrStatus: "—",
+      anonymizationStatus: isReadyStatus(currentDocStatus) ? "OK" : "—",
+      riskScore: "—",
+      trustScore: "—",
+      aiReadiness: "—",
       detections: "—",
+      exportStatus: exportDecisionFromRisk({}, currentDocStatus),
+      lastAudit: "—",
       nextAction: "Vérifier document",
     });
     renderExportGuard({ status: currentDocStatus, risk_level: currentRiskLevel });
+    renderTrustIndicator({});
   }
 }
 
@@ -1951,27 +2047,28 @@ async function uploadFile(file) {
 
 async function createDemoDocument() {
   try {
+    toast("Chargement Demo Investor : document synthétique et pipeline sécurisé…", "info");
     const res = await apiFetch("/demo", { method: "POST" });
     currentDocId = res.document_id;
     currentDocName = res.original_filename;
     currentDocStatus = "processing";
-    currentDocSize = 0;
+    currentDocSize = Number(res.size_bytes || 0);
     updateHeaderContext();
     await loadDocList();
 
     setStep(2);
     resetAnonPanel();
-    updateAnonDocBar(res.original_filename, 0);
+    updateAnonDocBar(res.original_filename, currentDocSize);
     refreshAIDocInsights(currentDocId);
     $("anon-empty").style.display = "";
     $("anon-empty").querySelector(".hint-icon").innerHTML =
       '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
     $("anon-empty").querySelector("p").innerHTML =
-      `<strong>${res.original_filename}</strong> créé.<br>Sécurisation en cours en arrière-plan…`;
-    showAnonLoading("Sécurisation en cours…");
+      `<strong>${res.original_filename}</strong> créé.<br>Workflow démo: upload → OCR → anonymisation → scores → audit → export.`;
+    showAnonLoading("Demo Investor : OCR et anonymisation en cours…");
     pollDocStatus(currentDocId);
 
-    toast("Document de démo créé — sécurisation lancée", "success");
+    toast(res.message || "Demo Investor chargée — sécurisation lancée", "success");
   } catch (e) {
     console.error("demo error:", e);
     toast(`Erreur démo: ${e.message}`, "error");
@@ -2100,6 +2197,10 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
       human_validated: false,
     });
   }
+  const trustPayload = fullData.trust
+    || (fullData.ai_readiness_score !== undefined || fullData.trust_score !== undefined ? fullData : null)
+    || (risk && (risk.ai_readiness_score !== undefined || risk.trust_score !== undefined) ? risk : null);
+  if (trustPayload) renderTrustIndicator(trustPayload);
 
   // Risk indicator (RGPD)
   const riskEl = $("risk-indicator");
@@ -3366,6 +3467,23 @@ function renderGdprDashboardSection(gdpr, totalDocs, riskDistribution) {
   }
 }
 
+function renderTrustDashboardSection(trust) {
+  const el = $("dash-trust-breakdown");
+  if (!el) return;
+  if (!trust || trust.score == null || trust.score === undefined) {
+    el.innerHTML = "<span>Trust Score —</span>";
+    return;
+  }
+  const score = Math.round(Number(trust.score) || 0);
+  const grade = trust.grade ? `Note ${escapeHtml(trust.grade)}` : "Note —";
+  const status = trust.status || "Trust Score";
+  el.innerHTML = [
+    `<span>Trust ${score}/100</span>`,
+    `<span>${grade}</span>`,
+    `<span>${escapeHtml(status)}</span>`,
+  ].join("");
+}
+
 function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const content = $("dash-content");
   if (!content) return;
@@ -3400,6 +3518,7 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
 
   const rdRisk = data.risk_distribution || {};
   renderGdprDashboardSection(data.gdpr_score || {}, totalDocs, rdRisk);
+  renderTrustDashboardSection(data.trust_score || {});
 
   // Risk distribution
   const riskEl = $("dash-risk-chart");
@@ -3971,6 +4090,7 @@ function handleDelegatedAction(e) {
   else if (action === "open-documents") openDocumentWorkspace();
   else if (action === "open-clients") openClientWorkspace();
   else if (action === "resume-review") resumeWorkspaceReview();
+  else if (action === "demo-investor") createDemoDocument();
   else if (action === "create-client") openCreateClientModal();
   else if (action === "dossier-overview") openDossierOverview();
   else if (action === "upload-for-dossier") openUploadForDossierClient();
@@ -4212,6 +4332,7 @@ document.addEventListener("DOMContentLoaded", () => {
   // Dashboard quick-actions (boutons internes du panel-dashboard)
   if ($("btn-home")) $("btn-home").addEventListener("click", goHome);
   if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", startNewDocument);
+  if ($("btn-dash-demo")) $("btn-dash-demo").addEventListener("click", createDemoDocument);
   if ($("btn-dash-clients")) $("btn-dash-clients").addEventListener("click", openClientWorkspace);
   if ($("btn-dash-list")) $("btn-dash-list").addEventListener("click", openDocumentWorkspace);
   if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {
