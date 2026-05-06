@@ -54,6 +54,7 @@ htmlcov/
 # Large files
 golden/inpi_samples/
 *.pdf
+!app/static/demo_doc.pdf
 *.png
 *.jpg
 *.tiff
