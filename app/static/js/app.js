@@ -250,8 +250,21 @@ function scheduleTokenRefresh() {
 }
 
 async function apiFetch(path, opts = {}) {
-  const resp = await apiRequest(path, opts);
-  return resp.json();
+  try {
+    const resp = await apiRequest(path, opts);
+    if (opts.returnBlob) {
+      return await resp.blob();
+    }
+    const contentType = resp.headers.get("content-type");
+    if (contentType && contentType.includes("application/json")) {
+      return await resp.json();
+    }
+    return await resp.text();
+  } catch (err) {
+    console.error(`[apiFetch] Erreur sur ${path} (${opts.method || "GET"}):`, err);
+    toast(err.message || "Erreur de chargement", "error");
+    throw err;
+  }
 }
 
 
@@ -2477,6 +2490,9 @@ async function loadOriginalDocument(docId) {
     }
 
     const blob = await resp.blob();
+    if (blob.size === 0) {
+      throw new Error("Le fichier original est vide ou inaccessible.");
+    }
     const contentType = (blob.type || resp.headers.get("content-type") || fallbackType || "")
       .split(";")[0]
       .toLowerCase();
@@ -4736,6 +4752,7 @@ document.addEventListener("DOMContentLoaded", () => {
   if ($("btn-home")) $("btn-home").addEventListener("click", goHome);
   if ($("btn-dash-upload")) $("btn-dash-upload").addEventListener("click", startNewDocument);
   if ($("btn-dash-demo")) $("btn-dash-demo").addEventListener("click", createDemoDocument);
+  if ($("btn-work-demo")) $("btn-work-demo").addEventListener("click", createDemoDocument);
   if ($("btn-dash-clients")) $("btn-dash-clients").addEventListener("click", openClientWorkspace);
   if ($("btn-dash-list")) $("btn-dash-list").addEventListener("click", openDocumentWorkspace);
   if ($("btn-dash-refresh")) $("btn-dash-refresh").addEventListener("click", () => {

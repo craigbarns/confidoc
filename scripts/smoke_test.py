@@ -77,7 +77,11 @@ def request_json(
     try:
         with urllib.request.urlopen(req, timeout=timeout) as resp:
             payload = resp.read().decode("utf-8", errors="replace")
-            return resp.status, json.loads(payload or "{}")
+            try:
+                parsed = json.loads(payload or "{}")
+            except json.JSONDecodeError:
+                parsed = {"raw": payload[:300]}
+            return resp.status, parsed
     except urllib.error.HTTPError as exc:
         payload = exc.read().decode("utf-8", errors="replace")
         try:
@@ -179,6 +183,42 @@ def fetch_score(base_url: str, token: str, document_id: str) -> CheckResult:
     )
 
 
+
+def trigger_demo(base_url: str, token: str) -> tuple[CheckResult, str | None]:
+    status, payload = request_json(
+        base_url,
+        "/api/v1/demo",
+        method="POST",
+        token=token,
+    )
+    doc_id = payload.get("document_id") if isinstance(payload, dict) else None
+    return (
+        CheckResult(
+            "trigger demo endpoint",
+            status == 201 and bool(doc_id),
+            f"HTTP {status} · {doc_id or payload.get('detail', 'no document_id')}",
+        ),
+        str(doc_id) if doc_id else None,
+    )
+
+def fetch_raw(base_url: str, token: str, document_id: str) -> CheckResult:
+    # Need to just check status of raw endpoint
+    import urllib.request
+    req = urllib.request.Request(
+        _url(base_url, f"/api/v1/documents/{document_id}/raw"),
+        headers={"Authorization": f"Bearer {token}", "User-Agent": "confidoc-smoke-test/1.0"}
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=15.0) as resp:
+            status = resp.status
+            content = resp.read()
+            ok = status == 200 and len(content) > 0
+            return CheckResult("raw endpoint", ok, f"HTTP {status} · size={len(content)}")
+    except urllib.error.HTTPError as exc:
+        return CheckResult("raw endpoint", False, f"HTTP {exc.code} · {exc.reason}")
+    except Exception as exc:
+        return CheckResult("raw endpoint", False, f"Error: {exc}")
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="ConfiDoc Railway smoke test")
     parser.add_argument("--base-url", default=os.getenv("CONFIDOC_BASE_URL", "http://localhost:8000"))
@@ -195,6 +235,9 @@ def main() -> int:
     results = [
         check_endpoint(args.base_url, "/health", {200}),
         check_endpoint(args.base_url, "/version", {200}),
+        check_endpoint(args.base_url, "/ui", {200}),
+        check_endpoint(args.base_url, "/static/js/app.js", {200}),
+
         check_endpoint(
             args.base_url,
             "/readiness",
@@ -210,12 +253,19 @@ def main() -> int:
         results.append(CheckResult("login demo", True, "skipped: credentials not provided"))
 
     if token and not args.no_upload:
+        demo_result, demo_doc_id = trigger_demo(args.base_url, token)
+        results.append(demo_result)
+        if demo_doc_id:
+            results.append(fetch_score(args.base_url, token, demo_doc_id))
+            results.append(fetch_raw(args.base_url, token, demo_doc_id))
+        
         upload_result, document_id = upload_synthetic(args.base_url, token)
         results.append(upload_result)
         if document_id:
             results.append(fetch_score(args.base_url, token, document_id))
     else:
         results.append(CheckResult("upload synthetic document", True, "skipped"))
+        results.append(CheckResult("trigger demo endpoint", True, "skipped"))
 
     for item in results:
         marker = "OK" if item.ok else "FAIL"
