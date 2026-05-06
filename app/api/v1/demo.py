@@ -3,6 +3,7 @@
 import hashlib
 import io
 import time
+import uuid
 from pathlib import Path
 from typing import Any
 
@@ -32,6 +33,48 @@ DEMO_DOC_PATH = Path(__file__).resolve().parent.parent.parent / "static" / "demo
 _PUBLIC_DEMO_RATE_WINDOW = 60
 _PUBLIC_DEMO_RATE_MAX = 10
 _public_demo_attempts_fallback: dict[str, list[float]] = {}
+
+
+async def _resolve_demo_org_id(db: DbSession, current_user: CurrentUser) -> Any | None:
+    """Scope demo docs to an org when allowed, otherwise keep a personal demo doc.
+
+    The investor demo uses synthetic data. It must stay zero-friction for live
+    demos, including viewer/demo accounts, while still avoiding unauthorized
+    writes into an organization namespace.
+    """
+    org_id = getattr(current_user, "org_id", None)
+    if org_id is None:
+        membership_res = await db.execute(
+            select(Membership)
+            .where(
+                Membership.user_id == current_user.id,
+                Membership.is_active.is_(True),
+            )
+            .order_by(Membership.created_at.asc())
+        )
+        membership = membership_res.scalars().first()
+        org_id = membership.org_id if membership else None
+
+    if org_id is None:
+        return None
+
+    try:
+        await require_org_permission(
+            db,
+            user_id=current_user.id,
+            org_id=org_id,
+            permission="documents.upload",
+        )
+    except HTTPException as exc:
+        if exc.status_code == status.HTTP_403_FORBIDDEN:
+            logger.info(
+                "demo_org_scope_skipped",
+                user_id=str(current_user.id),
+                reason="upload_permission_denied",
+            )
+            return None
+        raise
+    return org_id
 
 
 async def _check_public_demo_rate_limit(key: str) -> None:
@@ -147,23 +190,19 @@ async def create_demo_document(
         )
 
     content = DEMO_DOC_PATH.read_bytes()
-    storage_backend, storage_key = store_bytes(content=content, extension="pdf")
+    sha256 = hashlib.sha256(content).hexdigest()
+    org_id = await _resolve_demo_org_id(db, current_user)
 
-    membership_res = await db.execute(
-        select(Membership).where(
-            Membership.user_id == current_user.id,
-            Membership.is_active.is_(True),
+    try:
+        storage_backend, storage_key = store_bytes(content=content, extension="pdf")
+    except Exception as exc:
+        logger.warning(
+            "demo_storage_primary_failed_using_database",
+            configured_backend=settings.STORAGE_BACKEND,
+            error_type=type(exc).__name__,
         )
-    )
-    membership = membership_res.scalar_one_or_none()
-    org_id = membership.org_id if membership else None
-    if org_id is not None:
-        await require_org_permission(
-            db,
-            user_id=current_user.id,
-            org_id=org_id,
-            permission="documents.upload",
-        )
+        storage_backend = "database"
+        storage_key = f"db://{sha256}.{uuid.uuid4().hex}.pdf"
 
     document = Document(
         org_id=org_id,
@@ -172,7 +211,7 @@ async def create_demo_document(
         content_type="application/pdf",
         extension="pdf",
         size_bytes=len(content),
-        sha256=hashlib.sha256(content).hexdigest(),
+        sha256=sha256,
         storage_backend=storage_backend,
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
