@@ -2137,7 +2137,7 @@ async function createDemoDocument() {
     const res = await apiFetch("/demo", { method: "POST" });
     currentDocId = res.document_id;
     currentDocName = res.original_filename;
-    currentDocStatus = "processing";
+    currentDocStatus = String(res.status || "processing").toLowerCase();
     currentDocSize = Number(res.size_bytes || 0);
     updateHeaderContext();
     await loadDocList();
@@ -2145,19 +2145,46 @@ async function createDemoDocument() {
     setStep(2);
     resetAnonPanel();
     updateAnonDocBar(res.original_filename, currentDocSize);
-    refreshAIDocInsights(currentDocId);
-    $("anon-empty").style.display = "";
-    $("anon-empty").querySelector(".hint-icon").innerHTML =
-      '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-    $("anon-empty").querySelector("p").innerHTML =
-      `<strong>${res.original_filename}</strong> créé.<br>Workflow démo: upload → OCR → anonymisation → scores → audit → export.`;
+    await refreshAIDocInsights(currentDocId);
+
+    const empty = $("anon-empty");
+    if (empty) {
+      empty.style.display = "";
+      const icon = empty.querySelector(".hint-icon");
+      const copy = empty.querySelector("p");
+      if (icon) {
+        icon.innerHTML =
+          '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+      }
+      if (copy) {
+        copy.innerHTML =
+          `<strong>${res.original_filename}</strong> créé.<br>Workflow démo: upload → OCR → anonymisation → scores → audit → export.`;
+      }
+    }
+
+    if (isReadyStatus(currentDocStatus)) {
+      try {
+        const preview = await apiFetch(`/documents/${currentDocId}/preview`);
+        showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
+      } catch (previewErr) {
+        console.warn("demo preview unavailable:", previewErr);
+      }
+      toast(res.message || "Demo Investor prête — scores et audit disponibles", "success");
+      return;
+    }
+
     showAnonLoading("Demo Investor : OCR et anonymisation en cours…");
     pollDocStatus(currentDocId);
 
     toast(res.message || "Demo Investor chargée — sécurisation lancée", "success");
   } catch (e) {
     console.error("demo error:", e);
-    toast(`Erreur démo: ${e.message}`, "error");
+    const msg = e.message || "Erreur inconnue";
+    if (msg.includes("Session expirée") || msg.includes("Authentification requise")) {
+      toast("Session expirée. Reconnectez-vous ou lancez la démo publique depuis la page d'accueil.", "error");
+    } else {
+      toast(`Erreur démo: ${msg}`, "error");
+    }
   }
 }
 

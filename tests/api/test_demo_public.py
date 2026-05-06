@@ -182,6 +182,83 @@ async def test_authenticated_demo_stays_personal_when_org_upload_forbidden(
 
 
 @pytest.mark.asyncio
+async def test_authenticated_demo_materializes_ready_snapshot_without_live_pipeline(
+    client,
+    demo_auth_overrides,
+    monkeypatch,
+    tmp_path,
+):
+    _, db, _user = demo_auth_overrides
+    demo_pdf = tmp_path / "demo.pdf"
+    demo_pdf.write_bytes(b"%PDF synthetic demo")
+
+    import app.api.v1.demo as demo_mod
+
+    snapshot = {
+        "status": "ready",
+        "original_excerpt": "email: direction@dupont-conseil.fr",
+        "anonymized_excerpt": "email: [DONNEE_1]",
+        "detections": [
+            {
+                "entity_type": "email",
+                "start_index": 7,
+                "end_index": 34,
+                "value_excerpt": "direction@dupont-conseil.fr",
+                "replacement": "[DONNEE_1]",
+            }
+        ],
+        "detections_count": 1,
+        "entity_summary": {"EMAIL": 1},
+        "risk": {"score": 0.0, "level": "low"},
+        "trust_score": 85,
+        "ai_readiness_score": 85,
+        "document_type": "legal",
+        "extraction_method": "demo_snapshot",
+        "extraction_provider": "local",
+        "pages": 1,
+    }
+
+    async def _get_demo_result():
+        return snapshot
+
+    def _unexpected_dispatch(**_kwargs):
+        raise AssertionError("snapshot demo must not dispatch live pipeline")
+
+    monkeypatch.setattr(demo_mod, "DEMO_DOC_PATH", demo_pdf)
+    monkeypatch.setattr(demo_mod, "store_bytes", lambda **_: ("database", "db://demo.pdf"))
+    monkeypatch.setattr(demo_mod, "should_dispatch_document_task_to_celery", _unexpected_dispatch)
+    monkeypatch.setattr("app.services.demo_service.get_demo_result", _get_demo_result)
+
+    resp = await client.post("/api/v1/demo")
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["status"] == "ready"
+    assert body["background_processing"] == "demo_snapshot"
+
+    from app.models.document import DocumentStatus
+
+    document = next(obj for obj in db.added if obj.__class__.__name__ == "Document")
+    assert document.status == DocumentStatus.READY
+
+    versions = [obj for obj in db.added if obj.__class__.__name__ == "DocumentVersion"]
+    detections = [obj for obj in db.added if obj.__class__.__name__ == "EntityDetection"]
+    mappings = [obj for obj in db.added if obj.__class__.__name__ == "PseudonymMapping"]
+    audit_actions = [
+        obj.action for obj in db.added if obj.__class__.__name__ == "AuditLog"
+    ]
+
+    assert {version.version_type.value for version in versions} == {
+        "original_text",
+        "preview_anonymized",
+    }
+    assert len(detections) == 1
+    assert mappings[0].risk_level == "low"
+    assert "pipeline:ready" in audit_actions
+    assert "document:demo_investor_loaded" in audit_actions
+
+
+@pytest.mark.asyncio
 async def test_public_demo_audit_report_pdf_requires_no_auth(client):
     payload = {
         "status": "ready",

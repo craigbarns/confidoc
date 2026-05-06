@@ -4,6 +4,7 @@ import hashlib
 import io
 import time
 import uuid
+from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
@@ -14,9 +15,14 @@ from sqlalchemy import select
 from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
 from app.core.logging import get_logger
+from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
+from app.models.document_version import DocumentVersion, DocumentVersionType
+from app.models.entity_detection import EntityDetection
 from app.models.membership import Membership
+from app.models.pseudonym_mapping import PseudonymMapping
 from app.services.audit_trail_service import record_document_audit_event
+from app.services.crypto_service import encrypt_mapping
 from app.services.rbac_service import require_org_permission
 from app.services.storage_service import store_bytes
 from app.workers.tasks import (
@@ -75,6 +81,126 @@ async def _resolve_demo_org_id(db: DbSession, current_user: CurrentUser) -> Any 
             return None
         raise
     return org_id
+
+
+async def _materialize_demo_snapshot(db: DbSession, document: Document) -> bool:
+    """Persist a deterministic ready demo result for live investor demos.
+
+    The dashboard demo must not depend on a live OCR/LLM call. Public demo cache
+    already contains a synthetic, pre-anonymized payload, so authenticated demo
+    documents can reuse that snapshot and become immediately inspectable.
+    """
+    try:
+        from app.services.demo_service import get_demo_result
+
+        result = await get_demo_result()
+    except Exception as exc:
+        logger.warning("demo_snapshot_unavailable", error_type=type(exc).__name__)
+        return False
+
+    if not isinstance(result, dict) or result.get("status") != "ready":
+        return False
+
+    original_text = str(result.get("original_excerpt") or "").strip()
+    anonymized_text = str(result.get("anonymized_excerpt") or "").strip()
+    if not anonymized_text:
+        return False
+
+    original_version = DocumentVersion(
+        document_id=document.id,
+        version_type=DocumentVersionType.ORIGINAL_TEXT,
+        content_text=postgres_safe_text(original_text or "Document de démonstration synthétique."),
+    )
+    preview_version = DocumentVersion(
+        document_id=document.id,
+        version_type=DocumentVersionType.PREVIEW_ANONYMIZED,
+        content_text=postgres_safe_text(anonymized_text),
+    )
+    db.add(original_version)
+    db.add(preview_version)
+    await db.flush()
+
+    raw_detections = result.get("detections")
+    detections = raw_detections if isinstance(raw_detections, list) else []
+    for item in detections[:120]:
+        if not isinstance(item, dict):
+            continue
+        db.add(
+            EntityDetection(
+                document_id=document.id,
+                document_version_id=preview_version.id,
+                entity_type=str(item.get("entity_type") or "unknown")[:40],
+                start_index=int(item.get("start_index") or 0),
+                end_index=int(item.get("end_index") or 0),
+                value_excerpt=postgres_safe_text(str(item.get("value_excerpt") or ""))[:1000],
+                replacement=postgres_safe_text(str(item.get("replacement") or "[REDACTED]"))[:500],
+            )
+        )
+
+    risk = result.get("risk") if isinstance(result.get("risk"), dict) else {}
+    try:
+        encrypted_mapping = encrypt_mapping({}, settings.PSEUDO_MAPPING_KEY)
+        expires_at = datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
+        db.add(
+            PseudonymMapping(
+                document_id=document.id,
+                user_id=document.uploaded_by_user_id,
+                encrypted_mapping=encrypted_mapping,
+                expires_at=expires_at,
+                human_validated=False,
+                risk_score=float(risk.get("score") or 0.0),
+                risk_level=str(risk.get("level") or "low"),
+            )
+        )
+    except Exception as exc:
+        logger.warning("demo_snapshot_mapping_failed", error_type=type(exc).__name__)
+
+    document.status = DocumentStatus.READY
+    for action, details in (
+        (
+            "pipeline:extract",
+            {
+                "method": result.get("extraction_method") or "demo_snapshot",
+                "provider": result.get("extraction_provider") or "demo_snapshot",
+                "pages": result.get("pages") or 0,
+            },
+        ),
+        (
+            "pipeline:anonymize",
+            {
+                "method": "demo_snapshot",
+                "profile": "investor_demo",
+                "document_type": result.get("document_type") or "auto",
+                "detections_count": int(result.get("detections_count") or len(detections)),
+                "entity_summary": result.get("entity_summary") or {},
+            },
+        ),
+        (
+            "pipeline:risk_score",
+            {
+                "risk_score": float(risk.get("score") or 0.0),
+                "risk_level": str(risk.get("level") or "low"),
+            },
+        ),
+        (
+            "pipeline:ready",
+            {
+                "mode": "demo_snapshot",
+                "trust_score": result.get("trust_score"),
+                "ai_readiness_score": result.get("ai_readiness_score"),
+            },
+        ),
+    ):
+        await record_document_audit_event(
+            db,
+            document=document,
+            action=action,
+            details=details,
+        )
+
+    await db.commit()
+    await db.refresh(document)
+    return True
 
 
 async def _check_public_demo_rate_limit(key: str) -> None:
@@ -226,7 +352,10 @@ async def create_demo_document(
     await db.refresh(document)
 
     doc_id = str(document.id)
-    if should_dispatch_document_task_to_celery(queue="nlp"):
+    snapshot_ready = await _materialize_demo_snapshot(db, document)
+    if snapshot_ready:
+        background_processing = "demo_snapshot"
+    elif should_dispatch_document_task_to_celery(queue="nlp"):
         anonymize_document_task.delay(
             doc_id=doc_id,
             profile="strict",
@@ -277,7 +406,7 @@ async def create_demo_document(
         await db.rollback()
 
     return {
-        "status": "processing",
+        "status": "ready" if snapshot_ready else "processing",
         "document_id": doc_id,
         "original_filename": document.original_filename,
         "size_bytes": document.size_bytes,
