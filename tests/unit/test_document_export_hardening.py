@@ -92,6 +92,99 @@ def test_raw_document_content_disposition_sanitizes_filename() -> None:
     assert "filename*=" in header
 
 
+def test_raw_document_pdf_is_served_inline_for_preview() -> None:
+    from app.api.v1._doc_crud import _raw_document_content_type, _raw_document_disposition
+
+    document = SimpleNamespace(
+        content_type="application/pdf",
+        extension="pdf",
+        original_filename="demo.pdf",
+    )
+
+    assert _raw_document_content_type(document) == "application/pdf"
+    assert _raw_document_disposition(document).startswith("inline;")
+
+
+def test_raw_document_office_file_is_attachment() -> None:
+    from app.api.v1._doc_crud import _raw_document_disposition
+
+    document = SimpleNamespace(
+        content_type="application/vnd.openxmlformats-officedocument.wordprocessingml.document",
+        extension="docx",
+        original_filename="contrat.docx",
+    )
+
+    assert _raw_document_disposition(document).startswith("attachment;")
+
+
+@pytest.mark.asyncio
+async def test_get_document_raw_returns_pdf_with_inline_headers(monkeypatch) -> None:
+    from app.api.v1 import _doc_crud
+
+    document_id = str(uuid.uuid4())
+    document = SimpleNamespace(
+        id=uuid.UUID(document_id),
+        content_type="application/pdf",
+        extension="pdf",
+        original_filename="original.pdf",
+        storage_backend="database",
+        storage_key="db://original.pdf",
+    )
+    user = SimpleNamespace(id=uuid.uuid4())
+    calls: dict[str, Any] = {}
+
+    async def fake_get_document(_db: Any, requested_id: str, user_id: uuid.UUID, permission: str):
+        calls["requested_id"] = requested_id
+        calls["user_id"] = user_id
+        calls["permission"] = permission
+        return document
+
+    monkeypatch.setattr(_doc_crud, "_get_user_document_or_404", fake_get_document)
+
+    import app.services.storage_service as storage_service
+
+    monkeypatch.setattr(storage_service, "read_document_bytes", lambda _document: b"%PDF-1.4")
+
+    response = await _doc_crud.get_document_raw(document_id, user, _FakeDb())
+
+    assert calls["permission"] == "documents.raw"
+    assert response.headers["content-type"].startswith("application/pdf")
+    assert response.headers["content-disposition"].startswith("inline;")
+    assert response.body == b"%PDF-1.4"
+
+
+@pytest.mark.asyncio
+async def test_get_document_raw_storage_error_returns_404(monkeypatch) -> None:
+    from app.api.v1 import _doc_crud
+
+    document_id = str(uuid.uuid4())
+    document = SimpleNamespace(
+        id=uuid.UUID(document_id),
+        content_type="application/pdf",
+        extension="pdf",
+        original_filename="missing.pdf",
+    )
+    user = SimpleNamespace(id=uuid.uuid4())
+
+    async def fake_get_document(*_args: Any, **_kwargs: Any):
+        return document
+
+    monkeypatch.setattr(_doc_crud, "_get_user_document_or_404", fake_get_document)
+
+    import app.services.storage_service as storage_service
+
+    def _missing(_document: Any) -> bytes:
+        raise FileNotFoundError("missing")
+
+    monkeypatch.setattr(storage_service, "read_document_bytes", _missing)
+
+    with pytest.raises(HTTPException) as exc_info:
+        await _doc_crud.get_document_raw(document_id, user, _FakeDb())
+
+    assert exc_info.value.status_code == 404
+    assert "Fichier source introuvable" in exc_info.value.detail
+
+
 @pytest.mark.asyncio
 async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch) -> None:
     document_id = str(uuid.uuid4())

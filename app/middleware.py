@@ -55,6 +55,7 @@ class SecurityHeadersMiddleware(BaseHTTPMiddleware):
             "img-src 'self' data: blob:; "
             "font-src 'self' https://fonts.gstatic.com; "
             "connect-src 'self'; "
+            "frame-src 'self' blob:; "
             "frame-ancestors 'none'; "
             "base-uri 'self'; "
             "form-action 'self';"

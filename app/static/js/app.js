@@ -36,6 +36,7 @@ let currentStatusFilter = "";
 let activeStream = null; // AbortController pour le streaming SSE
 let currentRiskLevel = null; // RGPD risk level from last anonymization
 let originalTextCache = {};
+let originalBlobUrl = "";
 let bgPollers = {};
 let uploadQueue = [];
 let isUploadProcessing = false;
@@ -693,8 +694,200 @@ function renderTrustIndicator(payload = {}) {
     blocked: "Bloqué",
   };
   if (aiEl) aiEl.textContent = Number.isFinite(aiScore) ? `${Math.round(aiScore)}/100` : "—";
-  if (trustEl) trustEl.textContent = Number.isFinite(trustScore) ? `Trust ${Math.round(trustScore)}` : "Trust —";
+  if (trustEl) trustEl.textContent = Number.isFinite(trustScore) ? `Confiance ${Math.round(trustScore)}` : "Confiance —";
   if (statusEl) statusEl.textContent = labels[level] || level || "Score de confiance disponible.";
+}
+
+function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
+  const score = normalizeRiskPercent(risk.risk_score ?? risk.score);
+  const level = String(risk.risk_level || risk.level || currentRiskLevel || "low").toLowerCase();
+  const validated = !!(risk.human_validated ?? risk.humanValidated);
+  const ready = isReadyStatus(status);
+  if (!ready && String(status).toLowerCase() === "failed") {
+    return {
+      code: "processing_error",
+      label: "Erreur de traitement",
+      severity: "error",
+      decision: "Le document n'est pas utilisable pour le moment",
+      explanation: "Le traitement n'a pas pu être terminé. Relancez ou contactez l'administrateur.",
+      recommended_action: "Relancer le traitement",
+      reasons: ["Traitement incomplet"],
+      actions: ["Relancer anonymisation", "Voir audit trail"],
+      risk_score: score,
+      risk_level: level,
+      human_validated: validated,
+    };
+  }
+  if (!ready) {
+    return {
+      code: "processing",
+      label: "Traitement en cours",
+      severity: "neutral",
+      decision: "Attendez la fin du traitement",
+      explanation: "Le document est en cours d'OCR, d'anonymisation ou de scoring.",
+      recommended_action: "Patienter",
+      reasons: ["Traitement en cours"],
+      actions: ["Voir audit trail"],
+      risk_score: score,
+      risk_level: level,
+      human_validated: validated,
+    };
+  }
+  if (level === "critical" || (score !== null && score >= 80)) {
+    return {
+      code: "blocked",
+      label: "Export bloqué",
+      severity: "danger",
+      decision: "Export bloqué tant que les risques ne sont pas corrigés",
+      explanation: "Des données sensibles critiques semblent encore présentes.",
+      recommended_action: "Corriger les risques",
+      reasons: ["Risque critique"],
+      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger rapport DPO"],
+      risk_score: score,
+      risk_level: level,
+      human_validated: validated,
+    };
+  }
+  if (level === "high" || level === "medium" || (score !== null && score >= 40)) {
+    return {
+      code: "review_recommended",
+      label: "Revue recommandée",
+      severity: "warning",
+      decision: "Vous devez vérifier avant export",
+      explanation: "Certaines données sensibles ou quasi-identifiants peuvent encore permettre une réidentification.",
+      recommended_action: validated ? "Télécharger le rapport DPO" : "Valider manuellement",
+      reasons: ["Contrôle recommandé avant export"],
+      actions: ["Corriger l'anonymisation", "Valider manuellement", "Voir pourquoi"],
+      risk_score: score,
+      risk_level: level,
+      human_validated: validated,
+    };
+  }
+  return {
+    code: validated ? "human_validated" : "ready_for_ai",
+    label: validated ? "Validé manuellement" : "Prêt pour IA",
+    severity: "success",
+    decision: "Vous pouvez exporter",
+    explanation: validated
+      ? "Le document anonymisé a été relu et validé par un utilisateur autorisé."
+      : "Le document anonymisé ne présente pas de risque évident. Il peut être utilisé pour une analyse IA ou un export.",
+    recommended_action: "Analyser avec IA",
+    reasons: ["Aucun risque évident détecté"],
+    actions: ["Analyser avec IA", "Exporter rapport", "Voir audit trail"],
+    risk_score: score,
+    risk_level: level,
+    human_validated: validated,
+  };
+}
+
+function buildDecisionPayload(risk = {}, status = currentDocStatus) {
+  const decision = risk.decision || fallbackDecisionFromRisk(risk, status);
+  return {
+    ...decision,
+    risk_score: normalizeRiskPercent(decision.risk_score ?? risk.risk_score ?? risk.score),
+    trust_score: risk.trust_score ?? risk.trust?.trust_score,
+    ai_readiness_score: risk.ai_readiness_score ?? risk.trust?.ai_readiness_score,
+    timeline: risk.timeline || [],
+    entity_types_found: risk.entity_types_found || [],
+    audit_events_count: risk.audit_events_count,
+  };
+}
+
+function renderDecisionCard(risk = {}, status = currentDocStatus) {
+  const card = $("decision-card");
+  if (!card) return;
+  if (!currentDocId) {
+    card.style.display = "none";
+    const why = $("why-score-card");
+    if (why) why.style.display = "none";
+    return;
+  }
+  const decision = buildDecisionPayload(risk, status);
+  const pill = $("decision-status-pill");
+  if (pill) {
+    pill.textContent = decision.label || "Traitement en cours";
+    pill.className = `decision-status-pill ${decision.severity || "neutral"}`;
+  }
+  const riskScore = decision.risk_score;
+  const trustScore = Number(decision.trust_score);
+  const aiScore = Number(decision.ai_readiness_score);
+  $("decision-risk-score").textContent = riskScore === null || riskScore === undefined ? "—" : `${riskScore}/100`;
+  $("decision-trust-score").textContent = Number.isFinite(trustScore) ? `${Math.round(trustScore)}/100` : "—";
+  $("decision-ai-score").textContent = Number.isFinite(aiScore) ? `${Math.round(aiScore)}/100` : "—";
+  $("decision-explanation").textContent = decision.explanation || "";
+  $("decision-export-text").textContent = decision.decision || "—";
+  $("decision-main-reason").textContent = (decision.reasons || [])[0] || "Aucun risque évident détecté";
+  $("decision-action-text").textContent = decision.recommended_action || "—";
+  $("decision-notice").textContent = decision.decision_notice
+    || "Ce score aide à prioriser les risques. Il ne remplace pas une validation juridique ou DPO.";
+  const actions = $("decision-actions");
+  if (actions) {
+    const actionMap = {
+      "Analyser avec IA": "analyze",
+      "Exporter rapport": "report",
+      "Voir audit trail": "audit",
+      "Corriger l'anonymisation": "correct",
+      "Corriger les risques": "correct",
+      "Valider manuellement": "validate",
+      "Voir pourquoi": "why",
+      "Relancer anonymisation": "retry",
+      "Voir les données détectées": "why",
+      "Télécharger rapport DPO": "report",
+    };
+    actions.innerHTML = (decision.actions || []).slice(0, 4).map(label => {
+      const action = actionMap[label] || "why";
+      const cls = action === "analyze" || action === "correct" ? "btn-primary" : "btn-ghost";
+      return `<button type="button" class="btn ${cls} btn-sm" data-decision-action="${escapeAttr(action)}">${escapeHtml(label)}</button>`;
+    }).join("");
+  }
+  renderWhyScore(decision);
+  card.style.display = "";
+}
+
+function renderWhyScore(decision = {}) {
+  const card = $("why-score-card");
+  if (!card) return;
+  const reasons = Array.isArray(decision.reasons) && decision.reasons.length
+    ? decision.reasons
+    : ["Aucun risque évident détecté"];
+  const label = decision.label || "Traitement en cours";
+  const mainReason = reasons[0] || "Aucun risque évident détecté";
+  $("why-score-summary").textContent =
+    `Le document est en statut "${label}" car ${mainReason.toLowerCase()}.`;
+  const list = $("why-score-list");
+  if (list) {
+    const items = [
+      ...reasons.map(reason => `Raison: ${reason}`),
+      `Niveau de risque: ${decision.risk_level || "non disponible"}`,
+      `Validation humaine: ${decision.human_validated ? "présente" : "absente"}`,
+      decision.decision ? `Export: ${decision.decision}` : "",
+    ].filter(Boolean);
+    list.innerHTML = items.map(item => `<li>${escapeHtml(item)}</li>`).join("");
+  }
+  renderDecisionTimeline(decision.timeline || []);
+  card.style.display = "";
+}
+
+function renderDecisionTimeline(steps = []) {
+  const el = $("decision-timeline");
+  if (!el) return;
+  if (!Array.isArray(steps) || !steps.length) {
+    el.innerHTML = "";
+    return;
+  }
+  el.innerHTML = steps.map((step, idx) => `
+    <div class="decision-timeline-step ${escapeAttr(step.state || "pending")}">
+      <strong>${idx + 1}. ${escapeHtml(step.label || step.key || "Étape")}</strong>
+      <span>${escapeHtml(timelineStateLabel(step.state))}</span>
+    </div>
+  `).join("");
+}
+
+function timelineStateLabel(state) {
+  if (state === "done") return "Terminé";
+  if (state === "current") return "En cours";
+  if (state === "error") return "Erreur";
+  return "À venir";
 }
 
 function renderExportGuard(payload = {}) {
@@ -715,7 +908,7 @@ function renderExportGuard(payload = {}) {
   const titleEl = $("export-guard-title");
   const detailEl = $("export-guard-detail");
   let state = "ready";
-  let title = "Export prêt";
+  let title = "Vous pouvez exporter";
   let detail = `${scoreText}Document anonymisé.`;
   let canApprove = false;
 
@@ -738,7 +931,7 @@ function renderExportGuard(payload = {}) {
     detail = `${scoreText}Validation humaine journalisée.`;
   } else if (level === "medium") {
     state = "watch";
-    title = "Export sous vigilance";
+    title = "Revue recommandée avant export IA";
     detail = `${scoreText}Contrôle recommandé avant partage externe.`;
   }
 
@@ -747,6 +940,7 @@ function renderExportGuard(payload = {}) {
   if (titleEl) titleEl.textContent = title;
   if (detailEl) detailEl.textContent = detail;
   if (approveBtn) approveBtn.style.display = canApprove ? "" : "none";
+  renderDecisionCard(payload, status);
   renderAIReadySummary();
 }
 
@@ -767,6 +961,7 @@ async function refreshAIDocInsights(docId) {
     renderAIDocInsights({});
     renderExportGuard({});
     renderTrustIndicator({});
+    renderDecisionCard({}, "");
     return;
   }
   try {
@@ -810,6 +1005,7 @@ async function refreshAIDocInsights(docId) {
       ...risk,
       status: st.status || currentDocStatus,
     });
+    renderDecisionCard(risk, st.status || currentDocStatus);
     renderTrustIndicator(risk);
   } catch (_e) {
     updatePipelineTimeline({ status: currentDocStatus, extractDone: currentDocStatus !== "uploaded", anonymDone: isReadyStatus(currentDocStatus) });
@@ -826,6 +1022,7 @@ async function refreshAIDocInsights(docId) {
       nextAction: "Vérifier document",
     });
     renderExportGuard({ status: currentDocStatus, risk_level: currentRiskLevel });
+    renderDecisionCard({ status: currentDocStatus, risk_level: currentRiskLevel }, currentDocStatus);
     renderTrustIndicator({});
   }
 }
@@ -841,18 +1038,23 @@ function updatePipelineTimeline(payload = {}) {
   const extractDone = !!payload.extractDone;
   const anonymDone = !!payload.anonymDone;
   const st = (payload.status || currentDocStatus || "").toLowerCase();
-  let currentStep = "extract";
-  if (!extractDone) currentStep = "extract";
-  else if (!anonymDone) currentStep = "anonymize";
-  else if (isReadyStatus(st)) currentStep = "ai";
+  const ready = isReadyStatus(st);
+  const scoreDone = ready || anonymDone;
+  let currentStep = "ocr";
+  if (!extractDone) currentStep = "ocr";
+  else if (!anonymDone) currentStep = st === "extracted" ? "detect" : "anonymize";
+  else if (ready) currentStep = "export";
   else currentStep = "anonymize";
   tl.querySelectorAll(".pipe-step").forEach((el) => {
     const key = el.dataset.step;
     el.classList.remove("done", "current");
     if (key === "upload") el.classList.add("done");
-    if (key === "extract" && extractDone) el.classList.add("done");
+    if (key === "ocr" && extractDone) el.classList.add("done");
+    if (key === "detect" && anonymDone) el.classList.add("done");
     if (key === "anonymize" && anonymDone) el.classList.add("done");
-    if (key === "ai" && isReadyStatus(st)) el.classList.add("done");
+    if (key === "score" && scoreDone) el.classList.add("done");
+    if (key === "review" && ready) el.classList.add("done");
+    if (key === "export" && ready) el.classList.add("done");
     if (key === currentStep) el.classList.add("current");
   });
 }
@@ -2245,32 +2447,72 @@ async function loadOriginalDocument(docId) {
   const spinner = $("original-loading-spinner");
   if (!container) return;
 
-  spinner.style.display = "";
+  if (originalBlobUrl) {
+    URL.revokeObjectURL(originalBlobUrl);
+    originalBlobUrl = "";
+  }
+  container.innerHTML = `
+    <div id="original-loading-spinner" class="spinner-overlay"><div class="spinner"></div></div>
+    <div class="viewer-placeholder">Chargement du document original...</div>
+  `;
   try {
     const doc = lastDocsList.find(d => d.id === docId);
-    const contentType = doc ? doc.content_type : "application/pdf";
-    const url = `${API}/documents/${docId}/raw?token=${token}`; // Token as query param for iframe if needed, though auth headers are preferred
-    
-    // Better: use blob URL with auth headers to avoid token in URL
+    const fallbackType = doc ? doc.content_type : "application/pdf";
+    const filename = doc?.original_filename || currentDocName || "document";
     const resp = await fetch(`${API}/documents/${docId}/raw`, {
-       headers: { "Authorization": `Bearer ${token}` }
+      headers: { "Authorization": `Bearer ${token}` }
     });
-    if (!resp.ok) throw new Error("Impossible de charger le document d'origine");
-    
-    const blob = await resp.blob();
-    const blobUrl = URL.createObjectURL(blob);
-
-    if (contentType.includes("pdf")) {
-      container.innerHTML = `<iframe src="${blobUrl}" class="original-viewer"></iframe>`;
-    } else if (contentType.includes("image")) {
-      container.innerHTML = `<img src="${blobUrl}" class="original-viewer" style="object-fit: contain;" />`;
-    } else {
-      container.innerHTML = `<div class="viewer-placeholder">Aperçu non disponible pour ce format (${contentType})</div>`;
+    if (!resp.ok) {
+      let message = "Impossible de charger le document original.";
+      try {
+        const payload = await resp.json();
+        if (payload.detail) message = payload.detail;
+      } catch (_e) {
+        // ignore non-JSON error bodies
+      }
+      if (resp.status === 403) {
+        message = "Vous n'avez pas accès au document original. Consultez la version anonymisée.";
+      }
+      throw new Error(message);
     }
+
+    const blob = await resp.blob();
+    const contentType = (blob.type || resp.headers.get("content-type") || fallbackType || "")
+      .split(";")[0]
+      .toLowerCase();
+    originalBlobUrl = URL.createObjectURL(blob);
+    const previewablePdf = contentType === "application/pdf";
+    const previewableImage = contentType.startsWith("image/");
+    const toolbar = `
+      <div class="original-viewer-toolbar">
+        <span title="${escapeAttr(filename)}">${escapeHtml(filename)}</span>
+        <div class="original-viewer-actions">
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-open-original">Ouvrir</button>
+          <button type="button" class="btn btn-ghost btn-sm" id="btn-download-original">Télécharger l'original</button>
+        </div>
+      </div>`;
+
+    if (previewablePdf) {
+      container.innerHTML = `${toolbar}<iframe src="${originalBlobUrl}" class="original-viewer original-viewer-frame" title="Aperçu PDF original"></iframe>`;
+    } else if (previewableImage) {
+      container.innerHTML = `${toolbar}<img src="${originalBlobUrl}" class="original-viewer original-viewer-frame" alt="Aperçu du document original" style="object-fit: contain;" />`;
+    } else {
+      container.innerHTML = `${toolbar}<div class="viewer-placeholder">Aperçu non disponible pour ce format. Téléchargez le fichier original.</div>`;
+    }
+    $("btn-open-original")?.addEventListener("click", () => window.open(originalBlobUrl, "_blank", "noopener"));
+    $("btn-download-original")?.addEventListener("click", () => {
+      triggerDownload(blob, filename || `document_${docId}`);
+    });
   } catch (e) {
-    container.innerHTML = `<div class="viewer-placeholder" style="color:var(--error)">Erreur: ${e.message}</div>`;
+    container.innerHTML = `
+      <div class="viewer-placeholder is-error">
+        <div>
+          <strong>Aperçu indisponible</strong><br>
+          ${escapeHtml(e.message || "Le document original ne peut pas être affiché.")}
+        </div>
+      </div>`;
   } finally {
-    spinner.style.display = "none";
+    if (spinner) spinner.style.display = "none";
   }
 }
 
@@ -2301,12 +2543,12 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   renderEntityLegend(summary);
 
   // Store risk level globally for export gating
-  currentRiskLevel = risk ? risk.level : null;
+  currentRiskLevel = risk ? (risk.risk_level || risk.level || null) : null;
   if (risk) {
     renderExportGuard({
       status: "ready",
-      risk_level: risk.level,
-      risk_score: risk.score,
+      risk_level: risk.risk_level || risk.level,
+      risk_score: risk.risk_score ?? risk.score,
       human_validated: false,
     });
   }
@@ -2323,7 +2565,8 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
     const levelEl = $("risk-level");
     const recoEl = $("risk-recommendation");
     const badgeEl = $("risk-badge");
-    if (scoreEl) scoreEl.textContent = `${Math.round(risk.score * 100)}%`;
+    const riskPct = normalizeRiskPercent(risk.score);
+    if (scoreEl) scoreEl.textContent = riskPct === null ? "—" : `${riskPct}%`;
     if (levelEl) {
       const labels = { low: "Faible", medium: "Moyen", high: "Élevé", critical: "Critique" };
       levelEl.textContent = labels[risk.level] || risk.level;
@@ -2513,7 +2756,8 @@ function renderRiskMeter(score) {
     meter.className = "doc-risk-meter";
     container.appendChild(meter);
   }
-  const pct = Math.max(0, Math.min(100, Math.round(score * 100)));
+  const normalized = normalizeRiskPercent(score);
+  const pct = normalized === null ? 0 : normalized;
   meter.innerHTML = `<span>Sensibilité</span><div class="doc-risk-meter-bar"><div style="width:${pct}%"></div></div><strong>${pct}%</strong>`;
 }
 
@@ -2742,9 +2986,12 @@ async function validate() {
   btn.disabled = true;
   btn.textContent = "Validation…";
   try {
+    const finalText = $("preview-anon-text")?.textContent || "";
     await apiFetch(`/documents/${currentDocId}/validate`, {
       method: "POST",
-      body: JSON.stringify({}),
+      body: JSON.stringify({
+        final_text: finalText.trim() ? finalText : undefined,
+      }),
     });
     setStep(3);
     updateAIDocBar(currentDocName, currentDocSize);
@@ -2761,6 +3008,74 @@ async function validate() {
     btn.disabled = false;
     btn.textContent = "Valider et continuer →";
   }
+}
+
+async function saveManualCorrection(maskOptions = {}) {
+  if (!currentDocId) return;
+  const textEl = $("preview-anon-text");
+  const finalText = textEl?.textContent || "";
+  if (!finalText.trim()) {
+    toast("Aucun texte anonymisé à corriger.", "error");
+    return;
+  }
+  try {
+    const payload = {
+      final_text: finalText,
+      masked_value: maskOptions.masked_value || null,
+      replacement: maskOptions.replacement || null,
+      entity_type: maskOptions.entity_type || null,
+    };
+    const result = await apiFetch(`/documents/${currentDocId}/manual-correction`, {
+      method: "POST",
+      body: JSON.stringify(payload),
+    });
+    if (textEl) textEl.innerHTML = highlightTags(result.preview_text || finalText);
+    showAnonResults(
+      result.preview_text || finalText,
+      result.detections_count || 0,
+      result.entity_summary || {},
+      result.risk || null,
+      "pseudonymization",
+      result
+    );
+    await refreshAIDocInsights(currentDocId);
+    await loadDocList();
+    toast("Correction enregistrée. Score RGPD recalculé.", "success");
+  } catch (e) {
+    toast(`Correction impossible: ${e.message}`, "error");
+  }
+}
+
+async function addMaskValue() {
+  if (!currentDocId) return;
+  const selected = String(window.getSelection?.().toString() || "").trim();
+  const value = prompt("Donnée à masquer dans tout le document", selected);
+  if (!value || !value.trim()) return;
+  const type = prompt("Type de donnée: nom, email, téléphone, IBAN, SIRET, adresse, date, autre", "email");
+  if (type === null) return;
+  const normalized = String(type || "autre").trim().toLowerCase();
+  const replacementMap = {
+    nom: "[PERSONNE]",
+    personne: "[PERSONNE]",
+    email: "[EMAIL]",
+    téléphone: "[TELEPHONE]",
+    telephone: "[TELEPHONE]",
+    iban: "[IBAN]",
+    siret: "[SIRET]",
+    adresse: "[ADRESSE]",
+    date: "[DATE]",
+    autre: "[DONNEE]",
+  };
+  const replacement = prompt(
+    "Remplacement à appliquer",
+    replacementMap[normalized] || "[DONNEE]"
+  );
+  if (!replacement || !replacement.trim()) return;
+  await saveManualCorrection({
+    masked_value: value.trim(),
+    replacement: replacement.trim(),
+    entity_type: normalized,
+  });
 }
 
 function goToChat() {
@@ -4518,6 +4833,32 @@ document.addEventListener("DOMContentLoaded", () => {
 
   // Valider → discussion IA (avec validation)
   $("btn-validate").addEventListener("click", validate);
+  if ($("btn-save-correction")) $("btn-save-correction").addEventListener("click", () => saveManualCorrection());
+  if ($("btn-add-mask")) $("btn-add-mask").addEventListener("click", addMaskValue);
+  if ($("btn-toggle-score-details")) {
+    $("btn-toggle-score-details").addEventListener("click", () => {
+      const details = $("why-score-details");
+      if (!details) return;
+      const visible = details.style.display !== "none";
+      details.style.display = visible ? "none" : "";
+      $("btn-toggle-score-details").textContent = visible ? "Voir pourquoi" : "Masquer";
+    });
+  }
+  document.addEventListener("click", (e) => {
+    const control = e.target instanceof Element ? e.target.closest("[data-decision-action]") : null;
+    if (!control) return;
+    const action = control.dataset.decisionAction;
+    if (action === "analyze") goToChat();
+    else if (action === "report" || action === "audit") downloadAuditReport();
+    else if (action === "correct") setReviewMode("split");
+    else if (action === "validate") validate();
+    else if (action === "why") {
+      const details = $("why-score-details");
+      if (details) details.style.display = "";
+    } else if (action === "retry") {
+      $("btn-anonymize")?.click();
+    }
+  });
 
   // Discussion directe → step 3 sans re-valider
   $("btn-go-ai").addEventListener("click", goToChat);

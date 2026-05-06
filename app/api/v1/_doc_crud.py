@@ -29,11 +29,49 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
-def _safe_content_disposition_filename(filename: str | None) -> str:
+_BROWSER_PREVIEW_TYPES = {
+    "application/pdf",
+    "image/png",
+    "image/jpeg",
+    "image/jpg",
+    "image/webp",
+    "image/gif",
+}
+
+
+def _safe_content_disposition_filename(
+    filename: str | None,
+    *,
+    disposition: str = "inline",
+) -> str:
     safe = (filename or "document").replace("\r", " ").replace("\n", " ").replace('"', "")
     safe = safe.strip() or "document"
     ascii_safe = safe.encode("ascii", "ignore").decode("ascii") or "document"
-    return f'inline; filename="{ascii_safe}"; filename*=UTF-8\'\'{quote(safe)}'
+    return (
+        f'{disposition}; filename="{ascii_safe}"; '
+        f"filename*=UTF-8''{quote(safe)}"
+    )
+
+
+def _raw_document_content_type(document: Document) -> str:
+    content_type = (document.content_type or "").split(";", 1)[0].strip().lower()
+    if content_type:
+        return content_type
+    extension = (document.extension or "").strip(".").lower()
+    if extension == "pdf":
+        return "application/pdf"
+    if extension in {"png", "jpg", "jpeg", "webp", "gif"}:
+        return "image/jpeg" if extension in {"jpg", "jpeg"} else f"image/{extension}"
+    return "application/octet-stream"
+
+
+def _raw_document_disposition(document: Document) -> str:
+    content_type = _raw_document_content_type(document)
+    disposition = "inline" if content_type in _BROWSER_PREVIEW_TYPES else "attachment"
+    return _safe_content_disposition_filename(
+        document.original_filename,
+        disposition=disposition,
+    )
 
 
 @router.get(
@@ -324,13 +362,14 @@ async def get_document_raw(
     try:
         from app.services.storage_service import read_document_bytes
         content = read_document_bytes(document)
+        content_type = _raw_document_content_type(document)
         return Response(
             content=content,
-            media_type=document.content_type or "application/octet-stream",
+            media_type=content_type,
             headers={
-                "Content-Disposition": _safe_content_disposition_filename(
-                    document.original_filename
-                )
+                "Content-Disposition": _raw_document_disposition(document),
+                "Content-Length": str(len(content)),
+                "Accept-Ranges": "bytes",
             }
         )
     except Exception as exc:

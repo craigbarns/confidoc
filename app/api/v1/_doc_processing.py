@@ -26,6 +26,7 @@ from app.models.entity_detection import EntityDetection
 from app.schemas.document import (
     DocumentPreviewResponse,
     EntityMappingItem,
+    ManualCorrectionRequest,
     StructuredDocumentResponse,
     ValidateDocumentRequest,
 )
@@ -403,6 +404,132 @@ async def get_structured_document(
         anonymization_method=None,
         created_at=document.created_at,
     )
+
+
+@router.post(
+    "/{document_id}/manual-correction",
+    status_code=status.HTTP_200_OK,
+    summary="Corriger manuellement la version anonymisée",
+)
+async def correct_anonymized_document(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    args: ManualCorrectionRequest,
+) -> dict:
+    document = await _get_user_document_or_404(
+        db,
+        document_id,
+        current_user.id,
+        permission="documents.validate",
+    )
+
+    final_text = postgres_safe_text(args.final_text)
+    masked_value = (args.masked_value or "").strip()
+    replacement = (args.replacement or "").strip()
+    if masked_value and replacement:
+        final_text = final_text.replace(masked_value, replacement)
+
+    await db.execute(
+        delete(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview_version = DocumentVersion(
+        document_id=document.id,
+        version_type=DocumentVersionType.PREVIEW_ANONYMIZED,
+        content_text=final_text,
+    )
+    db.add(preview_version)
+    await db.flush()
+
+    from app.services.anonymization.detector import detect_entities
+    from app.services.reidentification_risk_service import analyze_reidentification_risk
+
+    residual_detections = detect_entities(
+        final_text,
+        profile="strict",
+        document_type=document.doc_type or "auto",
+    )
+    await db.execute(delete(EntityDetection).where(EntityDetection.document_id == document.id))
+    for item in residual_detections:
+        db.add(
+            EntityDetection(
+                document_id=document.id,
+                document_version_id=preview_version.id,
+                entity_type=str(item.get("entity_type", "unknown"))[:40],
+                start_index=int(item.get("start_index", 0)),
+                end_index=int(item.get("end_index", 0)),
+                value_excerpt=postgres_safe_text(str(item.get("value_excerpt", "")))[:1000],
+                replacement=postgres_safe_text(str(item.get("replacement", "[REDACTED]")))[:500],
+            )
+        )
+
+    entity_summary: dict[str, int] = {}
+    for item in residual_detections:
+        entity_type = str(item.get("entity_type", "unknown")).upper()
+        entity_summary[entity_type] = entity_summary.get(entity_type, 0) + 1
+    risk_report = analyze_reidentification_risk(final_text, entity_summary)
+
+    try:
+        from datetime import timedelta
+
+        from app.config import get_settings
+        from app.models.pseudonym_mapping import PseudonymMapping
+        from app.services.crypto_service import encrypt_mapping
+
+        settings = get_settings()
+        mapping_result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = mapping_result.scalar_one_or_none()
+        if mapping is None:
+            mapping = PseudonymMapping(
+                document_id=document.id,
+                user_id=document.uploaded_by_user_id,
+                encrypted_mapping=encrypt_mapping({}, settings.PSEUDO_MAPPING_KEY),
+                expires_at=datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS),
+            )
+            db.add(mapping)
+        mapping.risk_score = risk_report.score
+        mapping.risk_level = risk_report.level
+        mapping.human_validated = False
+        mapping.validated_by_user_id = None
+        mapping.validated_at = None
+    except Exception as exc:
+        logger.warning("manual_correction_mapping_update_failed", error=str(exc))
+
+    document.status = DocumentStatus.READY
+    try:
+        await record_document_audit_event(
+            db,
+            document=document,
+            action="document:manual_correction",
+            details={
+                "final_chars": len(final_text),
+                "masked_value": masked_value or None,
+                "replacement": replacement or None,
+                "entity_type": args.entity_type,
+                "residual_detections_count": len(residual_detections),
+                "risk_score": risk_report.score,
+                "risk_level": risk_report.level,
+            },
+        )
+    except Exception as exc:
+        logger.warning("audit_manual_correction_event_failed", error=str(exc))
+
+    await db.commit()
+    return {
+        "status": "corrected",
+        "document_id": str(document.id),
+        "preview_text": final_text,
+        "detections_count": len(residual_detections),
+        "entity_summary": entity_summary,
+        "risk": risk_report.to_dict(),
+    }
 
 
 @router.post(

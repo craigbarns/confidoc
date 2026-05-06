@@ -1,10 +1,10 @@
 """ConfiDoc Backend — Schemas Documents."""
 
+import uuid
 from datetime import datetime
 from typing import Any
-import uuid
 
-from pydantic import BaseModel, ConfigDict, Field, model_validator, field_validator
+from pydantic import BaseModel, ConfigDict, Field, field_validator, model_validator
 
 
 class DocumentResponse(BaseModel):
@@ -86,6 +86,28 @@ class ValidateDocumentRequest(BaseModel):
     )
 
 
+class ManualCorrectionRequest(BaseModel):
+    final_text: str = Field(
+        min_length=1,
+        description="Texte anonymisé corrigé par l'utilisateur.",
+    )
+    masked_value: str | None = Field(
+        default=None,
+        max_length=500,
+        description="Valeur à remplacer dans tout le document.",
+    )
+    replacement: str | None = Field(
+        default=None,
+        max_length=80,
+        description="Token de remplacement, ex: [EMAIL].",
+    )
+    entity_type: str | None = Field(
+        default=None,
+        max_length=40,
+        description="Type de donnée masquée.",
+    )
+
+
 class EntityMappingItem(BaseModel):
     """A single entity placeholder → original values mapping."""
     placeholder: str = Field(description="Le token anonymisé, ex: [PERSONNE_1]")
@@ -104,7 +126,10 @@ class KeyAmountItem(BaseModel):
 class StructuredDocumentResponse(BaseModel):
     """Sortie structurée pour exploitation IA/RAG."""
     document_id: uuid.UUID
-    doc_type: str | None = Field(default=None, description="Type détecté: invoice, accounting, legal, generic")
+    doc_type: str | None = Field(
+        default=None,
+        description="Type détecté: invoice, accounting, legal, generic",
+    )
     status: str
     original_filename: str
 
@@ -184,4 +209,3 @@ class DossierClient(BaseModel):
     exercices: list[DossierExercice]
     total_docs: int
     last_activity: datetime | None
-

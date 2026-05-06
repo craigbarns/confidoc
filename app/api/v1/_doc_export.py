@@ -35,6 +35,10 @@ from app.core.logging import get_logger
 from app.models.document import DocumentStatus
 from app.models.entity_detection import EntityDetection
 from app.services.audit_trail_service import record_audit_event
+from app.services.document_decision_service import (
+    build_document_decision,
+    build_timeline_steps,
+)
 from app.services.trust_score_service import compute_document_trust_score
 
 router = APIRouter()
@@ -395,6 +399,18 @@ async def get_audit_report(
         audit_events_count=audit_count,
         has_anonymized_text=bool(anonymized_text),
     )
+    status_value = (
+        document.status.value if hasattr(document.status, "value") else str(document.status)
+    )
+    decision = build_document_decision(
+        status=status_value,
+        risk_score=risk_score_for_trust,
+        risk_level=risk_level_for_trust,
+        human_validated=human_validated_for_trust,
+        entity_types=[],
+        detections_count=detections_count,
+        audit_events_count=audit_count,
+    )
 
     return {
         "document_id": str(document.id),
@@ -414,6 +430,7 @@ async def get_audit_report(
         },
         "risk": risk_info,
         "trust": trust.to_dict(),
+        "decision": decision,
         "audit_entries": entries,
         "total_actions": len(entries),
         "decision_notice": (
@@ -586,6 +603,27 @@ async def get_document_risk_score(
         audit_events_count=audit_count,
         has_anonymized_text=bool(anonymized_text),
     )
+    status_value = (
+        document.status.value if hasattr(document.status, "value") else str(document.status)
+    )
+    human_validated = bool(mapping and mapping.human_validated)
+    decision = build_document_decision(
+        status=status_value,
+        risk_score=risk_score,
+        risk_level=risk_level,
+        human_validated=human_validated,
+        entity_types=sorted(unique_types),
+        detections_count=len(entity_types),
+        audit_events_count=audit_count,
+    )
+    timeline = build_timeline_steps(
+        status=status_value,
+        extraction_done=True,
+        anonymization_done=bool(anonymized_text),
+        risk_score_done=True,
+        human_validated=human_validated,
+        export_allowed=decision["code"] in {"ready_for_ai", "human_validated"},
+    )
 
     recommendations: list[str] = []
     if "CARTE_BANCAIRE" in unique_types or "IBAN" in unique_types:
@@ -616,6 +654,8 @@ async def get_document_risk_score(
         "ai_readiness_score": trust.ai_readiness_score,
         "ai_readiness_level": trust.ai_readiness_level,
         "trust": trust.to_dict(),
+        "decision": decision,
+        "timeline": timeline,
         "recommendations": recommendations,
         "entity_types_found": sorted(unique_types) if unique_types else [],
         "audit_events_count": audit_count,

@@ -720,13 +720,19 @@
         </div>
 
         <div id="pipeline-timeline" class="pipeline-timeline" style="display:none">
-          <div class="pipe-step" data-step="upload"><span>1</span> Ajout</div>
+          <div class="pipe-step" data-step="upload"><span>1</span> Import</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="extract"><span>2</span> OCR</div>
+          <div class="pipe-step" data-step="ocr"><span>2</span> OCR</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="anonymize"><span>3</span> Sécurisation</div>
+          <div class="pipe-step" data-step="detect"><span>3</span> Détection</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="ai"><span>4</span> IA</div>
+          <div class="pipe-step" data-step="anonymize"><span>4</span> Anonymisation</div>
+          <div class="pipe-link"></div>
+          <div class="pipe-step" data-step="score"><span>5</span> Score</div>
+          <div class="pipe-link"></div>
+          <div class="pipe-step" data-step="review"><span>6</span> Revue</div>
+          <div class="pipe-link"></div>
+          <div class="pipe-step" data-step="export"><span>7</span> Export / IA</div>
         </div>
 
         <div class="panel-header">
@@ -794,6 +800,49 @@
         </div>
 
         <div id="anon-results" style="display:none">
+          <section id="decision-card" class="decision-card" aria-live="polite">
+            <div class="decision-card-main">
+              <span id="decision-status-pill" class="decision-status-pill neutral">Traitement en cours</span>
+              <h3>Décision ConfiDoc</h3>
+              <p id="decision-explanation">Le document est en cours d'analyse.</p>
+            </div>
+            <div class="decision-score-grid">
+              <div><span>Score de risque RGPD</span><strong id="decision-risk-score">—</strong></div>
+              <div><span>Niveau de confiance</span><strong id="decision-trust-score">—</strong></div>
+              <div><span>Prêt pour IA</span><strong id="decision-ai-score">—</strong></div>
+            </div>
+            <div class="decision-detail-grid">
+              <div>
+                <span>Décision</span>
+                <strong id="decision-export-text">Attendez la fin du traitement</strong>
+              </div>
+              <div>
+                <span>Raison principale</span>
+                <strong id="decision-main-reason">—</strong>
+              </div>
+              <div>
+                <span>Action recommandée</span>
+                <strong id="decision-action-text">—</strong>
+              </div>
+            </div>
+            <p class="decision-notice" id="decision-notice">
+              Ce score aide à prioriser les risques. Il ne remplace pas une validation juridique ou DPO.
+            </p>
+            <div id="decision-actions" class="decision-actions"></div>
+          </section>
+
+          <section id="why-score-card" class="why-score-card">
+            <div class="why-score-header">
+              <h3>Pourquoi ce score ?</h3>
+              <button type="button" id="btn-toggle-score-details" class="btn btn-ghost btn-sm">Voir pourquoi</button>
+            </div>
+            <p id="why-score-summary">Le score sera détaillé après anonymisation.</p>
+            <div id="why-score-details" class="why-score-details" style="display:none">
+              <ul id="why-score-list"></ul>
+              <div id="decision-timeline" class="decision-timeline"></div>
+            </div>
+          </section>
+
           <div class="anon-stats">
             <div class="stat-badge">
               <span id="stat-count" class="stat-num">0</span>
@@ -827,9 +876,11 @@
             <div class="review-toolbar">
               <div class="review-mode-switch">
                 <button class="btn btn-ghost btn-sm active" id="btn-view-split" data-action="review-mode" data-mode="split">Vue côte à côte</button>
-                <button class="btn btn-ghost btn-sm" id="btn-view-text" data-action="review-mode" data-mode="text">Texte seul</button>
+              <button class="btn btn-ghost btn-sm" id="btn-view-text" data-action="review-mode" data-mode="text">Texte seul</button>
               </div>
               <div style="margin-left:auto; display:flex; gap:8px;">
+                 <button class="btn btn-ghost btn-sm" id="btn-add-mask" type="button">Ajouter une donnée à masquer</button>
+                 <button class="btn btn-ghost btn-sm" id="btn-save-correction" type="button">Enregistrer correction</button>
                  <button class="btn btn-ghost btn-sm" data-action="review-fullscreen" title="Plein écran">
                     <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M15 3h6v6M9 21H3v-6M21 3l-7 7M3 21l7-7"/></svg>
                  </button>
@@ -839,7 +890,7 @@
             <div id="review-container" class="review-container mode-split">
               <!-- Pane Gauche : Original (PDF/Image) -->
               <div class="review-pane original-pane">
-                <div class="pane-header">Document Original</div>
+                <div class="pane-header">Document original</div>
                 <div id="original-viewer-container" class="viewer-container">
                    <div id="original-loading-spinner" class="spinner-overlay" style="display:none"><div class="spinner"></div></div>
                    <!-- Sera rempli dynamiquement par un iframe ou img -->
@@ -849,7 +900,7 @@
 
               <!-- Pane Droite : Texte Anonymisé -->
               <div class="review-pane anonymized-pane">
-                <div class="pane-header">Texte Anonymisé (Révision)</div>
+                <div class="pane-header">Texte anonymisé modifiable</div>
                 <div class="viewer-container">
                    <div id="preview-anon-text" class="preview-text interactive-text" contenteditable="true" spellcheck="false"></div>
                 </div>
@@ -1011,15 +1062,15 @@
             <div id="kpi-anonymization-status" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Risk Score</div>
+            <div class="kpi-label" title="Ce score aide à prioriser les risques. Il ne remplace pas une validation juridique ou DPO.">Score de risque RGPD</div>
             <div id="kpi-risk-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Trust Score</div>
+            <div class="kpi-label">Niveau de confiance</div>
             <div id="kpi-trust-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">AI Readiness</div>
+            <div class="kpi-label">Prêt pour IA</div>
             <div id="kpi-ai-readiness" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
