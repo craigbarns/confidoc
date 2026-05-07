@@ -27,6 +27,8 @@ class Settings(BaseSettings):
     DEBUG: bool = False
     SECRET_KEY: str = "CHANGE-ME"
     LOG_LEVEL: str = "INFO"
+    DEMO_MODE: bool = True
+    DEMO_SEED_ENABLED: bool = True
 
     # ---- API ----
     API_V1_PREFIX: str = "/api/v1"

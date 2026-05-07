@@ -7,7 +7,7 @@
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="/static/css/style.css?v=2.3" />
+  <link rel="stylesheet" href="/static/css/style.css?v={{ASSET_VERSION}}" />
   <style>
     .review-station {
       margin-top: 20px;
@@ -189,6 +189,9 @@
         </svg>
         <span id="btn-login-text">Se connecter</span>
       </button>
+      <button type="button" class="btn btn-secondary btn-full auth-demo-btn" id="btn-public-investor-demo">
+        Lancer la démo investisseur
+      </button>
       <p id="auth-error" class="error-msg" style="display:none"></p>
     </form>
 
@@ -234,6 +237,7 @@
       </svg>
       Vos données restent confidentielles et ne quittent pas votre organisation.
     </p>
+    <div id="ui-version" class="ui-version" data-version="{{UI_VERSION_LABEL}}">v{{UI_VERSION_LABEL}}</div>
   </div>
 </div>
 
@@ -1274,6 +1278,6 @@
   </div>
 </div>
 
-<script src="/static/js/app.js?v=2.3" nonce="{{CSP_NONCE}}"></script>
+<script src="/static/js/app.js?v={{ASSET_VERSION}}" nonce="{{CSP_NONCE}}"></script>
 </body>
 </html>

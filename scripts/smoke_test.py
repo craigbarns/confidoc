@@ -18,28 +18,30 @@ import urllib.request
 from dataclasses import dataclass
 from typing import Any
 
-
-SYNTHETIC_PDF = b"""%PDF-1.4
-1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj
-2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj
-3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj
-4 0 obj<</Length 108>>stream
-BT /F1 12 Tf 72 760 Td (ConfiDoc smoke test - document synthetique sans donnees reelles.) Tj ET
-endstream endobj
-5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj
-xref
-0 6
-0000000000 65535 f
-0000000009 00000 n
-0000000058 00000 n
-0000000115 00000 n
-0000000233 00000 n
-0000000391 00000 n
-trailer<</Root 1 0 R/Size 6>>
-startxref
-461
-%%EOF
-"""
+SYNTHETIC_PDF = (
+    b"%PDF-1.4\n"
+    b"1 0 obj<</Type/Catalog/Pages 2 0 R>>endobj\n"
+    b"2 0 obj<</Type/Pages/Count 1/Kids[3 0 R]>>endobj\n"
+    b"3 0 obj<</Type/Page/Parent 2 0 R/MediaBox[0 0 595 842]"
+    b"/Contents 4 0 R/Resources<</Font<</F1 5 0 R>>>>>>endobj\n"
+    b"4 0 obj<</Length 108>>stream\n"
+    b"BT /F1 12 Tf 72 760 Td "
+    b"(ConfiDoc smoke test - document synthetique sans donnees reelles.) Tj ET\n"
+    b"endstream endobj\n"
+    b"5 0 obj<</Type/Font/Subtype/Type1/BaseFont/Helvetica>>endobj\n"
+    b"xref\n"
+    b"0 6\n"
+    b"0000000000 65535 f\n"
+    b"0000000009 00000 n\n"
+    b"0000000058 00000 n\n"
+    b"0000000115 00000 n\n"
+    b"0000000233 00000 n\n"
+    b"0000000391 00000 n\n"
+    b"trailer<</Root 1 0 R/Size 6>>\n"
+    b"startxref\n"
+    b"461\n"
+    b"%%EOF\n"
+)
 
 
 @dataclass
@@ -183,6 +185,19 @@ def fetch_score(base_url: str, token: str, document_id: str) -> CheckResult:
     )
 
 
+def fetch_json_path(
+    base_url: str,
+    path: str,
+    *,
+    token: str | None = None,
+    label: str,
+    required_key: str | None = None,
+) -> CheckResult:
+    status, payload = request_json(base_url, path, token=token)
+    ok = status == 200 and (required_key is None or payload.get(required_key) is not None)
+    detail_value = payload.get(required_key) if required_key else payload.get("status", "ok")
+    return CheckResult(label, ok, f"HTTP {status} · {required_key or 'status'}={detail_value}")
+
 
 def trigger_demo(base_url: str, token: str) -> tuple[CheckResult, str | None]:
     status, payload = request_json(
@@ -201,23 +216,72 @@ def trigger_demo(base_url: str, token: str) -> tuple[CheckResult, str | None]:
         str(doc_id) if doc_id else None,
     )
 
-def fetch_raw(base_url: str, token: str, document_id: str) -> CheckResult:
-    # Need to just check status of raw endpoint
+def trigger_public_investor_demo(base_url: str) -> tuple[CheckResult, dict[str, Any]]:
+    status, payload = request_json(
+        base_url,
+        "/api/v1/demo/investor-document",
+        method="POST",
+        content_type=None,
+    )
+    doc_id = payload.get("document_id") if isinstance(payload, dict) else None
+    urls = payload.get("urls") if isinstance(payload, dict) else None
+    return (
+        CheckResult(
+            "public investor demo",
+            status == 201 and bool(doc_id) and isinstance(urls, dict),
+            f"HTTP {status} · {doc_id or payload.get('detail', 'no document_id')}",
+        ),
+        payload if isinstance(payload, dict) else {},
+    )
+
+def fetch_raw_path(
+    base_url: str,
+    path: str,
+    *,
+    token: str | None = None,
+    label: str = "raw endpoint",
+) -> CheckResult:
     import urllib.request
+    headers = {"User-Agent": "confidoc-smoke-test/1.0"}
+    if token:
+        headers["Authorization"] = f"Bearer {token}"
     req = urllib.request.Request(
-        _url(base_url, f"/api/v1/documents/{document_id}/raw"),
-        headers={"Authorization": f"Bearer {token}", "User-Agent": "confidoc-smoke-test/1.0"}
+        _url(base_url, path),
+        headers=headers,
     )
     try:
         with urllib.request.urlopen(req, timeout=15.0) as resp:
             status = resp.status
+            content_type = resp.headers.get("content-type", "")
+            disposition = resp.headers.get("content-disposition", "")
             content = resp.read()
-            ok = status == 200 and len(content) > 0
-            return CheckResult("raw endpoint", ok, f"HTTP {status} · size={len(content)}")
+            previewable = content_type.startswith("application/pdf") or content_type.startswith(
+                "image/"
+            )
+            inline = "inline" in disposition.lower()
+            ok = status == 200 and len(content) > 0 and previewable and inline
+            return CheckResult(
+                label,
+                ok,
+                (
+                    f"HTTP {status} · content_type={content_type} "
+                    f"· disposition={disposition} · size={len(content)}"
+                ),
+            )
     except urllib.error.HTTPError as exc:
-        return CheckResult("raw endpoint", False, f"HTTP {exc.code} · {exc.reason}")
+        detail = exc.read().decode("utf-8", errors="replace")[:200]
+        return CheckResult(label, False, f"HTTP {exc.code} · {detail or exc.reason}")
     except Exception as exc:
-        return CheckResult("raw endpoint", False, f"Error: {exc}")
+        return CheckResult(label, False, f"Error: {exc}")
+
+
+def fetch_raw(base_url: str, token: str, document_id: str) -> CheckResult:
+    return fetch_raw_path(
+        base_url,
+        f"/api/v1/documents/{document_id}/raw",
+        token=token,
+        label="raw endpoint",
+    )
 
 def main() -> int:
     parser = argparse.ArgumentParser(description="ConfiDoc Railway smoke test")
@@ -237,6 +301,8 @@ def main() -> int:
         check_endpoint(args.base_url, "/version", {200}),
         check_endpoint(args.base_url, "/ui", {200}),
         check_endpoint(args.base_url, "/static/js/app.js", {200}),
+        check_endpoint(args.base_url, "/static/css/style.css", {200}),
+        check_endpoint(args.base_url, "/api/v1/demo/public", {200, 202}),
 
         check_endpoint(
             args.base_url,
@@ -252,13 +318,50 @@ def main() -> int:
     else:
         results.append(CheckResult("login demo", True, "skipped: credentials not provided"))
 
+    public_demo_result, public_demo_payload = trigger_public_investor_demo(args.base_url)
+    results.append(public_demo_result)
+    public_urls = public_demo_payload.get("urls") if isinstance(public_demo_payload, dict) else {}
+    if isinstance(public_urls, dict):
+        raw_path = public_urls.get("raw")
+        score_path = public_urls.get("score")
+        audit_path = public_urls.get("audit")
+        export_path = public_urls.get("export")
+        if raw_path:
+            results.append(fetch_raw_path(args.base_url, raw_path, label="public demo raw"))
+        if score_path:
+            results.append(
+                fetch_json_path(
+                    args.base_url,
+                    score_path,
+                    label="public demo score",
+                    required_key="risk_score",
+                )
+            )
+        if audit_path:
+            results.append(
+                fetch_json_path(
+                    args.base_url,
+                    audit_path,
+                    label="public demo audit",
+                    required_key="total_actions",
+                )
+            )
+        if export_path:
+            results.append(
+                fetch_json_path(
+                    args.base_url,
+                    export_path,
+                    label="public demo export",
+                )
+            )
+
     if token and not args.no_upload:
         demo_result, demo_doc_id = trigger_demo(args.base_url, token)
         results.append(demo_result)
         if demo_doc_id:
             results.append(fetch_score(args.base_url, token, demo_doc_id))
             results.append(fetch_raw(args.base_url, token, demo_doc_id))
-        
+
         upload_result, document_id = upload_synthetic(args.base_url, token)
         results.append(upload_result)
         if document_id:

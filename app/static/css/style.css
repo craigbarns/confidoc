@@ -379,6 +379,17 @@ body {
   line-height: 1.6;
 }
 
+.auth-demo-btn {
+  margin-top: 10px;
+}
+
+.ui-version {
+  margin-top: 12px;
+  text-align: center;
+  color: var(--text-dim);
+  font-size: 10px;
+}
+
 .auth-helpers {
   display: flex;
   justify-content: flex-end;

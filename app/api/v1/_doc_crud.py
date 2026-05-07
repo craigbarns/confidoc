@@ -9,7 +9,7 @@ import uuid
 from datetime import UTC, datetime
 from urllib.parse import quote
 
-from fastapi import APIRouter, Query, Response, status
+from fastapi import APIRouter, Query, Request, Response, status
 from sqlalchemy import delete, desc, func, or_, select
 
 from app.api.deps import CurrentUser, DbSession
@@ -351,6 +351,7 @@ async def get_document_raw(
     document_id: str,
     current_user: CurrentUser,
     db: DbSession,
+    request: Request,
 ) -> Response:
     document = await _get_user_document_or_404(
         db,
@@ -362,6 +363,13 @@ async def get_document_raw(
     try:
         from app.services.storage_service import read_document_bytes
         content = read_document_bytes(document)
+        if not content:
+            logger.warning(
+                "get_document_raw_empty",
+                doc_id=document_id,
+                request_id=getattr(request.state, "request_id", None),
+            )
+            raise http_404("Fichier source vide ou introuvable sur le stockage.")
         content_type = _raw_document_content_type(document)
         return Response(
             content=content,
@@ -373,7 +381,17 @@ async def get_document_raw(
             }
         )
     except Exception as exc:
-        logger.error("get_document_raw_failed", doc_id=document_id, error=str(exc))
+        if hasattr(exc, "status_code"):
+            raise
+        logger.error(
+            "get_document_raw_failed",
+            doc_id=document_id,
+            request_id=getattr(request.state, "request_id", None),
+            storage_backend=getattr(document, "storage_backend", None),
+            content_type=getattr(document, "content_type", None),
+            error_type=type(exc).__name__,
+            error=str(exc),
+        )
         raise http_404("Fichier source introuvable sur le stockage.") from exc
 
 

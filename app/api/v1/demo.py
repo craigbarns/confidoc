@@ -8,19 +8,25 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from typing import Any
 
-from fastapi import APIRouter, BackgroundTasks, HTTPException, Request, status
-from fastapi.responses import JSONResponse, StreamingResponse
+from fastapi import APIRouter, BackgroundTasks, Depends, HTTPException, Request, Response, status
+from fastapi.responses import JSONResponse, PlainTextResponse, StreamingResponse
 from sqlalchemy import select
+from sqlalchemy.exc import IntegrityError
 
-from app.api.deps import CurrentUser, DbSession
+from app.api.deps import CurrentUser, DbSession, oauth2_scheme
+from app.api.v1._doc_crud import _raw_document_content_type, _raw_document_disposition
+from app.api.v1._doc_shared import _get_anonymized_text
 from app.config import get_settings
+from app.core.exceptions import http_404
 from app.core.logging import get_logger
+from app.core.security import decode_access_token, get_password_hash
 from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
 from app.models.entity_detection import EntityDetection
 from app.models.membership import Membership
 from app.models.pseudonym_mapping import PseudonymMapping
+from app.models.user import User
 from app.services.audit_trail_service import record_document_audit_event
 from app.services.crypto_service import encrypt_mapping
 from app.services.rbac_service import require_org_permission
@@ -36,9 +42,209 @@ logger = get_logger(__name__)
 settings = get_settings()
 
 DEMO_DOC_PATH = Path(__file__).resolve().parent.parent.parent / "static" / "demo_doc.pdf"
+PUBLIC_DEMO_USER_EMAIL = "demo-investor@confidoc.local"
 _PUBLIC_DEMO_RATE_WINDOW = 60
 _PUBLIC_DEMO_RATE_MAX = 10
 _public_demo_attempts_fallback: dict[str, list[float]] = {}
+
+
+def _demo_document_urls(document_id: str) -> dict[str, str]:
+    base = f"/api/v1/demo/investor-document/{document_id}"
+    return {
+        "self": base,
+        "raw": f"{base}/raw",
+        "preview": f"{base}/preview",
+        "score": f"{base}/score",
+        "audit": f"{base}/audit",
+        "export": f"{base}/export",
+    }
+
+
+def _authenticated_document_urls(document_id: str) -> dict[str, str]:
+    base = f"/api/v1/documents/{document_id}"
+    return {
+        "self": base,
+        "raw": f"{base}/raw",
+        "preview": f"{base}/preview",
+        "score": f"{base}/risk-score",
+        "audit": f"{base}/audit-report",
+        "export": f"{base}/export",
+    }
+
+
+async def _resolve_user_from_bearer_token(db: DbSession, token: str | None) -> User | None:
+    if not token:
+        return None
+    payload = decode_access_token(token)
+    if not payload or not payload.get("sub"):
+        return None
+    result = await db.execute(select(User).where(User.id == payload["sub"]))
+    user = result.scalar_one_or_none()
+    if not user or not user.is_active:
+        return None
+    return user
+
+
+async def _get_or_create_public_demo_user(db: DbSession) -> User:
+    result = await db.execute(select(User).where(User.email == PUBLIC_DEMO_USER_EMAIL))
+    user = result.scalar_one_or_none()
+    if user:
+        return user
+
+    user = User(
+        email=PUBLIC_DEMO_USER_EMAIL,
+        password_hash=get_password_hash(f"Demo{uuid.uuid4().hex}1"),
+        first_name="Demo",
+        last_name="Investor",
+        is_active=True,
+        is_platform_admin=False,
+    )
+    db.add(user)
+    try:
+        await db.flush()
+    except IntegrityError:
+        await db.rollback()
+        result = await db.execute(select(User).where(User.email == PUBLIC_DEMO_USER_EMAIL))
+        user = result.scalar_one_or_none()
+        if user:
+            return user
+        raise
+    return user
+
+
+def _is_public_demo_document(document: Document, user: User | None = None) -> bool:
+    tags = set(str(item) for item in (document.tags or []))
+    owner_email = getattr(user, "email", "")
+    return (
+        document.client_name == "Démo Investisseur"
+        and "Investor Demo" in tags
+        and owner_email == PUBLIC_DEMO_USER_EMAIL
+    )
+
+
+async def _get_public_demo_document_or_404(
+    db: DbSession,
+    document_id: str,
+) -> tuple[Document, User]:
+    try:
+        doc_uuid = uuid.UUID(document_id)
+    except ValueError as exc:
+        raise http_404("Document de démo introuvable") from exc
+
+    result = await db.execute(
+        select(Document, User)
+        .join(User, User.id == Document.uploaded_by_user_id)
+        .where(
+            Document.id == doc_uuid,
+            Document.is_deleted.is_(False),
+            User.email == PUBLIC_DEMO_USER_EMAIL,
+        )
+    )
+    row = result.first()
+    if not row:
+        raise http_404("Document de démo introuvable")
+    document, user = row
+    if not _is_public_demo_document(document, user):
+        raise http_404("Document de démo introuvable")
+    return document, user
+
+
+async def _demo_document_payload(
+    db: DbSession,
+    document: Document,
+    *,
+    public_urls: bool = True,
+) -> dict[str, Any]:
+    original_text = ""
+    preview_text = ""
+
+    original_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.ORIGINAL_TEXT,
+        )
+    )
+    original_version = original_result.scalar_one_or_none()
+    if original_version and getattr(original_version, "content_text", None):
+        original_text = str(getattr(original_version, "content_text", ""))
+
+    preview_result = await db.execute(
+        select(DocumentVersion).where(
+            DocumentVersion.document_id == document.id,
+            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+        )
+    )
+    preview_version = preview_result.scalar_one_or_none()
+    if preview_version and getattr(preview_version, "content_text", None):
+        preview_text = str(getattr(preview_version, "content_text", ""))
+
+    detections_result = await db.execute(
+        select(EntityDetection).where(EntityDetection.document_id == document.id)
+    )
+    detections = list(detections_result.scalars().all())
+    entity_summary: dict[str, int] = {}
+    for detection in detections:
+        entity_type = str(detection.entity_type or "unknown").upper()
+        entity_summary[entity_type] = entity_summary.get(entity_type, 0) + 1
+
+    risk_score = 0.0
+    risk_level = "low"
+    mapping_result = await db.execute(
+        select(PseudonymMapping)
+        .where(PseudonymMapping.document_id == document.id)
+        .order_by(PseudonymMapping.created_at.desc())
+    )
+    mapping = mapping_result.scalar_one_or_none()
+    if mapping and hasattr(mapping, "risk_score"):
+        raw_score = float(getattr(mapping, "risk_score", None) or 0.0)
+        risk_score = raw_score * 100 if 0 <= raw_score <= 1 else raw_score
+        risk_level = getattr(mapping, "risk_level", None) or "low"
+
+    status_value = (
+        document.status.value if hasattr(document.status, "value") else str(document.status)
+    )
+    return {
+        "status": status_value,
+        "document_id": str(document.id),
+        "document": {
+            "id": str(document.id),
+            "original_filename": document.original_filename,
+            "content_type": document.content_type,
+            "size_bytes": document.size_bytes,
+            "status": status_value,
+            "client_name": document.client_name,
+            "synthetic": True,
+        },
+        "original_filename": document.original_filename,
+        "size_bytes": document.size_bytes,
+        "demo_mode": "investor",
+        "client_name": document.client_name,
+        "synthetic": True,
+        "original_excerpt": original_text,
+        "preview_text": preview_text,
+        "anonymized_excerpt": preview_text,
+        "detections_count": len(detections),
+        "entity_summary": entity_summary,
+        "risk": {
+            "risk_score": round(risk_score, 1),
+            "score": round(risk_score, 1),
+            "level": risk_level,
+            "risk_level": risk_level,
+        },
+        "urls": (
+            _demo_document_urls(str(document.id))
+            if public_urls
+            else _authenticated_document_urls(str(document.id))
+        ),
+        "workflow": [
+            "original",
+            "anonymized",
+            "decision",
+            "score_explanation",
+            "audit_trail",
+            "export_report",
+        ],
+    }
 
 
 async def _resolve_demo_org_id(db: DbSession, current_user: CurrentUser) -> Any | None:
@@ -295,20 +501,13 @@ async def get_public_demo_audit_report_pdf(request: Request) -> Any:
     )
 
 
-@router.post(
-    "",
-    status_code=status.HTTP_201_CREATED,
-    summary="Créer un document de démo",
-)
-async def create_demo_document(
-    current_user: CurrentUser,
+async def _create_investor_demo_document(
+    *,
+    current_user: User,
     db: DbSession,
     background_tasks: BackgroundTasks,
-) -> dict:
-    """Upload a pre-baked demo PDF and trigger background anonymization.
-
-    Perfect for zero-friction investor demos — one click, full pipeline.
-    """
+    public_demo: bool = False,
+) -> dict[str, Any]:
     if not DEMO_DOC_PATH.exists():
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
@@ -317,7 +516,7 @@ async def create_demo_document(
 
     content = DEMO_DOC_PATH.read_bytes()
     sha256 = hashlib.sha256(content).hexdigest()
-    org_id = await _resolve_demo_org_id(db, current_user)
+    org_id = None if public_demo else await _resolve_demo_org_id(db, current_user)
 
     try:
         storage_backend, storage_key = store_bytes(content=content, extension="pdf")
@@ -342,7 +541,7 @@ async def create_demo_document(
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
         raw_content=content if storage_backend == "database" else None,
-        tags=["Démonstration", "Investor Demo"],
+        tags=["Démonstration", "Investor Demo", "Synthetic"],
         client_name="Démo Investisseur",
         exercice="2025",
         doc_category="bilan",
@@ -377,6 +576,7 @@ async def create_demo_document(
         user_id=str(current_user.id),
         background_processing=background_processing,
         sensitive_client_mode=settings.SENSITIVE_CLIENT_MODE,
+        public_demo=public_demo,
     )
     try:
         await record_document_audit_event(
@@ -386,6 +586,7 @@ async def create_demo_document(
             details={
                 "demo_mode": "investor",
                 "synthetic": True,
+                "public_demo": public_demo,
                 "background_processing": background_processing,
                 "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
                 "workflow": [
@@ -405,28 +606,164 @@ async def create_demo_document(
         logger.warning("demo_document_audit_failed", doc_id=doc_id, error=str(exc))
         await db.rollback()
 
-    return {
-        "status": "ready" if snapshot_ready else "processing",
-        "document_id": doc_id,
-        "original_filename": document.original_filename,
-        "size_bytes": document.size_bytes,
-        "demo_mode": "investor",
-        "client_name": document.client_name,
-        "synthetic": True,
-        "background_processing": background_processing,
-        "workflow": [
-            "upload",
-            "ocr",
-            "anonymization",
-            "risk_score",
-            "trust_score",
-            "ai_readiness",
-            "audit_trail",
-            "export",
-        ],
-        "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
-        "message": (
-            "Demo Investor chargée : document synthétique, OCR/anonymisation, "
-            "scores et rapport d'audit en préparation."
-        ),
-    }
+    payload = await _demo_document_payload(db, document, public_urls=public_demo)
+    payload.update(
+        {
+            "status": "ready" if snapshot_ready else "processing",
+            "background_processing": background_processing,
+            "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
+            "message": (
+                "Démo investisseur chargée : document synthétique, original, "
+                "anonymisation, scores, audit et export disponibles."
+            ),
+        }
+    )
+    return payload
+
+
+@router.post(
+    "/investor-document",
+    status_code=status.HTTP_201_CREATED,
+    summary="Créer ou charger un document synthétique de démo investisseur",
+)
+async def create_investor_demo_document(
+    request: Request,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+    token: str | None = Depends(oauth2_scheme),
+) -> dict[str, Any]:
+    """Create a synthetic investor demo document.
+
+    Authenticated users get a normal personal demo document. Without auth, this
+    endpoint is enabled only in demo mode and uses a dedicated synthetic demo
+    owner so no real user data is exposed.
+    """
+    current_user = await _resolve_user_from_bearer_token(db, token)
+    public_demo = current_user is None
+    if public_demo:
+        if not settings.DEMO_MODE or not settings.DEMO_SEED_ENABLED:
+            raise HTTPException(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                detail="Démo investisseur désactivée sur cet environnement.",
+            )
+        client_ip = request.client.host if request.client else "unknown"
+        await _check_public_demo_rate_limit(f"investor-document:{client_ip}")
+        current_user = await _get_or_create_public_demo_user(db)
+
+    payload = await _create_investor_demo_document(
+        current_user=current_user,
+        db=db,
+        background_tasks=background_tasks,
+        public_demo=public_demo,
+    )
+    payload["auth_mode"] = "demo_mode" if public_demo else "authenticated"
+    return payload
+
+
+@router.get(
+    "/investor-document/{document_id}/raw",
+    status_code=status.HTTP_200_OK,
+    summary="Récupérer l'original synthétique de la démo investisseur",
+)
+async def get_investor_demo_raw(document_id: str, db: DbSession, request: Request) -> Response:
+    document, _user = await _get_public_demo_document_or_404(db, document_id)
+    try:
+        from app.services.storage_service import read_document_bytes
+
+        content = read_document_bytes(document)
+        if not content:
+            raise FileNotFoundError("empty demo raw content")
+        return Response(
+            content=content,
+            media_type=_raw_document_content_type(document),
+            headers={
+                "Content-Disposition": _raw_document_disposition(document),
+                "Content-Length": str(len(content)),
+                "Accept-Ranges": "bytes",
+                "X-ConfiDoc-Demo": "investor",
+            },
+        )
+    except Exception as exc:
+        logger.error(
+            "get_investor_demo_raw_failed",
+            doc_id=document_id,
+            request_id=getattr(request.state, "request_id", None),
+            error_type=type(exc).__name__,
+        )
+        raise http_404("Fichier original de démo introuvable.") from exc
+
+
+@router.get(
+    "/investor-document/{document_id}/preview",
+    status_code=status.HTTP_200_OK,
+    summary="Aperçu anonymisé du document synthétique investisseur",
+)
+async def get_investor_demo_preview(document_id: str, db: DbSession) -> dict[str, Any]:
+    document, _user = await _get_public_demo_document_or_404(db, document_id)
+    return await _demo_document_payload(db, document)
+
+
+@router.get(
+    "/investor-document/{document_id}/score",
+    status_code=status.HTTP_200_OK,
+    summary="Score RGPD du document synthétique investisseur",
+)
+async def get_investor_demo_score(document_id: str, db: DbSession) -> dict[str, Any]:
+    _document, user = await _get_public_demo_document_or_404(db, document_id)
+    from app.api.v1._doc_export import get_document_risk_score
+
+    return await get_document_risk_score(document_id, user, db)
+
+
+@router.get(
+    "/investor-document/{document_id}/audit",
+    status_code=status.HTTP_200_OK,
+    summary="Audit trail du document synthétique investisseur",
+)
+async def get_investor_demo_audit(document_id: str, db: DbSession) -> dict[str, Any]:
+    _document, user = await _get_public_demo_document_or_404(db, document_id)
+    from app.api.v1._doc_export import get_audit_report
+
+    return await get_audit_report(document_id, user, db)
+
+
+@router.get(
+    "/investor-document/{document_id}/export",
+    response_class=PlainTextResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Export texte anonymisé du document synthétique investisseur",
+)
+async def export_investor_demo_text(document_id: str, db: DbSession) -> PlainTextResponse:
+    document, _user = await _get_public_demo_document_or_404(db, document_id)
+    anonymized_text = await _get_anonymized_text(db, document)
+    if not anonymized_text:
+        raise http_404("Texte anonymisé de démo indisponible.")
+    return PlainTextResponse(
+        anonymized_text,
+        headers={
+            "Content-Disposition": 'attachment; filename="confidoc_demo_investor.txt"',
+            "X-ConfiDoc-Demo": "investor",
+        },
+    )
+
+
+@router.post(
+    "",
+    status_code=status.HTTP_201_CREATED,
+    summary="Créer un document de démo",
+)
+async def create_demo_document(
+    current_user: CurrentUser,
+    db: DbSession,
+    background_tasks: BackgroundTasks,
+) -> dict:
+    """Upload a pre-baked demo PDF and trigger background anonymization.
+
+    Perfect for zero-friction investor demos — one click, full pipeline.
+    """
+    return await _create_investor_demo_document(
+        current_user=current_user,
+        db=db,
+        background_tasks=background_tasks,
+        public_demo=False,
+    )

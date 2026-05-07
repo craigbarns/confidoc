@@ -8,6 +8,8 @@ let currentDocId = null;
 let currentDocName = "";
 let currentDocStatus = "";
 let currentDocSize = 0;
+let publicDemoMode = false;
+let currentDemoDocument = null;
 let currentProvider = "—";
 let sensitiveClientMode = false;
 let latestAssistantText = "";
@@ -158,16 +160,56 @@ function updateThemeBtn() {
 
 // ── API helpers ────────────────────────────────────────────────────────
 
+function buildApiUrl(path) {
+  if (/^https?:\/\//i.test(path)) return path;
+  if (path.startsWith("/api/")) return path;
+  return API + path;
+}
+
+async function readApiError(resp) {
+  const requestId = resp.headers.get("x-request-id") || resp.headers.get("x-railway-request-id") || "";
+  const contentType = resp.headers.get("content-type") || "";
+  let message = `Erreur HTTP ${resp.status}`;
+  let payload = null;
+  try {
+    if (contentType.includes("application/json")) {
+      payload = await resp.json();
+      message = payload.detail || payload.message || message;
+    } else {
+      const text = await resp.text();
+      if (text && text.trim()) message = text.trim().slice(0, 300);
+    }
+  } catch (_e) {
+    // Keep the status-based message.
+  }
+  const error = new Error(message);
+  error.status = resp.status;
+  error.requestId = requestId;
+  error.payload = payload;
+  error.contentType = contentType;
+  return error;
+}
+
 async function apiRequest(path, opts = {}) {
+  const { auth = true, ...fetchOptions } = opts;
   const headers = { ...(opts.headers || {}) };
-  if (token) headers["Authorization"] = `Bearer ${token}`;
+  if (auth && token) headers["Authorization"] = `Bearer ${token}`;
   if (!(opts.body instanceof FormData) && opts.body) {
     headers["Content-Type"] = "application/json";
   }
-  let resp = await fetch(API + path, { ...opts, headers });
+  const url = buildApiUrl(path);
+  let resp;
+  try {
+    resp = await fetch(url, { ...fetchOptions, headers });
+  } catch (err) {
+    const error = new Error(`Réseau indisponible pour ${path}: ${err.message || err}`);
+    error.cause = err;
+    console.error("[apiRequest] network", { endpoint: path, method: opts.method || "GET", error });
+    throw error;
+  }
 
   // Auto-refresh on 401 if we have a refresh token
-  if (resp.status === 401 && refreshToken) {
+  if (auth && resp.status === 401 && refreshToken) {
     const refreshed = await tryRefreshToken();
     if (refreshed) {
       // Retry the original request with the new token
@@ -176,29 +218,25 @@ async function apiRequest(path, opts = {}) {
       if (!(opts.body instanceof FormData) && opts.body) {
         retryHeaders["Content-Type"] = "application/json";
       }
-      resp = await fetch(API + path, { ...opts, headers: retryHeaders });
+      resp = await fetch(url, { ...fetchOptions, headers: retryHeaders });
     }
   }
 
   if (!resp.ok) {
     // If still 401 after refresh attempt, force re-login
-    if (resp.status === 401) {
+    if (auth && resp.status === 401 && token) {
       logout();
-      throw new Error("Session expirée. Veuillez vous reconnecter.");
     }
-    let msg = `Erreur HTTP ${resp.status}`;
-    try {
-      const j = await resp.json();
-      msg = j.detail || j.message || msg;
-    } catch (_e) {
-      try {
-        const txt = await resp.text();
-        if (txt && txt.trim()) msg = txt.trim().slice(0, 220);
-      } catch (_e2) {
-        // noop
-      }
-    }
-    throw new Error(msg);
+    const error = await readApiError(resp);
+    console.error("[apiRequest] failed", {
+      endpoint: path,
+      method: opts.method || "GET",
+      status: resp.status,
+      request_id: error.requestId,
+      content_type: error.contentType,
+      payload: error.payload,
+    });
+    throw error;
   }
   return resp;
 }
@@ -253,7 +291,11 @@ async function apiFetch(path, opts = {}) {
   try {
     const resp = await apiRequest(path, opts);
     if (opts.returnBlob) {
-      return await resp.blob();
+      const blob = await resp.blob();
+      if (!opts.allowEmptyBlob && blob.size === 0) {
+        throw new Error(`Réponse vide pour ${path}`);
+      }
+      return blob;
     }
     const contentType = resp.headers.get("content-type");
     if (contentType && contentType.includes("application/json")) {
@@ -261,7 +303,13 @@ async function apiFetch(path, opts = {}) {
     }
     return await resp.text();
   } catch (err) {
-    console.error(`[apiFetch] Erreur sur ${path} (${opts.method || "GET"}):`, err);
+    console.error("[apiFetch] failed", {
+      endpoint: path,
+      method: opts.method || "GET",
+      status: err.status || null,
+      request_id: err.requestId || null,
+      message: err.message,
+    });
     toast(err.message || "Erreur de chargement", "error");
     throw err;
   }
@@ -543,6 +591,8 @@ function logout() {
   currentDocName = "";
   currentDocStatus = "";
   currentDocSize = 0;
+  publicDemoMode = false;
+  currentDemoDocument = null;
   currentProvider = "—";
   sensitiveClientMode = false;
   latestAssistantText = "";
@@ -559,11 +609,20 @@ function logout() {
   $("screen-auth").style.display = "";
   $("screen-app").style.display = "none";
   $("btn-logout").style.display = "none";
+  $("btn-logout").innerHTML = `
+        <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/>
+          <polyline points="16 17 21 12 16 7"/><line x1="21" y1="12" x2="9" y2="12"/>
+        </svg>
+        Déconnexion
+      `;
   $("user-info").textContent = "";
   updateHeaderContext();
 }
 
 async function initApp(email) {
+  publicDemoMode = false;
+  currentDemoDocument = null;
   $("screen-auth").style.display = "none";
   $("screen-app").style.display = "";
   $("btn-logout").style.display = "";
@@ -975,6 +1034,10 @@ async function refreshAIDocInsights(docId) {
     renderExportGuard({});
     renderTrustIndicator({});
     renderDecisionCard({}, "");
+    return;
+  }
+  if (publicDemoMode && currentDemoDocument) {
+    applyPublicDemoInsights(currentDemoDocument);
     return;
   }
   try {
@@ -1964,7 +2027,27 @@ async function selectDoc(id, status, name, sizeBytes) {
   delete originalTextCache[id]; // invalide le cache si on recharge
   updateHeaderContext();
 
+  if (publicDemoMode && currentDemoDocument && id === currentDemoDocument.document_id) {
+    document.querySelectorAll(".doc-item").forEach(el =>
+      el.classList.toggle("selected", el.dataset.id === id)
+    );
+    setStep(2);
+    resetAnonPanel();
+    updateAnonDocBar(currentDocName, currentDocSize, "Démo Investisseur");
+    showAnonResults(
+      currentDemoDocument.preview_text || currentDemoDocument.anonymized_excerpt || "",
+      currentDemoDocument.detections_count ?? 0,
+      currentDemoDocument.entity_summary || {},
+      currentDemoDocument.risk || null,
+      "pseudonymization",
+      currentDemoDocument,
+    );
+    applyPublicDemoInsights(currentDemoDocument);
+    return;
+  }
+
   const clientLabel = getDocClientLabel(id);
+
 
   document.querySelectorAll(".doc-item").forEach(el =>
     el.classList.toggle("selected", el.dataset.id === id)
@@ -2347,6 +2430,10 @@ async function uploadFile(file) {
 }
 
 async function createDemoDocument() {
+  if (!token) {
+    await launchPublicInvestorDemo();
+    return;
+  }
   try {
     toast("Chargement Demo Investor : document synthétique et pipeline sécurisé…", "info");
     const res = await apiFetch("/demo", { method: "POST" });
@@ -2400,6 +2487,107 @@ async function createDemoDocument() {
     } else {
       toast(`Erreur démo: ${msg}`, "error");
     }
+  }
+}
+
+function buildDemoAssistantAnswer(question) {
+  const q = (question || "").toLowerCase();
+  const score = currentDemoDocument?.risk?.score ?? currentDemoDocument?.risk?.risk_score ?? 0;
+  const entities = currentDemoDocument?.detections_count ?? 0;
+  if (q.includes("risque") || q.includes("score") || q.includes("pourquoi")) {
+    return `## Pourquoi ce score\n- Score de risque: ${score}/100, niveau faible.\n- ${entities} entités synthétiques ont été détectées et remplacées par des jetons stables.\n- L'original reste disponible pour contrôle visuel, tandis que l'analyse IA utilise uniquement la version anonymisée.\n\n## Action recommandée\n- Valider le contexte de diffusion avant un partage externe.`;
+  }
+  if (q.includes("audit")) {
+    return "## Audit trail\n- Document synthétique créé pour démonstration investisseur.\n- Extraction, anonymisation, calcul de risque et préparation export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
+  }
+  return "## Résumé\n- Document synthétique de démonstration investisseur chargé.\n- Original PDF accessible, aperçu anonymisé disponible, score RGPD calculé et audit exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des jetons.\n- Le workflow illustre original, anonymisé, décision ConfiDoc, explication du score, audit trail et export.";
+}
+
+function applyPublicDemoInsights(payload) {
+  const status = payload.status || "ready";
+  const risk = payload.risk || {};
+  const trust = payload.trust || {};
+  const score = normalizeRiskPercent(risk.risk_score ?? risk.score);
+  currentRiskLevel = risk.risk_level || risk.level || "low";
+  updatePipelineTimeline({ status, extractDone: true, anonymDone: true });
+  renderAIDocInsights({
+    status: documentStatusLabel(status),
+    ocrStatus: "OK · demo synthétique",
+    anonymizationStatus: "OK",
+    riskScore: score === null ? "0/100" : `${score}/100`,
+    trustScore: Number.isFinite(Number(trust.trust_score ?? payload.trust_score))
+      ? `${Math.round(Number(trust.trust_score ?? payload.trust_score))}/100`
+      : "85/100",
+    aiReadiness: Number.isFinite(Number(trust.ai_readiness_score ?? payload.ai_readiness_score))
+      ? `${Math.round(Number(trust.ai_readiness_score ?? payload.ai_readiness_score))}/100`
+      : "85/100",
+    detections: payload.detections_count ?? 0,
+    exportStatus: "Export autorisé",
+    lastAudit: "document:demo_investor_loaded",
+    nextAction: "Présenter le workflow",
+  });
+  renderExportGuard({
+    ...risk,
+    status,
+    risk_level: currentRiskLevel,
+    risk_score: score ?? 0,
+  });
+  renderDecisionCard({
+    ...risk,
+    status,
+    risk_level: currentRiskLevel,
+    risk_score: score ?? 0,
+    trust_score: trust.trust_score ?? payload.trust_score ?? 85,
+    ai_readiness_score: trust.ai_readiness_score ?? payload.ai_readiness_score ?? 85,
+  }, status);
+  renderTrustIndicator(trust.trust_score ? trust : { trust_score: 85, ai_readiness_score: 85, grade: "A" });
+}
+
+async function launchPublicInvestorDemo() {
+  try {
+    toast("Chargement de la démo investisseur…", "info");
+    const payload = await apiFetch("/demo/investor-document", {
+      method: "POST",
+      auth: false,
+    });
+    publicDemoMode = true;
+    currentDemoDocument = payload;
+    currentDocId = payload.document_id;
+    currentDocName = payload.original_filename || payload.document?.original_filename || "Démo investisseur";
+    currentDocStatus = String(payload.status || "ready").toLowerCase();
+    currentDocSize = Number(payload.size_bytes || payload.document?.size_bytes || 0);
+    lastDocsList = [payload.document || {
+      id: currentDocId,
+      original_filename: currentDocName,
+      content_type: "application/pdf",
+      size_bytes: currentDocSize,
+      status: currentDocStatus,
+    }];
+    originalTextCache[currentDocId] = payload.original_excerpt || "";
+
+    $("screen-auth").style.display = "none";
+    $("screen-app").style.display = "";
+    $("btn-logout").style.display = "";
+    $("btn-logout").textContent = "Quitter la démo";
+    $("user-info").textContent = "Mode démo investisseur";
+    updateHeaderContext();
+    renderDocList(lastDocsList);
+    setStep(2);
+    resetAnonPanel();
+    updateAnonDocBar(currentDocName, currentDocSize);
+    showAnonResults(
+      payload.preview_text || payload.anonymized_excerpt || "",
+      payload.detections_count ?? 0,
+      payload.entity_summary || {},
+      payload.risk || null,
+      "pseudonymization",
+      payload,
+    );
+    applyPublicDemoInsights(payload);
+    toast("Démo investisseur prête", "success");
+  } catch (e) {
+    console.error("public investor demo error:", e);
+    toast(`Démo indisponible: ${e.message}`, "error");
   }
 }
 
@@ -2472,28 +2660,23 @@ async function loadOriginalDocument(docId) {
     const doc = lastDocsList.find(d => d.id === docId);
     const fallbackType = doc ? doc.content_type : "application/pdf";
     const filename = doc?.original_filename || currentDocName || "document";
-    const resp = await fetch(`${API}/documents/${docId}/raw`, {
-      headers: { "Authorization": `Bearer ${token}` }
+    const rawPath = publicDemoMode && currentDemoDocument?.urls?.raw
+      ? currentDemoDocument.urls.raw
+      : `/documents/${docId}/raw`;
+    const resp = await apiRequest(rawPath, {
+      auth: !publicDemoMode,
     });
-    if (!resp.ok) {
-      let message = "Impossible de charger le document original.";
-      try {
-        const payload = await resp.json();
-        if (payload.detail) message = payload.detail;
-      } catch (_e) {
-        // ignore non-JSON error bodies
-      }
-      if (resp.status === 403) {
-        message = "Vous n'avez pas accès au document original. Consultez la version anonymisée.";
-      }
-      throw new Error(message);
+    const responseContentType = (resp.headers.get("content-type") || fallbackType || "")
+      .split(";")[0]
+      .toLowerCase();
+    if (responseContentType.includes("application/json")) {
+      throw new Error("L'endpoint original a renvoyé du JSON au lieu du fichier source.");
     }
-
     const blob = await resp.blob();
     if (blob.size === 0) {
       throw new Error("Le fichier original est vide ou inaccessible.");
     }
-    const contentType = (blob.type || resp.headers.get("content-type") || fallbackType || "")
+    const contentType = (blob.type || responseContentType || fallbackType || "")
       .split(";")[0]
       .toLowerCase();
     originalBlobUrl = URL.createObjectURL(blob);
@@ -2736,6 +2919,11 @@ async function loadOriginalText(docId) {
   $("original-loading").style.display = "";
   $("preview-original-text").textContent = "";
   try {
+    if (publicDemoMode && currentDemoDocument?.original_excerpt) {
+      originalTextCache[docId] = currentDemoDocument.original_excerpt;
+      $("preview-original-text").textContent = currentDemoDocument.original_excerpt;
+      return;
+    }
     const data = await apiFetch(`/documents/${docId}/extracted-text`);
     const text = data.text || "(Aucun texte extrait)";
     originalTextCache[docId] = text;
@@ -3210,6 +3398,17 @@ async function sendMessage() {
   const input = $("chat-input");
   const question = input.value.trim();
   if (!question || !currentDocId) return;
+  if (publicDemoMode) {
+    input.value = "";
+    appendUserMsg(question);
+    const bodyEl = appendAssistantMsg();
+    latestAssistantText = buildDemoAssistantAnswer(question);
+    bodyEl.textContent = latestAssistantText;
+    $("btn-copy-answer").disabled = false;
+    if (reportMode) renderStructuredAnswer(bodyEl, latestAssistantText);
+    saveChatHistory(currentDocId);
+    return;
+  }
   if (copilotMode) {
     await sendCopilotMessage(question, input);
     return;
@@ -3451,7 +3650,10 @@ function stopStream() {
 async function exportText() {
   if (!currentDocId) return;
   try {
-    const resp = await apiRequest(`/documents/${currentDocId}/export`);
+    const exportPath = publicDemoMode && currentDemoDocument?.urls?.export
+      ? currentDemoDocument.urls.export
+      : `/documents/${currentDocId}/export`;
+    const resp = await apiRequest(exportPath, { auth: !publicDemoMode });
     const blob = new Blob([await resp.text()], { type: "text/plain;charset=utf-8" });
     triggerDownload(blob, `confidoc_${currentDocId.slice(0, 8)}.txt`);
     toast("Export texte terminé", "success");
@@ -3471,6 +3673,13 @@ async function exportText() {
 async function exportPdf() {
   if (!currentDocId) return;
   try {
+    if (publicDemoMode && currentDemoDocument?.urls?.raw) {
+      const resp = await apiRequest(currentDemoDocument.urls.raw, { auth: false });
+      const blob = await resp.blob();
+      triggerDownload(blob, currentDocName || `confidoc_demo_${currentDocId.slice(0, 8)}.pdf`);
+      toast("Original PDF de démo téléchargé", "success");
+      return;
+    }
     const resp = await apiRequest(`/documents/${currentDocId}/export-pdf`);
     const blob = await resp.blob();
     triggerDownload(blob, `confidoc_${currentDocId.slice(0, 8)}.pdf`);
@@ -3578,7 +3787,10 @@ async function showApproveExportPrompt() {
 async function downloadAuditReport() {
   if (!currentDocId) return;
   try {
-    const resp = await apiRequest(`/documents/${currentDocId}/audit-report-pdf`);
+    const path = publicDemoMode
+      ? "/api/v1/demo/public/audit-report-pdf"
+      : `/documents/${currentDocId}/audit-report-pdf`;
+    const resp = await apiRequest(path, { auth: !publicDemoMode });
     const blob = await resp.blob();
     triggerDownload(blob, `audit_rgpd_${currentDocId.slice(0, 8)}.pdf`);
     toast("Rapport d'audit PDF telecharge", "success");
@@ -3590,7 +3802,16 @@ async function downloadAuditReport() {
 async function downloadComplianceReport() {
   if (!currentDocId) return;
   try {
-    const data = await apiFetch(`/documents/${currentDocId}/compliance-report`);
+    let data;
+    if (publicDemoMode && currentDemoDocument?.urls?.score && currentDemoDocument?.urls?.audit) {
+      const [score, audit] = await Promise.all([
+        apiFetch(currentDemoDocument.urls.score, { auth: false }),
+        apiFetch(currentDemoDocument.urls.audit, { auth: false }),
+      ]);
+      data = { score, audit, demo: currentDemoDocument.document };
+    } else {
+      data = await apiFetch(`/documents/${currentDocId}/compliance-report`);
+    }
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     triggerDownload(blob, `conformite_rgpd_${currentDocId.slice(0, 8)}.json`);
     toast("Rapport de conformite telecharge", "success");
@@ -4533,6 +4754,10 @@ function handleDelegatedAction(e) {
 // ── Event listeners ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+  const versionEl = $("ui-version");
+  if (versionEl?.dataset?.version) {
+    console.info(`ConfiDoc UI ${versionEl.dataset.version}`);
+  }
 
   // Garantir l'état initial : overlay fermé, forgot/reset-section cachés
   if ($("confirm-overlay")) $("confirm-overlay").style.display = "none";
@@ -4619,6 +4844,10 @@ document.addEventListener("DOMContentLoaded", () => {
         btn.textContent = "Envoyer le lien";
       }
     });
+  }
+
+  if ($("btn-public-investor-demo")) {
+    $("btn-public-investor-demo").addEventListener("click", launchPublicInvestorDemo);
   }
 
   // Reset password flow (from ?reset_token=... URL)

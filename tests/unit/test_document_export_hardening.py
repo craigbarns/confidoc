@@ -145,12 +145,65 @@ async def test_get_document_raw_returns_pdf_with_inline_headers(monkeypatch) -> 
 
     monkeypatch.setattr(storage_service, "read_document_bytes", lambda _document: b"%PDF-1.4")
 
-    response = await _doc_crud.get_document_raw(document_id, user, _FakeDb())
+    request = SimpleNamespace(state=SimpleNamespace(request_id="test-request"))
+    response = await _doc_crud.get_document_raw(document_id, user, _FakeDb(), request)
 
     assert calls["permission"] == "documents.raw"
     assert response.headers["content-type"].startswith("application/pdf")
     assert response.headers["content-disposition"].startswith("inline;")
     assert response.body == b"%PDF-1.4"
+
+
+@pytest.mark.asyncio
+async def test_get_document_raw_returns_image_with_inline_headers(monkeypatch) -> None:
+    from app.api.v1 import _doc_crud
+
+    document_id = str(uuid.uuid4())
+    document = SimpleNamespace(
+        id=uuid.UUID(document_id),
+        content_type="image/png",
+        extension="png",
+        original_filename="original.png",
+        storage_backend="database",
+        storage_key="db://original.png",
+    )
+    user = SimpleNamespace(id=uuid.uuid4())
+
+    async def fake_get_document(*_args: Any, **_kwargs: Any):
+        return document
+
+    monkeypatch.setattr(_doc_crud, "_get_user_document_or_404", fake_get_document)
+
+    import app.services.storage_service as storage_service
+
+    monkeypatch.setattr(storage_service, "read_document_bytes", lambda _document: b"\x89PNG\r\n")
+
+    request = SimpleNamespace(state=SimpleNamespace(request_id="test-request"))
+    response = await _doc_crud.get_document_raw(document_id, user, _FakeDb(), request)
+
+    assert response.headers["content-type"].startswith("image/png")
+    assert response.headers["content-disposition"].startswith("inline;")
+    assert response.body == b"\x89PNG\r\n"
+
+
+@pytest.mark.asyncio
+async def test_get_document_raw_without_permission_returns_403(monkeypatch) -> None:
+    from app.api.v1 import _doc_crud
+
+    document_id = str(uuid.uuid4())
+    user = SimpleNamespace(id=uuid.uuid4())
+
+    async def fake_get_document(*_args: Any, **_kwargs: Any):
+        raise HTTPException(status_code=403, detail="documents.raw denied")
+
+    monkeypatch.setattr(_doc_crud, "_get_user_document_or_404", fake_get_document)
+
+    with pytest.raises(HTTPException) as exc_info:
+        request = SimpleNamespace(state=SimpleNamespace(request_id="test-request"))
+        await _doc_crud.get_document_raw(document_id, user, _FakeDb(), request)
+
+    assert exc_info.value.status_code == 403
+    assert "documents.raw denied" in exc_info.value.detail
 
 
 @pytest.mark.asyncio
@@ -179,10 +232,41 @@ async def test_get_document_raw_storage_error_returns_404(monkeypatch) -> None:
     monkeypatch.setattr(storage_service, "read_document_bytes", _missing)
 
     with pytest.raises(HTTPException) as exc_info:
-        await _doc_crud.get_document_raw(document_id, user, _FakeDb())
+        request = SimpleNamespace(state=SimpleNamespace(request_id="test-request"))
+        await _doc_crud.get_document_raw(document_id, user, _FakeDb(), request)
 
     assert exc_info.value.status_code == 404
     assert "Fichier source introuvable" in exc_info.value.detail
+
+
+@pytest.mark.asyncio
+async def test_get_document_raw_empty_bytes_returns_404(monkeypatch) -> None:
+    from app.api.v1 import _doc_crud
+
+    document_id = str(uuid.uuid4())
+    document = SimpleNamespace(
+        id=uuid.UUID(document_id),
+        content_type="application/pdf",
+        extension="pdf",
+        original_filename="empty.pdf",
+    )
+    user = SimpleNamespace(id=uuid.uuid4())
+
+    async def fake_get_document(*_args: Any, **_kwargs: Any):
+        return document
+
+    monkeypatch.setattr(_doc_crud, "_get_user_document_or_404", fake_get_document)
+
+    import app.services.storage_service as storage_service
+
+    monkeypatch.setattr(storage_service, "read_document_bytes", lambda _document: b"")
+
+    with pytest.raises(HTTPException) as exc_info:
+        request = SimpleNamespace(state=SimpleNamespace(request_id="test-request"))
+        await _doc_crud.get_document_raw(document_id, user, _FakeDb(), request)
+
+    assert exc_info.value.status_code == 404
+    assert "Fichier source vide" in exc_info.value.detail
 
 
 @pytest.mark.asyncio

@@ -24,6 +24,9 @@ class _ResultList:
     def scalar_one_or_none(self) -> Any | None:
         return self.first()
 
+    def all(self) -> list[Any]:
+        return self._rows
+
 
 class _DemoFakeSession:
     def __init__(self, memberships: list[Any] | None = None) -> None:
@@ -256,6 +259,65 @@ async def test_authenticated_demo_materializes_ready_snapshot_without_live_pipel
     assert mappings[0].risk_level == "low"
     assert "pipeline:ready" in audit_actions
     assert "document:demo_investor_loaded" in audit_actions
+
+
+@pytest.mark.asyncio
+async def test_public_investor_document_creates_synthetic_demo_without_auth(
+    client,
+    monkeypatch,
+    tmp_path,
+):
+    from app.core.database import get_db
+    from app.main import app
+
+    db = _DemoFakeSession()
+
+    async def _override_db():
+        yield db
+
+    app.dependency_overrides[get_db] = _override_db
+
+    demo_pdf = tmp_path / "demo.pdf"
+    demo_pdf.write_bytes(b"%PDF synthetic demo")
+
+    import app.api.v1.demo as demo_mod
+
+    snapshot = {
+        "status": "ready",
+        "original_excerpt": "Societe: DUPONT CONSEIL SAS",
+        "anonymized_excerpt": "[SOCIETE_1]",
+        "detections": [],
+        "detections_count": 0,
+        "entity_summary": {},
+        "risk": {"score": 0.0, "level": "low"},
+    }
+
+    async def _get_demo_result():
+        return snapshot
+
+    monkeypatch.setattr(demo_mod, "DEMO_DOC_PATH", demo_pdf)
+    monkeypatch.setattr(demo_mod, "store_bytes", lambda **_: ("database", "db://demo.pdf"))
+    monkeypatch.setattr(demo_mod, "should_dispatch_document_task_to_celery", lambda **_: False)
+    monkeypatch.setattr("app.services.demo_service.get_demo_result", _get_demo_result)
+    monkeypatch.setattr(demo_mod.settings, "DEMO_MODE", True)
+    monkeypatch.setattr(demo_mod.settings, "DEMO_SEED_ENABLED", True)
+
+    try:
+        resp = await client.post("/api/v1/demo/investor-document")
+    finally:
+        app.dependency_overrides.pop(get_db, None)
+
+    assert resp.status_code == 201
+    body = resp.json()
+    assert body["auth_mode"] == "demo_mode"
+    assert body["demo_mode"] == "investor"
+    assert body["synthetic"] is True
+    assert body["urls"]["raw"].endswith("/raw")
+
+    users = [obj for obj in db.added if obj.__class__.__name__ == "User"]
+    documents = [obj for obj in db.added if obj.__class__.__name__ == "Document"]
+    assert users[0].email == demo_mod.PUBLIC_DEMO_USER_EMAIL
+    assert documents[0].raw_content == b"%PDF synthetic demo"
 
 
 @pytest.mark.asyncio

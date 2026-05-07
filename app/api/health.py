@@ -118,21 +118,29 @@ async def health_check() -> dict:
 async def version_check() -> dict:
     """Build metadata for Railway/Vercel-style deployments."""
     settings = get_settings()
+    git_commit_sha = os.getenv("RAILWAY_GIT_COMMIT_SHA") or os.getenv("SOURCE_VERSION")
+    build_version = os.getenv("BUILD_VERSION") or os.getenv("SOURCE_VERSION")
     return {
         "service": "confidoc-backend",
         "app_name": settings.APP_NAME,
         "version": settings.APP_VERSION,
         "environment": settings.APP_ENV,
+        "git_commit_sha": git_commit_sha,
+        "asset_version": (git_commit_sha or build_version or settings.APP_VERSION)[:12],
         "railway": {
             "deployment_id": os.getenv("RAILWAY_DEPLOYMENT_ID"),
             "environment_id": os.getenv("RAILWAY_ENVIRONMENT_ID"),
             "service_id": os.getenv("RAILWAY_SERVICE_ID"),
-            "git_commit_sha": os.getenv("RAILWAY_GIT_COMMIT_SHA"),
+            "git_commit_sha": git_commit_sha,
             "git_branch": os.getenv("RAILWAY_GIT_BRANCH"),
         },
         "build": {
-            "build_version": os.getenv("BUILD_VERSION") or os.getenv("SOURCE_VERSION"),
+            "build_version": build_version,
             "build_time": os.getenv("BUILD_TIME"),
+        },
+        "demo": {
+            "demo_mode": settings.DEMO_MODE,
+            "demo_seed_enabled": settings.DEMO_SEED_ENABLED,
         },
         "ai_policy": {
             "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,

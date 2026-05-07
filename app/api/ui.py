@@ -1,6 +1,7 @@
 """ConfiDoc Backend — UI Console premium (refactorisee)."""
 
 import asyncio
+import os
 from html import escape
 from pathlib import Path
 from typing import Any
@@ -67,6 +68,21 @@ def _build_meta_context(
     }
 
 
+def _ui_version_context() -> dict[str, str]:
+    commit_sha = (
+        os.getenv("RAILWAY_GIT_COMMIT_SHA")
+        or os.getenv("SOURCE_VERSION")
+        or os.getenv("BUILD_VERSION")
+        or ""
+    ).strip()
+    short_sha = commit_sha[:7] if commit_sha else "local"
+    asset_version = short_sha if short_sha != "local" else settings.APP_VERSION
+    return {
+        "ASSET_VERSION": asset_version,
+        "UI_VERSION_LABEL": f"{settings.APP_VERSION} · {short_sha}",
+    }
+
+
 async def _get_landing_social_proof() -> dict[str, Any]:
     fallback = {
         "PILOT_EYEBROW": "Programme pilote",
@@ -128,7 +144,9 @@ def _render_template(
     html_content = template_path.read_text(encoding="utf-8")
     replacements = {"CSP_NONCE": nonce or ""}
     if context:
-        replacements.update({key: "" if value is None else str(value) for key, value in context.items()})
+        replacements.update(
+            {key: "" if value is None else str(value) for key, value in context.items()}
+        )
 
     for key, value in replacements.items():
         html_content = html_content.replace(f"{{{{{key}}}}}", escape(value, quote=True))
@@ -172,6 +190,7 @@ async def upload_ui(request: Request) -> HTMLResponse:
         ),
         path="/ui",
     )
+    context.update(_ui_version_context())
     html_content = _render_template(_TEMPLATE, request, nonce, context)
     return HTMLResponse(
         content=html_content,
