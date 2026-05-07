@@ -2603,9 +2603,10 @@ function resetAnonPanel() {
   $("anon-empty").querySelector("p").innerHTML =
     "Sélectionnez un document dans la liste<br>ou uploadez-en un nouveau.";
   $("btn-anonymize").disabled = false;
-  // Reset vue split
-  $("preview-original-text").textContent = "";
-  $("original-loading").style.display = "none";
+  const originalTextEl = $("preview-original-text");
+  const originalLoadingEl = $("original-loading");
+  if (originalTextEl) originalTextEl.textContent = "";
+  if (originalLoadingEl) originalLoadingEl.style.display = "none";
   $("preview-diff-text").innerHTML = "";
   updatePipelineTimeline({});
 }
@@ -2912,27 +2913,30 @@ function pollDocStatus(docId) {
 // ── Original text ──────────────────────────────────────────────────────
 
 async function loadOriginalText(docId) {
+  const originalTextEl = $("preview-original-text");
+  const originalLoadingEl = $("original-loading");
+  if (!originalTextEl) return;
   if (originalTextCache[docId]) {
-    $("preview-original-text").textContent = originalTextCache[docId];
+    originalTextEl.textContent = originalTextCache[docId];
     return;
   }
-  $("original-loading").style.display = "";
-  $("preview-original-text").textContent = "";
+  if (originalLoadingEl) originalLoadingEl.style.display = "";
+  originalTextEl.textContent = "";
   try {
     if (publicDemoMode && currentDemoDocument?.original_excerpt) {
       originalTextCache[docId] = currentDemoDocument.original_excerpt;
-      $("preview-original-text").textContent = currentDemoDocument.original_excerpt;
+      originalTextEl.textContent = currentDemoDocument.original_excerpt;
       return;
     }
     const data = await apiFetch(`/documents/${docId}/extracted-text`);
     const text = data.text || "(Aucun texte extrait)";
     originalTextCache[docId] = text;
-    $("preview-original-text").textContent = text;
+    originalTextEl.textContent = text;
   } catch (e) {
     console.warn("loadOriginalText error:", e);
-    $("preview-original-text").textContent = "(Texte original non disponible — lancez l'anonymisation d'abord)";
+    originalTextEl.textContent = "(Texte original non disponible — lancez l'anonymisation d'abord)";
   } finally {
-    $("original-loading").style.display = "none";
+    if (originalLoadingEl) originalLoadingEl.style.display = "none";
   }
 }
 
