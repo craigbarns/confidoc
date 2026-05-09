@@ -40,6 +40,10 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert resp.status_code == 200
     assert resp.text.count('<main id="main-content"') == 1
     assert resp.text.count("</main>") == 1
+    main_start = resp.text.index('<main id="main-content"')
+    main_end = resp.text.index("</main>", main_start)
+    panel_ai = resp.text.index('<div id="panel-ai"', main_start)
+    assert main_start < panel_ai < main_end
     assert "translate.google.com" not in resp.text
     assert "google_translate_element" not in resp.text
     assert "onclick=" not in resp.text
