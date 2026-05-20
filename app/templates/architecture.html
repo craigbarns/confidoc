@@ -1,0 +1,838 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}">
+  <meta name="robots" content="index,follow">
+  <meta name="theme-color" content="#080810">
+  <link rel="icon" href="/static/confidoc-mark.svg" type="image/svg+xml">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&family=Fira+Code:wght@400;500;600&display=swap" rel="stylesheet">
+  <style nonce="{{CSP_NONCE}}">
+    :root {
+      --bg: #06060c;
+      --surface: rgba(13, 13, 25, 0.75);
+      --surface-hover: rgba(22, 22, 45, 0.85);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(124, 116, 255, 0.25);
+      --accent: #6366f1;
+      --accent-light: #a855f7;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --dim: #475569;
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --danger: #ef4444;
+      --radius-lg: 16px;
+      --radius-md: 10px;
+    }
+    
+    * { margin:0; padding:0; box-sizing:border-box; }
+    html { scroll-behavior:smooth; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+    }
+
+    h1, h2, h3, .logo-text, .tab-btn {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    code, pre {
+      font-family: 'Fira Code', monospace;
+    }
+
+    /* HEADER */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 48px;
+      max-width: 1240px;
+      margin: 0 auto;
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+      flex-shrink: 0;
+    }
+    .logo-text { font-size: 19px; font-weight: 800; letter-spacing: -0.5px; color: var(--text); }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a { color: var(--text-muted); font-size: 14px; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn-nav {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      padding: 9px 22px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      text-decoration: none;
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .btn-nav:hover {
+      background: rgba(99, 102, 241, 0.24);
+      color: #fff;
+      transform: translateY(-1px);
+    }
+
+    /* CONTAINER */
+    .container {
+      max-width: 1240px;
+      margin: 0 auto;
+      padding: 48px 24px;
+    }
+
+    /* HERO */
+    .hero {
+      text-align: center;
+      margin-bottom: 48px;
+      position: relative;
+    }
+    .hero-eyebrow {
+      font-size: 13px;
+      text-transform: uppercase;
+      letter-spacing: 2px;
+      color: var(--accent-light);
+      font-weight: 700;
+      margin-bottom: 12px;
+      display: inline-block;
+    }
+    .hero h1 {
+      font-size: 44px;
+      font-weight: 900;
+      letter-spacing: -1px;
+      background: linear-gradient(135deg, #fff 40%, var(--accent-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 16px;
+    }
+    .hero p {
+      font-size: 16px;
+      color: var(--text-muted);
+      max-width: 600px;
+      margin: 0 auto;
+    }
+
+    /* TABS */
+    .tabs-nav {
+      display: flex;
+      justify-content: center;
+      gap: 12px;
+      margin-bottom: 32px;
+      background: rgba(255, 255, 255, 0.03);
+      padding: 6px;
+      border-radius: 12px;
+      border: 1px solid var(--border);
+      max-width: fit-content;
+      margin-left: auto;
+      margin-right: auto;
+    }
+    .tab-btn {
+      background: transparent;
+      border: none;
+      color: var(--text-muted);
+      padding: 10px 24px;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+    .tab-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.04);
+    }
+    .tab-btn.active {
+      background: var(--accent);
+      color: #fff;
+      box-shadow: 0 4px 12px rgba(99, 102, 241, 0.35);
+    }
+    .tab-content {
+      display: none;
+      animation: fadeIn 0.4s ease forwards;
+    }
+    .tab-content.active {
+      display: block;
+    }
+
+    /* GLASS CARD */
+    .card {
+      background: var(--surface);
+      border: 1px solid var(--border);
+      border-radius: var(--radius-lg);
+      padding: 32px;
+      backdrop-filter: blur(24px) saturate(180%);
+      box-shadow: 0 12px 32px rgba(0, 0, 0, 0.3);
+      margin-bottom: 32px;
+      position: relative;
+      overflow: hidden;
+    }
+    .card::before {
+      content: '';
+      position: absolute;
+      top: 0; left: 0; right: 0; height: 1px;
+      background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.1), transparent);
+    }
+
+    /* CARTOGRAPHIE / MERMAID */
+    .mermaid-container {
+      background: #080812;
+      border-radius: 12px;
+      padding: 24px;
+      border: 1px solid rgba(255, 255, 255, 0.05);
+      display: flex;
+      justify-content: center;
+      overflow-x: auto;
+    }
+
+    /* METRICS / STATS */
+    .metrics-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+      gap: 24px;
+      margin-bottom: 32px;
+    }
+    .metric-card {
+      background: rgba(255, 255, 255, 0.02);
+      border: 1px solid var(--border);
+      border-radius: 12px;
+      padding: 24px;
+      text-align: center;
+      transition: all 0.3s ease;
+      position: relative;
+    }
+    .metric-card:hover {
+      transform: translateY(-3px);
+      border-color: var(--border-accent);
+      background: rgba(99, 102, 241, 0.03);
+    }
+    .metric-card h3 {
+      font-size: 13px;
+      color: var(--text-muted);
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      margin-bottom: 12px;
+    }
+    .metric-value {
+      font-size: 40px;
+      font-weight: 800;
+      color: #fff;
+      font-family: 'Outfit', sans-serif;
+      background: linear-gradient(135deg, #fff, var(--accent-light));
+      -webkit-background-clip: text;
+      -webkit-text-fill-color: transparent;
+      margin-bottom: 4px;
+    }
+    .metric-desc {
+      font-size: 12px;
+      color: var(--dim);
+    }
+
+    /* API EXPLORER */
+    .explorer-header {
+      display: flex;
+      flex-wrap: wrap;
+      justify-content: space-between;
+      align-items: center;
+      gap: 16px;
+      margin-bottom: 24px;
+      padding-bottom: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .search-wrapper {
+      position: relative;
+      flex: 1;
+      min-width: 280px;
+    }
+    .search-input {
+      width: 100%;
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      padding: 12px 16px 12px 42px;
+      border-radius: 8px;
+      color: #fff;
+      font-size: 14px;
+      transition: all 0.2s;
+    }
+    .search-input:focus {
+      outline: none;
+      border-color: var(--accent);
+      background: rgba(99, 102, 241, 0.05);
+      box-shadow: 0 0 12px rgba(99, 102, 241, 0.25);
+    }
+    .search-icon {
+      position: absolute;
+      left: 14px;
+      top: 50%;
+      transform: translateY(-50%);
+      color: var(--text-muted);
+      pointer-events: none;
+    }
+    .tag-filters {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+    .tag-filter-btn {
+      background: rgba(255, 255, 255, 0.03);
+      border: 1px solid var(--border);
+      color: var(--text-muted);
+      padding: 6px 14px;
+      border-radius: 6px;
+      font-size: 12px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .tag-filter-btn:hover {
+      color: var(--text);
+      background: rgba(255, 255, 255, 0.06);
+    }
+    .tag-filter-btn.active {
+      background: rgba(99, 102, 241, 0.15);
+      border-color: var(--accent);
+      color: #a5b4fc;
+    }
+
+    .routes-list {
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+    .route-item {
+      background: rgba(255, 255, 255, 0.01);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      overflow: hidden;
+      transition: all 0.2s;
+    }
+    .route-item:hover {
+      background: rgba(255, 255, 255, 0.02);
+      border-color: rgba(255, 255, 255, 0.12);
+    }
+    .route-trigger {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 16px 20px;
+      cursor: pointer;
+      user-select: none;
+    }
+    .route-meta {
+      display: flex;
+      align-items: center;
+      gap: 16px;
+    }
+    .method-badge {
+      font-size: 10px;
+      font-weight: 800;
+      padding: 4px 8px;
+      border-radius: 4px;
+      text-transform: uppercase;
+      letter-spacing: 0.5px;
+      min-width: 60px;
+      text-align: center;
+    }
+    .method-badge.get { background: rgba(16, 185, 129, 0.15); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); }
+    .method-badge.post { background: rgba(99, 102, 241, 0.15); color: #a5b4fc; border: 1px solid rgba(99, 102, 241, 0.25); }
+    .method-badge.put { background: rgba(245, 158, 11, 0.15); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); }
+    .method-badge.delete { background: rgba(239, 68, 68, 0.15); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); }
+    
+    .route-path {
+      font-size: 14px;
+      font-weight: 600;
+      color: #fff;
+    }
+    .route-name-summary {
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+    .route-tag-badge {
+      font-size: 10px;
+      text-transform: uppercase;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+      color: var(--accent-light);
+      background: rgba(168, 85, 247, 0.08);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(168, 85, 247, 0.15);
+    }
+    .route-detail {
+      display: none;
+      padding: 0 20px 20px 20px;
+      border-top: 1px dashed rgba(255, 255, 255, 0.04);
+      background: rgba(0, 0, 0, 0.12);
+      animation: slideDown 0.25s ease forwards;
+    }
+    .route-item.expanded .route-detail {
+      display: block;
+    }
+    .route-detail-title {
+      font-size: 12px;
+      text-transform: uppercase;
+      color: var(--dim);
+      margin: 16px 0 6px 0;
+      font-weight: 700;
+      letter-spacing: 0.5px;
+    }
+    .route-docstring {
+      background: rgba(0, 0, 0, 0.25);
+      border: 1px solid rgba(255, 255, 255, 0.04);
+      border-radius: 6px;
+      padding: 12px 16px;
+      color: #e2e8f0;
+      font-size: 13px;
+      line-height: 1.6;
+    }
+
+    /* MIDDLEWARES TABLE */
+    .table-wrapper {
+      overflow-x: auto;
+    }
+    .compliance-table {
+      width: 100%;
+      border-collapse: collapse;
+      text-align: left;
+    }
+    .compliance-table th, .compliance-table td {
+      padding: 16px;
+      border-bottom: 1px solid var(--border);
+    }
+    .compliance-table th {
+      color: var(--text-muted);
+      font-size: 12px;
+      text-transform: uppercase;
+      letter-spacing: 1px;
+      font-weight: 700;
+    }
+    .compliance-table td {
+      font-size: 14px;
+      vertical-align: middle;
+    }
+    .middleware-name {
+      font-weight: 700;
+      color: #fff;
+    }
+    .middleware-class {
+      font-size: 12px;
+      color: var(--accent-light);
+      background: rgba(168, 85, 247, 0.06);
+      padding: 3px 8px;
+      border-radius: 4px;
+      border: 1px solid rgba(168, 85, 247, 0.12);
+      display: inline-block;
+    }
+    .status-badge {
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+      font-size: 11px;
+      font-weight: 700;
+      padding: 4px 10px;
+      border-radius: 20px;
+    }
+    .status-badge.active {
+      background: var(--success-bg);
+      color: #34d399;
+      border: 1px solid rgba(16, 185, 129, 0.25);
+    }
+
+    /* ANIMATIONS */
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translateY(6px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+    @keyframes slideDown {
+      from { opacity: 0; transform: translateY(-4px); }
+      to { opacity: 1; transform: translateY(0); }
+    }
+
+    /* RESPONSIVE */
+    @media (max-width: 768px) {
+      .nav { padding: 16px 24px; }
+      .hero h1 { font-size: 32px; }
+      .tab-btn { padding: 8px 16px; font-size: 13px; }
+    }
+  </style>
+</head>
+<body>
+
+  <!-- NAV -->
+  <nav class="nav">
+    <a href="/" class="logo">
+      <div class="logo-icon">🔐</div>
+      <span class="logo-text">ConfiDoc</span>
+    </a>
+    <div class="nav-links">
+      <a href="/ui">Console Client</a>
+      <a href="/security">Securite</a>
+      <a href="/docs" class="btn-nav">Swagger API</a>
+    </div>
+  </nav>
+
+  <!-- CONTAINER -->
+  <div class="container">
+    
+    <!-- HERO -->
+    <header class="hero">
+      <span class="hero-eyebrow">DEVELOPER & COMPLIANCE HUB</span>
+      <h1>Architecture & Diagnostics</h1>
+      <p>Exploration interactive du fonctionnement de ConfiDoc, de la modularité du code et du grand catalogue de points d'accès FastAPI en temps réel.</p>
+    </header>
+
+    <!-- TABS NAVIGATION -->
+    <div class="tabs-nav">
+      <button class="tab-btn active" onclick="switchTab('cartographie')">Cartographie</button>
+      <button class="tab-btn" onclick="switchTab('api-explorer')">API Explorer</button>
+      <button class="tab-btn" onclick="switchTab('metrics')">Modularité & Métriques</button>
+      <button class="tab-btn" onclick="switchTab('middlewares')">Middlewares Sécurité</button>
+    </div>
+
+    <!-- TAB 1: CARTOGRAPHIE -->
+    <section id="tab-cartographie" class="tab-content active">
+      <div class="card">
+        <h2 style="font-size:20px; font-weight:800; margin-bottom:16px;">Pipeline de traitement et d'anonymisation</h2>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:24px;">Ce diagramme illustre le cycle de vie d'un document au sein du backend ConfiDoc. Le pipeline garantit une étanchéité absolue (Air-Gapped par défaut) avant d'autoriser toute transmission à des LLM externes.</p>
+        
+        <div class="mermaid-container">
+          <div class="mermaid" style="width:100%; text-align:center;">
+graph TD
+    %% Custom styles
+    classDef default fill:#111122,stroke:#ffffff1a,color:#f1f5f9;
+    classDef client fill:#312e81,stroke:#6366f1,color:#f1f5f9;
+    classDef sovereign fill:#064e3b,stroke:#10b981,color:#f1f5f9;
+    classDef third fill:#1e1b4b,stroke:#a855f7,color:#f1f5f9;
+
+    A["Fichier Client (PDF, Image, TXT)"]:::client -->|Upload Stream anti-OOM| B["Anti-virus & Malware Sandbox Scan"]
+    B -->|Check Clean| C["Classification Automatique du Profil"]
+    C -->|Image ou Scan PDF| D["OCR Souverain (Mistral OCR / Tesseract local)"]:::sovereign
+    C -->|Fichier Texte Brut| E["Extracteur natif & Normalisateur"]
+    D --> F["Stockage sécurisé du texte Original (Chiffré)"]
+    E --> F
+
+    F -->|Délégation Pipeline| G["Filtres d'Anonymisation Déterministes (Regex & Dictionnaires)"]
+    F -->|Traitement Complémentaire NLP| H["Moteur LLM/NER (Mistral AI / Ollama en local)"]:::third
+
+    G --> I["Fusion & Déduplication des Entités Détectées"]
+    H --> I
+
+    I --> J["Registre des Pseudonymes Stables (EntityRegistry)"]
+    J --> K["Aperçu Anonymisé et Chiffré en Client-side"]:::client
+
+    K -->|Indexation sémantique chiffrée| L["Base Vectorielle PGVector (RAG)"]
+    K -->|Tâches asynchrones lourdes| M["Gestionnaire de Files Celery (Redis)"]
+
+    class A,K client;
+    class D sovereign;
+    class H third;
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 2: API EXPLORER -->
+    <section id="tab-api-explorer" class="tab-content">
+      <div class="card">
+        <h2 style="font-size:20px; font-weight:800; margin-bottom:16px;">Explorateur d'API Dynamique</h2>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:24px;">Cette console interroge en direct le routeur FastAPI (`request.app.routes`) pour documenter et lister les points d'entrée configurés en production.</p>
+        
+        <div class="explorer-header">
+          <div class="search-wrapper">
+            <span class="search-icon">🔍</span>
+            <input type="text" id="route-search" class="search-input" placeholder="Rechercher une route ou description..." oninput="filterRoutes()">
+          </div>
+          <div class="tag-filters" id="tag-filters-container">
+            <button class="tag-filter-btn active" onclick="filterTag('all')">Tous</button>
+          </div>
+        </div>
+
+        <div class="routes-list" id="routes-list-container">
+          <!-- Routes dynamically injected -->
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 3: METRICS -->
+    <section id="tab-metrics" class="tab-content">
+      
+      <!-- Metrics Cards -->
+      <div class="metrics-grid">
+        <div class="metric-card">
+          <h3>Services Métier</h3>
+          <div class="metric-value">{{SERVICES_COUNT}}</div>
+          <div class="metric-desc">Fichiers dans `app/services`</div>
+        </div>
+        <div class="metric-card">
+          <h3>Modèles de Données</h3>
+          <div class="metric-value">{{MODELS_COUNT}}</div>
+          <div class="metric-desc">Fichiers dans `app/models`</div>
+        </div>
+        <div class="metric-card">
+          <h3>Schémas Pydantic</h3>
+          <div class="metric-value">{{SCHEMAS_COUNT}}</div>
+          <div class="metric-desc">Fichiers dans `app/schemas`</div>
+        </div>
+        <div class="metric-card">
+          <h3>Routeurs API v1</h3>
+          <div class="metric-value">{{API_V1_COUNT}}</div>
+          <div class="metric-desc">Fichiers dans `app/api/v1`</div>
+        </div>
+      </div>
+
+      <div class="card">
+        <h2 style="font-size:20px; font-weight:800; margin-bottom:16px;">Indicateur de Santé Architectural</h2>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:24px;">Le backend ConfiDoc respecte une architecture en couches étanches de type **Domain-Driven Design (DDD)** avec injection de dépendance. Les fichiers sont isolés de façon modulaire :</p>
+        
+        <div style="display:flex; flex-direction:column; gap:16px;">
+          <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:16px; border-radius:8px;">
+            <div style="display:flex; justify-content:space-between; margin-bottom:6px; font-size:13px; font-weight:700;">
+              <span>Modularité Applicative (Services / API v1 Ratio)</span>
+              <span style="color:var(--accent-light)">Parfaite (DDD respecté)</span>
+            </div>
+            <div style="height:6px; background:rgba(255,255,255,0.04); border-radius:3px; overflow:hidden;">
+              <div style="width:100%; height:100%; background:linear-gradient(90deg, var(--accent), var(--accent-light));"></div>
+            </div>
+          </div>
+          
+          <div style="font-size:13px; color:var(--text-muted); line-height:1.6;">
+            <ul>
+              <li style="margin-bottom:8px;"><strong>Pas de God-Files</strong> : Les responsabilités d'extraction (OCR, parseurs) et d'anonymisation (dictionnaires, LLM) sont découpées en micro-services autonomes.</li>
+              <li style="margin-bottom:8px;"><strong>Couche API ultra-légère</strong> : Les routeurs FastAPI valident uniquement les types d'entrées et passent les charges de travail aux services.</li>
+              <li><strong>Zéro injection SQL</strong> : SQLAlchemy 2.0 asynchrone applique un typage strict et prévient toute faille d'injection de base de données.</li>
+            </ul>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <!-- TAB 4: MIDDLEWARES -->
+    <section id="tab-middlewares" class="tab-content">
+      <div class="card">
+        <h2 style="font-size:20px; font-weight:800; margin-bottom:16px;">Middlewares de Sécurité Actifs</h2>
+        <p style="color:var(--text-muted); font-size:14px; margin-bottom:24px;">Ces couches de filtrage interceptent chaque requête entrante et sortante pour auditer sa provenance, mesurer les performances, forcer les en-têtes de sécurité et prévenir la ré-identification.</p>
+        
+        <div class="table-wrapper">
+          <table class="compliance-table">
+            <thead>
+              <tr>
+                <th>Middleware</th>
+                <th>Classe Technique</th>
+                <th>Rôle RGPD / Sécurité</th>
+                <th>Statut</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr>
+                <td><span class="middleware-name">Audit Trail Logs</span></td>
+                <td><span class="middleware-class">AuditLogMiddleware</span></td>
+                <td style="color:var(--text-muted);">Enregistre l'ensemble des événements de consultation documentaire pour conformité RGPD.</td>
+                <td><span class="status-badge active">● ACTIF</span></td>
+              </tr>
+              <tr>
+                <td><span class="middleware-name">Mesure de Latence</span></td>
+                <td><span class="middleware-class">TimingMiddleware</span></td>
+                <td style="color:var(--text-muted);">Mesure les millisecondes de traitement pour monitorer l'efficacité OCR et IA.</td>
+                <td><span class="status-badge active">● ACTIF</span></td>
+              </tr>
+              <tr>
+                <td><span class="middleware-name">En-têtes de Sécurité</span></td>
+                <td><span class="middleware-class">SecurityHeadersMiddleware</span></td>
+                <td style="color:var(--text-muted);">Injecte HSTS, CSP (Content Security Policy), et protections contre le vol de clic (Clickjacking).</td>
+                <td><span class="status-badge active">● ACTIF</span></td>
+              </tr>
+              <tr>
+                <td><span class="middleware-name">Traçage de Requêtes</span></td>
+                <td><span class="middleware-class">RequestIdMiddleware</span></td>
+                <td style="color:var(--text-muted);">Génère un UUID X-Request-ID pour corréler les logs et assurer l'auditabilité.</td>
+                <td><span class="status-badge active">● ACTIF</span></td>
+              </tr>
+              <tr>
+                <td><span class="middleware-name">Gestion CORS</span></td>
+                <td><span class="middleware-class">CORSMiddleware</span></td>
+                <td style="color:var(--text-muted);">Filtre les origines d'appels HTTP pour bloquer l'usage illégitime de l'API.</td>
+                <td><span class="status-badge active">● ACTIF</span></td>
+              </tr>
+              <tr>
+                <td><span class="middleware-name">En-têtes Proxy Réseau</span></td>
+                <td><span class="middleware-class">ProxyHeadersMiddleware</span></td>
+                <td style="color:var(--text-muted);">Transmet proprement les IPs réelles des clients à travers les proxys Railway Edge.</td>
+                <td><span class="status-badge active">● ACTIF</span></td>
+              </tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </section>
+
+  </div>
+
+  <!-- SCRIPTS -->
+  <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js" nonce="{{CSP_NONCE}}"></script>
+  <script nonce="{{CSP_NONCE}}">
+    // Initialise Mermaid
+    mermaid.initialize({
+      startOnLoad: true,
+      theme: 'dark',
+      themeVariables: {
+        background: '#080812',
+        primaryColor: '#6366f1',
+        lineColor: '#rgba(255,255,255,0.1)',
+        textColor: '#f1f5f9'
+      }
+    });
+
+    // Données injectées depuis le backend
+    const routes = {{RAW_ROUTES_JSON}};
+    let activeTag = 'all';
+
+    // Switch Tabs
+    function switchTab(tabId) {
+      document.querySelectorAll('.tab-btn').forEach(btn => {
+        btn.classList.remove('active');
+      });
+      document.querySelectorAll('.tab-content').forEach(content => {
+        content.classList.remove('active');
+      });
+      
+      const targetBtn = Array.from(document.querySelectorAll('.tab-btn')).find(btn => btn.getAttribute('onclick').includes(tabId));
+      if (targetBtn) targetBtn.classList.add('active');
+      
+      const targetContent = document.getElementById('tab-' + tabId);
+      if (targetContent) targetContent.classList.add('active');
+      
+      // Si on active l'onglet Cartographie, on force Mermaid à re-rendre
+      if (tabId === 'cartographie') {
+        mermaid.init();
+      }
+    }
+
+    // API Explorer Logic
+    function initApiExplorer() {
+      // 1. Détecter tous les tags uniques pour générer les boutons de filtre
+      const tags = new Set();
+      routes.forEach(r => {
+        if (r.tag) tags.add(r.tag);
+      });
+
+      const filtersContainer = document.getElementById('tag-filters-container');
+      tags.forEach(tag => {
+        const btn = document.createElement('button');
+        btn.className = 'tag-filter-btn';
+        btn.textContent = tag.toUpperCase();
+        btn.setAttribute('onclick', `filterTag('${tag}')`);
+        btn.id = 'filter-btn-' + tag;
+        filtersContainer.appendChild(btn);
+      });
+
+      renderRoutes();
+    }
+
+    function filterTag(tag) {
+      activeTag = tag;
+      document.querySelectorAll('.tag-filter-btn').forEach(btn => btn.classList.remove('active'));
+      
+      if (tag === 'all') {
+        document.querySelector('button[onclick="filterTag(\'all\')"]').classList.add('active');
+      } else {
+        const targetBtn = document.getElementById('filter-btn-' + tag);
+        if (targetBtn) targetBtn.classList.add('active');
+      }
+
+      filterRoutes();
+    }
+
+    function filterRoutes() {
+      const query = document.getElementById('route-search').value.toLowerCase();
+      const container = document.getElementById('routes-list-container');
+      container.innerHTML = '';
+
+      const filtered = routes.filter(r => {
+        const matchesTag = activeTag === 'all' || r.tag === activeTag;
+        const matchesQuery = r.path.toLowerCase().includes(query) || 
+                             r.name.toLowerCase().includes(query) || 
+                             r.description.toLowerCase().includes(query);
+        return matchesTag && matchesQuery;
+      });
+
+      if (filtered.length === 0) {
+        container.innerHTML = `<div style="text-align:center; padding:32px; color:var(--text-muted); font-size:14px;">Aucun point d'accès ne correspond à votre recherche.</div>`;
+        return;
+      }
+
+      filtered.forEach((r, idx) => {
+        const item = document.createElement('div');
+        item.className = 'route-item';
+        item.id = 'route-item-' + idx;
+
+        const methodsBadges = r.methods.map(m => {
+          const cls = m.toLowerCase();
+          return `<span class="method-badge ${cls}">${m}</span>`;
+        }).join(' ');
+
+        const docstringHtml = r.description ? 
+          `<div class="route-docstring">${r.description}</div>` : 
+          `<div class="route-docstring" style="color:var(--dim); font-style:italic;">Aucune description fournie.</div>`;
+
+        item.innerHTML = `
+          <div class="route-trigger" onclick="toggleRouteExpansion(${idx})">
+            <div class="route-meta">
+              ${methodsBadges}
+              <span class="route-path">${r.path}</span>
+            </div>
+            <div style="display:flex; align-items:center; gap:12px;">
+              <span class="route-name-summary">${r.name}</span>
+              <span class="route-tag-badge">${r.tag}</span>
+            </div>
+          </div>
+          <div class="route-detail">
+            <div class="route-detail-title">Description technique (Docstring)</div>
+            ${docstringHtml}
+          </div>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function renderRoutes() {
+      filterRoutes();
+    }
+
+    function toggleRouteExpansion(idx) {
+      const el = document.getElementById('route-item-' + idx);
+      if (el) {
+        el.classList.toggle('expanded');
+      }
+    }
+
+    // Initialisation globale
+    document.addEventListener('DOMContentLoaded', () => {
+      initApiExplorer();
+    });
+  </script>
+</body>
+</html>

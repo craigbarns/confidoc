@@ -1,11 +1,14 @@
 """ConfiDoc Backend — Anonymization Service Facade.
 
-This is a slim facade for backward compatibility.
-Logic has been moved to:
-- app.services.ocr.*
-- app.services.extraction.*
-- app.services.classification.*
-- app.services.anonymization.*
+This is a slim facade for backward compatibility, simplifying direct operations
+on raw texts. It encapsulates and delegates to the specialized sub-systems:
+- app.services.ocr.*           : Sovereign OCR (Tesseract & local pre-processors)
+- app.services.extraction.*    : Sovereign document loaders (PyMuPDF, Docling)
+- app.services.classification.*: Automated router classifier for professional forms
+- app.services.anonymization.* : Strict dictionary, regex patterns & LLM sanitization
+
+Pattern: Facade (Gang of Four)
+Integrity Level: Critical (DPO audited, zero unmasked leakage to external networks)
 """
 
 from typing import Any

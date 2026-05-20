@@ -1,4 +1,33 @@
-"""ConfiDoc Backend — Document processing pipeline service (v5)."""
+"""ConfiDoc Backend — Document processing pipeline service (v5).
+
+Lifecycle of Document & Anonymization Pipeline:
++-------------------+
+|  1. UPLOADED      | ---> File streamed, verified clean by anti-virus scan
++-------------------+
+          |
+          v [build_extraction_ocr]
++-------------------+
+|  2. EXTRACTING    | ---> OCR & Miner running (Mistral OCR first / local fallback)
++-------------------+
+          |
+          v
++-------------------+
+|  3. EXTRACTED     | ---> Original raw text persisted securely in database
++-------------------+
+          |
+          v [build_anonymization_llm]
++-------------------+
+|  4. ANONYMIZING   | ---> Anonymization profiles running (Regex & LLM Entity Detect)
++-------------------+
+          |
+          v
++-------------------+
+|  5. READY         | ---> Preview clean text, entity dictionary & RAG vector store cached
++-------------------+
+
+This service coordinates OCR extraction, regex pattern detection, LLM-based entities enrichment,
+stable pseudonym generation via the EntityRegistry, and persistence/audit logs recording.
+"""
 
 from __future__ import annotations
 

@@ -149,7 +149,10 @@ def _render_template(
         )
 
     for key, value in replacements.items():
-        html_content = html_content.replace(f"{{{{{key}}}}}", escape(value, quote=True))
+        if key.startswith("RAW_") or key == "CSP_NONCE":
+            html_content = html_content.replace(f"{{{{{key}}}}}", value)
+        else:
+            html_content = html_content.replace(f"{{{{{key}}}}}", escape(value, quote=True))
     return html_content
 
 
@@ -228,3 +231,107 @@ async def security_page(request: Request) -> HTMLResponse:
 async def trust_center_page(request: Request) -> HTMLResponse:
     """Alias public du Trust Center ConfiDoc."""
     return await security_page(request)
+
+
+_ARCHITECTURE_TEMPLATE = _TEMPLATE_DIR / "architecture.html"
+
+@router.get("/architecture", response_class=HTMLResponse, include_in_schema=False)
+async def architecture_page(request: Request) -> HTMLResponse:
+    """Page d'architecture interactive du backend ConfiDoc."""
+    import json
+    
+    # 1. Calcul dynamique des métriques de modularité
+    def _count_py_files(subdir: str) -> int:
+        try:
+            p = Path(__file__).resolve().parent.parent / subdir
+            if not p.exists():
+                return 0
+            return len([
+                f for f in p.glob("**/*.py") 
+                if f.name != "__init__.py" and "__pycache__" not in str(f)
+            ])
+        except Exception:
+            return 0
+
+    metrics = {
+        "services_count": _count_py_files("services"),
+        "models_count": _count_py_files("models"),
+        "schemas_count": _count_py_files("schemas"),
+        "api_v1_count": _count_py_files("api/v1"),
+    }
+
+    # 2. Scan et extraction dynamique des routes FastAPI
+    routes_data = []
+    for route in request.app.routes:
+        # Exclure les routes internes du schéma openapi ou les routes de redirection techniques
+        if route.path in {"/openapi.json", "/docs", "/redoc", "/metrics"}:
+            continue
+            
+        methods = list(route.methods) if hasattr(route, "methods") and route.methods else []
+        clean_methods = [m for m in methods if m not in {"HEAD", "OPTIONS"}]
+        if not clean_methods and not route.path.startswith("/static"):
+            clean_methods = ["GET"]
+
+        docstring = ""
+        if hasattr(route, "endpoint") and route.endpoint:
+            docstring = route.endpoint.__doc__ or ""
+            docstring = docstring.strip().replace("\n", " ")
+
+        tags = list(route.tags) if hasattr(route, "tags") and route.tags else []
+        if not tags:
+            if route.path.startswith("/api/v1/auth"):
+                tags = ["auth"]
+            elif route.path.startswith("/api/v1/uploads"):
+                tags = ["uploads"]
+            elif route.path.startswith("/api/v1/documents"):
+                tags = ["documents"]
+            elif route.path.startswith("/api/v1/copilot") or route.path.startswith("/api/v1/ai"):
+                tags = ["ai"]
+            elif route.path.startswith("/api/v1/compliance"):
+                tags = ["compliance"]
+            elif route.path.startswith("/api/v1/integrations"):
+                tags = ["integrations"]
+            elif route.path.startswith("/api/v1/leads"):
+                tags = ["leads"]
+            elif route.path.startswith("/ui") or route.path == "/":
+                tags = ["ui"]
+            else:
+                tags = ["system"]
+
+        routes_data.append({
+            "path": route.path,
+            "methods": clean_methods,
+            "name": route.name or "",
+            "description": docstring,
+            "tag": tags[0] if tags else "system"
+        })
+
+    routes_data.sort(key=lambda r: r["path"])
+
+    # 3. Préparation du contexte
+    nonce = getattr(request.state, "csp_nonce", "")
+    meta_context = _build_meta_context(
+        request,
+        title="ConfiDoc | Architecture & Developer Hub",
+        description="Explorateur d'API dynamique, cartographie Mermaid.js du pipeline d'anonymisation et métriques de santé du backend ConfiDoc.",
+        path="/architecture",
+    )
+
+    context = {
+        "RAW_ROUTES_JSON": json.dumps(routes_data),
+        "RAW_METRICS_JSON": json.dumps(metrics),
+        "SERVICES_COUNT": str(metrics["services_count"]),
+        "MODELS_COUNT": str(metrics["models_count"]),
+        "SCHEMAS_COUNT": str(metrics["schemas_count"]),
+        "API_V1_COUNT": str(metrics["api_v1_count"]),
+    }
+    context.update(meta_context)
+
+    html_content = _render_template(_ARCHITECTURE_TEMPLATE, request, nonce, context)
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
