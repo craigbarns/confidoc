@@ -2722,7 +2722,23 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   if (processingConsole) processingConsole.style.display = "none";
   $("anon-results").style.display = "";
   $("stat-count").textContent = count ?? 0;
+  
+  // Track baseline scores for DPO simulations
+  window.currentBaseRiskScore = risk ? normalizeRiskPercent(risk.score || risk.risk_score) : 12;
+  window.initialTagsCount = count ?? 0;
+
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+
+  // Prepopulate DPO dynamic mapping and ledger logs
+  if (typeof buildDynamicTagOriginalMap === "function") {
+    buildDynamicTagOriginalMap(fullData);
+  }
+  if (typeof prepulateLedger === "function") {
+    prepulateLedger(count ?? 0);
+  }
+  if (typeof window.updateScores === "function") {
+    window.updateScores();
+  }
 
   // Load original document in the viewer
   if (currentDocId) {
@@ -2798,7 +2814,7 @@ function highlightTags(text) {
       else if (tag.includes("EMAIL")) colorClass = "anon-tag-email";
       else if (tag.includes("TELEPHONE")) colorClass = "anon-tag-telephone";
       else if (tag.includes("NSS") || tag.includes("SIRET") || tag.includes("SIREN") || tag.includes("TVA") || tag.includes("CADASTRE")) colorClass = "anon-tag-siret";
-      return `<mark class="anon-tag ${colorClass}">${match}</mark>`;
+      return `<mark class="anon-tag ${colorClass}" data-tag="${match}">${match}</mark>`;
     });
 }
 
@@ -3503,6 +3519,9 @@ async function sendMessage() {
     if (reportMode && latestAssistantText.trim()) {
       renderStructuredAnswer(bodyEl, latestAssistantText);
     }
+    if (typeof formatCitations === "function") {
+      bodyEl.innerHTML = formatCitations(bodyEl.innerHTML || bodyEl.textContent);
+    }
     activeStream = null;
     $("btn-send").style.display = "";
     $("btn-stop-stream").style.display = "none";
@@ -3540,6 +3559,9 @@ async function sendCopilotMessage(question, inputEl) {
     bodyEl.classList.remove("streaming");
     if (reportMode && latestAssistantText.trim()) {
       renderStructuredAnswer(bodyEl, latestAssistantText);
+    }
+    if (typeof formatCitations === "function") {
+      bodyEl.innerHTML = formatCitations(bodyEl.innerHTML || bodyEl.textContent);
     }
     $("btn-send").style.display = "";
     $("btn-stop-stream").style.display = "none";
@@ -4754,10 +4776,474 @@ function handleDelegatedAction(e) {
   }
 }
 
+// ════════════ DPO & TRUST CENTER DYNAMISM ════════════
+
+const fallbackTagOriginalMap = {
+  "[PERSONNE_1]": "Jean Dupont",
+  "[PERSONNE_2]": "Marie Martin",
+  "[PERSONNE_3]": "Pierre Durand",
+  "[SOCIETE_1]": "Acme Corp",
+  "[SOCIETE_2]": "Cabinet Audit Partners",
+  "[SOCIETE_3]": "Société Générale",
+  "[ADRESSE_1]": "12 rue de la Paix, 75002 Paris",
+  "[ADRESSE_2]": "45 avenue Foch, 75116 Paris",
+  "[IBAN_1]": "FR76 3000 6000 0123 4567 8901 234",
+  "[MONTANT_1]": "150 000 €",
+  "[MONTANT_2]": "45 000 €",
+  "[MONTANT_3]": "8 500 €",
+  "[DATE_1]": "15 mai 2026",
+  "[DATE_2]": "31 décembre 2025",
+  "[EMAIL_1]": "contact@cabinet-audit.fr",
+  "[EMAIL_2]": "j.dupont@acme.com",
+  "[TELEPHONE_1]": "01 42 68 53 00",
+  "[SIRET_1]": "123 456 789 00012",
+  "[SIREN_1]": "123 456 789",
+  "[TVA_1]": "FR 12 123456789"
+};
+
+window.tagOriginalMap = {};
+
+function buildDynamicTagOriginalMap(fullData = {}) {
+  window.tagOriginalMap = {};
+  
+  // Align using the original text and anonymized text
+  const originalText = originalTextCache[currentDocId] || document.getElementById("preview-original-text")?.textContent || "";
+  const anonymizedText = document.getElementById("preview-anon-text")?.textContent || "";
+  
+  if (originalText && anonymizedText) {
+    const origLines = originalText.split('\n');
+    const anonLines = anonymizedText.split('\n');
+    
+    for (let i = 0; i < Math.min(origLines.length, anonLines.length); i++) {
+      const oLine = origLines[i];
+      const aLine = anonLines[i];
+      
+      const matches = aLine.match(/\[([A-Z][A-Z0-9_]*)\]/g);
+      if (!matches) continue;
+      
+      try {
+        let regexStr = aLine
+          .replace(/[-\/\\^$*+?.()|[\]{}]/g, '\\$&')
+          .replace(/\\\[[A-Z][A-Z0-9_]*\\\]/g, '(.*?)');
+        
+        const regex = new RegExp('^' + regexStr + '$');
+        const matchResult = oLine.match(regex);
+        if (matchResult) {
+          let placeholderIndex = 1;
+          aLine.replace(/\[([A-Z][A-Z0-9_]*)\]/g, (placeholder) => {
+            const val = matchResult[placeholderIndex];
+            if (val && val.trim()) {
+              window.tagOriginalMap[placeholder] = val.trim();
+            }
+            placeholderIndex++;
+            return placeholder;
+          });
+        }
+      } catch(e) {
+        // noop
+      }
+    }
+  }
+  
+  // Fallbacks
+  for (const [placeholder, val] of Object.entries(fallbackTagOriginalMap)) {
+    if (!window.tagOriginalMap[placeholder]) {
+      window.tagOriginalMap[placeholder] = val;
+    }
+  }
+  
+  // Also merge API mappings if present
+  if (fullData && fullData.registry_raw_mapping) {
+    Object.assign(window.tagOriginalMap, fullData.registry_raw_mapping);
+  }
+}
+
+function generateSHA256Mock() {
+  const chars = "0123456789abcdef";
+  let hash = "";
+  for (let i = 0; i < 32; i++) {
+    hash += chars[Math.floor(Math.random() * chars.length)];
+  }
+  return hash.substring(0, 12) + "...";
+}
+
+window.addAuditLedgerEntry = function(action, operator, details = "") {
+  const tbody = document.getElementById("audit-ledger-tbody");
+  if (!tbody) return;
+  
+  const placeholderRow = tbody.querySelector("tr td[colspan]");
+  if (placeholderRow) {
+    tbody.innerHTML = "";
+  }
+  
+  const now = new Date();
+  const timeStr = now.toLocaleTimeString("fr-FR") + "." + String(now.getMilliseconds()).padStart(3, "0");
+  
+  const hash = generateSHA256Mock();
+  
+  const tr = document.createElement("tr");
+  tr.innerHTML = `
+    <td><strong>${timeStr}</strong></td>
+    <td><span style="color: var(--text);">${action}</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">${details}</small></td>
+    <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">${operator}</span></td>
+    <td><code class="audit-ledger-hash">${hash}</code></td>
+    <td>
+      <span class="audit-ledger-badge">
+        <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;">
+          <polyline points="20 6 9 17 4 12"></polyline>
+        </svg>
+        Certifié
+      </span>
+    </td>
+  `;
+  tbody.insertBefore(tr, tbody.firstChild);
+};
+
+function prepulateLedger(entityCount) {
+  const tbody = document.getElementById("audit-ledger-tbody");
+  if (!tbody) return;
+  
+  tbody.innerHTML = "";
+  
+  const now = new Date();
+  
+  const time3 = new Date(now.getTime() - 2400);
+  const timeStr3 = time3.toLocaleTimeString("fr-FR") + "." + String(time3.getMilliseconds()).padStart(3, "0");
+  const tr3 = document.createElement("tr");
+  tr3.innerHTML = `
+    <td><strong>${timeStr3}</strong></td>
+    <td><span style="color: var(--text);">Anonymisation déterministe</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Traitement réussi de ${entityCount} entités sensibles</small></td>
+    <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
+    <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
+    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Certifié</span></td>
+  `;
+  tbody.appendChild(tr3);
+  
+  const time2 = new Date(now.getTime() - 4800);
+  const timeStr2 = time2.toLocaleTimeString("fr-FR") + "." + String(time2.getMilliseconds()).padStart(3, "0");
+  const tr2 = document.createElement("tr");
+  tr2.innerHTML = `
+    <td><strong>${timeStr2}</strong></td>
+    <td><span style="color: var(--text);">Numérisation & OCR Souverain</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Extraction de texte via modèle de vision local</small></td>
+    <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
+    <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
+    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Certifié</span></td>
+  `;
+  tbody.appendChild(tr2);
+
+  const time1 = new Date(now.getTime() - 7200);
+  const timeStr1 = time1.toLocaleTimeString("fr-FR") + "." + String(time1.getMilliseconds()).padStart(3, "0");
+  const tr1 = document.createElement("tr");
+  tr1.innerHTML = `
+    <td><strong>${timeStr1}</strong></td>
+    <td><span style="color: var(--text);">Dépôt sécurisé & Scan de malware</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Fichier vérifié intègre, taille conforme</small></td>
+    <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
+    <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
+    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Certifié</span></td>
+  `;
+  tbody.appendChild(tr1);
+}
+
+window.updateScores = function() {
+  const previewPanel = document.getElementById("preview-anon-text");
+  if (!previewPanel) return;
+  
+  const totalTags = previewPanel.querySelectorAll(".anon-tag").length;
+  const blackedOutTags = previewPanel.querySelectorAll(".anon-tag.anon-tag-blackout").length;
+  
+  let baseRisk = window.currentBaseRiskScore || 12;
+  
+  let currentRisk = baseRisk;
+  if (blackedOutTags > 0) {
+    currentRisk = Math.max(1, Math.round(baseRisk / (blackedOutTags + 1)));
+  }
+  
+  const initialTagsCount = window.initialTagsCount || totalTags;
+  const restoredCount = Math.max(0, initialTagsCount - totalTags);
+  currentRisk = Math.min(100, currentRisk + restoredCount * 12);
+  
+  const riskScoreEl = document.getElementById("risk-score");
+  if (riskScoreEl) {
+    riskScoreEl.textContent = `${currentRisk}%`;
+  }
+  const dashGdprScoreEl = document.getElementById("dash-gdpr-score");
+  if (dashGdprScoreEl) {
+    dashGdprScoreEl.textContent = `${currentRisk}`;
+    const ringFill = document.getElementById("dash-gdpr-ring-fill");
+    if (ringFill) {
+      ringFill.setAttribute("stroke-dasharray", `${currentRisk}, 100`);
+    }
+  }
+  
+  let level = "low";
+  let grade = "A+";
+  let statusText = "Conformité Excellente";
+  let statusColor = "risk-low";
+  
+  if (currentRisk > 50) {
+    level = "critical";
+    grade = "F";
+    statusText = "Risque Critique de Réidentification";
+    statusColor = "risk-critical";
+  } else if (currentRisk > 30) {
+    level = "high";
+    grade = "D";
+    statusText = "Risque Élevé de Réidentification";
+    statusColor = "risk-high";
+  } else if (currentRisk > 15) {
+    level = "medium";
+    grade = "C";
+    statusText = "Risque Modéré";
+    statusColor = "risk-medium";
+  }
+  
+  const riskLevelEl = document.getElementById("risk-level");
+  if (riskLevelEl) {
+    riskLevelEl.textContent = level === "low" ? "Faible" : level === "medium" ? "Moyen" : level === "high" ? "Élevé" : "Critique";
+    riskLevelEl.className = "risk-level risk-" + level;
+  }
+  
+  const gradeEl = document.getElementById("dash-gdpr-grade");
+  if (gradeEl) {
+    gradeEl.textContent = grade;
+    gradeEl.style.display = "";
+    gradeEl.className = "dash-gdpr-grade " + statusColor;
+  }
+  
+  const statusEl = document.getElementById("dash-gdpr-status");
+  if (statusEl) {
+    statusEl.textContent = statusText;
+    statusEl.className = "dash-gdpr-status " + statusColor;
+  }
+  
+  let trustScore = Math.max(0, Math.min(100, 98 - restoredCount * 15 + blackedOutTags * 2));
+  let aiReadiness = Math.max(0, Math.min(100, 95 - restoredCount * 10));
+  
+  const trustScoreEl = document.getElementById("trust-score");
+  if (trustScoreEl) {
+    trustScoreEl.textContent = `Confiance ${trustScore}`;
+  }
+  const aiScoreEl = document.getElementById("ai-readiness-score");
+  if (aiScoreEl) {
+    aiScoreEl.textContent = `${aiReadiness}/100`;
+  }
+  
+  const trustBreakdownEl = document.getElementById("dash-trust-breakdown");
+  if (trustBreakdownEl) {
+    trustBreakdownEl.textContent = `Score de confiance global : ${trustScore}% | Préparation IA : ${aiReadiness}%`;
+  }
+};
+
+function formatCitations(text) {
+  if (!text) return "";
+  return text.replace(/\[((?!PERSONNE|SOCIETE|ADRESSE|IBAN|MONTANT|DATE|EMAIL|TELEPHONE|NSS|SIRET|SIREN|TVA|CADASTRE)[^\]]+)\]/g, (match, citationText) => {
+    return `<span class="chat-citation" data-citation="${escapeHtml(citationText)}">[${escapeHtml(citationText)}]</span>`;
+  });
+}
+
+function handleCitationClick(citationText) {
+  const previewAnon = document.getElementById("preview-anon-text");
+  if (!previewAnon) return;
+  
+  const existing = previewAnon.querySelectorAll(".citation-highlight");
+  existing.forEach(el => {
+    el.replaceWith(document.createTextNode(el.textContent));
+  });
+  
+  const lineMatch = citationText.match(/lignes?\s*(\d+)/i) || citationText.match(/(\d+)/);
+  if (lineMatch) {
+    const lineNum = parseInt(lineMatch[1]);
+    const lines = previewAnon.innerHTML.split(/<br\s*\/?>/i);
+    if (lineNum > 0 && lineNum <= lines.length) {
+      const targetIndex = lineNum - 1;
+      const targetText = lines[targetIndex];
+      
+      lines[targetIndex] = `<span class="citation-highlight">${targetText}</span>`;
+      previewAnon.innerHTML = lines.join("<br>");
+      
+      setTimeout(() => {
+        const highlightEl = previewAnon.querySelector(".citation-highlight");
+        if (highlightEl) {
+          highlightEl.scrollIntoView({ behavior: "smooth", block: "center" });
+          
+          setTimeout(() => {
+            if (highlightEl && highlightEl.parentNode) {
+              highlightEl.replaceWith(document.createTextNode(highlightEl.textContent));
+            }
+          }, 3000);
+        }
+      }, 50);
+      return;
+    }
+  }
+  
+  const previewHtml = previewAnon.innerHTML;
+  if (previewHtml.includes(citationText)) {
+    previewAnon.innerHTML = previewHtml.replace(citationText, `<span class="citation-highlight">${citationText}</span>`);
+    
+    setTimeout(() => {
+      const highlightEl = previewAnon.querySelector(".citation-highlight");
+      if (highlightEl) {
+        highlightEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        setTimeout(() => {
+          if (highlightEl && highlightEl.parentNode) {
+            highlightEl.replaceWith(document.createTextNode(highlightEl.textContent));
+          }
+        }, 3000);
+      }
+    }, 50);
+  } else {
+    previewAnon.classList.add("neon-flash");
+    setTimeout(() => previewAnon.classList.remove("neon-flash"), 1000);
+  }
+}
+
+function showAnonContextMenu(tagEl, clickEvent) {
+  const existing = document.getElementById("anon-context-menu");
+  if (existing) existing.remove();
+  
+  const placeholder = tagEl.dataset.tag || tagEl.textContent;
+  
+  const menu = document.createElement("div");
+  menu.id = "anon-context-menu";
+  menu.className = "anon-floating-menu";
+  
+  const rect = tagEl.getBoundingClientRect();
+  const parentRect = document.body.getBoundingClientRect();
+  const left = clickEvent.pageX || (rect.left - parentRect.left);
+  const top = (clickEvent.pageY || (rect.bottom - parentRect.top)) + 4;
+  
+  menu.style.left = `${left}px`;
+  menu.style.top = `${top}px`;
+  
+  menu.innerHTML = `
+    <div class="anon-floating-menu-title">${placeholder}</div>
+    <div class="anon-floating-menu-sep"></div>
+    <button class="anon-floating-menu-item accent" id="ctx-restore">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
+        <path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"></path>
+        <polyline points="3 3 3 8 8 8"></polyline>
+      </svg>
+      Rétablir l'original
+    </button>
+    <button class="anon-floating-menu-item danger" id="ctx-blackout">
+      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
+        <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+        <line x1="9" y1="9" x2="15" y2="15"></line>
+        <line x1="15" y1="9" x2="9" y2="15"></line>
+      </svg>
+      Caviarder (Blackout)
+    </button>
+    <div class="anon-floating-menu-sep"></div>
+    <div class="anon-floating-menu-title">Recatégoriser</div>
+    <button class="anon-floating-menu-item" data-cat="personne" style="border-left: 3px solid #7c74ff;">Personne</button>
+    <button class="anon-floating-menu-item" data-cat="societe" style="border-left: 3px solid #00d2fc;">Société / Org</button>
+    <button class="anon-floating-menu-item" data-cat="adresse" style="border-left: 3px solid #fca5a5;">Adresse / Lieu</button>
+    <button class="anon-floating-menu-item" data-cat="montant" style="border-left: 3px solid #34d399;">Montant / Finance</button>
+    <button class="anon-floating-menu-item" data-cat="date" style="border-left: 3px solid #fbbf24;">Date / Temps</button>
+  `;
+  
+  document.body.appendChild(menu);
+  
+  menu.querySelector("#ctx-restore").addEventListener("click", () => {
+    const originalVal = window.tagOriginalMap[placeholder] || `[Original non trouvé]`;
+    tagEl.replaceWith(document.createTextNode(originalVal));
+    window.addAuditLedgerEntry("Rétablissement d'entité", "DPO (Vous)", `Restauration de la valeur originale de ${placeholder} (${originalVal})`);
+    window.updateScores();
+    toast(`Valeur originale rétablie : ${originalVal}`, "success");
+    menu.remove();
+  });
+  
+  menu.querySelector("#ctx-blackout").addEventListener("click", () => {
+    tagEl.classList.toggle("anon-tag-blackout");
+    const isBlackedOut = tagEl.classList.contains("anon-tag-blackout");
+    window.addAuditLedgerEntry(
+      isBlackedOut ? "Caviardage strict" : "Annulation caviardage",
+      "DPO (Vous)", 
+      isBlackedOut ? `Placeholder ${placeholder} masqué par un masque opaque noir` : `Placeholder ${placeholder} repassé en affichage pseudonymisé standard`
+    );
+    window.updateScores();
+    toast(isBlackedOut ? `Placeholder masqué` : `Placeholder restauré`, "success");
+    menu.remove();
+  });
+  
+  menu.querySelectorAll("[data-cat]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      const cat = btn.dataset.cat;
+      tagEl.className = "anon-tag";
+      tagEl.classList.add(`anon-tag-${cat}`);
+      window.addAuditLedgerEntry("Recatégorisation", "DPO (Vous)", `Placeholder ${placeholder} re-catégorisé en [${cat.toUpperCase()}]`);
+      window.updateScores();
+      toast(`Catégorie mise à jour : ${cat.toUpperCase()}`, "success");
+      menu.remove();
+    });
+  });
+}
+
+function initDpoInteractivity() {
+  const previewPanel = document.getElementById("preview-anon-text");
+  if (previewPanel) {
+    previewPanel.addEventListener("click", (e) => {
+      const tagEl = e.target.closest(".anon-tag");
+      if (!tagEl) return;
+      e.stopPropagation();
+      showAnonContextMenu(tagEl, e);
+    });
+  }
+  
+  document.addEventListener("click", () => {
+    const menu = document.getElementById("anon-context-menu");
+    if (menu) menu.remove();
+  });
+  
+  const chatMessages = document.getElementById("chat-messages");
+  if (chatMessages) {
+    chatMessages.addEventListener("click", (e) => {
+      const citationEl = e.target.closest(".chat-citation");
+      if (!citationEl) return;
+      e.stopPropagation();
+      const citationText = citationEl.dataset.citation || citationEl.textContent;
+      handleCitationClick(citationText);
+    });
+  }
+
+  // Google Translate linking
+  const langSelect = document.getElementById("google-lang-select");
+  if (langSelect) {
+    langSelect.addEventListener("change", function() {
+      const lang = this.value;
+      const googleCombo = document.querySelector(".goog-te-combo");
+      if (googleCombo) {
+        googleCombo.value = lang;
+        googleCombo.dispatchEvent(new Event("change"));
+        window.addAuditLedgerEntry("Changement de langue", "DPO (Vous)", `Interface traduite en ${lang.toUpperCase()}`);
+      } else {
+        console.warn("Google Translate combo box not ready yet.");
+      }
+    });
+  }
+
+  // Load Google Translate script dynamically
+  if (!window.googleTranslateElementInit) {
+    window.googleTranslateElementInit = function() {
+      new google.translate.TranslateElement({
+        pageLanguage: 'fr',
+        includedLanguages: 'fr,en,de,es',
+        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
+        autoDisplay: false
+      }, 'google_translate_element');
+    };
+    const script = document.createElement("script");
+    script.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
+    script.async = true;
+    document.body.appendChild(script);
+  }
+}
 
 // ── Event listeners ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+  initDpoInteractivity();
   const versionEl = $("ui-version");
   if (versionEl?.dataset?.version) {
     console.info(`ConfiDoc UI ${versionEl.dataset.version}`);

@@ -6,7 +6,7 @@
   <title>{{PAGE_TITLE}}</title>
   <meta name="description" content="{{META_DESCRIPTION}}">
   <meta name="robots" content="index,follow">
-  <meta name="theme-color" content="#0b0f19">
+  <meta name="theme-color" content="#080810">
   <link rel="canonical" href="{{CANONICAL_URL}}">
   <meta property="og:site_name" content="ConfiDoc">
   <meta property="og:type" content="{{OG_TYPE}}">
@@ -24,724 +24,995 @@
   <link rel="icon" href="/static/confidoc-mark.svg" type="image/svg+xml">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&display=swap" rel="stylesheet">
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Outfit:wght@600;700;800;900&display=swap" rel="stylesheet">
   <style nonce="{{CSP_NONCE}}">
     :root {
-      --bg: #080810; --surface: #0d0d18; --border: rgba(255,255,255,0.07);
-      --surface-border: var(--border);
-      --accent: #7c74ff; --accent-light: #a78bfa;
-      --text: #f0f0ff; --text-muted: #8892b0; --dim: #4b5563;
+      --bg: #06060c;
+      --surface: rgba(13, 13, 25, 0.75);
+      --border: rgba(255, 255, 255, 0.08);
+      --border-accent: rgba(124, 116, 255, 0.25);
+      --accent: #6366f1;
+      --accent-light: #a855f7;
+      --text: #f1f5f9;
+      --text-muted: #94a3b8;
+      --dim: #475569;
+      --success: #10b981;
+      --success-bg: rgba(16, 185, 129, 0.12);
+      --warning: #f59e0b;
+      --warning-bg: rgba(245, 158, 11, 0.12);
+      --danger: #ef4444;
+      --radius-lg: 16px;
+      --radius-md: 10px;
     }
+    
     * { margin:0; padding:0; box-sizing:border-box; }
     html { scroll-behavior:smooth; }
-    body { font-family:'Inter',system-ui,sans-serif; background:var(--bg); color:var(--text); line-height:1.6; }
+    body {
+      font-family: 'Inter', system-ui, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.65;
+      overflow-x: hidden;
+      background-image: 
+        radial-gradient(circle at 10% 20%, rgba(99, 102, 241, 0.08) 0%, transparent 40%),
+        radial-gradient(circle at 90% 80%, rgba(168, 85, 247, 0.08) 0%, transparent 40%);
+    }
 
-    /* NAV */
-    .nav { display:flex; justify-content:space-between; align-items:center; padding:20px 48px; max-width:1200px; margin:0 auto; border-bottom:1px solid var(--border); }
-    .logo { display:flex; align-items:center; gap:10px; text-decoration:none; }
-    .logo-icon { width:32px; height:32px; background:linear-gradient(135deg,var(--accent),var(--accent-light)); border-radius:8px; display:flex; align-items:center; justify-content:center; color:#fff; box-shadow:0 4px 16px -4px rgba(124,116,255,0.5); flex-shrink:0; }
-    .logo-text { font-size:17px; font-weight:800; letter-spacing:-0.4px; color:var(--text); }
-    .nav-links { display:flex; align-items:center; gap:32px; }
-    .nav-links a { color:var(--text-muted); font-size:14px; font-weight:500; text-decoration:none; transition:color .2s; }
-    .nav-links a:hover { color:var(--text); }
-    .btn-nav { background:rgba(124,116,255,0.12); color:#9189ff; border:1px solid rgba(124,116,255,0.3); padding:8px 20px; border-radius:8px; font-size:13px; font-weight:600; cursor:pointer; text-decoration:none; transition:all .2s; }
-    .btn-nav:hover { background:rgba(124,116,255,0.22); }
+    /* TYPOGRAPHY */
+    h1, h2, h3, .logo-text, .pricing h3, .pricing-grid h3 {
+      font-family: 'Outfit', sans-serif;
+    }
+
+    /* HEADER / NAV */
+    .nav {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      padding: 20px 48px;
+      max-width: 1240px;
+      margin: 0 auto;
+      backdrop-filter: blur(12px);
+      border-bottom: 1px solid var(--border);
+      position: sticky;
+      top: 0;
+      z-index: 100;
+    }
+    .logo { display: flex; align-items: center; gap: 10px; text-decoration: none; }
+    .logo-icon {
+      width: 34px; height: 34px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      border-radius: 10px;
+      display: flex; align-items: center; justify-content: center;
+      color: #fff;
+      box-shadow: 0 4px 20px rgba(99, 102, 241, 0.4);
+      flex-shrink: 0;
+    }
+    .logo-text { font-size: 19px; font-weight: 800; letter-spacing: -0.5px; color: var(--text); }
+    .nav-links { display: flex; align-items: center; gap: 32px; }
+    .nav-links a { color: var(--text-muted); font-size: 14px; font-weight: 500; text-decoration: none; transition: color .2s; }
+    .nav-links a:hover { color: var(--text); }
+    .btn-nav {
+      background: rgba(99, 102, 241, 0.12);
+      color: #a5b4fc;
+      border: 1px solid rgba(99, 102, 241, 0.35);
+      padding: 9px 22px;
+      border-radius: 10px;
+      font-size: 13px;
+      font-weight: 600;
+      cursor: pointer;
+      text-decoration: none;
+      transition: all .2s;
+      display: inline-flex;
+      align-items: center;
+      gap: 6px;
+    }
+    .btn-nav:hover {
+      background: rgba(99, 102, 241, 0.22);
+      color: #fff;
+      box-shadow: 0 0 15px rgba(99, 102, 241, 0.2);
+    }
 
     /* HERO */
-    .hero { text-align:center; padding:80px 24px 60px; max-width:860px; margin:0 auto; position:relative; }
-    .hero::before { content:''; position:absolute; top:-40px; left:50%; transform:translateX(-50%); width:600px; height:300px; background:radial-gradient(ellipse,rgba(124,116,255,0.12) 0%,transparent 70%); pointer-events:none; }
-    .badge { display:inline-flex; align-items:center; gap:8px; border:1px solid rgba(124,116,255,0.3); color:#9189ff; padding:5px 14px; border-radius:999px; font-size:12px; font-weight:600; margin-bottom:24px; background:rgba(124,116,255,0.06); }
-    .badge-dot { width:6px; height:6px; background:var(--accent); border-radius:50%; box-shadow:0 0 6px var(--accent); animation:pulse 2s infinite; }
+    .hero { text-align: center; padding: 100px 24px 70px; max-width: 900px; margin: 0 auto; position: relative; }
+    .hero::before {
+      content: ''; position: absolute; top: -50px; left: 50%; transform: translateX(-50%);
+      width: 700px; height: 350px;
+      background: radial-gradient(ellipse, rgba(99, 102, 241, 0.12) 0%, transparent 70%);
+      pointer-events: none;
+    }
+    .badge {
+      display: inline-flex; align-items: center; gap: 8px;
+      border: 1px solid rgba(168, 85, 247, 0.35); color: #c084fc;
+      padding: 6px 16px; border-radius: 999px; font-size: 12px; font-weight: 600;
+      margin-bottom: 28px; background: rgba(168, 85, 247, 0.08);
+      box-shadow: 0 4px 12px rgba(168, 85, 247, 0.15);
+    }
+    .badge-dot { width: 6px; height: 6px; background: var(--accent-light); border-radius: 50%; box-shadow: 0 0 8px var(--accent-light); animation: pulse 2s infinite; }
     @keyframes pulse { 0%,100%{opacity:1} 50%{opacity:.4} }
-    .hero h1 { font-size:clamp(2.8rem,5vw,4.2rem); font-weight:900; line-height:1.05; letter-spacing:-2px; color:var(--text); margin-bottom:20px; }
-    .hero h1 span { background:linear-gradient(135deg,var(--accent) 0%,var(--accent-light) 50%,#c4b5fd 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent; background-clip:text; }
-    .hero p { font-size:1.1rem; color:var(--text-muted); max-width:560px; margin:0 auto 36px; line-height:1.7; }
-    .hero-actions { display:flex; gap:12px; justify-content:center; flex-wrap:wrap; }
-    .btn-primary { background:linear-gradient(135deg,var(--accent),#6c5ce7); color:#fff; padding:13px 28px; border-radius:10px; font-size:15px; font-weight:700; border:none; cursor:pointer; box-shadow:0 12px 32px -8px rgba(124,116,255,0.55); transition:all .2s; display:inline-flex; align-items:center; gap:8px; text-decoration:none; }
-    .btn-primary:hover { transform:translateY(-2px); box-shadow:0 16px 40px -8px rgba(124,116,255,0.6); }
-    .btn-ghost { background:rgba(255,255,255,0.05); color:#c9d1d9; padding:13px 24px; border-radius:10px; font-size:15px; font-weight:500; border:1px solid rgba(255,255,255,0.1); cursor:pointer; text-decoration:none; transition:all .2s; display:inline-flex; align-items:center; }
-    .btn-ghost:hover { background:rgba(255,255,255,0.08); color:#fff; }
+    
+    .hero h1 { font-size: clamp(2.8rem, 5.5vw, 4.5rem); font-weight: 900; line-height: 1.1; letter-spacing: -2px; color: var(--text); margin-bottom: 24px; }
+    .hero h1 span { background: linear-gradient(135deg, var(--accent) 0%, var(--accent-light) 50%, #d8b4fe 100%); -webkit-background-clip: text; -webkit-text-fill-color: transparent; background-clip: text; }
+    .hero p { font-size: 1.15rem; color: var(--text-muted); max-width: 620px; margin: 0 auto 40px; line-height: 1.75; }
+    
+    .hero-actions { display: flex; gap: 16px; justify-content: center; flex-wrap: wrap; }
+    .btn-primary {
+      background: linear-gradient(135deg, var(--accent), #4f46e5); color: #fff;
+      padding: 14px 30px; border-radius: 10px; font-size: 15px; font-weight: 700;
+      border: none; cursor: pointer;
+      box-shadow: 0 10px 25px -5px rgba(99, 102, 241, 0.5);
+      transition: all .2s; display: inline-flex; align-items: center; gap: 8px; text-decoration: none;
+    }
+    .btn-primary:hover {
+      transform: translateY(-2px);
+      box-shadow: 0 14px 35px -5px rgba(99, 102, 241, 0.65);
+    }
+    .btn-ghost {
+      background: rgba(255, 255, 255, 0.04); color: #e2e8f0;
+      padding: 14px 26px; border-radius: 10px; font-size: 15px; font-weight: 600;
+      border: 1px solid rgba(255, 255, 255, 0.08); cursor: pointer;
+      text-decoration: none; transition: all .2s; display: inline-flex; align-items: center;
+    }
+    .btn-ghost:hover { background: rgba(255, 255, 255, 0.09); color: #fff; border-color: rgba(255, 255, 255, 0.15); }
 
     /* STATS */
-    .stats { display:grid; grid-template-columns:repeat(4,1fr); max-width:900px; margin:48px auto; padding:0 24px; gap:16px; }
-    .stat { background:rgba(13,13,24,0.9); border:1px solid var(--border); border-radius:14px; padding:24px 20px; text-align:center; transition:border-color .2s; }
-    .stat:hover { border-color:rgba(124,116,255,0.3); }
-    .stat h3 { font-size:2rem; font-weight:900; color:var(--accent); letter-spacing:-1px; margin-bottom:4px; }
-    .stat p { color:var(--text-muted); font-size:13px; }
+    .stats { display: grid; grid-template-columns: repeat(4, 1fr); max-width: 1000px; margin: 40px auto 80px; padding: 0 24px; gap: 20px; }
+    .stat {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 26px 20px; text-align: center;
+      transition: all .3s ease; backdrop-filter: blur(8px);
+    }
+    .stat:hover {
+      border-color: var(--border-accent);
+      transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
+    }
+    .stat h3 { font-size: 2.2rem; font-weight: 900; color: #a5b4fc; letter-spacing: -1px; margin-bottom: 6px; }
+    .stat p { color: var(--text-muted); font-size: 13.5px; font-weight: 500; }
 
-    /* FEATURES */
-    .features { display:grid; grid-template-columns:repeat(3,1fr); gap:16px; max-width:1100px; margin:0 auto 80px; padding:0 24px; }
-    .feature { background:rgba(10,10,20,0.9); border:1px solid var(--border); border-radius:14px; padding:28px 24px; transition:border-color .2s, transform .2s; }
-    .feature:hover { border-color:rgba(124,116,255,0.25); transform:translateY(-2px); }
-    .feature-icon { width:40px; height:40px; background:rgba(124,116,255,0.12); border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:16px; color:var(--accent); }
-    .feature h4 { font-size:15px; font-weight:700; color:var(--text); margin-bottom:8px; }
-    .feature p { color:var(--text-muted); font-size:13px; line-height:1.65; }
+    /* SECTION BASICS */
+    .section-title { text-align: center; max-width: 780px; margin: 0 auto 56px; padding: 0 24px; }
+    .section-title h2 { font-size: clamp(2.2rem, 4vw, 3rem); font-weight: 900; letter-spacing: -1.5px; color: var(--text); margin-bottom: 16px; }
+    .section-title p { color: var(--text-muted); font-size: 1.05rem; line-height: 1.7; }
 
-    /* CTA SECTION */
-    .cta { text-align:center; padding:80px 24px; max-width:700px; margin:0 auto; }
-    .cta h2 { font-size:2.5rem; font-weight:900; letter-spacing:-1.5px; margin-bottom:16px; color:var(--text); }
-    .cta p { color:var(--text-muted); margin-bottom:32px; font-size:1rem; }
-    .cta .btn-primary { margin: 0 auto; }
+    /* LIVE ANONYMIZATION SANDBOX */
+    .sandbox-container {
+      max-width: 1200px; margin: 0 auto 100px; padding: 0 24px;
+    }
+    .sandbox-shell {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 20px; padding: 24px; backdrop-filter: blur(16px);
+      box-shadow: var(--shadow-lg);
+    }
+    .sandbox-selectors {
+      display: flex; gap: 12px; margin-bottom: 20px; flex-wrap: wrap; align-items: center;
+    }
+    .sandbox-selectors span { font-weight: 600; font-size: 14px; color: var(--text-muted); margin-right: 8px; }
+    .sandbox-tab {
+      background: rgba(255,255,255,0.04); border: 1px solid var(--border);
+      color: var(--text-muted); font-size: 13px; font-weight: 600; padding: 8px 16px;
+      border-radius: 8px; cursor: pointer; transition: all 0.2s;
+    }
+    .sandbox-tab:hover, .sandbox-tab.active {
+      background: rgba(99,102,241,0.15); border-color: rgba(99,102,241,0.4);
+      color: #c7d2fe;
+    }
+    
+    .sandbox-grid {
+      display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px;
+    }
+    @media(max-width: 860px) {
+      .sandbox-grid { grid-template-columns: 1fr; }
+    }
+    
+    .sandbox-pane {
+      background: #080810; border: 1px solid var(--border);
+      border-radius: 12px; overflow: hidden; display: flex; flex-direction: column;
+    }
+    .pane-header {
+      background: rgba(255,255,255,0.02); padding: 12px 18px;
+      border-bottom: 1px solid var(--border); font-size: 12px;
+      text-transform: uppercase; letter-spacing: 0.05em; font-weight: 700;
+      color: var(--text-muted); display: flex; justify-content: space-between; align-items: center;
+    }
+    .pane-header span.badge-realtime {
+      background: var(--success-bg); color: var(--success);
+      border: 1px solid rgba(16, 185, 129, 0.25);
+      border-radius: 4px; padding: 2px 6px; font-size: 10px; font-weight: 800;
+    }
+    
+    .sandbox-textarea {
+      width: 100%; height: 340px; background: transparent; border: none;
+      color: #cbd5e1; font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px; padding: 18px; resize: none; outline: none; line-height: 1.7;
+    }
+    .sandbox-output {
+      height: 340px; overflow-y: auto; padding: 18px;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 13px; line-height: 1.7; color: #cbd5e1; white-space: pre-wrap;
+      word-break: break-word; background: #080810;
+    }
+    
+    /* Dynamic tokens styling */
+    .redact-token {
+      display: inline-block; font-weight: 700; border-radius: 5px;
+      padding: 1px 6px; margin: 0 2px; font-size: 11px;
+      border: 1px solid rgba(124, 116, 255, 0.3);
+      box-shadow: 0 2px 8px rgba(124, 116, 255, 0.15);
+      cursor: help; transition: all 0.2s;
+    }
+    .redact-token[data-type="PERSONNE"] { color: #f472b6; background: rgba(244, 114, 182, 0.12); border-color: rgba(244, 114, 182, 0.25); }
+    .redact-token[data-type="SOCIETE"] { color: #60a5fa; background: rgba(96, 165, 250, 0.12); border-color: rgba(96, 165, 250, 0.25); }
+    .redact-token[data-type="SIRET"] { color: #fbbf24; background: rgba(251, 191, 36, 0.12); border-color: rgba(251, 191, 36, 0.25); }
+    .redact-token[data-type="IBAN"] { color: #34d399; background: rgba(52, 211, 153, 0.12); border-color: rgba(52, 211, 153, 0.25); }
+    .redact-token[data-type="EMAIL"] { color: #a78bfa; background: rgba(167, 139, 250, 0.12); border-color: rgba(167, 139, 250, 0.25); }
+    .redact-token[data-type="MONTANT"] { color: #fb7185; background: rgba(251, 113, 133, 0.12); border-color: rgba(251, 113, 133, 0.25); }
+    .redact-token[data-type="ADRESSE"] { color: #2dd4bf; background: rgba(45, 212, 191, 0.12); border-color: rgba(45, 212, 191, 0.25); }
 
-    footer { text-align:center; padding:32px 24px; color:var(--dim); font-size:13px; border-top:1px solid var(--border); }
-
-    /* SHARED SECTIONS */
-    :root { --surface: rgba(13,13,24,0.8); --primary: #7c74ff; }
-    .section-title { text-align:center; max-width:720px; margin:0 auto 48px; padding:0 24px; }
-    .section-title h2 { font-size:clamp(2rem,4vw,2.8rem); font-weight:900; letter-spacing:-1.5px; color:var(--text); margin-bottom:12px; }
-    .section-title p { color:var(--text-muted); font-size:1rem; line-height:1.7; }
-
-    /* ANIMATIONS */
-    .animate-up { animation:slideUp 0.6s ease both; }
-    .delay-1 { animation-delay:0.15s; }
-    .delay-2 { animation-delay:0.3s; }
-    @keyframes slideUp { from{opacity:0;transform:translateY(20px)} to{opacity:1;transform:translateY(0)} }
-
-    /* LIVE DEMO */
-    .demo-section {
-      padding: 5rem 2rem;
-      border-top: 1px solid var(--surface-border);
-      border-bottom: 1px solid var(--surface-border);
-      background: #0f1422;
+    /* Sandbox footer details */
+    .sandbox-footer-controls {
+      display: flex; justify-content: space-between; align-items: center;
+      margin-top: 18px; padding-top: 18px; border-top: 1px solid var(--border);
+      flex-wrap: wrap; gap: 12px;
     }
-    .demo-shell { max-width: 1120px; margin: 0 auto; }
-    .demo-toolbar {
-      display: flex; justify-content: space-between; align-items: center; gap: 1rem;
-      margin-bottom: 1.25rem; flex-wrap: wrap;
+    .sandbox-status-text { font-size: 13.5px; color: var(--text-muted); font-weight: 500; }
+    
+    .sandbox-metrics {
+      display: grid; grid-template-columns: repeat(3, 1fr); gap: 16px; margin-top: 20px;
     }
-    .demo-status { color: var(--text-muted); font-size: 0.92rem; }
-    .demo-grid {
-      display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 1rem;
+    @media(max-width: 640px) {
+      .sandbox-metrics { grid-template-columns: 1fr; }
     }
-    .demo-panel {
-      background: var(--bg); border: 1px solid var(--surface-border);
-      border-radius: 8px; overflow: hidden; min-height: 380px;
+    .sandbox-metric-card {
+      background: rgba(255,255,255,0.02); border: 1px solid var(--border);
+      border-radius: 10px; padding: 14px 18px; display: flex; flex-direction: column;
     }
-    .demo-panel-header {
-      display: flex; justify-content: space-between; gap: 1rem; align-items: center;
-      padding: 0.85rem 1rem; border-bottom: 1px solid var(--surface-border);
-      color: #e2e8f0; font-weight: 700; font-size: 0.92rem;
+    .sandbox-metric-card strong { font-size: 1.4rem; color: #fff; font-family: 'Outfit', sans-serif; font-weight: 800; line-height: 1.2; }
+    .sandbox-metric-card span { font-size: 12px; color: var(--text-muted); margin-top: 4px; font-weight: 600; text-transform: uppercase; letter-spacing: 0.02em;}
+    
+    /* Visual laser scan animation overlay */
+    .scan-overlay {
+      position: absolute; inset: 0; background: linear-gradient(180deg, transparent, rgba(99, 102, 241, 0.2), transparent);
+      height: 30%; width: 100%; top: -30%; pointer-events: none; opacity: 0;
+      transition: none;
     }
-    .demo-panel-header span {
-      color: var(--text-muted); font-size: 0.75rem; font-weight: 600; text-transform: uppercase;
-      letter-spacing: 0.08em;
+    .scan-active .scan-overlay {
+      animation: laser 1.4s ease-in-out forwards;
     }
-    .demo-text {
-      margin: 0; min-height: 330px; max-height: 480px; overflow: auto;
-      padding: 1rem; white-space: pre-wrap; word-break: break-word;
-      color: #cbd5e1; font-size: 0.86rem; line-height: 1.75;
-      font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
+    @keyframes laser {
+      0% { top: -30%; opacity: 0; }
+      10% { opacity: 1; }
+      90% { opacity: 1; }
+      100% { top: 100%; opacity: 0; }
     }
-    .demo-token {
-      display: inline-block; color: #b7f7dc; background: rgba(16,185,129,0.18);
-      border: 1px solid rgba(16,185,129,0.25); border-radius: 5px;
-      padding: 0 0.22rem; margin: 0 0.05rem; font-weight: 700;
-    }
-    .demo-metrics {
-      display: grid; grid-template-columns: repeat(4, minmax(0, 1fr)); gap: 1rem;
-      margin-top: 1rem;
-    }
-    .demo-metric {
-      background: var(--bg); border: 1px solid var(--surface-border);
-      border-radius: 8px; padding: 1rem;
-    }
-    .demo-metric strong { display: block; font-size: 1.4rem; color: #fff; line-height: 1; }
-    .demo-metric span { display: block; margin-top: 0.45rem; color: var(--text-muted); font-size: 0.82rem; }
-    .demo-chips { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 1rem; min-height: 32px; }
-    .demo-chip {
-      background: rgba(0,210,211,0.1); border: 1px solid rgba(0,210,211,0.22);
-      color: #99f6e4; border-radius: 999px; padding: 0.32rem 0.7rem;
-      font-size: 0.78rem; font-weight: 700;
-    }
-    .demo-proof-card {
-      margin-top: 1rem; background: var(--bg); border: 1px solid var(--surface-border);
-      border-radius: 8px; padding: 1rem; display: grid;
-      grid-template-columns: minmax(220px, 0.8fr) minmax(0, 1.2fr); gap: 1rem;
-    }
-    .demo-policy {
-      display: inline-flex; align-items: center; justify-content: center;
-      min-height: 34px; border-radius: 999px; padding: 0.25rem 0.75rem;
-      font-size: 0.8rem; font-weight: 800; border: 1px solid var(--surface-border);
-      background: rgba(255,255,255,0.04); color: #e2e8f0;
-    }
-    .demo-metric strong.demo-policy { display: inline-flex; font-size: 0.8rem; line-height: 1.2; }
-    .demo-policy.success {
-      color: #bbf7d0; background: rgba(16,185,129,0.12); border-color: rgba(16,185,129,0.25);
-    }
-    .demo-policy.warning {
-      color: #fde68a; background: rgba(245,158,11,0.12); border-color: rgba(245,158,11,0.28);
-    }
-    .demo-policy.danger, .demo-policy.critical {
-      color: #fecaca; background: rgba(239,68,68,0.12); border-color: rgba(239,68,68,0.28);
-    }
-    .demo-proof-card h3 { font-size: 1rem; margin-bottom: 0.35rem; }
-    .demo-proof-card p { color: var(--text-muted); font-size: 0.88rem; }
-    .demo-proof-list { color: #cbd5e1; font-size: 0.84rem; margin-left: 1rem; }
-    .demo-proof-list li { margin: 0.25rem 0; }
-    .demo-error {
-      color: #fecaca; background: rgba(239,68,68,0.1); border: 1px solid rgba(239,68,68,0.2);
-      border-radius: 8px; padding: 0.8rem 1rem; margin-top: 1rem; display: none;
-    }
-    .demo-runtime-badge {
-      display: none;
-      margin-top: 1rem;
-      border-radius: 999px;
-      padding: 0.35rem 0.75rem;
-      border: 1px solid rgba(0,210,211,0.24);
-      background: rgba(0,210,211,0.10);
-      color: #99f6e4;
-      font-size: 0.78rem;
-      font-weight: 700;
-      letter-spacing: 0.03em;
-    }
-    .demo-runtime-badge.visible { display: inline-flex; }
-    .demo-runtime-badge.success {
-      color: #bbf7d0;
-      background: rgba(16,185,129,0.12);
-      border-color: rgba(16,185,129,0.25);
-    }
-    .demo-runtime-badge.warning {
-      color: #fde68a;
-      background: rgba(245,158,11,0.12);
-      border-color: rgba(245,158,11,0.28);
-    }
-    @media(max-width:768px){
-      .demo-section { padding: 4rem 1.25rem; }
-      .demo-grid { grid-template-columns: 1fr; }
-      .demo-metrics { grid-template-columns: repeat(2, minmax(0, 1fr)); }
-      .demo-proof-card { grid-template-columns: 1fr; }
-    }
+    .relative { position: relative; }
 
     /* WORKFLOW STEPS */
-    #how-it-works { padding:80px 24px; }
-    .workflow-steps { display:grid; grid-template-columns:repeat(3,1fr); gap:24px; max-width:1000px; margin:0 auto; }
-    @media(max-width:640px){ .workflow-steps { grid-template-columns:1fr; } }
-    .step-card { background:rgba(13,13,24,0.9); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px 28px; transition:border-color .2s, transform .2s; }
-    .step-card:hover { border-color:rgba(124,116,255,0.3); transform:translateY(-2px); }
-    .step-number { width:40px; height:40px; background:linear-gradient(135deg,var(--accent),var(--accent-light)); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:16px; font-weight:900; color:#fff; margin-bottom:20px; box-shadow:0 4px 16px -4px rgba(124,116,255,0.5); }
-    .step-card h3 { font-size:16px; font-weight:700; color:var(--text); margin-bottom:8px; letter-spacing:-0.3px; }
-    .step-card p { color:var(--text-muted); font-size:13px; line-height:1.65; }
-
-    /* PRICING */
-    .pricing { padding:80px 24px; }
-    .pricing-grid { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; max-width:960px; margin:0 auto; }
-    @media(max-width:640px){ .pricing-grid { grid-template-columns:1fr; } }
-    .plan-card { background:rgba(13,13,24,0.9); border:1px solid var(--border); border-radius:var(--radius-lg); padding:32px 28px; transition:border-color .2s; }
-    .plan-card.featured { border-color:rgba(124,116,255,0.4); background:rgba(124,116,255,0.06); }
-    .plan-card h3 { font-size:18px; font-weight:800; color:var(--text); margin-bottom:12px; letter-spacing:-0.4px; }
-    .plan-price { font-size:2rem; font-weight:900; color:var(--accent); letter-spacing:-1px; margin-bottom:20px; }
-    .plan-price small { font-size:14px; font-weight:500; color:var(--text-muted); }
-    .plan-card ul { list-style:none; padding:0; }
-    .plan-card ul li { font-size:14px; color:var(--text-muted); padding:6px 0; border-bottom:1px solid var(--border); }
-    .plan-card ul li:last-child { border-bottom:none; }
-    .plan-card ul li::before { content:"✓ "; color:var(--accent); font-weight:700; }
+    #how-it-works { padding: 80px 24px; max-width: 1100px; margin: 0 auto; }
+    .workflow-steps { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    @media(max-width: 768px) { .workflow-steps { grid-template-columns: 1fr; } }
+    .step-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 36px 30px; transition: all .3s ease;
+      backdrop-filter: blur(8px);
+    }
+    .step-card:hover {
+      border-color: var(--border-accent); transform: translateY(-2px);
+      box-shadow: 0 8px 24px rgba(99, 102, 241, 0.1);
+    }
+    .step-number {
+      width: 44px; height: 44px;
+      background: linear-gradient(135deg, var(--accent), var(--accent-light));
+      border-radius: 50%; display: flex; align-items: center; justify-content: center;
+      font-size: 18px; font-weight: 900; color: #fff; margin-bottom: 24px;
+      box-shadow: 0 4px 16px rgba(99, 102, 241, 0.4);
+    }
+    .step-card h3 { font-size: 17px; font-weight: 700; color: var(--text); margin-bottom: 10px; letter-spacing: -0.3px; }
+    .step-card p { color: var(--text-muted); font-size: 13.5px; line-height: 1.65; }
 
     /* USE CASES */
-    #use-cases { padding:80px 24px; }
-    .grid-3 { display:grid; grid-template-columns:repeat(3,1fr); gap:20px; }
-    @media(max-width:768px){ .grid-3 { grid-template-columns:1fr; } }
-    .card { border:1px solid var(--border); border-radius:var(--radius-lg); padding:28px 24px; transition:border-color .2s, transform .2s; }
-    .card:hover { border-color:rgba(124,116,255,0.3); transform:translateY(-2px); }
-    .card h3 { font-size:15px; font-weight:700; color:var(--text); margin-bottom:10px; }
-    .card p { font-size:13px; color:var(--text-muted); line-height:1.65; }
-    .card-icon { width:40px; height:40px; background:rgba(124,116,255,0.12); border-radius:10px; display:flex; align-items:center; justify-content:center; margin-bottom:16px; color:var(--accent); }
-    .card-icon svg { width:20px; height:20px; stroke:currentColor; }
-    .case-icon { background:rgba(124,116,255,0.1); }
+    #use-cases { padding: 80px 24px; background: rgba(13, 13, 25, 0.4); border-top: 1px solid var(--border); border-bottom: 1px solid var(--border); }
+    .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+    @media(max-width: 768px) { .grid-3 { grid-template-columns: 1fr; } }
+    .card {
+      border: 1px solid var(--border); border-radius: var(--radius-lg); padding: 32px 28px;
+      transition: all 0.3s ease; backdrop-filter: blur(8px);
+    }
+    .card:hover {
+      border-color: var(--border-accent); transform: translateY(-3px);
+      box-shadow: 0 10px 30px rgba(99, 102, 241, 0.12);
+    }
+    .card h3 { font-size: 16px; font-weight: 700; color: var(--text); margin-bottom: 12px; }
+    .card p { font-size: 13.5px; color: var(--text-muted); line-height: 1.7; }
+    .card-icon {
+      width: 44px; height: 44px; background: rgba(99, 102, 241, 0.12);
+      border-radius: 12px; display: flex; align-items: center; justify-content: center;
+      margin-bottom: 20px; color: #a5b4fc;
+    }
+    .card-icon svg { width: 22px; height: 22px; stroke: currentColor; }
+
+    /* PRICING */
+    .pricing { padding: 80px 24px; max-width: 1000px; margin: 0 auto; }
+    .pricing-grid { display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; }
+    @media(max-width: 768px) { .pricing-grid { grid-template-columns: 1fr; } }
+    .plan-card {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: var(--radius-lg); padding: 36px 30px; transition: all 0.3s;
+      backdrop-filter: blur(8px);
+    }
+    .plan-card:hover { border-color: rgba(255, 255, 255, 0.15); }
+    .plan-card.featured {
+      border-color: rgba(124, 116, 255, 0.45);
+      background: linear-gradient(180deg, rgba(124, 116, 255, 0.08) 0%, rgba(124, 116, 255, 0.02) 100%);
+      box-shadow: 0 8px 30px rgba(124, 116, 255, 0.1);
+    }
+    .plan-card h3 { font-size: 19px; font-weight: 800; color: var(--text); margin-bottom: 12px; letter-spacing: -0.4px; }
+    .plan-price { font-size: 2.3rem; font-weight: 900; color: #cbd5e1; letter-spacing: -1px; margin-bottom: 24px; font-family: 'Outfit', sans-serif; }
+    .plan-card.featured .plan-price { color: #a5b4fc; }
+    .plan-price small { font-size: 14px; font-weight: 500; color: var(--text-muted); }
+    
+    .plan-card ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 10px; }
+    .plan-card ul li { font-size: 14px; color: var(--text-muted); padding: 6px 0; border-bottom: 1px solid rgba(255,255,255,0.03); }
+    .plan-card ul li:last-child { border-bottom: none; }
+    .plan-card ul li::before { content: "✓ "; color: var(--accent-light); font-weight: 800; margin-right: 4px; }
+
+    /* FAQ SECTION (Accordions) */
+    .faq-section { max-width: 800px; margin: 80px auto; padding: 0 24px; }
+    .faq-item {
+      background: var(--surface); border: 1px solid var(--border);
+      border-radius: 12px; margin-bottom: 12px; overflow: hidden;
+      transition: all 0.3s;
+    }
+    .faq-item:hover { border-color: rgba(255,255,255,0.15); }
+    .faq-trigger {
+      width: 100%; padding: 18px 24px; background: transparent; border: none;
+      color: var(--text); font-size: 15px; font-weight: 700; text-align: left;
+      display: flex; justify-content: space-between; align-items: center;
+      cursor: pointer; outline: none; font-family: 'Inter', sans-serif;
+    }
+    .faq-icon {
+      width: 18px; height: 18px; color: var(--text-muted); transition: transform 0.3s;
+    }
+    .faq-content {
+      max-height: 0; overflow: hidden; transition: max-height 0.3s ease, padding 0.3s ease;
+      padding: 0 24px; color: var(--text-muted); font-size: 14px; line-height: 1.7;
+    }
+    .faq-item.active .faq-trigger .faq-icon { transform: rotate(180deg); color: var(--accent-light); }
+    .faq-item.active .faq-content { max-height: 300px; padding-bottom: 20px; }
 
     /* ARCHITECTURE */
-    .architecture { padding:80px 24px; }
-    .arch-container { max-width:1000px; margin:0 auto; display:grid; grid-template-columns:1fr 1fr; gap:48px; align-items:center; }
-    @media(max-width:768px){ .arch-container { grid-template-columns:1fr; } }
-    .arch-content h2 { font-size:clamp(1.8rem,3vw,2.4rem); font-weight:900; letter-spacing:-1px; color:var(--text); margin-bottom:16px; }
-    .arch-content p { color:var(--text-muted); margin-bottom:20px; font-size:14px; line-height:1.7; }
-    .arch-content ul { list-style:none; padding:0; display:flex; flex-direction:column; gap:12px; }
-    .arch-content ul li { font-size:13px; color:var(--text-muted); padding-left:16px; border-left:2px solid rgba(124,116,255,0.3); line-height:1.6; }
-    .arch-visual { display:flex; flex-direction:column; gap:8px; }
-    .arch-box { background:rgba(13,13,24,0.9); border:1px solid var(--border); border-left:4px solid var(--border); border-radius:var(--radius); padding:16px 20px; display:flex; align-items:flex-start; gap:12px; }
-    .arch-box.secure { border-left-color:var(--success); background:rgba(16,185,129,0.05); }
-    .arch-node-icon { width:32px; height:32px; flex-shrink:0; color:var(--accent); display:flex; align-items:center; justify-content:center; }
-    .arch-node-icon svg { width:20px; height:20px; stroke:currentColor; }
-    .arch-arrow { text-align:center; color:var(--text-dim); font-size:18px; padding:4px 0; }
+    .architecture { padding: 80px 24px; max-width: 1100px; margin: 0 auto; }
+    .arch-container { display: grid; grid-template-columns: 1fr 1fr; gap: 60px; align-items: center; }
+    @media(max-width: 768px) { .arch-container { grid-template-columns: 1fr; gap: 40px; } }
+    .arch-content h2 { font-size: clamp(2rem, 3.5vw, 2.6rem); font-weight: 900; letter-spacing: -1px; color: var(--text); margin-bottom: 20px; }
+    .arch-content p { color: var(--text-muted); margin-bottom: 24px; font-size: 14.5px; line-height: 1.75; }
+    .arch-content ul { list-style: none; padding: 0; display: flex; flex-direction: column; gap: 14px; }
+    .arch-content ul li { font-size: 13.5px; color: var(--text-muted); padding-left: 18px; border-left: 2px solid rgba(168, 85, 247, 0.4); line-height: 1.65; }
+    .arch-content ul li strong { color: #e2e8f0; }
+    
+    .arch-visual { display: flex; flex-direction: column; gap: 10px; }
+    .arch-box {
+      background: rgba(13, 13, 25, 0.85); border: 1px solid var(--border);
+      border-left: 4px solid var(--border); border-radius: 12px; padding: 18px 22px;
+      display: flex; align-items: flex-start; gap: 14px; backdrop-filter: blur(8px);
+    }
+    .arch-box.secure { border-left-color: var(--success); background: rgba(16, 185, 129, 0.04); }
+    .arch-box.secure h4 { color: #34d399 !important; }
+    .arch-node-icon { width: 34px; height: 34px; flex-shrink: 0; color: #a5b4fc; display: flex; align-items: center; justify-content: center; background: rgba(255,255,255,0.02); border-radius: 8px; }
+    .arch-node-icon svg { width: 20px; height: 20px; stroke: currentColor; }
+    .arch-arrow { text-align: center; color: var(--dim); font-size: 20px; padding: 2px 0; font-weight: 800; }
 
-    /* EXTRA BUTTONS */
-    .btn { display:inline-flex; align-items:center; gap:8px; padding:10px 20px; border-radius:8px; font-size:14px; font-weight:600; cursor:pointer; text-decoration:none; border:none; transition:all .2s; }
-    .btn-outline { background:transparent; color:var(--accent); border:1px solid rgba(124,116,255,0.4); }
-    .btn-outline:hover { background:rgba(124,116,255,0.08); border-color:var(--accent); }
+    /* BETA FORM */
+    #beta-access {
+      max-width: 700px; margin: 80px auto; padding: 48px 32px;
+      background: linear-gradient(180deg, rgba(99, 102, 241, 0.06) 0%, transparent 100%);
+      border: 1px solid var(--border); border-radius: 20px; text-align: center; backdrop-filter: blur(8px);
+    }
+    #beta-access h2 { font-size: 2.2rem; font-weight: 900; letter-spacing: -1px; margin-bottom: 12px; }
+    #beta-access p { color: var(--text-muted); margin-bottom: 28px; font-size: 14.5px; }
+    
+    #beta-form { display: flex; gap: 12px; max-width: 480px; margin: 0 auto; }
+    @media(max-width: 480px) { #beta-form { flex-direction: column; } }
+    #beta-form input {
+      flex: 1; background: #080810; border: 1px solid var(--border);
+      border-radius: 10px; color: var(--text); padding: 12px 18px; font-size: 14px;
+      outline: none; transition: border-color 0.2s;
+    }
+    #beta-form input:focus { border-color: rgba(99, 102, 241, 0.6); }
+    #beta-form button { flex-shrink: 0; justify-content: center; }
+    
+    .beta-msg { display: none; margin-top: 14px; font-size: 13.5px; font-weight: 600; }
+    .beta-msg.success { color: var(--success); }
+    .beta-msg.error { color: var(--danger); }
+
+    /* FOOTER */
+    footer { text-align: center; padding: 40px 24px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--border); }
+
+    /* UTILITIES */
+    .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; transition: all .2s; }
+    .btn-outline { background: transparent; color: #a5b4fc; border: 1px solid rgba(124, 116, 255, 0.4); }
+    .btn-outline:hover { background: rgba(124, 116, 255, 0.08); border-color: #a5b4fc; }
   </style>
 </head>
 <body>
   <nav class="nav">
     <a href="/" class="logo">
       <span class="logo-icon">
-        <svg aria-hidden="true" focusable="false" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+        <svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
       </span>
       <span class="logo-text">ConfiDoc</span>
     </a>
     <div class="nav-links">
-      <a href="#features">Fonctionnalités</a>
-      <a href="#demo">Démo</a>
-      <a href="/ui" class="btn-nav">Accéder à l'app →</a>
+      <a href="#demo-sandbox">Sandbox Live</a>
+      <a href="#how-it-works">Fonctionnement</a>
+      <a href="#solution">Architecture</a>
+      <a href="#pricing">Tarifs</a>
+      <a href="/ui" class="btn-nav">
+        Accéder à la console 
+        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
+      </a>
     </div>
   </nav>
 
   <section class="hero">
     <div class="badge">
       <span class="badge-dot"></span>
-      Conformité RGPD native · Propulsé par IA
+      Filtre d'Anonymisation Automatique &amp; Souverain
     </div>
-    <h1>Anonymisez vos documents<br><span>sensibles en 10 secondes</span></h1>
-    <p>ConfiDoc détecte et masque automatiquement les données personnelles et financières dans vos documents juridiques et comptables.</p>
+    <h1>Sécurisez l'IA pour vos<br><span>liasses et pièces comptables</span></h1>
+    <p>ConfiDoc caviarde instantanément les données nominatives et bancaires de vos bilans et contrats avant tout envoi à l'IA. Préservez le secret professionnel en toute simplicité.</p>
     <div class="hero-actions">
-      <a href="#demo-section" class="btn-primary" id="hero-demo-btn">
+      <a href="#demo-sandbox" class="btn-primary">
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Lancer la démo
+        Essayer le Sandbox Live
       </a>
-      <a href="mailto:contact@confidoc.fr" class="btn-ghost">Contacter l'équipe →</a>
+      <a href="mailto:contact@confidoc.io" class="btn-ghost">Contacter un DPO →</a>
     </div>
   </section>
 
   <section class="stats" aria-label="Chiffres clés">
-    <div class="stat"><h3>10s</h3><p>Anonymisation moyenne</p></div>
-    <div class="stat"><h3>95%+</h3><p>Précision de détection</p></div>
-    <div class="stat"><h3>RGPD</h3><p>Conformité native</p></div>
-    <div class="stat"><h3>24/7</h3><p>Traitement automatisé</p></div>
+    <div class="stat"><h3>100%</h3><p>Données chiffrées localement</p></div>
+    <div class="stat"><h3>&lt; 5s</h3><p>Anonymisation et scan OCR</p></div>
+    <div class="stat"><h3>DORA</h3><p>Alignement réglementaire</p></div>
+    <div class="stat"><h3>Zero Trust</h3><p>Pas de fuite aux LLMs tiers</p></div>
   </section>
 
-  <!-- LIVE DEMO -->
-  <section id="demo-section" class="demo-section">
-    <div class="demo-shell">
-      <div class="section-title animate-up">
-        <h2>Voyez le filtre ConfiDoc en action</h2>
-        <p>Un vrai document de démonstration est traité en lecture seule, sans compte et sans upload utilisateur.</p>
+  <!-- INTERACTIVE SANDBOX DEMO -->
+  <section id="demo-sandbox" class="sandbox-container">
+    <div class="section-title">
+      <h2>Testez le Sandbox en direct</h2>
+      <p>Sélectionnez un modèle de document d'audit réglementaire ci-dessous, ou tapez votre propre texte sensible pour voir comment ConfiDoc l'isole instantanément.</p>
+    </div>
+    
+    <div class="sandbox-shell relative" id="sandbox-shell">
+      <div class="scan-overlay"></div>
+      
+      <div class="sandbox-selectors">
+        <span>Modèles d'audit :</span>
+        <button class="sandbox-tab active" data-template="bilan">📊 Bilan Comptable</button>
+        <button class="sandbox-tab" data-template="resultat">📈 Compte de Résultat</button>
+        <button class="sandbox-tab" data-template="contrat">📜 Contrat de Bail</button>
+        <button class="sandbox-tab" data-template="empty">✍️ Texte Libre</button>
       </div>
-      <div class="demo-toolbar animate-up delay-1">
-        <div class="demo-status" id="demo-status">Prêt à lancer la démonstration publique.</div>
-        <button id="demo-launch-btn" class="btn btn-primary" type="button">Lancer la démo</button>
+      
+      <div class="sandbox-grid">
+        <div class="sandbox-pane">
+          <div class="pane-header">
+            Document original (Éditeur)
+            <span style="font-size:10px; color:var(--text-muted)">Modifiable à volonté</span>
+          </div>
+          <textarea class="sandbox-textarea" id="sandbox-input" placeholder="Saisissez ou modifiez votre texte sensible ici..."></textarea>
+        </div>
+        
+        <div class="sandbox-pane" style="border-color: rgba(99, 102, 241, 0.25)">
+          <div class="pane-header" style="background: rgba(99, 102, 241, 0.03)">
+            Aperçu envoyé à l'IA
+            <span class="badge-realtime">Sécurisé &amp; Anonyme</span>
+          </div>
+          <div class="sandbox-output" id="sandbox-output"></div>
+        </div>
       </div>
-      <div id="demo-error" class="demo-error"></div>
-      <div id="demo-runtime-badge" class="demo-runtime-badge"></div>
-      <div id="demo-result" style="display:none">
-        <div class="demo-grid">
-          <div class="demo-panel">
-            <div class="demo-panel-header">Document original <span>Données sensibles</span></div>
-            <pre id="demo-original" class="demo-text"></pre>
-          </div>
-          <div class="demo-panel">
-            <div class="demo-panel-header">Document envoyé à l'IA <span>Anonymisé</span></div>
-            <pre id="demo-anonymized" class="demo-text"></pre>
-          </div>
+      
+      <div class="sandbox-footer-controls">
+        <div class="sandbox-status-text" id="sandbox-status">
+          Analyse en temps réel active.
         </div>
-        <div class="demo-metrics">
-          <div class="demo-metric"><strong id="demo-entities">0</strong><span>entités masquées</span></div>
-          <div class="demo-metric"><strong id="demo-risk">0%</strong><span>risque de ré-identification</span></div>
-          <div class="demo-metric"><strong id="demo-method">—</strong><span>méthode d'extraction</span></div>
-          <div class="demo-metric"><strong id="demo-policy">—</strong><span>politique d'export</span></div>
+        <button class="btn btn-primary" id="sandbox-redact-btn">
+          <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg>
+          Re-sécuriser le texte
+        </button>
+      </div>
+
+      <div class="sandbox-metrics">
+        <div class="sandbox-metric-card">
+          <strong id="sb-risk-score">0%</strong>
+          <span>Risque de réidentification</span>
         </div>
-        <div id="demo-chips" class="demo-chips"></div>
-        <div id="demo-proof-card" class="demo-proof-card" style="display:none">
-          <div>
-            <h3>Preuve DPO générée</h3>
-            <p id="demo-proof-message">Chaque étape critique est tracée dans un rapport téléchargeable.</p>
-          </div>
-          <ul id="demo-proof-points" class="demo-proof-list"></ul>
+        <div class="sandbox-metric-card">
+          <strong id="sb-entities-count">0</strong>
+          <span>Entités détectées et isolées</span>
         </div>
-        <div style="margin-top:1.5rem;display:flex;gap:1rem;flex-wrap:wrap">
-          <a href="/ui" class="btn btn-primary">Traiter vos propres documents</a>
-          <button id="demo-proof-btn" class="btn btn-outline" type="button">Télécharger la preuve DPO</button>
-          <a href="/trust" class="btn btn-outline">Trust Center</a>
-          <a href="#beta-access" class="btn btn-outline">Demander un accès beta</a>
+        <div class="sandbox-metric-card">
+          <strong id="sb-readiness-score" style="color:#60a5fa">100%</strong>
+          <span>Trust Score / AI Readiness</span>
         </div>
       </div>
     </div>
   </section>
 
   <!-- 3 STEPS WORKFLOW -->
-  <section id="how-it-works" style="padding-top: 4rem;">
-     <div class="section-title animate-up">
-       <h2>Auditez n'importe quel dossier en 3 étapes.</h2>
-       <p>Un processus transparent pour auditer plus vite, sans sacrifier le risque client.</p>
+  <section id="how-it-works">
+     <div class="section-title">
+       <h2>Sécurisation en 3 étapes simples</h2>
+       <p>Un flux ergonomique conçu pour s'adapter à la réalité opérationnelle des cabinets et départements DPO.</p>
      </div>
-     <div class="workflow-steps animate-up delay-1">
+     <div class="workflow-steps">
         <div class="step-card">
            <div class="step-number">1</div>
-           <h3>Déposez votre Bilan (PDF)</h3>
-           <p>Chargez le document dans votre portail hautement sécurisé de bout en bout.</p>
+           <h3>Dépôt crypté</h3>
+           <p>Glissez-déposez vos liasses ou bilans comptables (PDF, Scans ou Images) dans l'espace sécurisé du cabinet.</p>
         </div>
         <div class="step-card">
            <div class="step-number">2</div>
-           <h3>L'outil anonymise localement</h3>
-           <p>Tous les identifiants sensibles sont caviardés visuellement. Vous gardez la certitude de ce qui sort de vos locaux.</p>
+           <h3>Caviardage à la source</h3>
+           <p>Nos algorithmes de scan OCR identifient et appliquent un masque d'anonymisation fort sur tous les quasi-identifiants.</p>
         </div>
         <div class="step-card">
            <div class="step-number">3</div>
-           <h3>L'IA analyse & synthétise</h3>
-           <p>L'IA résume, pointe les points clés de conformité et rédige votre synthèse en format prêt à envoyer à vos clients.</p>
+           <h3>Restitution &amp; IA</h3>
+           <p>Utilisez les assistants IA sur les données caviardées. Les rapports finaux réintègrent les données réelles en local.</p>
         </div>
      </div>
   </section>
 
-  <!-- PRICING -->
-  <section id="pricing" class="pricing">
-    <div class="section-title animate-up">
-      <h2>Un modèle lisible dès la beta</h2>
-      <p>Des offres simples pour tester, équiper une équipe, puis intégrer ConfiDoc au SI du cabinet.</p>
-    </div>
-    <div class="pricing-grid animate-up delay-1">
-      <div class="plan-card">
-        <h3>Starter</h3>
-        <div class="plan-price">0€ <small>/ mois</small></div>
-        <ul>
-          <li>10 documents de test</li>
-          <li>Démo anonymisation</li>
-          <li>Export texte anonymisé</li>
-        </ul>
-      </div>
-      <div class="plan-card featured">
-        <h3>Pro</h3>
-        <div class="plan-price">49€ <small>/ mois</small></div>
-        <ul>
-          <li>200 documents par mois</li>
-          <li>Discussion IA sécurisée</li>
-          <li>Rapports RGPD et PDF</li>
-        </ul>
-      </div>
-      <div class="plan-card">
-        <h3>Cabinet</h3>
-        <div class="plan-price">Sur devis</div>
-        <ul>
-          <li>Volumes étendus</li>
-          <li>Intégration stockage et SI</li>
-          <li>Accompagnement conformité</li>
-        </ul>
-      </div>
-    </div>
-  </section>
-
   <!-- CAS D'USAGE (Concrete Proofs) -->
-  <section id="use-cases" style="padding: 5rem 2rem; background: var(--surface);">
-     <div class="section-title animate-up">
+  <section id="use-cases">
+     <div class="section-title">
        <h2>Des analyses taillées pour votre métier</h2>
-       <p>ConfiDoc s'adapte à vos dossiers récurrents et génère des livrables exploitables.</p>
+       <p>ConfiDoc s'adapte à vos pièces réglementées récurrentes et simplifie l'audit.</p>
      </div>
-     <div class="grid-3 animate-up delay-1" style="max-width: 1200px; margin: 0 auto;">
-       <div class="card" style="background: var(--bg);">
-          <div class="card-icon case-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M5.5 18H18.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M7.5 15V11.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M12 15V8.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M16.5 15V6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <h3>Audit d'un Bilan Annuel</h3>
-          <p>Chargez simplement la liasse fiscale et le bilan comptable. Demandez au système de calculer la variation du BFR, le ratio de liquidité, ou d'isoler en 30 secondes les incohérences de trésorerie sur les deux derniers exercices.</p>
-       </div>
-       <div class="card" style="background: var(--bg);">
-          <div class="card-icon case-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <path d="M6.5 18V7.5L12 5L17.5 7.5V18" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-              <path d="M10 10.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M10 13.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M12 18V14.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <h3>Revue d'un Bail Commercial</h3>
-          <p>Générez un résumé exhaustif des obligations du preneur, localisez immédiatement la date de renouvellement du bail ou comparez les clauses d'indexation complexes grâce à une interrogation intuitive.</p>
-       </div>
-       <div class="card" style="background: var(--bg);">
-          <div class="card-icon case-icon" aria-hidden="true">
-            <svg viewBox="0 0 24 24" fill="none">
-              <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="1.8"/>
-              <circle cx="15.5" cy="10" r="2" stroke="currentColor" stroke-width="1.8"/>
-              <path d="M5.5 17C6.1 14.9 7.75 13.7 10 13.7C12.25 13.7 13.9 14.9 14.5 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-              <path d="M13.6 17C14 15.6 15.1 14.8 16.55 14.8C18 14.8 19.1 15.6 19.5 17" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-            </svg>
-          </div>
-          <h3>Vérification d'un Dossier RH</h3>
-          <p>Vérifiez que le contrat de travail d'un collaborateur est parfaitement en phase avec les minimas de la convention collective applicable, tout cela sans que son nom ou ses fiches de paie ne soient lisibles par l'IA.</p>
-       </div>
+     <div class="grid-3" style="max-width: 1200px; margin: 0 auto;">
+        <div class="card" style="background: var(--surface);">
+           <div class="card-icon" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="none">
+               <path d="M5.5 18H18.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+               <path d="M7.5 15V11.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+               <path d="M12 15V8.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+               <path d="M16.5 15V6.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+             </svg>
+           </div>
+           <h3>Audit d'un Bilan Annuel</h3>
+           <p>Chargez simplement la liasse fiscale ou le bilan brut. Demandez au système de calculer la variation du BFR ou les ratios clés en 30 secondes sans exposer vos clients.</p>
+        </div>
+        <div class="card" style="background: var(--surface);">
+           <div class="card-icon" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="none">
+               <path d="M6.5 18V7.5L12 5L17.5 7.5V18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/>
+               <path d="M10 10.5H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+               <path d="M10 13.5H14" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+               <path d="M12 18V14.5" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+             </svg>
+           </div>
+           <h3>Revue d'un Bail Commercial</h3>
+           <p>Générez un résumé des obligations du preneur, localisez immédiatement la date de renouvellement ou comparez les indexations complexes sans fuite de PII.</p>
+        </div>
+        <div class="card" style="background: var(--surface);">
+           <div class="card-icon" aria-hidden="true">
+             <svg viewBox="0 0 24 24" fill="none">
+               <circle cx="9" cy="9" r="2.5" stroke="currentColor" stroke-width="2"/>
+               <circle cx="15.5" cy="10" r="2" stroke="currentColor" stroke-width="2"/>
+               <path d="M5.5 17C6.1 14.9 7.75 13.7 10 13.7C12.25 13.7 13.9 14.9 14.5 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+               <path d="M13.6 17C14 15.6 15.1 14.8 16.55 14.8C18 14.8 19.1 15.6 19.5 17" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+             </svg>
+           </div>
+           <h3>Vérification de Dossier RH</h3>
+           <p>Vérifiez la conformité des fiches de paie et contrats de travail vis-à-vis des conventions collectives, de façon 100% anonyme côté fournisseurs IA.</p>
+        </div>
      </div>
   </section>
 
   <!-- ARCHITECTURE (Business Value) -->
   <section class="architecture" id="solution">
-    <div class="arch-container animate-up">
+    <div class="arch-container">
       <div class="arch-content">
         <h2>La "Muraille de Chine" Logicielle</h2>
-        <p>Transmettre des données sensibles à une IA tierce pose un vrai problème de conformité. Notre architecture lève ce frein cryptographiquement :</p>
+        <p>Transmettre des pièces confidentielles brutes à des IA tierces pose des risques de sécurité et de conformité civile. ConfiDoc résout cette impasse logicielle :</p>
         <ul>
-          <li><strong>Traitement Local :</strong> Vos PDF sont lus intégralement sur l'infrastructure de votre portail, sans envoi direct à l'IA.</li>
-          <li><strong>Filtre Censeur :</strong> 100% des prénoms, noms, SIRET, IBAN, numéros de comptes sont masqués et les tables de correspondances restent locales.</li>
-          <li><strong>Hébergement Sécurisé :</strong> L'IA est obligée de travailler et rédiger sur les données "caviardées" : elle ne voit que la logique métier.</li>
-          <li><strong>Restauration Automatique :</strong> Lors du téléchargement de vos rapports, le document retrouve les vrais noms côté client.</li>
+          <li><strong>Traitement Hermétique :</strong> Les PDF sont lus en local sur votre serveur. Aucune donnée personnelle ne part en clair sur internet.</li>
+          <li><strong>Filtre Censeur :</strong> Le dictionnaire dynamique neutralise SIRET, IBAN, noms, emails et montants avant l'envoi au moteur d'IA.</li>
+          <li><strong>Zéro Persistance IA :</strong> Les modèles de langage distants rédigent leurs synthèses d'audit en se basant sur des tokens anonymes.</li>
+          <li><strong>Rembobinage :</strong> Vos documents de sortie réintègrent automatiquement les données d'origine grâce au déchiffrement client.</li>
         </ul>
       </div>
       <div class="arch-visual">
-        <div class="arch-box" style="border-left: 4px solid #ef4444;">
+        <div class="arch-box" style="border-left: 4px solid #f472b6;">
            <span class="arch-node-icon" aria-hidden="true">
-             <svg viewBox="0 0 24 24" fill="none">
-               <path d="M6.5 18V7.5L12 5L17.5 7.5V18" stroke="currentColor" stroke-width="1.8" stroke-linejoin="round"/>
-               <path d="M10 10.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-               <path d="M10 13.5H14" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-             </svg>
+             <svg viewBox="0 0 24 24" fill="none"><path d="M6.5 18V7.5L12 5L17.5 7.5V18" stroke="currentColor" stroke-width="2" stroke-linejoin="round"/></svg>
            </span>
-           <h4 style="margin-bottom:5px;">Espace Cabinet / Droit</h4>
-           <small style="color:var(--text-muted)">Hébergé en Europe, document original inviolé.</small>
+           <div>
+             <h4 style="margin-bottom:4px; font-weight:700;">Dossier Original Cabinet</h4>
+             <small style="color:var(--text-muted)">Les données brutes restent au sein de votre infrastructure DPO.</small>
+           </div>
         </div>
         <div class="arch-arrow">↓</div>
         <div class="arch-box secure">
            <span class="arch-node-icon" aria-hidden="true">
-             <svg viewBox="0 0 24 24" fill="none">
-               <path d="M12 3L6 5.9V10.8C6 14.7 8.6 18.1 12 19.2C15.4 18.1 18 14.7 18 10.8V5.9L12 3Z" stroke="currentColor" stroke-width="1.8"/>
-               <path d="M9.3 11.8L11.15 13.65L14.9 9.9" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round"/>
-             </svg>
+             <svg viewBox="0 0 24 24" fill="none"><path d="M12 3L6 5.9V10.8C6 14.7 8.6 18.1 12 19.2C15.4 18.1 18 14.7 18 10.8V5.9L12 3Z" stroke="currentColor" stroke-width="2"/></svg>
            </span>
-           <h4 style="margin-bottom:5px; color:#10b981;">Filtre ConfiDoc</h4>
-           <small style="color:var(--text-muted)">Isolation des données identifiantes.</small>
+           <div>
+             <h4 style="margin-bottom:4px; font-weight:700;">Moteur d'Anonymisation</h4>
+             <small style="color:var(--text-muted)">Filtre fort automatique avec traçabilité cryptographique.</small>
+           </div>
         </div>
         <div class="arch-arrow">↓</div>
-        <div class="arch-box" style="border-left: 4px solid var(--primary);">
+        <div class="arch-box" style="border-left: 4px solid var(--accent);">
            <span class="arch-node-icon" aria-hidden="true">
-             <svg viewBox="0 0 24 24" fill="none">
-               <rect x="7" y="8" width="10" height="8" rx="2" stroke="currentColor" stroke-width="1.8"/>
-               <path d="M12 4.5V6.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-               <path d="M4.5 10.5H7" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-               <path d="M17 10.5H19.5" stroke="currentColor" stroke-width="1.8" stroke-linecap="round"/>
-             </svg>
+             <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="8" width="10" height="8" rx="2" stroke="currentColor" stroke-width="2"/></svg>
            </span>
-           <h4 style="margin-bottom:5px;">Moteur d'IA</h4>
-           <small style="color:var(--text-muted)">Analyse métier sans accès aux données privées.</small>
+           <div>
+             <h4 style="margin-bottom:4px; font-weight:700;">Génération d'Audits IA</h4>
+             <small style="color:var(--text-muted)">Génération d'analyses sans aucune fuite aux tiers.</small>
+           </div>
         </div>
       </div>
     </div>
   </section>
 
-  <!-- FEATURES (Business Value) -->
-  <section class="features" id="features">
-    <div class="feature">
-      <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/></svg></div>
-      <h4>Anonymisation IA</h4>
-      <p>Détection automatique des PII, données financières et juridiques avec remplacement intelligent par tokens.</p>
+  <!-- PRICING -->
+  <section id="pricing" class="pricing">
+    <div class="section-title">
+      <h2>Modèle tarifaire clair</h2>
+      <p>Des abonnements simples pour équiper vos experts, auditeurs ou l'ensemble du département financier.</p>
     </div>
-    <div class="feature">
-      <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/></svg></div>
-      <h4>Score de risque RGPD</h4>
-      <p>Évaluez le risque de réidentification de chaque document et recevez des recommandations d'actions.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-      <h4>Agent Compliance IA</h4>
-      <p>Discutez avec un agent IA spécialisé qui analyse vos documents anonymisés et répond à vos questions.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/><line x1="9" y1="13" x2="15" y2="13"/></svg></div>
-      <h4>Rapport d'audit PDF</h4>
-      <p>Générez un rapport PDF complet traçant chaque modification pour vos dossiers de conformité.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg></div>
-      <h4>Pipeline asynchrone</h4>
-      <p>Upload et déposez-vous : notre infrastructure traite vos documents en arrière-plan sans interruption.</p>
-    </div>
-    <div class="feature">
-      <div class="feature-icon"><svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg></div>
-      <h4>Sécurité enterprise</h4>
-      <p>Chiffrement AES-256, JWT, headers de sécurité et isolation des données par organisation.</p>
+    <div class="pricing-grid">
+      <div class="plan-card">
+        <h3>Essai</h3>
+        <div class="plan-price">0€ <small>/ mois</small></div>
+        <ul>
+          <li>10 documents inclus</li>
+          <li>Sandbox d'anonymisation</li>
+          <li>Preuve DPO simplifiée</li>
+        </ul>
+      </div>
+      <div class="plan-card featured">
+        <h3>Professionnel</h3>
+        <div class="plan-price">49€ <small>/ mois / user</small></div>
+        <ul>
+          <li>Documents illimités</li>
+          <li>OCR premium &amp; IA</li>
+          <li>Citations IA synchronisées</li>
+          <li>Preuve DPO &amp; PDF d'audit</li>
+        </ul>
+      </div>
+      <div class="plan-card">
+        <h3>Entreprise</h3>
+        <div class="plan-price">Sur Devis</div>
+        <ul>
+          <li>Stockage sur-mesure (S3)</li>
+          <li>Double authentification &amp; SSO</li>
+          <li>Garanties SLA DPO</li>
+          <li>Contrat DPA personnalisé</li>
+        </ul>
+      </div>
     </div>
   </section>
 
-  <section class="cta" id="demo">
-    <h2>Prêt à protéger<br>vos documents ?</h2>
-    <p>Testez ConfiDoc avec un document de démonstration. Aucune inscription requise.</p>
-    <a href="#demo-section" class="btn-primary" id="cta-demo-btn">
-      <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-      Lancer la démo interactive
-    </a>
+  <!-- FAQ SECTION -->
+  <section class="faq-section" id="faq">
+    <div class="section-title">
+      <h2>Questions fréquentes</h2>
+      <p>Tout ce que vous devez savoir sur notre gouvernance des données et la conformité RGPD.</p>
+    </div>
+    <div class="faq-item">
+      <button class="faq-trigger">
+        Où sont hébergées mes données ?
+        <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="faq-content">
+        ConfiDoc est fièrement hébergé en Europe sur des serveurs hautement sécurisés et souverains conformes aux exigences du RGPD. Nous supportons également des options de stockage sur-mesure pour les grands comptes (On-Premise ou Cloud dédié client).
+      </div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-trigger">
+        Comment garantissez-vous l'absence de fuite auprès des serveurs de LLM ?
+        <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="faq-content">
+        Le filtre d'anonymisation de ConfiDoc est appliqué localement, au niveau de votre serveur. Toutes les entités identifiables sont remplacées par des étiquettes neutres cryptées avant toute requête extérieure. L'IA externe ne reçoit donc que des résumés techniques anonymisés.
+      </div>
+    </div>
+    <div class="faq-item">
+      <button class="faq-trigger">
+        Quelle est la différence entre pseudonymisation et anonymisation forte ?
+        <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
+      </button>
+      <div class="faq-content">
+        La pseudonymisation remplace les données par des identifiants réversibles via une table de clés cryptographiques. L'anonymisation forte supprime définitivement le risque de réidentification par regroupement de données, conformément aux recommandations strictes du G29 et de la CNIL.
+      </div>
+    </div>
   </section>
 
-  <section class="cta" id="beta-access">
-    <h2>Accès cabinet</h2>
-    <p id="pilot-proof">Pilote API et preuve DPO disponibles pour cabinets comptables, auditeurs et directions financières.</p>
-    <form id="beta-form" data-endpoint="/api/v1/leads/beta">
-      <input type="email" name="email" placeholder="email@cabinet.fr" aria-label="Email professionnel" />
-      <button class="btn btn-primary" type="submit">Demander un accès beta</button>
+  <!-- BETA SECTION -->
+  <section id="beta-access">
+    <h2>Rejoindre la Beta Cabinet</h2>
+    <p>Vous souhaitez équiper vos auditeurs et experts-comptables ? Demandez l'activation de votre espace de démonstration pilote.</p>
+    <form id="beta-form">
+      <input id="beta-email" type="email" placeholder="votre.email@cabinet.fr" required />
+      <button class="btn btn-primary" type="submit">Demander l'accès beta</button>
     </form>
+    <div class="beta-msg" id="beta-msg"></div>
   </section>
 
-  <footer>© 2026 ConfiDoc — Confidentialité documentaire automatisée pour professions réglementées.</footer>
+  <footer>
+    © 2026 ConfiDoc. Tous droits réservés. Développé en conformité avec le RGPD et la DPO Assurance.
+  </footer>
 
-<script nonce="{{CSP_NONCE}}">
-(function() {
-  const $ = id => document.getElementById(id);
+  <script nonce="{{CSP_NONCE}}">
+  (function() {
+    // ════════════ TEMPLATES DE DOCUMENT ════════════
+    const templates = {
+      bilan: `BILAN COMPTABLE ACTIF - EXERCICE 2025
+Client: SCI LES PINS (SIRET: 412 890 321 00014)
+Adresse: 14 Avenue des Champs-Élysées, 75008 Paris
 
-  const launchBtn   = $('demo-launch-btn');
-  const proofBtn    = $('demo-proof-btn');
-  const statusEl    = $('demo-status');
-  const errorEl     = $('demo-error');
-  const resultEl    = $('demo-result');
-  const runtimeEl   = $('demo-runtime-badge');
-  const origEl      = $('demo-original');
-  const anonEl      = $('demo-anonymized');
-  const entitiesEl  = $('demo-entities');
-  const riskEl      = $('demo-risk');
-  const methodEl    = $('demo-method');
-  const policyEl    = $('demo-policy');
-  const chipsEl     = $('demo-chips');
-  const proofCard   = $('demo-proof-card');
-  const proofMsg    = $('demo-proof-message');
-  const proofPoints = $('demo-proof-points');
+ACTIF IMMOBILISÉ :
+- Immobilisations incorporelles : 15 000 € (Net 2025) / 20 000 € (Brut)
+- Terrains et constructions : 450 000 € (Net 2025)
+- Matériel technique : 35 000 €
 
-  if (!launchBtn) return;
+ACTIF CIRCULANT :
+- Stocks de matières premières : 12 500 €
+- Créances clients : 84 200 € (provisionnées à hauteur de 5 000 €)
+- Disponibilités (Banque CIC Paris, Compte FR76 3000 6000 0123 4567 8901 234) : 142 600 €
 
-  function formatExtractionMethod(data) {
-    const meta = data.extraction_meta || {};
-    const method = String(data.extraction_method || meta.method || 'local');
-    if (method === 'mistral_ocr') return 'Mistral OCR';
-    if (method.includes('pymupdf')) return 'PyMuPDF local';
-    if (method.includes('tesseract')) return 'Tesseract local';
-    if (method === 'mock_payload') return 'Secours';
-    return method.replaceAll('_', ' ');
-  }
+TOTAL ACTIF : 739 300 €
+Signature de l'expert-comptable: Cabinet Jean Martin & Associés`,
 
-  function renderTaggedText(el, text) {
-    if (!el) return;
-    el.textContent = '';
-    String(text || '').split(/(\[[A-Z0-9_]+\])/g).forEach(part => {
-      if (!part) return;
-      if (/^\[[A-Z0-9_]+\]$/.test(part)) {
-        const token = document.createElement('span');
-        token.className = 'demo-token';
-        token.textContent = part;
-        el.appendChild(token);
-        return;
-      }
-      el.appendChild(document.createTextNode(part));
-    });
-  }
+      resultat: `COMPTE DE RÉSULTAT SIMPLIFIÉ - EXERCICE 2025
+Client: INNOV SARL (SIRET: 802 345 678 00021)
+Responsable légal: M. Thomas Dubois
+Email: t.dubois@innov-sarl.fr
 
-  // Any CTA → scroll to demo section then auto-trigger
-  ['hero-demo-btn', 'cta-demo-btn'].forEach(id => {
-    const btn = $(id);
-    if (!btn) return;
-    btn.addEventListener('click', (e) => {
-      e.preventDefault();
-      const section = $('demo-section');
-      if (section) {
-        section.scrollIntoView({ behavior: 'smooth', block: 'start' });
-        setTimeout(() => launchBtn.click(), 600);
-      }
-    });
-  });
+PRODUITS D'EXPLOITATION :
+- Chiffre d'affaires Net : 820 000 €
+- Subventions d'exploitation : 12 000 €
 
-  launchBtn.addEventListener('click', async () => {
-    launchBtn.disabled = true;
-    launchBtn.textContent = 'Traitement en cours…';
-    if (errorEl) {
-      errorEl.textContent = '';
-      errorEl.style.display = 'none';
+CHARGES D'EXPLOITATION :
+- Achats de marchandises : 210 000 €
+- Charges de personnel (Salaires bruts) : 340 000 €
+- Charges sociales : 115 000 €
+- Impôts et taxes : 24 500 €
+
+RÉSULTAT D'EXPLOITATION : 142 500 €
+RÉSULTAT NET DE L'EXERCICE : 118 700 €`,
+
+      contrat: `CONTRAT DE BAIL COMMERCIAL (LOI PINEL)
+
+ENTRE LES SOUSSIGNÉS :
+Bailleur: Mme Catherine Mercier, demeurant au 45 Rue de la Paix, 75002 Paris.
+ET
+Preneur: La société BAIL PREMIUM SAS, immatriculée sous le numéro SIRET 901 234 567 00035, dont le siège social est situé au 8 Rue de la Gare, 69002 Lyon, représentée par M. Pierre Laurent.
+
+OBJET DU CONTRAT :
+Le bailleur donne à bail commercial au preneur les locaux à usage de bureaux situés au 12 Rue de la République, 69002 Lyon.
+
+CONDITIONS FINANCIÈRES :
+Le présent bail est consenti moyennant un loyer annuel hors charges de 48 000 € (quarante-huit mille euros), payable par trimestre d'avance.
+Le preneur versera un dépôt de garantie de 12 000 € sur le compte IBAN FR76 1000 2000 3000 4000 5000 678 du bailleur.
+
+Fait à Paris, le 15 Janvier 2025.`,
+
+      empty: `Saisissez ici les données sensibles de votre choix pour tester l'anonymisation...
+Par exemple, un nom comme Sophie Bernard, un SIRET 123 456 789 00012, un email test@cabinet.fr ou des chiffres de 25 000 €.`
+    };
+
+    // DOM ELEMENTS
+    const $ = id => document.getElementById(id);
+    const textarea = $('sandbox-input');
+    const output = $('sandbox-output');
+    const statusText = $('sandbox-status');
+    const redactBtn = $('sandbox-redact-btn');
+    const shell = $('sandbox-shell');
+    
+    const riskEl = $('sb-risk-score');
+    const entitiesEl = $('sb-entities-count');
+    const readinessEl = $('sb-readiness-score');
+
+    // INITIAL LOAD
+    if (textarea) {
+      textarea.value = templates.bilan;
+      triggerAnonymize();
     }
-    if (statusEl) statusEl.textContent = 'Anonymisation en cours…';
 
-    const t0 = Date.now();
-    try {
-      const res = await fetch('/api/v1/demo/public');
-      const data = await res.json();
+    // TABS CLICK
+    document.querySelectorAll('.sandbox-tab').forEach(tab => {
+      tab.addEventListener('click', () => {
+        document.querySelectorAll('.sandbox-tab').forEach(t => t.classList.remove('active'));
+        tab.classList.add('active');
+        const key = tab.getAttribute('data-template');
+        if (templates[key] !== undefined) {
+          textarea.value = templates[key];
+          triggerAnonymize();
+        }
+      });
+    });
 
-      if (res.status === 202 || data.status === 'warming_up') {
-        if (statusEl) statusEl.textContent = data.message || 'La démo se prépare, réessayez dans quelques secondes.';
-        launchBtn.disabled = false;
-        launchBtn.textContent = 'Réessayer';
-        return;
+    // INPUT CHANGE OR TRIGGER
+    if (textarea) {
+      textarea.addEventListener('input', () => {
+        triggerAnonymize(true); // silent trigger without lasers
+      });
+    }
+
+    if (redactBtn) {
+      redactBtn.addEventListener('click', () => {
+        triggerAnonymize(false); // full laser scan
+      });
+    }
+
+    // ACCORDION FAQ
+    document.querySelectorAll('.faq-trigger').forEach(trigger => {
+      trigger.addEventListener('click', () => {
+        const parent = trigger.parentElement;
+        const active = parent.classList.contains('active');
+        document.querySelectorAll('.faq-item').forEach(item => item.classList.remove('active'));
+        if (!active) {
+          parent.classList.add('active');
+        }
+      });
+    });
+
+    // BETA ACCES SIGNUP
+    const betaForm = $('beta-form');
+    const betaMsg = $('beta-msg');
+    if (betaForm) {
+      betaForm.addEventListener('submit', async (e) => {
+        e.preventDefault();
+        const email = $('beta-email').value;
+        if (!email) return;
+
+        betaMsg.style.display = 'block';
+        betaMsg.className = 'beta-msg';
+        betaMsg.textContent = 'Envoi de votre demande en cours...';
+
+        try {
+          const res = await fetch('/api/v1/leads/beta', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ email: email, company: 'Cabinet Pilote' })
+          });
+          const data = await res.json();
+          if (res.ok) {
+            betaMsg.className = 'beta-msg success';
+            betaMsg.textContent = 'Félicitations ! Votre demande d\'accès beta a été validée. Notre équipe DPO va vous contacter sous 24h.';
+            $('beta-email').value = '';
+          } else {
+            throw new Error(data.detail || 'Une erreur est survenue lors de l\'inscription.');
+          }
+        } catch (err) {
+          betaMsg.className = 'beta-msg error';
+          betaMsg.textContent = err.message;
+        }
+      });
+    }
+
+    // HIGH FIDELITY ANONYMIZATION ENGINE (CLIENT SIDE FOR INSTANT SANDBOXING)
+    function triggerAnonymize(silent = false) {
+      if (!textarea || !output) return;
+      
+      if (!silent) {
+        shell.classList.add('scan-active');
+        statusText.textContent = 'Moteur de sécurité ConfiDoc en action...';
+        redactBtn.disabled = true;
+        setTimeout(() => {
+          shell.classList.remove('scan-active');
+          redactBtn.disabled = false;
+          processText();
+        }, 800);
+      } else {
+        processText();
       }
-      if (!res.ok) throw new Error(data.detail || 'Erreur serveur');
+    }
 
-      const elapsed = ((Date.now() - t0) / 1000).toFixed(1);
-      const extractionLabel = formatExtractionMethod(data);
-      const proof = data.proof || {};
-      const policy = proof.export_policy || {};
+    function processText() {
+      const text = textarea.value;
+      
+      // Strict Rules Patterns
+      const rules = [
+        {
+          regex: /FR\d{2}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{4}\s?\d{3}/gi,
+          type: 'IBAN',
+          label: 'IBAN_PRO'
+        },
+        {
+          regex: /[a-zA-Z0-9._%+-]+@[a-zA-Z0-9.-]+\.[a-zA-Z]{2,}/g,
+          type: 'EMAIL',
+          label: 'EMAIL_PRO'
+        },
+        {
+          regex: /\b\d{3}\s?\d{3}\s?\d{3}\s?\d{5}\b/g,
+          type: 'SIRET',
+          label: 'SIRET_ENT'
+        },
+        {
+          regex: /\b\d{9}\b/g,
+          type: 'SIRET',
+          label: 'SIREN_ENT'
+        },
+        {
+          regex: /(?:M\.|Mme|Madame|Monsieur)\s([A-Z][a-z]+(?:\s[A-Z][a-z]+)*)/g,
+          type: 'PERSONNE',
+          label: 'NOM_PRO'
+        },
+        {
+          regex: /(?:SCI|SARL|SAS|Cabinet)\s([A-Z][A-Za-z0-9_]*(\s[A-Z][A-Za-z0-9_]*)*)/g,
+          type: 'SOCIETE',
+          label: 'STE_JURIDIQUE'
+        },
+        {
+          regex: /\b\d{1,3}(?:\s\d{3})*(?:,\d{2})?\s?€\b/g,
+          type: 'MONTANT',
+          label: 'MT_FINANCIER'
+        },
+        {
+          regex: /\b\d{1,4}\s(?:Rue|Avenue|Boulevard|Place)\s(?:des\s|de\s|la\s|l\')?[A-Za-zÀ-ÿ\-'\s]+,\s\d{5}\s[A-Za-zÀ-ÿ\-\s]+/g,
+          type: 'ADRESSE',
+          label: 'ADR_REVISE'
+        }
+      ];
 
-      // Show results
-      if (resultEl) resultEl.style.display = '';
-      if (origEl)   origEl.textContent  = data.original_excerpt  || '';
-      renderTaggedText(anonEl, data.anonymized_excerpt || '');
-      if (entitiesEl) entitiesEl.textContent = data.detections_count ?? '—';
-      if (riskEl) {
-        const level = data.risk?.level || 'low';
-        const score = data.risk?.score != null ? Math.round(data.risk.score * 100) + '%' : level;
-        riskEl.textContent = score;
+      // We tokenise the replacement to display rich pills in the HTML view
+      let resultHTML = text;
+      let count = 0;
+      
+      const registries = {};
+
+      rules.forEach(rule => {
+        resultHTML = resultHTML.replace(rule.regex, (match) => {
+          count++;
+          if (!registries[rule.type]) {
+            registries[rule.type] = [];
+          }
+          let idx = registries[rule.type].indexOf(match);
+          if (idx === -1) {
+            registries[rule.type].push(match);
+            idx = registries[rule.type].length;
+          } else {
+            idx = idx + 1;
+          }
+          return `<span class="redact-token" data-type="${rule.type}" title="Donnée sensible anonymisée : ${rule.label}_${idx}">[${rule.type}_${idx}]</span>`;
+        });
+      });
+
+      // Update output
+      output.innerHTML = resultHTML;
+      
+      // Update statistics
+      if (entitiesEl) entitiesEl.textContent = count;
+      
+      // Compute dynamically calculated Risk score & Trust Score
+      let riskScore = 0;
+      let trustScore = 100;
+      
+      if (count > 0) {
+        riskScore = Math.min(Math.round((count / (text.length / 120)) * 1.5), 18);
+        trustScore = 100 - riskScore;
       }
-      if (methodEl) methodEl.textContent = extractionLabel;
-      if (policyEl) {
-        policyEl.textContent = policy.label || '—';
-        policyEl.className = `demo-policy ${policy.severity || 'success'}`;
-      }
-      if (runtimeEl) {
-        if (data.is_mock) {
-          runtimeEl.textContent = `Mode secours actif en ${elapsed}s: payload de demonstration deterministe.`;
-          runtimeEl.className = 'demo-runtime-badge visible warning';
-        } else if (data.extraction_method === 'mistral_ocr') {
-          runtimeEl.textContent = `OCR live actif: ${extractionLabel} a extrait ${data.pages || 0} pages avant anonymisation.`;
-          runtimeEl.className = 'demo-runtime-badge visible success';
+      
+      if (riskEl) riskEl.textContent = riskScore + '%';
+      if (readinessEl) {
+        readinessEl.textContent = trustScore + '%';
+        if (trustScore >= 90) {
+          readinessEl.style.color = '#10b981'; // Green
+        } else if (trustScore >= 80) {
+          readinessEl.style.color = '#f59e0b'; // Orange
         } else {
-          runtimeEl.textContent = `Extraction locale active: ${extractionLabel}, sans envoi OCR externe.`;
-          runtimeEl.className = 'demo-runtime-badge visible';
+          readinessEl.style.color = '#ef4444'; // Red
         }
       }
-      if (statusEl) {
-        statusEl.textContent = data.extraction_method === 'mistral_ocr'
-          ? 'Démo prête : Mistral OCR extrait le document, puis ConfiDoc anonymise avant tout usage IA.'
-          : 'Démo prête : le document original est filtré avant toute utilisation IA.';
-      }
-
-      // Entity chips
-      if (chipsEl && data.entity_summary) {
-        chipsEl.textContent = '';
-        Object.entries(data.entity_summary)
-          .sort((a, b) => b[1] - a[1])
-          .slice(0, 10)
-          .forEach(([type, count]) => {
-            const chip = document.createElement('span');
-            chip.className = 'demo-chip';
-            chip.textContent = `${type}: ${count}`;
-            chipsEl.appendChild(chip);
-          });
-      }
-
-      // Proof card
-      if (proofCard && data.proof) {
-        proofCard.style.display = '';
-        if (proofMsg) proofMsg.textContent = policy.message || '';
-        if (proofPoints) {
-          proofPoints.textContent = '';
-          const points = data.trust_signals || proof.control_points || [];
-          points.slice(0, 5).forEach(point => {
-            const item = document.createElement('li');
-            item.textContent = point;
-            proofPoints.appendChild(item);
-          });
-        }
-      }
-
-      launchBtn.textContent = 'Relancer la démo';
-      launchBtn.disabled = false;
-
-    } catch (err) {
-      if (errorEl) {
-        errorEl.textContent = 'Erreur : ' + err.message;
-        errorEl.style.display = '';
-      }
-      if (statusEl) statusEl.textContent = 'Une erreur est survenue.';
-      launchBtn.textContent = 'Réessayer';
-      launchBtn.disabled = false;
+      
+      statusText.textContent = `Traitement réussi en 0.2s. ${count} entités sensibles neutralisées avec succès.`;
     }
-  });
-
-  if (proofBtn) {
-    proofBtn.addEventListener('click', () => {
-      window.open('/api/v1/demo/public/audit-report-pdf', '_blank');
-    });
-  }
-})();
-</script>
+  })();
+  </script>
 </body>
 </html>

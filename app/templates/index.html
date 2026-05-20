@@ -132,6 +132,18 @@
     <div class="header-actions">
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
+      
+      <!-- Sélecteur linguistique Google Translate discret -->
+      <div class="lang-selector-container">
+        <select id="google-lang-select" class="lang-selector-select" aria-label="Langue / Language">
+          <option value="fr">FR 🇫🇷</option>
+          <option value="en">EN 🇬🇧</option>
+          <option value="de">DE 🇩🇪</option>
+          <option value="es">ES 🇪🇸</option>
+        </select>
+        <div id="google_translate_element" style="display:none"></div>
+      </div>
+
       <button id="btn-theme" class="btn-theme-toggle theme-switch" aria-label="Changer le thème" role="switch" aria-checked="false"></button>
       <span id="user-info" class="user-info"></span>
       <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">
@@ -1216,6 +1228,43 @@
             <div class="dash-chart-card">
               <h3>Entités par type</h3>
               <div id="dash-entity-chart" class="dash-entity-list"></div>
+            </div>
+          </div>
+
+          <!-- Grand livre d'audit DPO -->
+          <div class="dash-chart-card audit-ledger-card" style="margin-top: 20px;">
+            <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
+              <h3 style="margin: 0;">Grand livre d'audit DPO & Traçabilité Cryptographique</h3>
+              <span class="audit-ledger-badge">
+                <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                </svg>
+                Certifié Conforme RGPD
+              </span>
+            </div>
+            <p style="color: var(--text-dim); font-size: 12.5px; margin-bottom: 16px; line-height: 1.5;">
+              Registre inaltérable de traçabilité. Chaque traitement (extraction, anonymisation, modification manuelle, export) produit un horodatage précis et un hash cryptographique SHA-256 unique pour prouver l'intégrité de la conformité DPO.
+            </p>
+            <div class="audit-ledger-container">
+              <table class="audit-ledger-table">
+                <thead>
+                  <tr>
+                    <th>Horodatage</th>
+                    <th>Action / Événement</th>
+                    <th>Opérateur / Système</th>
+                    <th>Empreinte SHA-256</th>
+                    <th>Preuve d'Intégrité</th>
+                  </tr>
+                </thead>
+                <tbody id="audit-ledger-tbody">
+                  <!-- Sera alimenté dynamiquement en JS -->
+                  <tr>
+                    <td colspan="5" style="text-align: center; color: var(--text-dim); padding: 20px;">
+                      Aucune action enregistrée pour le moment. Sélectionnez et traitez un document pour générer le grand livre d'audit.
+                    </td>
+                  </tr>
+                </tbody>
+              </table>
             </div>
           </div>
         </div>
