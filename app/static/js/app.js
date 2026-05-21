@@ -1686,6 +1686,23 @@ function openDossierPage(clientName) {
     el.classList.toggle("selected", el.dataset.client === clientName);
   });
 
+  // Reset active tab to documents when opening a client dossier page
+  document.querySelectorAll(".dossier-tab").forEach(btn => {
+    if (btn.dataset.tab === "documents") {
+      btn.classList.add("active");
+      btn.style.color = "#fff";
+      btn.style.borderBottom = "2px solid var(--accent)";
+    } else {
+      btn.classList.remove("active");
+      btn.style.color = "var(--text-muted)";
+      btn.style.borderBottom = "none";
+    }
+  });
+  const exercicesEl = $("dossier-page-exercices");
+  const comparisonEl = $("dossier-page-comparison");
+  if (exercicesEl) exercicesEl.style.display = "block";
+  if (comparisonEl) comparisonEl.style.display = "none";
+
   setPageTitle("Dossier");
   loadDossierClientPage(clientName);
 }
@@ -1718,6 +1735,267 @@ async function loadDossierClientPage(clientName) {
     ].join("");
   } catch (e) {
     exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Erreur chargement dossier.</p>`;
+  }
+}
+
+function initDossierTabsAndComparison() {
+  // Listen for tab clicks dynamically
+  document.addEventListener("click", (e) => {
+    const tab = e.target.closest(".dossier-tab");
+    if (!tab) return;
+    
+    // Toggle active classes on tab buttons
+    document.querySelectorAll(".dossier-tab").forEach(t => {
+      t.classList.remove("active");
+      t.style.color = "var(--text-muted)";
+      t.style.borderBottom = "none";
+    });
+    tab.classList.add("active");
+    tab.style.color = "#fff";
+    tab.style.borderBottom = "2px solid var(--accent)";
+
+    // Switch displayed panel
+    const target = tab.dataset.tab;
+    const exercicesEl = $("dossier-page-exercices");
+    const comparisonEl = $("dossier-page-comparison");
+
+    if (target === "documents") {
+      if (exercicesEl) exercicesEl.style.display = "block";
+      if (comparisonEl) comparisonEl.style.display = "none";
+    } else if (target === "comparison") {
+      if (exercicesEl) exercicesEl.style.display = "none";
+      if (comparisonEl) comparisonEl.style.display = "block";
+      initDossierComparisonTab();
+    }
+  });
+
+  // Listen for compare run button click dynamically
+  document.addEventListener("click", (e) => {
+    if (e.target && (e.target.id === "btn-run-comparison" || e.target.closest("#btn-run-comparison"))) {
+      runDossierComparison();
+    }
+  });
+}
+
+async function initDossierComparisonTab() {
+  const selectN = $("compare-doc-n");
+  const selectN1 = $("compare-doc-n1");
+  const resultsEl = $("comparison-results");
+  const placeholderEl = $("comparison-placeholder");
+  const placeholderTextEl = $("comparison-placeholder-text");
+  
+  if (!selectN || !selectN1) return;
+  
+  selectN.innerHTML = "";
+  selectN1.innerHTML = "";
+  if (resultsEl) resultsEl.style.display = "none";
+  if (placeholderEl) {
+    placeholderEl.style.display = "block";
+    if (placeholderTextEl) {
+      placeholderTextEl.innerHTML = "Chargement des documents du client...";
+    }
+  }
+  
+  try {
+    const data = await apiFetch(`/documents/dossiers?client_name=${encodeURIComponent(currentDossierClient)}`);
+    const client = Array.isArray(data) ? data.find(c => c.client_name === currentDossierClient) || data[0] : null;
+    if (!client) {
+      if (placeholderTextEl) placeholderTextEl.innerHTML = "Aucun document trouvé pour ce client.";
+      return;
+    }
+    
+    const exercices = client.exercices || [];
+    const eligibleDocs = [];
+    exercices.forEach(ex => {
+      const year = ex.exercice || "Sans exercice";
+      (ex.documents || []).forEach(doc => {
+        const cat = (doc.doc_category || "").toLowerCase();
+        if (cat === "bilan" || cat === "liasse_fiscale" || cat.includes("bilan") || cat.includes("liasse")) {
+          eligibleDocs.push({
+            id: doc.id,
+            name: doc.original_filename,
+            year: year,
+            status: doc.status,
+            created_at: doc.created_at
+          });
+        }
+      });
+    });
+    
+    if (eligibleDocs.length < 2) {
+      if (placeholderTextEl) {
+        placeholderTextEl.innerHTML = `
+          <div style="font-weight: 700; color: #fff; margin-bottom: 8px; font-size: 14px;">📈 Postes comptables insuffisants</div>
+          Pour analyser l'évolution pluriannuelle, ConfiDoc requiert au moins <strong>deux bilans ou liasses fiscales</strong> (exercice N et exercice N-1) pour ce client.<br>
+          <span style="font-size: 12px; color: var(--text-muted); display: block; margin-top: 6px;">Veuillez téléverser un autre exercice pour <strong>${escapeHtml(currentDossierClient)}</strong>.</span>
+        `;
+      }
+      return;
+    }
+    
+    eligibleDocs.sort((a, b) => {
+      const yearA = parseInt(a.year) || 0;
+      const yearB = parseInt(b.year) || 0;
+      if (yearB !== yearA) return yearB - yearA;
+      return new Date(b.created_at) - new Date(a.created_at);
+    });
+    
+    eligibleDocs.forEach((doc) => {
+      const optionHtml = `<option value="${doc.id}">Exercice ${escapeHtml(doc.year)} — ${escapeHtml(doc.name)} (${documentStatusLabel(doc.status)})</option>`;
+      selectN.insertAdjacentHTML("beforeend", optionHtml);
+      selectN1.insertAdjacentHTML("beforeend", optionHtml);
+    });
+    
+    if (selectN.options.length > 0) selectN.selectedIndex = 0;
+    if (selectN1.options.length > 1) selectN1.selectedIndex = 1;
+    else if (selectN1.options.length > 0) selectN1.selectedIndex = 0;
+    
+    if (placeholderTextEl) {
+      placeholderTextEl.innerHTML = "Sélectionnez deux exercices distincts (ex. Bilan 2024 vs Bilan 2023) et cliquez sur \"Comparer\".";
+    }
+  } catch (e) {
+    console.error("initDossierComparisonTab error:", e);
+    if (placeholderTextEl) placeholderTextEl.innerHTML = "Erreur lors du chargement des documents éligibles.";
+  }
+}
+
+async function runDossierComparison() {
+  const docIdN = $("compare-doc-n").value;
+  const docIdN1 = $("compare-doc-n1").value;
+  const resultsEl = $("comparison-results");
+  const placeholderEl = $("comparison-placeholder");
+  
+  if (!docIdN || !docIdN1) {
+    toast("Veuillez sélectionner deux documents.", "warning");
+    return;
+  }
+  
+  if (docIdN === docIdN1) {
+    toast("Veuillez sélectionner deux exercices distincts.", "warning");
+    return;
+  }
+  
+  if (resultsEl) {
+    resultsEl.style.display = "block";
+    resultsEl.innerHTML = '<div class="spinner" style="margin:40px auto"></div>';
+  }
+  if (placeholderEl) placeholderEl.style.display = "none";
+  
+  try {
+    const data = await apiFetch(`/documents/${docIdN}/compare`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ previous_document_id: docIdN1 }),
+    });
+    
+    const variations = data.variations || [];
+    const coherenceFlags = data.coherence_flags || [];
+    const summary = data.summary || "Aucun résumé disponible.";
+    const globalTrend = data.global_trend || "Stable";
+    
+    let resultsHtml = `
+      <div class="comparison-summary-card animate-fade-in" style="background: rgba(99, 102, 241, 0.04); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
+        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; flex-wrap:wrap; gap:8px;">
+          <h4 style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700; color: #fff; margin:0;">📊 Synthèse d'Évolution Pluriannuelle</h4>
+          <span class="auto-badge" style="background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%); color: #fff; font-weight:700; padding: 4px 10px; border-radius: 20px; font-size: 11px;">Tendance globale : ${escapeHtml(globalTrend)}</span>
+        </div>
+        <p style="color: var(--text-muted); font-size: 13px; line-height: 1.6; margin:0;">${escapeHtml(summary)}</p>
+      </div>
+    `;
+    
+    if (coherenceFlags.length > 0) {
+      const alertsHtml = coherenceFlags.map(flag => `
+        <div class="coherence-alert animate-fade-in" style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-md); color: #fca5a5; font-size: 13px; margin-bottom: 16px; font-weight: 500; box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);">
+          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
+          <span><strong>Alerte Cohérence Bilan :</strong> ${escapeHtml(flag)}</span>
+        </div>
+      `).join("");
+      resultsHtml += alertsHtml;
+    }
+    
+    if (variations.length === 0) {
+      resultsHtml += `
+        <div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 13px; border: 1px dashed var(--border); border-radius: var(--radius-md); background: rgba(255,255,255,0.01);">
+          Aucune variation comptable significative détectée entre ces deux exercices.
+        </div>
+      `;
+    } else {
+      resultsHtml += `
+        <div class="table-container animate-fade-in" style="border: 1px solid var(--border); border-radius: var(--radius-md); overflow: hidden; background: rgba(255,255,255,0.01); box-shadow: 0 8px 32px rgba(0,0,0,0.15);">
+          <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
+            <thead>
+              <tr style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);">
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif;">Poste Comptable</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Exercice Précédent</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Exercice Récent</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Variation</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif;">Analyse & Seuil d'Alerte</th>
+              </tr>
+            </thead>
+            <tbody>
+              ${variations.map((v, index) => {
+                const varPct = v.variation_pct;
+                let pctLabel = "—";
+                let pctColor = "var(--text-muted)";
+                let rowBg = index % 2 === 0 ? "rgba(255,255,255,0.01)" : "rgba(0,0,0,0.15)";
+                
+                if (varPct !== null && varPct !== undefined) {
+                  const plus = varPct > 0 ? "+" : "";
+                  pctLabel = `${plus}${varPct.toFixed(1)}%`;
+                  
+                  if (v.severity === "critical") {
+                    pctColor = "#f87171"; // Crimson
+                  } else if (v.severity === "warning") {
+                    pctColor = "#fbbf24"; // Amber
+                  } else {
+                    pctColor = "#34d399"; // Emerald
+                  }
+                }
+                
+                let severityBadge = "";
+                if (v.severity === "critical") {
+                  severityBadge = `<span class="badge-category" style="background: rgba(239, 68, 68, 0.12); color: #f87171; border: 1px solid rgba(239, 68, 68, 0.25); font-size: 10px; padding: 2px 8px; font-weight: 700; border-radius: 4px; letter-spacing: 0.02em;">ALERTE</span>`;
+                } else if (v.severity === "warning") {
+                  severityBadge = `<span class="badge-category" style="background: rgba(245, 158, 11, 0.12); color: #fbbf24; border: 1px solid rgba(245, 158, 11, 0.25); font-size: 10px; padding: 2px 8px; font-weight: 700; border-radius: 4px; letter-spacing: 0.02em;">ATTENTION</span>`;
+                } else {
+                  severityBadge = `<span class="badge-category" style="background: rgba(16, 185, 129, 0.12); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.25); font-size: 10px; padding: 2px 8px; font-weight: 700; border-radius: 4px; letter-spacing: 0.02em;">STABLE</span>`;
+                }
+                
+                const formatVal = (val) => {
+                  if (val === null || val === undefined || isNaN(val)) return "—";
+                  return new Intl.NumberFormat('fr-FR', { style: 'currency', currency: 'EUR', maximumFractionDigits: 0 }).format(val);
+                };
+                
+                return `
+                  <tr style="background: ${rowBg}; border-bottom: 1px solid var(--border); transition: background 0.15s ease;" onmouseover="this.style.background='rgba(255,255,255,0.03)'" onmouseout="this.style.background='${rowBg}'">
+                    <td style="padding: 14px 16px; font-weight: 600; color: #fff; font-family: 'Outfit', sans-serif;">${escapeHtml(v.field)}</td>
+                    <td style="padding: 14px 16px; text-align: right; color: var(--text-muted); font-variant-numeric: tabular-nums;">${formatVal(v.previous_value)}</td>
+                    <td style="padding: 14px 16px; text-align: right; color: #fff; font-weight: 600; font-variant-numeric: tabular-nums;">${formatVal(v.current_value)}</td>
+                    <td style="padding: 14px 16px; text-align: right; color: ${pctColor}; font-weight: 800; font-size: 13px; font-variant-numeric: tabular-nums;">${pctLabel}</td>
+                    <td style="padding: 14px 16px; color: var(--text-muted); line-height: 1.5;">
+                      <div style="display:flex; align-items:center; gap:10px;">
+                        ${severityBadge}
+                        <span style="font-size: 12px;">${escapeHtml(v.insight)}</span>
+                      </div>
+                    </td>
+                  </tr>
+                `;
+              }).join("")}
+            </tbody>
+          </table>
+        </div>
+      `;
+    }
+    
+    if (resultsEl) resultsEl.innerHTML = resultsHtml;
+  } catch (e) {
+    console.error("runDossierComparison error:", e);
+    toast(`Erreur d'analyse : ${e.message || e}`, "error");
+    if (resultsEl) resultsEl.style.display = "none";
+    if (placeholderEl) {
+      placeholderEl.style.display = "block";
+      if (placeholderTextEl) placeholderTextEl.innerHTML = "Une erreur est survenue lors de l'analyse.";
+    }
   }
 }
 
@@ -2272,21 +2550,81 @@ function uploadWithProgress(formData, path, fillEl, statusEl) {
 
 // ── Upload ─────────────────────────────────────────────────────────────
 
+let isBatchUpload = false;
+let completedBatchItems = [];
+
 function renderUploadQueue() {
   const el = $("upload-queue");
   if (!el) return;
-  if (!uploadQueue.length && !isUploadProcessing) {
+  
+  const totalItems = uploadQueue.length + completedBatchItems.length;
+  if (totalItems === 0 && !isUploadProcessing) {
     el.style.display = "none";
     el.innerHTML = "";
     return;
   }
-  el.style.display = "";
-  el.innerHTML = uploadQueue.map((item, idx) => {
-    return `<div class="upload-queue-item ${item.status}">
-      <span>${idx + 1}. ${escapeHtml(item.file.name)}</span>
-      <strong>${item.status_label}</strong>
-    </div>`;
+  
+  el.style.display = "block";
+  
+  const queueHtml = uploadQueue.map((item, idx) => {
+    return `
+      <div class="upload-queue-item queued" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: rgba(255,255,255,0.02); border: 1px solid var(--border); border-radius: 8px; margin-bottom: 8px;">
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0;">
+          <div class="spinner-sm" style="width: 14px; height: 14px; border: 2px solid rgba(255,255,255,0.2); border-top-color: var(--accent); border-radius: 50%; animation: spin 0.8s linear infinite; flex-shrink: 0;"></div>
+          <span style="font-size: 13px; color: var(--text-muted); text-overflow: ellipsis; overflow: hidden; white-space: nowrap;">${escapeHtml(item.file.name)}</span>
+        </div>
+        <strong style="font-size: 11px; text-transform: uppercase; color: var(--text-muted);">${item.status_label}</strong>
+      </div>`;
   }).join("");
+
+  const completedHtml = completedBatchItems.map((item, idx) => {
+    const isDone = item.status === "done";
+    const statusColor = isDone ? "var(--success)" : "var(--danger)";
+    const bgGlow = isDone ? "rgba(16, 185, 129, 0.04)" : "rgba(239, 68, 68, 0.04)";
+    const borderGlow = isDone ? "rgba(16, 185, 129, 0.15)" : "rgba(239, 68, 68, 0.15)";
+    
+    return `
+      <div class="upload-queue-item ${item.status}" style="display: flex; justify-content: space-between; align-items: center; padding: 10px 14px; background: ${bgGlow}; border: 1px solid ${borderGlow}; border-radius: 8px; margin-bottom: 8px; transition: all 0.2s;">
+        <div style="display: flex; align-items: center; gap: 10px; min-width: 0; flex: 1;">
+          ${isDone 
+            ? `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--success)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><polyline points="20 6 9 17 4 12"/></svg>`
+            : `<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--danger)" stroke-width="3" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0"><line x1="18" y1="6" x2="6" y2="18"/><line x1="6" y1="6" x2="18" y2="18"/></svg>`
+          }
+          <span style="font-size: 13px; color: var(--text); text-overflow: ellipsis; overflow: hidden; white-space: nowrap; font-weight: 500;">${escapeHtml(item.file.name)}</span>
+        </div>
+        <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
+          <strong style="font-size: 11px; text-transform: uppercase; color: ${statusColor}; margin-right: 4px;">${item.status_label}</strong>
+          ${isDone 
+            ? `<button class="btn btn-ghost btn-sm" type="button" style="padding: 4px 8px; font-size: 11px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); height: auto;" onclick="selectDoc('${item.docId}', '${item.docStatus}', '${escapeAttr(item.file.name)}', ${item.file.size})">Ouvrir</button>`
+            : ""
+          }
+        </div>
+      </div>`;
+  }).join("");
+
+  let headerHtml = "";
+  if (isBatchUpload) {
+    const totalDone = completedBatchItems.filter(i => i.status === "done").length;
+    const isFinished = !isUploadProcessing;
+    
+    headerHtml = `
+      <div style="margin-bottom: 12px; padding: 12px; background: rgba(99, 102, 241, 0.05); border: 1px dashed var(--border-accent); border-radius: 8px;">
+        <div style="display:flex; justify-content:space-between; align-items:center;">
+          <strong style="font-size:12px; color:#fff;">📦 Import multiple (${completedBatchItems.length}/${totalItems})</strong>
+          <span style="font-size:11px; color:var(--text-muted);">${isFinished ? "Import complété !" : "Importation en cours..."}</span>
+        </div>
+        ${isFinished 
+          ? `<p style="font-size:11px; color:var(--success); margin-top: 4px; display:flex; align-items:center; gap:4px;">
+              <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+              ${totalDone} document${totalDone > 1 ? "s" : ""} ajouté${totalDone > 1 ? "s" : ""} au dossier client.
+             </p>` 
+          : `<div class="progress-bar-track" style="margin-top: 6px; height: 4px; background: rgba(255,255,255,0.04);"><div class="progress-bar-fill" style="width: ${Math.round(completedBatchItems.length / totalItems * 100)}%; height: 100%; background: var(--accent); transition: width 0.3s;"></div></div>`
+        }
+      </div>
+    `;
+  }
+
+  el.innerHTML = headerHtml + completedHtml + queueHtml;
 }
 
 function enqueueUpload(files) {
@@ -2296,6 +2634,8 @@ function enqueueUpload(files) {
     $("upload-client-name")?.focus();
     return;
   }
+  isBatchUpload = files.length > 1;
+  completedBatchItems = [];
   files.forEach((file) => {
     uploadQueue.push({ file, status: "queued", status_label: "En attente" });
   });
@@ -2312,13 +2652,16 @@ async function processUploadQueue() {
     item.status_label = "Envoi...";
     renderUploadQueue();
     try {
-      await uploadFile(item.file);
+      const data = await uploadFile(item.file);
       item.status = "done";
       item.status_label = "Terminé";
+      item.docId = data.document_id;
+      item.docStatus = data.processing?.status || data.status || "uploaded";
     } catch (e) {
       item.status = "error";
       item.status_label = "Échec";
     }
+    completedBatchItems.push({ ...item });
     renderUploadQueue();
     await new Promise((r) => setTimeout(r, 250));
     uploadQueue.shift();
@@ -2381,40 +2724,48 @@ async function uploadFile(file) {
       zone.style.display = "";
       progress.style.display = "none";
       fill.style.width = "0";
-      setStep(2);
-      resetAnonPanel();
-      updateAnonDocBar(file.name, file.size, clientName);
-      refreshAIDocInsights(currentDocId);
-      const anonEmpty = $("anon-empty");
-      if (anonEmpty) {
-        anonEmpty.style.display = "";
-        const hintIcon = anonEmpty.querySelector(".hint-icon");
-        if (hintIcon) {
-          hintIcon.innerHTML =
-        '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
-        }
-        const pEl = anonEmpty.querySelector("p");
-        if (pEl) {
-          if (autoAnon) {
-            pEl.innerHTML =
-          `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Sécurisation en cours en arrière-plan…`;
-          } else {
-            pEl.innerHTML =
-          `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+
+      if (!isBatchUpload) {
+        setStep(2);
+        resetAnonPanel();
+        updateAnonDocBar(file.name, file.size, clientName);
+        refreshAIDocInsights(currentDocId);
+        const anonEmpty = $("anon-empty");
+        if (anonEmpty) {
+          anonEmpty.style.display = "";
+          const hintIcon = anonEmpty.querySelector(".hint-icon");
+          if (hintIcon) {
+            hintIcon.innerHTML =
+          '<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>';
+          }
+          const pEl = anonEmpty.querySelector("p");
+          if (pEl) {
+            if (autoAnon) {
+              pEl.innerHTML =
+            `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Sécurisation en cours en arrière-plan…`;
+            } else {
+              pEl.innerHTML =
+            `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+            }
           }
         }
-      }
-      if (autoAnon) {
-        showAnonLoading("Mistral OCR et sécurisation en cours…");
-        updateProcessingConsole({
-          status: currentDocStatus,
-          backend: (data.processing?.background_processing || "api").toUpperCase(),
-        });
-        pollDocStatus(currentDocId);
+        if (autoAnon) {
+          showAnonLoading("Mistral OCR et sécurisation en cours…");
+          updateProcessingConsole({
+            status: currentDocStatus,
+            backend: (data.processing?.background_processing || "api").toUpperCase(),
+          });
+          pollDocStatus(currentDocId);
+        }
+      } else {
+        if (autoAnon) {
+          pollDocStatusBackground(data.document_id, file.name);
+        }
       }
     }, 600);
 
     toast(`${file.name} ajouté`, "success");
+    return data;
   } catch (e) {
     console.error("uploadFile error:", e);
     zone.style.display = "";
@@ -2427,6 +2778,48 @@ async function uploadFile(file) {
     }
     throw e;
   }
+}
+
+function pollDocStatusBackground(docId, fileName) {
+  let tries = 0;
+  const maxTries = 240;
+  const interval = setInterval(async () => {
+    tries++;
+    if (tries > maxTries) {
+      clearInterval(interval);
+      const item = completedBatchItems.find(i => i.docId === docId);
+      if (item) {
+        item.status_label = "Délai dépassé";
+        renderUploadQueue();
+      }
+      return;
+    }
+    try {
+      const st = await apiFetch(`/documents/${docId}/status`);
+      const status = (st.status || "").toLowerCase();
+      const anonymDone = !!st.anonymization?.done;
+      
+      const item = completedBatchItems.find(i => i.docId === docId);
+      if (item) {
+        item.docStatus = status;
+        if (status === "ready" || anonymDone) {
+          item.status_label = "Sécurisé ✨";
+          item.docStatus = "ready";
+          clearInterval(interval);
+          renderUploadQueue();
+          await loadDocList().catch(e => console.warn(e));
+          if (sidebarMode === "dossier") loadDossierTree();
+        } else if (status === "processing" || status === "extracting") {
+          item.status_label = "Sécurisation...";
+          renderUploadQueue();
+        }
+      } else {
+        clearInterval(interval);
+      }
+    } catch (e) {
+      console.warn("Background poll error for", docId, e);
+    }
+  }, 2000);
 }
 
 async function createDemoDocument() {
@@ -5220,36 +5613,15 @@ function initDpoInteractivity() {
     });
   }
 
-  // Google Translate linking
-  const langSelect = document.getElementById("google-lang-select");
-  if (langSelect) {
-    langSelect.addEventListener("change", function() {
-      const lang = this.value;
-      const googleCombo = document.querySelector(".goog-te-combo");
-      if (googleCombo) {
-        googleCombo.value = lang;
-        googleCombo.dispatchEvent(new Event("change"));
-        window.addAuditLedgerEntry("Changement de langue", "DPO (Vous)", `Interface traduite en ${lang.toUpperCase()}`);
-      } else {
-        console.warn("Google Translate combo box not ready yet.");
+  // Hide onboarding guide listener
+  const btnHideOnboarding = document.getElementById("btn-hide-onboarding");
+  if (btnHideOnboarding) {
+    btnHideOnboarding.addEventListener("click", () => {
+      const guide = document.getElementById("onboarding-guide");
+      if (guide) {
+        guide.style.display = "none";
       }
     });
-  }
-
-  // Load Google Translate script dynamically
-  if (!window.googleTranslateElementInit) {
-    window.googleTranslateElementInit = function() {
-      new google.translate.TranslateElement({
-        pageLanguage: 'fr',
-        includedLanguages: 'fr,en,de,es',
-        layout: google.translate.TranslateElement.InlineLayout.SIMPLE,
-        autoDisplay: false
-      }, 'google_translate_element');
-    };
-    const script = document.createElement("script");
-    script.src = "//translate.google.com/translate_a/element.js?cb=googleTranslateElementInit";
-    script.async = true;
-    document.body.appendChild(script);
   }
 }
 
@@ -5257,6 +5629,7 @@ function initDpoInteractivity() {
 
 document.addEventListener("DOMContentLoaded", () => {
   initDpoInteractivity();
+  initDossierTabsAndComparison();
   const versionEl = $("ui-version");
   if (versionEl?.dataset?.version) {
     console.info(`ConfiDoc UI ${versionEl.dataset.version}`);

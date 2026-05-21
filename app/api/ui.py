@@ -76,7 +76,11 @@ def _ui_version_context() -> dict[str, str]:
         or ""
     ).strip()
     short_sha = commit_sha[:7] if commit_sha else "local"
-    asset_version = short_sha if short_sha != "local" else settings.APP_VERSION
+    if short_sha == "local":
+        import time
+        asset_version = f"local-{int(time.time())}"
+    else:
+        asset_version = short_sha
     return {
         "ASSET_VERSION": asset_version,
         "UI_VERSION_LABEL": f"{settings.APP_VERSION} · {short_sha}",

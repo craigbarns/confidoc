@@ -133,17 +133,6 @@
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
       
-      <!-- Sélecteur linguistique Google Translate discret -->
-      <div class="lang-selector-container">
-        <select id="google-lang-select" class="lang-selector-select" aria-label="Langue / Language">
-          <option value="fr">FR 🇫🇷</option>
-          <option value="en">EN 🇬🇧</option>
-          <option value="de">DE 🇩🇪</option>
-          <option value="es">ES 🇪🇸</option>
-        </select>
-        <div id="google_translate_element" style="display:none"></div>
-      </div>
-
       <button id="btn-theme" class="btn-theme-toggle theme-switch" aria-label="Changer le thème" role="switch" aria-checked="false"></button>
       <span id="user-info" class="user-info"></span>
       <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">
@@ -449,7 +438,43 @@
             </div>
             <button class="btn btn-primary btn-sm" id="btn-dossier-upload" data-action="upload-for-dossier">+ Ajouter</button>
           </div>
+
+          <!-- Sub-tabs for Documents vs Multi-Year Evolution -->
+          <div class="dossier-tabs" style="display: flex; gap: 8px; margin: 12px 0 20px 0; border-bottom: 1px solid var(--border); padding-bottom: 0;">
+            <button class="dossier-tab active" data-tab="documents" style="background: none; border: none; color: #fff; border-bottom: 2px solid var(--accent); padding: 10px 16px; cursor: pointer; font-weight: 600; font-family: 'Outfit', sans-serif; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+              📂 Documents
+            </button>
+            <button class="dossier-tab" data-tab="comparison" style="background: none; border: none; color: var(--text-muted); padding: 10px 16px; cursor: pointer; font-weight: 500; font-family: 'Outfit', sans-serif; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+              📈 Évolution Pluriannuelle
+            </button>
+          </div>
+
           <div id="dossier-page-exercices" class="dossier-page-exercices"></div>
+          
+          <div id="dossier-page-comparison" class="dossier-page-comparison" style="display: none; padding: 20px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border); border-radius: var(--radius-lg); backdrop-filter: blur(10px);">
+            <div class="comparison-selectors-row" style="display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
+              <div class="field" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+                <label for="compare-doc-n" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Exercice Récent (N)</label>
+                <select id="compare-doc-n" class="btn btn-secondary btn-sm" style="min-width: 200px; text-align: left; background: var(--bg); border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;"></select>
+              </div>
+              <div class="field" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
+                <label for="compare-doc-n1" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Exercice Précédent (N-1)</label>
+                <select id="compare-doc-n1" class="btn btn-secondary btn-sm" style="min-width: 200px; text-align: left; background: var(--bg); border: 1px solid var(--border); color: #fff; padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;"></select>
+              </div>
+              <button id="btn-run-comparison" class="btn btn-primary" style="height: 38px; display: flex; align-items: center; gap: 8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
+                Comparer les exercices
+              </button>
+            </div>
+            
+            <div id="comparison-results" style="display: none;">
+              <!-- Dynamic comparison results (coherence alerts, variation table, insights) -->
+            </div>
+            <div id="comparison-placeholder" class="empty-state" style="padding: 40px 20px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: var(--radius-md); background: rgba(0,0,0,0.1);">
+              <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px; opacity:0.6;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
+              <div id="comparison-placeholder-text">Veuillez sélectionner deux exercices distincts (ex. Bilan 2024 vs Bilan 2023) et cliquer sur "Comparer".</div>
+            </div>
+          </div>
         </div>
 
       </div>
@@ -484,6 +509,40 @@
         </div>
 
         <div id="dash-content" style="display:none">
+          <!-- Guide de Démarrage Rapide Novice (Premium glassmorphic collapse) -->
+          <div class="card onboarding-guide-card" id="onboarding-guide" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%); border: 1px solid var(--border-accent); border-radius: var(--radius-lg); padding: 24px; position: relative;">
+            <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
+              <div>
+                <span class="auto-badge" style="background: var(--accent); color: #fff; margin-bottom: 8px; font-weight: 700; display: inline-block;">🚀 NOUVEAU</span>
+                <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; color: #fff; margin: 0;">Guide de Démarrage Rapide</h3>
+                <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Comprendre ConfiDoc et sécuriser vos premiers dossiers clients en 4 étapes simples.</p>
+              </div>
+              <button id="btn-hide-onboarding" class="btn btn-ghost btn-sm" style="padding: 4px 8px; font-size: 12px; color: var(--text-muted); cursor: pointer;" title="Masquer définitivement">Masquer</button>
+            </div>
+            <div class="onboarding-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
+              <div class="onboarding-step-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">1</div>
+                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 6px;">📂 Groupe Client & Dossier</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Créez ou sélectionnez un client (ex: <em>SCI Les Pins</em>) pour y rattacher vos documents par année d'exercice.</p>
+              </div>
+              <div class="onboarding-step-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">2</div>
+                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 6px;">📤 Import Multi-Fichiers</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Glissez-déposez un ou plusieurs fichiers (PDF, images) d'un coup. Ils se téléversent en lot de façon fluide.</p>
+              </div>
+              <div class="onboarding-step-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">3</div>
+                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 6px;">🛡️ Masquage IA & DPO</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">L'IA détecte et caviarde automatiquement les données personnelles (noms, RIB) pour créer un double anonyme.</p>
+              </div>
+              <div class="onboarding-step-card" style="background: rgba(255, 255, 255, 0.02); border: 1px solid rgba(255,255,255,0.04); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">4</div>
+                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: #fff; margin-bottom: 6px;">📈 Évolutions Pluriannuelles</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Consultez les dossiers clients pour comparer l'année N avec N-1 et repérer les variations comptables.</p>
+              </div>
+            </div>
+          </div>
+
           <section class="workspace-overview" aria-label="Parcours principal">
             <div class="workspace-copy">
               <span class="workspace-eyebrow">Parcours principal</span>
