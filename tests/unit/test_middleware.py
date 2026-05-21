@@ -10,7 +10,7 @@ class TestSecurityHeaders:
     async def test_health_has_security_headers(self, client):
         resp = await client.get("/health")
         assert resp.headers.get("X-Content-Type-Options") == "nosniff"
-        assert resp.headers.get("X-Frame-Options") == "DENY"
+        assert resp.headers.get("X-Frame-Options") == "SAMEORIGIN"
         # X-XSS-Protection est obsolète (remplacé par CSP) — non envoyé
         assert resp.headers.get("Referrer-Policy") == "strict-origin-when-cross-origin"
 
