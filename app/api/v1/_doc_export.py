@@ -900,6 +900,147 @@ async def get_compliance_report(
     }
 
 
+@router.get(
+    "/{document_id}/compliance-certificate",
+    response_class=StreamingResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Obtenir le certificat de conformité RGPD cryptographique (PDF)",
+)
+async def get_compliance_certificate(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+) -> Any:
+    """Génère le certificat de preuve de conformité RGPD signé pour le document."""
+    try:
+        document = await _get_user_document_or_404(
+            db,
+            document_id,
+            current_user.id,
+            permission="exports.download",
+        )
+        await _check_export_gate(db, document, current_user)
+
+        # Risk info retrieval
+        from app.models.pseudonym_mapping import PseudonymMapping
+        pm_result = await db.execute(
+            select(PseudonymMapping)
+            .where(PseudonymMapping.document_id == document.id)
+            .order_by(PseudonymMapping.created_at.desc())
+        )
+        mapping = pm_result.scalar_one_or_none()
+
+        risk_score_val = mapping.risk_score if mapping else 0.0
+        risk_level = mapping.risk_level or "low" if mapping else "low"
+        human_validated = bool(mapping and mapping.human_validated)
+
+        risk_info = {
+            "score": risk_score_val,
+            "level": risk_level,
+            "human_validated": human_validated,
+        }
+
+        # Entity counts retrieval
+        entity_summary: dict[str, int] = {}
+        try:
+            det_result = await db.execute(
+                select(EntityDetection).where(
+                    EntityDetection.document_id == document.id
+                )
+            )
+            for det in det_result.scalars().all():
+                etype = det.entity_type or "unknown"
+                entity_summary[etype] = entity_summary.get(etype, 0) + 1
+        except Exception as e:
+            logger.warning("certificate_entity_summary_failed", error=str(e))
+
+        # Get audit count for trust score
+        audit_count = 0
+        try:
+            from app.models.audit_log import AuditLog
+            audit_count_result = await db.execute(
+                select(func.count()).select_from(AuditLog).where(
+                    AuditLog.resource_id == str(document.id)
+                )
+            )
+            audit_count = int(audit_count_result.scalar() or 0)
+        except Exception:
+            pass
+
+        anonymized_preview = ""
+        with suppress(Exception):
+            anonymized_preview = await _get_anonymized_text(db, document)
+
+        # Trust score computation
+        trust = compute_document_trust_score(
+            status=document.status.value if hasattr(document.status, "value") else str(document.status),
+            risk_score=_risk_score_percent(risk_score_val),
+            risk_level=risk_level,
+            human_validated=human_validated,
+            detections_count=sum(entity_summary.values()),
+            audit_events_count=audit_count,
+            has_anonymized_text=bool(anonymized_preview),
+        )
+
+        document_info = {
+            "document_id": str(document.id),
+            "filename": document.original_filename,
+            "created_at": document.created_at.isoformat() if document.created_at else None,
+            "file_hash": document.sha256,
+            "trust": trust.to_dict(),
+            "user_id": str(document.uploaded_by_user_id),
+        }
+
+        # Generate compliance certificate PDF bytes
+        from app.services.pdf_certificate_service import generate_compliance_certificate
+        pdf_bytes = generate_compliance_certificate(
+            document_info=document_info,
+            risk_info=risk_info,
+            entity_summary=entity_summary,
+            validator_user_id=str(current_user.id),
+        )
+
+        # Record audit event
+        try:
+            await record_audit_event(
+                db,
+                user_id=current_user.id,
+                org_id=document.org_id,
+                action="export:certificate",
+                resource_type="document",
+                resource_id=str(document.id),
+                method="GET",
+                path=f"/api/v1/documents/{document_id}/compliance-certificate",
+                status_code=200,
+                actor_type="user",
+            )
+            await db.commit()
+        except Exception as exc:
+            logger.warning("export_certificate_audit_log_failed", error=str(exc))
+            with suppress(Exception):
+                await db.rollback()
+
+        headers = {
+            "Content-Disposition": _safe_attachment_disposition(
+                f"certificat_rgpd_{document.original_filename}"
+            )
+        }
+        return StreamingResponse(
+            io.BytesIO(pdf_bytes),
+            media_type="application/pdf",
+            headers=headers,
+        )
+
+    except Exception as exc:
+        if hasattr(exc, "status_code"):
+            raise
+        logger.error("export_certificate_failed", error=str(exc))
+        return JSONResponse(
+            status_code=500,
+            content={"detail": "Génération du certificat temporairement indisponible."},
+        )
+
+
 @router.post(
     "/{document_id}/compare",
     status_code=status.HTTP_200_OK,

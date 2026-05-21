@@ -102,6 +102,10 @@ class TestDocumentsRouterStructure:
         paths = self._get_paths()
         assert "/{document_id}/compliance-report" in paths
 
+    def test_compliance_certificate_route_exists(self):
+        paths = self._get_paths()
+        assert "/{document_id}/compliance-certificate" in paths
+
     def test_no_duplicate_method_path_routes(self):
         """Un même (method, path) ne doit pas apparaître deux fois."""
         from fastapi.routing import APIRoute
@@ -210,6 +214,11 @@ class TestDocumentsAuthRequired:
     @pytest.mark.asyncio
     async def test_risk_score_requires_auth(self, client):
         resp = await client.get("/api/v1/documents/some-fake-uuid/risk-score")
+        assert resp.status_code == 401
+
+    @pytest.mark.asyncio
+    async def test_compliance_certificate_requires_auth(self, client):
+        resp = await client.get("/api/v1/documents/some-fake-uuid/compliance-certificate")
         assert resp.status_code == 401
 
     @pytest.mark.asyncio

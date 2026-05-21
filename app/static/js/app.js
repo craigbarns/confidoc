@@ -3846,6 +3846,19 @@ async function downloadComplianceReport() {
   }
 }
 
+async function downloadComplianceCertificate() {
+  if (!currentDocId) return;
+  try {
+    const path = `/documents/${currentDocId}/compliance-certificate`;
+    const resp = await apiRequest(path, { auth: !publicDemoMode });
+    const blob = await resp.blob();
+    triggerDownload(blob, `certificat_rgpd_${currentDocId.slice(0, 8)}.pdf`);
+    toast("Certificat de preuve PDF téléchargé", "success");
+  } catch (e) {
+    toast(`Erreur certificat: ${e.message}`, "error");
+  }
+}
+
 async function downloadDossier360Report() {
   try {
     const resp = await apiRequest("/documents/stats/dossier-360/report");
@@ -5631,7 +5644,7 @@ document.addEventListener("DOMContentLoaded", () => {
         $("chat-input")?.focus();
         document.querySelector(".chat-input-zone")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else if (action === "proof") {
-        $("btn-compliance-report")?.click();
+        ($("btn-compliance-certificate") || $("btn-compliance-report"))?.click();
       } else if (action === "review") {
         setStep(2);
       }
@@ -5779,6 +5792,7 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   if ($("btn-audit-report")) $("btn-audit-report").addEventListener("click", downloadAuditReport);
   if ($("btn-compliance-report")) $("btn-compliance-report").addEventListener("click", downloadComplianceReport);
+  if ($("btn-compliance-certificate")) $("btn-compliance-certificate").addEventListener("click", downloadComplianceCertificate);
 
   // Load Global Quality on startup when a session already exists.
   loadGoldenReport();
