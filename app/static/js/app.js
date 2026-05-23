@@ -5843,6 +5843,19 @@ function initDpoInteractivity() {
 document.addEventListener("DOMContentLoaded", () => {
   initDpoInteractivity();
   initDossierTabsAndComparison();
+
+  // Redesign topbar — wire search + Copilot buttons to ⌘K / ⌘J shortcuts
+  document.querySelector('[data-action="open-cmd-palette"]')?.addEventListener("click", () => {
+    document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+  });
+  document.querySelector('[data-action="open-copilot"]')?.addEventListener("click", () => {
+    if (window.__confidocDrawer) {
+      window.__confidocDrawer.open();
+    } else {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "j", metaKey: true, bubbles: true }));
+    }
+  });
+
   const versionEl = $("ui-version");
   if (versionEl?.dataset?.version) {
     console.info(`ConfiDoc UI ${versionEl.dataset.version}`);
@@ -6054,7 +6067,9 @@ document.addEventListener("DOMContentLoaded", () => {
         case "quality":
           showQualityPanel();
           break;
-        case "compliance":
+        case "audit":
+          // Promoted to top-level per spec §4.1. Reuse the compliance panel until
+          // a dedicated audit panel ships in Phase 7 — both surface audit data.
           showCompliancePanel();
           break;
         case "settings":
