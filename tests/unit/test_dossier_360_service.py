@@ -61,3 +61,22 @@ def test_dossier_360_handles_empty_portfolio() -> None:
     assert payload["mission_control"]["urgency"] == "neutral"
     assert payload["mission_control"]["next_best_actions"]
     assert payload["dossiers"] == []
+
+
+def test_dossier_360_uses_client_name_and_doc_category_without_tags() -> None:
+    payload = build_dossier_360(
+        [
+            {
+                "id": "doc-acme-bilan",
+                "original_filename": "piece_2025.pdf",
+                "status": "ready",
+                "client_name": "Acme SAS",
+                "doc_category": "bilan",
+                "exercice": "2025",
+            }
+        ]
+    )
+
+    assert payload["portfolio"]["clients_count"] == 1
+    assert payload["dossiers"][0]["client_name"] == "Acme SAS"
+    assert "Bilan, liasse ou compte de resultat" in payload["dossiers"][0]["matched_documents"]

@@ -11,14 +11,16 @@ from __future__ import annotations
 
 import json
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from fastapi import APIRouter, Query, Response, status
 from sqlalchemy import desc, func, select
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.database import async_session_factory
 from app.core.logging import get_logger
 from app.models.document import Document
+from app.models.entity_detection import EntityDetection
+from app.models.pseudonym_mapping import PseudonymMapping
 from app.schemas.quality_metrics import QualityDashboardResponse
 from app.services.dossier_360_service import build_dossier_360
 from app.services.quality_metrics_service import compute_quality_metrics
@@ -26,6 +28,55 @@ from app.services.trust_score_service import compute_portfolio_trust_score
 
 router = APIRouter()
 logger = get_logger(__name__)
+
+
+def _risk_score_percent(score: float | int | None) -> float:
+    if score is None:
+        return 0.0
+    value = float(score)
+    if 0 <= value <= 1:
+        value *= 100
+    return max(0.0, min(100.0, value))
+
+
+def _status_key(status: object) -> str:
+    return str(getattr(status, "value", status) or "").strip().lower()
+
+
+def _document_to_dossier_360_input(document: Document) -> dict[str, Any]:
+    tags = list(getattr(document, "tags", None) or [])
+    client_name = str(getattr(document, "client_name", "") or "").strip()
+    if client_name and client_name not in tags:
+        tags = [client_name, *tags]
+
+    doc_category = getattr(document, "doc_category", None)
+    doc_type = getattr(document, "doc_type", None) or doc_category
+    return {
+        "id": getattr(document, "id", ""),
+        "original_filename": getattr(document, "original_filename", ""),
+        "status": getattr(document, "status", ""),
+        "tags": tags,
+        "client_name": client_name or None,
+        "doc_type": doc_type,
+        "doc_category": doc_category,
+        "exercice": getattr(document, "exercice", None),
+        "created_at": getattr(document, "created_at", None),
+        "updated_at": getattr(document, "updated_at", None),
+    }
+
+
+def _created_last_7_days(created_values: list[datetime], now: datetime) -> list[dict[str, Any]]:
+    buckets = {
+        (now.date() - timedelta(days=offset)): 0
+        for offset in range(6, -1, -1)
+    }
+    for created_at in created_values:
+        if created_at is None:
+            continue
+        day = created_at.date()
+        if day in buckets:
+            buckets[day] += 1
+    return [{"date": day.isoformat(), "count": count} for day, count in buckets.items()]
 
 
 def _calculate_gdpr_score(
@@ -182,38 +233,51 @@ async def get_dashboard_stats(
 
     risk_distribution = {"low": 0, "medium": 0, "high": 0, "critical": 0}
     try:
-        from app.models.pseudonym_mapping import PseudonymMapping
-        async with async_session_factory() as db2:
-            risk_result = await db2.execute(
-                select(PseudonymMapping.risk_level, func.count())
-                .where(PseudonymMapping.user_id == user_id)
-                .group_by(PseudonymMapping.risk_level)
+        risk_result = await db.execute(
+            select(PseudonymMapping.risk_level, func.count())
+            .join(Document, PseudonymMapping.document_id == Document.id)
+            .where(
+                Document.uploaded_by_user_id == user_id,
+                Document.is_deleted.is_(False),
             )
-            for row in risk_result.all():
-                level = row[0] or "low"
-                if level in risk_distribution:
-                    risk_distribution[level] = row[1]
+            .group_by(PseudonymMapping.risk_level)
+        )
+        for row in risk_result.all():
+            level = row[0] or "low"
+            if level in risk_distribution:
+                risk_distribution[level] = row[1]
     except Exception:
         pass
+
+    entity_distribution: dict[str, int] = {}
+    try:
+        entity_result = await db.execute(
+            select(EntityDetection.entity_type, func.count())
+            .join(Document, EntityDetection.document_id == Document.id)
+            .where(
+                Document.uploaded_by_user_id == user_id,
+                Document.is_deleted.is_(False),
+            )
+            .group_by(EntityDetection.entity_type)
+        )
+        entity_distribution = {
+            str(row[0] or "unknown").upper(): int(row[1] or 0)
+            for row in entity_result.all()
+        }
+    except Exception:
+        entity_distribution = {}
 
     recent_activity: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
-        since = datetime.now(UTC) - timedelta(days=7)
-        async with async_session_factory() as db2:
-            activity_result = await db2.execute(
-                select(
-                    func.date_trunc("day", AuditLog.created_at).label("day"),
-                    func.count(),
-                )
-                .where(AuditLog.user_id == user_id, AuditLog.created_at >= since)
-                .group_by("day")
-                .order_by("day")
-            )
-            recent_activity = [
-                {"date": row[0].isoformat() if row[0] else "", "count": row[1]}
-                for row in activity_result.all()
-            ]
+        now = datetime.now(UTC)
+        since = now - timedelta(days=6)
+        activity_result = await db.execute(
+            select(AuditLog.created_at)
+            .where(AuditLog.user_id == user_id, AuditLog.created_at >= since)
+            .order_by(AuditLog.created_at)
+        )
+        recent_activity = _created_last_7_days(list(activity_result.scalars().all()), now)
     except Exception:
         pass
 
@@ -243,8 +307,10 @@ async def get_dashboard_stats(
 
     return {
         "total_documents": total_docs,
+        "total_entities_masked": sum(entity_distribution.values()),
         "status_counts": status_counts,
         "risk_distribution": risk_distribution,
+        "entity_distribution": entity_distribution,
         "recent_activity": recent_activity,
         "trashed_documents": trashed,
         "gdpr_score": gdpr_score,
@@ -343,7 +409,7 @@ async def get_documents_status_summary(
     now = datetime.now(UTC)
     since = now - timedelta(days=days)
 
-    result = await db.execute(
+    period_result = await db.execute(
         select(Document.status, func.count())
         .where(
             Document.uploaded_by_user_id == user_id,
@@ -352,22 +418,72 @@ async def get_documents_status_summary(
         )
         .group_by(Document.status)
     )
-    status_counts: dict[str, int] = {}
-    for row in result.all():
-        st = row[0]
-        key = st.value if hasattr(st, "value") else str(st)
-        status_counts[key] = row[1]
+    period_status_counts: dict[str, int] = {}
+    for row in period_result.all():
+        key = _status_key(row[0])
+        period_status_counts[key] = row[1]
+
+    current_result = await db.execute(
+        select(Document.status, func.count())
+        .where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+        )
+        .group_by(Document.status)
+    )
+    current_status_counts: dict[str, int] = {}
+    for row in current_result.all():
+        key = _status_key(row[0])
+        current_status_counts[key] = row[1]
+
+    created_24h_result = await db.execute(
+        select(func.count())
+        .select_from(Document)
+        .where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+            Document.created_at >= now - timedelta(hours=24),
+        )
+    )
+    recent_uploads_24h = int(created_24h_result.scalar() or 0)
+
+    created_7d_result = await db.execute(
+        select(Document.created_at).where(
+            Document.uploaded_by_user_id == user_id,
+            Document.is_deleted.is_(False),
+            Document.created_at >= now - timedelta(days=6),
+        )
+    )
+    created_last_7_days = _created_last_7_days(
+        list(created_7d_result.scalars().all()),
+        now,
+    )
+
+    processing_count = (
+        current_status_counts.get("processing", 0)
+        + current_status_counts.get("extracting", 0)
+        + current_status_counts.get("extracted", 0)
+        + current_status_counts.get("anonymizing", 0)
+    )
 
     return {
         "period_days": days,
-        "status_counts": status_counts,
+        "status_counts": period_status_counts,
+        "current_status_counts": current_status_counts,
+        "period_total": sum(period_status_counts.values()),
+        "total": sum(current_status_counts.values()),
+        "ready": current_status_counts.get("ready", 0),
+        "anonymized": current_status_counts.get("anonymized", 0),
+        "processing": processing_count,
+        "uploaded": current_status_counts.get("uploaded", 0),
+        "failed": current_status_counts.get("failed", 0),
+        "recent_uploads_24h": recent_uploads_24h,
+        "created_last_7_days": created_last_7_days,
         "last_updated": now.isoformat(),
     }
 
 
 async def _load_dossier_360_payload(current_user, db, limit):
-    # (Garder la logique de chargement ici pour dossier-360)
-    # Je simplifie pour la lisibilité mais je garde la structure
     result = await db.execute(
         select(Document)
         .where(Document.uploaded_by_user_id == current_user.id, Document.is_deleted.is_(False))
@@ -375,14 +491,39 @@ async def _load_dossier_360_payload(current_user, db, limit):
         .limit(50)
     )
     docs = result.scalars().all()
+    doc_ids = [doc.id for doc in docs]
+
+    risk_by_document: dict[str, float] = {}
+    entity_counts_by_document: dict[str, int] = {}
+    if doc_ids:
+        risk_result = await db.execute(
+            select(
+                PseudonymMapping.document_id,
+                PseudonymMapping.risk_score,
+                PseudonymMapping.risk_level,
+            ).where(PseudonymMapping.document_id.in_(doc_ids))
+        )
+        fallback_by_level = {"low": 10.0, "medium": 45.0, "high": 70.0, "critical": 90.0}
+        for document_id, risk_score, risk_level in risk_result.all():
+            normalized_score = _risk_score_percent(risk_score)
+            if not normalized_score:
+                normalized_score = fallback_by_level.get(str(risk_level or "low").lower(), 0.0)
+            key = str(document_id)
+            risk_by_document[key] = max(risk_by_document.get(key, 0.0), normalized_score)
+
+        entity_result = await db.execute(
+            select(EntityDetection.document_id, func.count())
+            .where(EntityDetection.document_id.in_(doc_ids))
+            .group_by(EntityDetection.document_id)
+        )
+        entity_counts_by_document = {
+            str(document_id): int(count or 0)
+            for document_id, count in entity_result.all()
+        }
+
     return build_dossier_360(
-        [
-            {
-                "id": d.id,
-                "original_filename": d.original_filename,
-                "status": d.status,
-            }
-            for d in docs
-        ],
+        [_document_to_dossier_360_input(document) for document in docs],
+        risk_by_document=risk_by_document,
+        entity_counts_by_document=entity_counts_by_document,
         limit=limit,
     )

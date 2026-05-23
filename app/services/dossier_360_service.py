@@ -50,6 +50,10 @@ def _status_value(value: object) -> str:
 
 
 def _client_label(doc: dict[str, Any]) -> str:
+    client_name = str(doc.get("client_name") or "").strip()
+    if client_name:
+        return re.sub(r"\s+", " ", client_name)
+
     tags = doc.get("tags") or []
     if tags:
         label = str(tags[0] or "").strip()
@@ -64,7 +68,10 @@ def _doc_blob(doc: dict[str, Any]) -> str:
         " ".join(
             [
                 str(doc.get("original_filename") or ""),
+                str(doc.get("client_name") or ""),
                 str(doc.get("doc_type") or ""),
+                str(doc.get("doc_category") or ""),
+                str(doc.get("exercice") or ""),
                 tags,
             ]
         )
