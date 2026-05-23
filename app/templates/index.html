@@ -1551,5 +1551,13 @@
 </div>
 
 <script src="/static/js/app.js?v={{ASSET_VERSION}}" nonce="{{CSP_NONCE}}"></script>
+<script type="module" nonce="{{CSP_NONCE}}">
+  import { initComponents } from "/static/js/components/index.js?v={{ASSET_VERSION}}";
+  if (document.readyState === "loading") {
+    document.addEventListener("DOMContentLoaded", initComponents);
+  } else {
+    initComponents();
+  }
+</script>
 </body>
 </html>
