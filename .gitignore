@@ -56,3 +56,6 @@ golden/**/*_extracted.txt
 # PDF de test locaux (voir golden/README.md)
 testdata/
 .worktrees/
+
+# Brainstorming companion artifacts
+.superpowers/
