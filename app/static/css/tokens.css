@@ -1,1 +1,79 @@
 /* ConfiDoc — tokens.css */
+/* Source of truth: docs/superpowers/specs/2026-05-23-confidoc-dashboard-redesign-design.md §3 */
+
+:root {
+  /* Surfaces */
+  --surface: #FAFAF7;
+  --surface-2: #FFFFFF;
+  --surface-muted: #F0EFE9;
+  --border: #ECEBE4;
+  --border-strong: #D6D3C6;
+
+  /* Ink (text) */
+  --ink: #0F0F12;
+  --ink-2: #3F3F44;
+  --ink-muted: #6E6E72;
+  --ink-dim: #9A9A9F;
+
+  /* Narrative accents */
+  --accent: #047857;
+  --accent-soft: #ECFDF5;
+  --accent-soft-ink: #065F46;
+  --accent-border: #A7F3D0;
+  --raw: #A4471E;
+  --raw-soft: #FDF6F1;
+  --raw-soft-ink: #A4471E;
+
+  /* Status */
+  --warning: #B45309;
+  --warning-soft: #FEF3C7;
+  --warning-soft-ink: #92400E;
+  --danger: #B91C1C;
+  --info: #5B21B6;
+  --info-soft: #EDE9FE;
+
+  /* Radii */
+  --r-xs: 4px;
+  --r-sm: 5px;
+  --r-md: 7px;
+  --r-lg: 8px;
+  --r-xl: 10px;
+  --r-2xl: 14px;
+
+  /* Motion */
+  --t-fast: 120ms ease-out;
+  --t-drawer: 200ms cubic-bezier(0.16, 1, 0.3, 1);
+  --t-gauge: 900ms cubic-bezier(0.16, 1, 0.3, 1);
+  --t-scan: 600ms cubic-bezier(0.4, 0, 0.2, 1);
+
+  /* Single allowed shadow */
+  --shadow-docked: 0 24px 60px -28px rgba(0, 0, 0, 0.18);
+}
+
+[data-theme="dark"] {
+  --surface: #0A0A14;
+  --surface-2: #15151F;
+  --surface-muted: #1F1F2A;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --ink: #EDEDF5;
+  --ink-2: #C5C5D2;
+  --ink-muted: #A0A0B8;
+  --ink-dim: #7A7A92;
+  --accent: #10B981;
+  --accent-soft: rgba(16, 185, 129, 0.12);
+  --accent-soft-ink: #6EE7B7;
+  --accent-border: rgba(16, 185, 129, 0.35);
+  --raw: #C97B5C;
+  --raw-soft: rgba(201, 123, 92, 0.10);
+  --raw-soft-ink: #E0A88A;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  :root {
+    --t-fast: 0ms;
+    --t-drawer: 0ms;
+    --t-gauge: 0ms;
+    --t-scan: 0ms;
+  }
+}
