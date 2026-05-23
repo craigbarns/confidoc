@@ -22,10 +22,11 @@ Base claire, sobre, lisible — avec **une signature reconnaissable** pour ne pa
 ### 2.1 Principes
 - **Confiance avant tout** : le visuel ne doit jamais distraire d'une donnée chiffrée.
 - **Densité professionnelle** : ce n'est pas Notion. Un comptable doit voir beaucoup d'infos sans scroller.
-- **Une couleur d'accent unique** : vert émeraude `#047857` = "RGPD safe / vérifié". Aucune autre couleur décorative.
+- **Deux couleurs en opposition narrative** : terracotta `#A4471E` = "données brutes / PII / sensible", émeraude `#047857` = "RGPD safe / protégé". L'app raconte visuellement le passage de l'un à l'autre. Aucune autre couleur d'accent décorative.
 - **Bordures, pas d'ombres** : low chrome. Une `1px solid` claire structure l'écran.
-- **Zéro gradient dans le chrome.** Les seuls dégradés tolérés sont dans le logo / l'illustration éventuelle.
+- **Zéro gradient dans le chrome.** Les seuls dégradés tolérés sont (a) sur les tokens anonymisés (effet "carte plastique" subtil), et (b) sur la ligne du scan reveal.
 - **Tabular nums partout** où des chiffres apparaissent (KPI, scores, montants).
+- **Retenue radicale du motion.** Un seul moment d'animation par document : le scan reveal à la validation. Le reste est immobile pour que ce moment compte.
 
 ## 3. Design tokens
 
@@ -42,15 +43,21 @@ Base claire, sobre, lisible — avec **une signature reconnaissable** pour ne pa
 | `--ink-2` | `#3F3F44` | Texte secondaire |
 | `--ink-muted` | `#6E6E72` | Labels, métadonnées |
 | `--ink-dim` | `#9A9A9F` | Texte tertiaire, timestamps |
-| `--accent` | `#047857` | Trust, succès, validations, RGPD safe |
-| `--accent-soft` | `#ECFDF5` | Pills "anonymisé / safe" (fond) |
+| `--accent` | `#047857` | Trust, succès, validations, RGPD safe, anneau "safe" du Trust Gauge |
+| `--accent-soft` | `#ECFDF5` | Pills "anonymisé / safe" (fond), fond des tokens-cartes |
 | `--accent-soft-ink` | `#065F46` | Pills "anonymisé / safe" (texte) |
-| `--warning` | `#B45309` | Trust 70-89%, "À reviewer", drafts |
+| `--accent-border` | `#A7F3D0` | Bordure des tokens-cartes, des pills safe |
+| `--raw` | `#A4471E` | **Couleur narrative "données brutes / PII"** : utilisée pour highlight des PII dans l'original, et pour la pluie hors zone "safe" du Trust Gauge |
+| `--raw-soft` | `#FDF6F1` | Fond de la pane original, fond highlight PII |
+| `--raw-soft-ink` | `#A4471E` | Texte sur fond raw-soft |
+| `--warning` | `#B45309` | Trust 70-89%, "À reviewer", drafts, anneau "quasi-ID" du Trust Gauge |
 | `--warning-soft` | `#FEF3C7` | Pills warning (fond) |
 | `--warning-soft-ink` | `#92400E` | Pills warning (texte) |
 | `--danger` | `#B91C1C` | Trust <70%, erreurs, suppression |
 | `--info` | `#5B21B6` | Pills "Exporté", actions Copilot |
 | `--info-soft` | `#EDE9FE` | Pills info (fond) |
+
+**Règle d'opposition** : terracotta `--raw` et émeraude `--accent` ne sont **jamais utilisés côte à côte sur un même élément**. Leur opposition est *toujours* spatiale (pane gauche vs pane droite, anneau plein vs anneau vide, état avant vs état après). C'est ce qui rend l'histoire visuelle lisible.
 
 ### 3.2 Couleurs — thème sombre (option utilisateur, gardée mais épurée)
 
@@ -68,7 +75,9 @@ Le thème sombre ne fait **plus** de glassmorphisme et **plus** de gradient indi
 
 ### 3.3 Typographie
 
-- **Famille** : Inter (déjà installée) — graisses 400 / 500 / 600 / 700.
+- **Famille principale** : Inter (déjà installée) — graisses 400 / 500 / 600 / 700.
+- **Famille signature (literary)** : *Iowan Old Style* (fallback `Times New Roman`, `Georgia`) en *italique* `font-weight: 500`. **Usage strict** : mots-pivots dans les titres hero des pages clés (ex : "trois bilans", "la barre des 90%"). **Une seule occurrence par page maximum.** Cette retenue est ce qui fait la différence entre charme et ridicule.
+- **Famille code (tokens & nombres techniques)** : *JetBrains Mono* (fallback `ui-monospace`, `Menlo`). Utilisée uniquement dans les tokens-cartes (`[PERSONNE_1]`) et les valeurs cryptographiques (clés, checksums).
 - **Tabular nums activés** (`font-variant-numeric: tabular-nums`) sur tout chiffre : KPI, montants, scores, dates.
 - **Échelle (px)** : 10, 11, 12, 13, 14, 17, 22, 26, 32. Pas d'autre taille.
 - **Letter-spacing** : `-0.02em` sur titres ≥ 22px, `0.06-0.08em` sur uppercase labels.
@@ -80,7 +89,67 @@ Le thème sombre ne fait **plus** de glassmorphisme et **plus** de gradient indi
 - Rayons : `5px` (badges), `7px` (boutons), `8px` (chips, inputs), `10px` (cartes intérieures), `14px` (containers principaux). Plus de `--radius-xl 20px`.
 - Ombres : presque jamais. Une seule autorisée : `0 24px 60px -28px rgba(0,0,0,0.18)` pour modales et docked panels. Le reste = bordures 1px.
 
-### 3.5 Composants à standardiser
+### 3.5 La couche signature (5 éléments exceptionnels)
+
+Ces 5 éléments sont ce qui rend ConfiDoc reconnaissable et non interchangeable avec n'importe quel SaaS B2B propre. Aucun n'est négociable.
+
+#### 3.5.1 Token-card (`<span class="token-card">`)
+
+Chaque `[PERSONNE_1]`, `[ADRESSE_1]`, etc. dans la pane Anonymisé est rendu en *carte plastique miniature* :
+
+- Padding `2px 8px`, rayon `4px`, bordure `1px solid var(--accent-border)`
+- Fond : `linear-gradient(180deg, #FFFFFF 0%, #F6FDF9 100%)`
+- Inner shadow haut : `inset 0 1px 0 rgba(255,255,255,0.8)`
+- Drop shadow émeraude très subtile : `0 1px 0 rgba(4,120,87,0.06)`
+- Font : JetBrains Mono `12px`, weight `600`, color `--accent`
+- Hover : bordure `--accent`, halo `0 0 0 3px var(--accent-soft)`
+- Cliquable → édite le mapping inline
+
+#### 3.5.2 Trust Gauge — radial à 4 anneaux concentriques
+
+Composant SVG dédié, présent en grand format sur Document détail et en mini format (40px) en colonne de table.
+
+- 4 anneaux concentriques, rayons 17 / 26 / 35 / 44 (sur SVG 100×100)
+- Anneaux : `PII directs (intérieur) · Cohérence tokens · Réversibilité · Quasi-identifiants (extérieur)`
+- Stroke-width `4`, `stroke-linecap: round`
+- Couleur stroke : `--accent` si valeur ≥ 90%, `--warning` si 70-89%, `--danger` si <70%
+- Fond non rempli : `--border`
+- Animation à l'apparition : `stroke-dashoffset` de la valeur "vide" → valeur réelle, durée `900ms cubic-bezier(0.16, 1, 0.3, 1)`, *une seule fois par chargement*
+- Centre : valeur globale (moyenne pondérée) en font-size `30px` weight `800`, couleur sémantique
+- Mini version (40×40) : pas d'animation, pas de label central, juste les 4 anneaux
+
+#### 3.5.3 Hero literary line
+
+Sur Accueil et sur les vues détail (Document, Dossier), le H1 n'est pas un nom de section mais **une phrase d'accueil** qui contient *un seul mot ou groupe nominal* dans la famille signature italique en couleur `--accent`.
+
+Exemples :
+- Accueil : *« Bonjour Grégory. Aujourd'hui, *trois bilans* attendent ta revue — dont un sous *la barre des 90 %* de confiance. »* → 2 italiques, c'est l'exception qui prouve la règle (page la plus importante)
+- Document détail : *« Bilan SARL Martin, *en revue* depuis 12 minutes. »*
+- Dossier : *« Dossier Martin & Associés — *14 documents*, dernier mouvement il y a 3 jours. »*
+
+**Règle** : 1 italique signature par page maximum (2 sur Accueil seulement). Si pas d'italique naturel, on n'en force pas.
+
+#### 3.5.4 Scan reveal
+
+Animation unique et seule de l'app, déclenchée à la validation d'anonymisation (`✓ Valider & exporter`).
+
+- Une ligne `height: 2px`, `linear-gradient(90deg, transparent, var(--accent) 30%, var(--accent) 70%, transparent)`, `box-shadow: 0 0 12px rgba(4,120,87,0.5)`
+- Glow halo derrière : `linear-gradient(180deg, rgba(4,120,87,0.08), transparent)` `height: 60px` solidaire de la ligne
+- Translation `translateY(0) → translateY(100%)` en `600ms cubic-bezier(0.4, 0, 0.2, 1)`
+- À la fin : checkmark `28px` circulaire émeraude qui apparaît en `200ms` avec scale `0.8 → 1.0` (bounce subtil `cubic-bezier(0.34, 1.56, 0.64, 1)`)
+- **Désactivée si `prefers-reduced-motion: reduce`** — remplacée par fade-in instantané du checkmark
+- **Aucune autre animation comparable dans l'app.** C'est ce qui la rend mémorable.
+
+#### 3.5.5 Privacy Lens (optionnel mais distinctif)
+
+Toggle dans le topbar de Document détail qui overlaye un *heatmap d'opacité* sur la pane Original montrant les zones de risque de ré-identification résiduel (calculé à partir des quasi-identifiants).
+
+- Off par défaut, raccourci clavier `⌘L`
+- Zones à fort risque : voile terracotta `rgba(164,71,30,0.18)` avec bordure dashed `rgba(164,71,30,0.5)`
+- Zones safe : pas d'overlay
+- Permet au DPO de voir *pourquoi* le trust score est à 87 et pas 100 — visible spatialement, pas juste numériquement
+
+### 3.6 Composants à standardiser
 
 Composants source unique de vérité, à reconstruire :
 
@@ -141,13 +210,14 @@ Composants source unique de vérité, à reconstruire :
 
 ### 5.1 Accueil
 
-**Objectif** : "Que dois-je faire aujourd'hui ?"
+**Objectif** : "Que dois-je faire aujourd'hui ?" — pas "voici tes statistiques."
 
-- Header : "Bonjour {prénom}" + lead "X documents demandent ton attention aujourd'hui."
-- 4 KPI cards : Documents traités (delta semaine) · En revue (delta retard) · Trust Score moyen (delta 30j) · Anonymisations (anomalie PII)
-- Section "À reviewer" : 3-5 lignes de docs prioritaires, avec colonne Trust + statut, action ▶ inline
-- Section "Activité récente" : 5 derniers événements d'audit (qui a fait quoi)
-- (optionnel) Card "Conformité du mois" : pourcentage RGPD safe, lien vers Qualité & RGPD
+- **Hero literary** (§3.5.3) : phrase d'accueil avec 1-2 italiques signature. Exemple : *« Bonjour Grégory. Aujourd'hui, *trois bilans* attendent ta revue — dont un sous *la barre des 90 %* de confiance. »*
+- **Bloc "À reviewer en premier"** (le plus important visuellement) : 3 lignes de docs critiques avec Trust Gauge mini (40px) à gauche, nom + dossier, action ▶ "Reviewer" inline. Si rien à reviewer : message éditorial *« Aucun document n'attend ta revue. »* sur fond `--surface-muted`.
+- **Bloc "Activité du jour"** : timeline éditoriale (pas table) — *« 14:23 · Marie L. a uploadé Bilan Martin · 14:24 · 12 entités détectées · 14:30 · Paul a validé Relevé BNP »* en flow continu, pas grille.
+- **4 KPI cards en second rang** (taille réduite, en bas) : Documents traités (delta semaine) · En revue (delta retard) · Trust Score moyen 30j · Anonymisations (anomalie PII).
+
+L'ordre visuel inverse l'attendu : *d'abord ce qui demande ton attention, ensuite ce qui s'est passé, en dernier les chiffres de vanity.*
 
 ### 5.2 Documents (liste)
 
@@ -166,15 +236,17 @@ Composants source unique de vérité, à reconstruire :
 **Objectif** : poste de travail principal du comptable.
 
 - **Layout 3 colonnes** : Original | Anonymisé | Right rail (320px)
-- **Topbar** : `← Documents` · breadcrumb · status pill · mode (Pseudonymiser ▾) · Exporter… · **`✓ Valider l'anonymisation` (⌘↵)**
-- **Pane Original** : fond `#FDFCF6`, PII surlignés en `--warning-soft`
-- **Pane Anonymisé** : fond blanc, tokens `[PERSONNE_1]` cliquables (édition inline, pas de modale)
+- **Topbar** : `← Documents` · breadcrumb · status pill · mode (Pseudonymiser ▾) · **`⌘L Privacy Lens`** (§3.5.5) · Exporter… · **`✓ Valider l'anonymisation` (⌘↵)**
+- **Hero literary** sous le topbar (optionnel, sur 1 ligne) : *« Bilan SARL Martin, *en revue* depuis 12 minutes. »*
+- **Pane Original** : fond `--raw-soft` (`#FDF6F1`), PII surlignés en `rgba(164,71,30,0.13)` avec texte `--raw`. Quand Privacy Lens activé : overlay heatmap terracotta.
+- **Pane Anonymisé** : fond `--surface-2` blanc, tokens `[PERSONNE_1]` rendus en **token-card** (§3.5.1) cliquables. Édition inline du mapping (pas de modale).
 - **Right rail** :
-  - Trust score décomposé en 4 dimensions (PII directs / Quasi-identifiants / Cohérence tokens / Réversibilité) avec barres
+  - **Trust Gauge** (§3.5.2) en grand format (140×140), animé à l'apparition. Centre = valeur globale, légende à droite avec les 4 dimensions.
   - Métadonnées (Type, Période, Dossier, Uploadé par, Pages, Mode)
   - **Copilot IA contextuel** : 1-3 alertes proactives (ex : "Adresse partielle détectée page 4" / "Quasi-identifiant fort : CA + secteur + ville"), + input "Demander au Copilot…" (⌘J)
   - Audit (extraits) : 4 dernières entrées timestampées
 - **Action bar sticky bas** : résumé ("12 entités remplacées · 0 PII résiduel direct") + `Re-anonymiser avec règles strictes` · `Aperçu PDF redacté` · `Valider & exporter`
+- **À la validation** : déclenchement du **Scan reveal** (§3.5.4) qui balaye les deux panes en parallèle, puis checkmark central. Tout le reste de l'app est immobile pour faire vivre ce moment.
 
 ### 5.4 Dossiers (liste + détail)
 
@@ -218,11 +290,16 @@ Onglets : *Profil* · *Apparence* (thème, densité) · *Anonymisation* (règles
 
 ## 7bis. Animations & transitions
 
-- **Hover / focus** : transition `120ms ease-out` sur `background`, `border-color`, `color`.
+Doctrine : **retenue radicale**. L'app est immobile pour que le Scan reveal (§3.5.4) compte.
+
+- **Hover / focus** : transition `120ms ease-out` sur `background`, `border-color`, `color`. *Aucune* sur `transform`, `scale`, `opacity` du conteneur.
 - **Drawer (Copilot, modales)** : slide `200ms cubic-bezier(0.16, 1, 0.3, 1)`.
-- **Aucune animation sur le chargement de page**, sur la navigation entre sections, sur les listes. Le contenu apparaît instantanément.
-- **Skeleton screens** plutôt que spinners pour les états de chargement de tables / KPI (placeholder rectangle de la couleur `--surface-muted` qui pulse à 800ms).
+- **Trust Gauge** (§3.5.2) : animé à l'apparition uniquement (`stroke-dashoffset` sur `900ms`), pas au scroll, pas au hover.
+- **Scan reveal** (§3.5.4) : la *seule* animation cérémonielle de l'app — 600ms pour la ligne, 200ms pour le check.
+- **Aucune animation sur le chargement de page**, sur la navigation entre sections, sur l'apparition des lignes de table, sur les filtres. Le contenu apparaît instantanément.
+- **Skeleton screens** plutôt que spinners pour les états de chargement de tables / KPI (placeholder rectangle `--surface-muted` qui pulse à 800ms).
 - Spinners autorisés uniquement pour les actions ponctuelles (Anonymiser en cours, Export en cours).
+- **`prefers-reduced-motion: reduce`** désactive le Scan reveal, l'animation du Trust Gauge, et le slide des drawers. Tout reste fonctionnel, juste instantané.
 
 ## 7ter. Responsive
 
@@ -234,21 +311,25 @@ Onglets : *Profil* · *Apparence* (thème, densité) · *Anonymisation* (règles
 
 Cible : modifier `app/templates/index.html`, `app/static/css/style.css`, `app/static/js/app.js` **sans** changer les endpoints, schemas, ni le JS métier (handlers d'API, workflows d'upload).
 
-**Étape 1 — Tokens & primitives.** Refondre les CSS variables (section `:root` et `[data-theme]`) selon §3. Reconstruire les composants atomiques (Button, Pill, Chip, Segment, Card, Input, Table, NavItem).
+**Étape 1 — Tokens & primitives.** Refondre les CSS variables (section `:root` et `[data-theme]`) selon §3.1-3.4. Reconstruire les composants atomiques (Button, Pill, Chip, Segment, Card, Input, Table, NavItem). Charger les fonts : Inter (déjà OK), Iowan Old Style (web font ou fallback Times New Roman), JetBrains Mono.
 
-**Étape 2 — Topbar + Sidebar.** Mettre à jour la nav (5 sections + groupes Workspace / Confiance / Système), ajouter ⌘K et ⌘J dans le topbar. Conserver les data-attributes existants (`data-nav="..."`).
+**Étape 2 — Couche signature.** Implémenter les 5 composants distinctifs (§3.5) en isolation, chacun avec sa démo statique : (1) `.token-card`, (2) `<TrustGauge>` SVG animé, (3) helper `<HeroLiterary>` pour les titres, (4) `<ScanReveal>` overlay, (5) `<PrivacyLens>` toggle + overlay. Tester chaque composant standalone avant intégration.
 
-**Étape 3 — Documents (liste).** Remplacer `panel-upload` par la nouvelle liste avec segments + filter bar + table. Brancher la drop zone sur l'API d'upload existante.
+**Étape 3 — Topbar + Sidebar.** Mettre à jour la nav (6 destinations en 3 groupes Workspace / Confiance / Système), ajouter ⌘K (palette globale) et ⌘J (drawer Copilot) dans le topbar. Conserver les data-attributes existants (`data-nav="..."`).
 
-**Étape 4 — Document détail.** Refondre `panel-anon` en layout 3 colonnes. Réutiliser le viewer original et la zone éditable existants. Ajouter le right rail (Trust décomposé, Métadonnées, Copilot inline, Audit court).
+**Étape 4 — Documents (liste).** Remplacer `panel-upload` par la nouvelle liste avec segments + filter bar + table. Mini Trust Gauge en colonne. Brancher la drop zone sur l'API d'upload existante.
 
-**Étape 5 — Dossiers, Qualité & RGPD, Journal d'audit, Paramètres.** Appliquer la grammaire (page head + filtres + table) à chaque écran.
+**Étape 5 — Document détail.** Refondre `panel-anon` en layout 3 colonnes. Intégrer Trust Gauge (grand format), tokens-cards dans la pane Anonymisé, Privacy Lens toggle dans le topbar, Scan reveal déclenché par "Valider & exporter".
 
-**Étape 6 — Copilot drawer.** Sortir `panel-ai` du flux principal, le transformer en drawer ⌘J avec contexte.
+**Étape 6 — Accueil.** Implémenter Hero literary (avec italique signature), bloc "À reviewer" avec mini Trust Gauges, timeline éditoriale, KPI cards reléguées en second rang.
 
-**Étape 7 — Suppression / nettoyage.** Retirer le CSS non utilisé (gradients indigo→violet, glow purple, blur 24px sur cartes, etc.). Objectif : passer de 5 695 lignes de CSS à <3 000.
+**Étape 7 — Dossiers, Qualité & RGPD, Journal d'audit, Paramètres.** Appliquer la grammaire (page head + Hero literary + filtres + table) à chaque écran.
 
-Chaque étape est testable indépendamment : on doit pouvoir merger l'étape 1 sans l'étape 2 et avoir une UI fonctionnelle, juste partiellement migrée.
+**Étape 8 — Copilot drawer.** Sortir `panel-ai` du flux principal, le transformer en drawer ⌘J avec contexte (s'il y a un doc ouvert, le Copilot l'a en contexte).
+
+**Étape 9 — Suppression / nettoyage.** Retirer le CSS non utilisé (gradients indigo→violet, glow purple, blur 24px sur cartes, `--accent-glow`, etc.). Objectif : passer de 5 695 lignes de CSS à <3 000.
+
+Chaque étape est testable indépendamment : on doit pouvoir merger l'étape 1 sans l'étape 2 et avoir une UI fonctionnelle, juste partiellement migrée. L'étape 2 (couche signature) est *standalone* — elle peut être merged même si aucun écran ne l'utilise encore.
 
 ## 9. Hors-scope explicite
 
@@ -263,12 +344,27 @@ Chaque étape est testable indépendamment : on doit pouvoir merger l'étape 1 s
 
 Le redesign est livré quand :
 
-1. Les 5 sections navigables fonctionnent et chargent les bons écrans.
+**Fonctionnel**
+
+1. Les 6 destinations navigables (en 3 groupes) fonctionnent et chargent les bons écrans.
 2. Un utilisateur peut uploader → reviewer → anonymiser → exporter un document **sans quitter Documents** (workflow en 3 clics maximum).
-3. ⌘K, ⌘J, ⌘↵ fonctionnent.
-4. Le thème sombre est dispo et n'a plus de glassmorphisme ni de gradient indigo→violet.
-5. Le CSS total passe sous 3 000 lignes.
-6. Aucun gradient n'est utilisé dans le chrome (sauf logo / illustrations explicites).
-7. Tous les KPI affichent en tabular nums.
-8. Tous les écrans existants sont migrés (Accueil, Documents, Document détail, Dossiers, Qualité & RGPD, Journal d'audit, Paramètres).
-9. Les tests smoke et les golden sets continuent de passer (pas de régression backend).
+3. ⌘K (palette globale), ⌘J (Copilot drawer), ⌘↵ (action principale), ⌘L (Privacy Lens) fonctionnent.
+4. Tous les écrans existants sont migrés (Accueil, Documents, Document détail, Dossiers, Qualité & RGPD, Journal d'audit, Paramètres).
+5. Les tests smoke et les golden sets continuent de passer (pas de régression backend).
+
+**Couche signature (§3.5) en place**
+
+6. `.token-card` rendue sur tous les tokens `[PERSONNE_*]`, `[ADRESSE_*]`, etc. dans la pane Anonymisé.
+7. `<TrustGauge>` (4 anneaux) visible : grand format sur Document détail, mini format en colonne de table Documents.
+8. Hero literary présent sur Accueil (1-2 italiques signature) et sur les vues détail.
+9. Scan reveal déclenché à la validation, désactivé proprement si `prefers-reduced-motion: reduce`.
+10. Privacy Lens (⌘L) opérationnel sur Document détail — overlay heatmap terracotta sur la pane Original.
+
+**Discipline visuelle**
+
+11. Le thème sombre est dispo et n'a plus de glassmorphisme ni de gradient indigo→violet.
+12. Le CSS total passe sous 3 000 lignes.
+13. Aucun gradient dans le chrome (sauf token-card et scan reveal qui sont les deux exceptions documentées).
+14. Aucune autre couleur d'accent que `--accent` (émeraude) et `--raw` (terracotta) — pas de purple, pas d'indigo, pas de bleu décoratif.
+15. Tous les chiffres affichent en tabular nums.
+16. Italique signature : une occurrence maximum par page (deux sur Accueil seulement, page-pivot).
