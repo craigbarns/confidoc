@@ -493,6 +493,219 @@ function showCompliancePanel() {
   if (!dashboardLoaded) loadDashboard();
 }
 
+function showQualityPanel() {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  const panel = $("panel-quality");
+  if (panel) panel.classList.add("active");
+  setActiveNav("quality");
+  setPageTitle("Qualité");
+  closeAppNavDrawer();
+  loadQualityDashboard();
+}
+
+let qualityLoaded = false;
+let lastQualityData = null;
+
+async function loadQualityDashboard() {
+  const loading = $("quality-loading");
+  const content = $("quality-content");
+  const errorPanel = $("quality-error");
+  const emptyPanel = $("quality-empty");
+
+  if (loading) loading.style.display = "";
+  if (content) content.style.display = "none";
+  if (errorPanel) errorPanel.style.display = "none";
+  if (emptyPanel) emptyPanel.style.display = "none";
+
+  try {
+    const data = await apiFetch("/stats/quality-dashboard");
+    lastQualityData = data;
+
+    if (!data || data.total_documents === 0) {
+      if (emptyPanel) emptyPanel.style.display = "";
+      return;
+    }
+
+    renderQualityDashboard(data);
+    if (content) content.style.display = "";
+    qualityLoaded = true;
+
+  } catch (e) {
+    console.warn("loadQualityDashboard failed:", e);
+    if (errorPanel) {
+      errorPanel.style.display = "";
+      const msg = $("quality-error-msg");
+      if (msg) msg.textContent = `Impossible de charger les statistiques. ${e.message || e}`;
+    }
+  } finally {
+    if (loading) loading.style.display = "none";
+  }
+}
+
+function renderQualityDashboard(data) {
+  const asOfEl = $("quality-as-of");
+  if (asOfEl && data.as_of) {
+    const date = new Date(data.as_of);
+    asOfEl.textContent = `Mis à jour le ${date.toLocaleDateString("fr-FR")} à ${date.toLocaleTimeString("fr-FR", { hour: '2-digit', minute: '2-digit' })}`;
+  }
+
+  const fill = $("quality-readiness-fill");
+  const scoreEl = $("quality-readiness-score");
+  const levelEl = $("quality-readiness-level");
+  
+  if (data.ai_readiness_score != null) {
+    const score = Number(data.ai_readiness_score);
+    if (scoreEl) scoreEl.textContent = score;
+    if (fill) fill.setAttribute("stroke-dasharray", `${score}, 100`);
+
+    const levels = {
+      ready_for_ai: { text: "Prêt pour l'IA", color: "var(--success)" },
+      internal_review: { text: "Revue interne", color: "var(--warning)" },
+      needs_review: { text: "Revue requise", color: "var(--warning)" },
+      not_ready: { text: "Non prêt", color: "var(--danger)" },
+    };
+    const levelInfo = levels[data.ai_readiness_level] || { text: "En attente", color: "var(--text-muted)" };
+    
+    if (levelEl) {
+      levelEl.textContent = levelInfo.text;
+      levelEl.className = "badge-ready";
+      levelEl.style.background = levelInfo.color + "1a"; 
+      levelEl.style.color = levelInfo.color;
+      levelEl.style.borderColor = levelInfo.color + "33"; 
+    }
+  } else {
+    if (scoreEl) scoreEl.textContent = "—";
+    if (fill) fill.setAttribute("stroke-dasharray", "0, 100");
+    if (levelEl) {
+      levelEl.textContent = "En attente";
+      levelEl.className = "badge-ready";
+      levelEl.style.color = "var(--text-muted)";
+      levelEl.style.background = "rgba(255,255,255,0.03)";
+      levelEl.style.borderColor = "var(--border)";
+    }
+  }
+
+  const oneShotEl = $("quality-one-shot-rate");
+  if (oneShotEl) {
+    if (data.one_shot_full_ready_rate != null) {
+      oneShotEl.textContent = `${Math.round(Number(data.one_shot_full_ready_rate) * 100)}%`;
+    } else {
+      oneShotEl.textContent = "—";
+    }
+  }
+
+  const avgTimeEl = $("quality-avg-time");
+  if (avgTimeEl) {
+    if (data.avg_time_to_validation_seconds != null) {
+      const sec = Number(data.avg_time_to_validation_seconds);
+      avgTimeEl.textContent = sec < 60 ? `${sec.toFixed(1)}s` : `${Math.round(sec / 60)}m`;
+    } else if (data.avg_processing_seconds != null) {
+      const sec = Number(data.avg_processing_seconds);
+      avgTimeEl.textContent = sec < 60 ? `${sec.toFixed(1)}s` : `${Math.round(sec / 60)}m`;
+    } else {
+      avgTimeEl.textContent = "—";
+    }
+  }
+
+  const avgOverridesEl = $("quality-avg-overrides");
+  if (avgOverridesEl) {
+    if (data.avg_human_overrides_per_document != null) {
+      avgOverridesEl.textContent = Number(data.avg_human_overrides_per_document).toFixed(2);
+    } else {
+      avgOverridesEl.textContent = "—";
+    }
+  }
+
+  const draftsTotal = Number(data.total_golden_case_drafts || 0);
+  const draftsAccepted = Number(data.accepted_golden_case_drafts || 0);
+  
+  if ($("quality-drafts-total")) $("quality-drafts-total").textContent = draftsTotal;
+  if ($("quality-drafts-accepted")) $("quality-drafts-accepted").textContent = draftsAccepted;
+  
+  const maxFunnel = Math.max(1, draftsTotal);
+  if ($("quality-drafts-total-bar")) $("quality-drafts-total-bar").style.width = draftsTotal ? "100%" : "0%";
+  if ($("quality-drafts-accepted-bar")) $("quality-drafts-accepted-bar").style.width = `${Math.round((draftsAccepted / maxFunnel) * 100)}%`;
+
+  if ($("quality-vol-total")) $("quality-vol-total").textContent = data.total_documents || 0;
+  if ($("quality-vol-processed")) $("quality-vol-processed").textContent = data.processed_documents || 0;
+  if ($("quality-vol-validated")) $("quality-vol-validated").textContent = data.validated_documents || 0;
+
+  renderQualityDistributions();
+
+  const statusGrid = $("quality-status-summary-grid");
+  if (statusGrid && data.documents_by_status) {
+    const statuses = [
+      { key: "ready", label: "Prêt IA", dot: "ready" },
+      { key: "processing", label: "Traitement", dot: "processing" },
+      { key: "uploaded", label: "Ajouté", dot: "uploaded" },
+      { key: "failed", label: "Erreur", dot: "failed" },
+    ];
+    statusGrid.innerHTML = statuses.map(s => {
+      const count = data.documents_by_status[s.key] || 0;
+      return `<div class="dash-status-pill">
+        <div class="dash-status-dot ${s.dot}"></div>
+        <span class="dash-status-name">${s.label}</span>
+        <span class="dash-status-num">${count}</span>
+      </div>`;
+    }).join("");
+  }
+}
+
+function renderQualityDistributions() {
+  const fieldsContainer = $("quality-fields-container");
+  const errorsContainer = $("quality-errors-container");
+  if (!fieldsContainer || !errorsContainer || !lastQualityData) return;
+
+  const fData = lastQualityData.corrections_by_field || {};
+  const eData = lastQualityData.corrections_by_error_type || {};
+
+  const sortedFields = Object.entries(fData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxField = Math.max(1, ...sortedFields.map(x => x[1]));
+  if (sortedFields.length === 0) {
+    fieldsContainer.innerHTML = '<div class="dash-chart-empty" style="font-size: 11px;">Aucun ajustement de champ enregistré.</div>';
+  } else {
+    fieldsContainer.innerHTML = sortedFields.map(([field, count]) => {
+      const pct = (count / maxField) * 100;
+      return `<div class="quality-dist-row">
+        <span class="quality-dist-label" title="${escapeHtml(field)}">${escapeHtml(field)}</span>
+        <div class="quality-dist-bar-bg">
+          <div class="quality-dist-bar-fill" style="width:0%" data-target="${pct}"></div>
+        </div>
+        <span class="quality-dist-count">${count}</span>
+      </div>`;
+    }).join("");
+    setTimeout(() => {
+      fieldsContainer.querySelectorAll(".quality-dist-bar-fill").forEach(bar => {
+        bar.style.width = bar.dataset.target + "%";
+      });
+    }, 50);
+  }
+
+  const sortedErrors = Object.entries(eData).sort((a, b) => b[1] - a[1]).slice(0, 5);
+  const maxError = Math.max(1, ...sortedErrors.map(x => x[1]));
+  if (sortedErrors.length === 0) {
+    errorsContainer.innerHTML = '<div class="dash-chart-empty" style="font-size: 11px;">Aucun type d\'erreur enregistré.</div>';
+  } else {
+    errorsContainer.innerHTML = sortedErrors.map(([err, count]) => {
+      const pct = (count / maxError) * 100;
+      const formattedErr = String(err).replace(/_/g, " ");
+      return `<div class="quality-dist-row">
+        <span class="quality-dist-label" title="${escapeHtml(formattedErr)}" style="width: 110px;">${escapeHtml(formattedErr)}</span>
+        <div class="quality-dist-bar-bg">
+          <div class="quality-dist-bar-fill" style="width:0%; background: var(--accent-light);" data-target="${pct}"></div>
+        </div>
+        <span class="quality-dist-count">${count}</span>
+      </div>`;
+    }).join("");
+    setTimeout(() => {
+      errorsContainer.querySelectorAll(".quality-dist-bar-fill").forEach(bar => {
+        bar.style.width = bar.dataset.target + "%";
+      });
+    }, 50);
+  }
+}
+
+
 function showStubPanel(panelId, navKey, title) {
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   const panel = $(panelId);
@@ -5839,7 +6052,7 @@ document.addEventListener("DOMContentLoaded", () => {
           openClientWorkspace();
           break;
         case "quality":
-          showStubPanel("panel-quality", "quality", "Qualité");
+          showQualityPanel();
           break;
         case "compliance":
           showCompliancePanel();
@@ -5865,6 +6078,25 @@ document.addEventListener("DOMContentLoaded", () => {
     loadDashboard();
   });
   if ($("btn-d360-pdf")) $("btn-d360-pdf").addEventListener("click", downloadDossier360Report);
+  
+  // Quality panel events
+  if ($("btn-quality-refresh")) $("btn-quality-refresh").addEventListener("click", () => {
+    loadQualityDashboard();
+  });
+  if ($("quality-tab-fields")) $("quality-tab-fields").addEventListener("click", () => {
+    $("quality-tab-fields").classList.add("active");
+    $("quality-tab-errors").classList.remove("active");
+    $("quality-fields-container").style.display = "flex";
+    $("quality-errors-container").style.display = "none";
+    renderQualityDistributions();
+  });
+  if ($("quality-tab-errors")) $("quality-tab-errors").addEventListener("click", () => {
+    $("quality-tab-errors").classList.add("active");
+    $("quality-tab-fields").classList.remove("active");
+    $("quality-errors-container").style.display = "flex";
+    $("quality-fields-container").style.display = "none";
+    renderQualityDistributions();
+  });
 
   // Batch mode
   if ($("btn-batch-toggle")) $("btn-batch-toggle").addEventListener("click", toggleBatchMode);

@@ -343,3 +343,51 @@ async def test_route_exposes_grouped_corrections(
         "missed_field": 1,
     }
     assert body["documents_by_status"] == {"ready": 2, "uploaded": 1}
+
+
+@pytest.mark.asyncio
+async def test_compute_quality_metrics_ai_readiness_and_oneshot_calculation(monkeypatch):
+    """Verify exact formula calculations for one-shot rate and AI readiness score."""
+    from app.services import quality_metrics_service as svc
+
+    org_id = uuid.uuid4()
+
+    # 1. Base case: 10 documents, 8 processed, 5 validated.
+    # 2 validated docs received human correction drafts (out of 5 validated docs).
+    # Thus, validated_with_drafts = 2.
+    # one_shot_rate should be: (5 - 2) / 5 = 3/5 = 0.60
+    # processed_rate = 8 / 10 = 0.8
+    # validation_rate = 5 / 10 = 0.5
+    # one_shot_component = 0.60
+    # accepted_drafts = 1 (gives +5 bonus)
+    # failure_penalty = (1 / 10) * 25 = 2.5
+    # Expected AI Readiness Score:
+    # round(0.8 * 45 + 0.5 * 30 + 0.60 * 20 + 5 - 2.5) = round(36 + 15 + 12 + 5 - 2.5) = round(65.5) = 66
+    
+    async def fake_count_documents(db, oid):
+        return 10, {"ready": 5, "processing": 3, "uploaded": 1, "failed": 1}
+
+    async def fake_processed_validated(db, oid):
+        return 8, 5
+
+    async def fake_avg(db, oid, version_type):
+        return 10.0
+
+    async def fake_drafts(db, oid):
+        return 4, 1, {}, {}
+
+    async def fake_validated_with_drafts(db, oid):
+        return 2
+
+    monkeypatch.setattr(svc, "_count_documents", fake_count_documents)
+    monkeypatch.setattr(svc, "_count_processed_and_validated", fake_processed_validated)
+    monkeypatch.setattr(svc, "_avg_durations_seconds", fake_avg)
+    monkeypatch.setattr(svc, "_draft_aggregates", fake_drafts)
+    monkeypatch.setattr(svc, "_count_validated_documents_with_drafts", fake_validated_with_drafts)
+
+    metrics = await svc.compute_quality_metrics(None, org_id)  # type: ignore[arg-type]
+
+    assert metrics.one_shot_full_ready_rate == 0.60
+    assert metrics.ai_readiness_score == 66
+    assert metrics.ai_readiness_level == "internal_review"
+
