@@ -30,10 +30,12 @@ from app.api.v1._doc_shared import (
     _get_user_document_or_404,
     _read_file_or_404,
 )
+from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.models.document import DocumentStatus
 from app.models.entity_detection import EntityDetection
+from app.services.agents.privacy_gate import evaluate_document_privacy_gate
 from app.services.audit_trail_service import record_audit_event
 from app.services.document_decision_service import (
     build_document_decision,
@@ -59,6 +61,32 @@ def _safe_attachment_disposition(filename: str | None) -> str:
     return f'attachment; filename="{ascii_safe}"; filename*=UTF-8\'\'{quote(safe)}'
 
 
+def _external_mistral_enabled() -> bool:
+    from app.config import get_settings
+
+    settings = get_settings()
+    return bool(
+        not settings.SENSITIVE_CLIENT_MODE
+        and settings.MISTRAL_ENABLED
+        and settings.MISTRAL_API_KEY
+    )
+
+
+async def _require_external_ai_gate_if_enabled(
+    db: DbSession,
+    document,
+    anonymized_text: str,
+) -> None:
+    if not _external_mistral_enabled():
+        return
+    await require_privacy_gate(
+        db,
+        document,
+        "external_ai",
+        anonymized_text=anonymized_text,
+    )
+
+
 @router.get(
     "/{document_id}/export",
     response_class=PlainTextResponse,
@@ -82,6 +110,12 @@ async def export_document(
         await _check_export_gate(db, document, current_user)
         final = await _get_or_create_final_version(db, document)
         text_content = final.content_text
+        await require_privacy_gate(
+            db,
+            document,
+            "export",
+            anonymized_text=text_content,
+        )
         await db.commit()
 
         try:
@@ -131,6 +165,9 @@ async def export_fec(
     anonymized_text = await _get_anonymized_text(db, document)
     if not anonymized_text:
         raise http_404("Texte anonymise indisponible. Lancez l'anonymisation d'abord.")
+
+    await require_privacy_gate(db, document, "export", anonymized_text=anonymized_text)
+    await _require_external_ai_gate_if_enabled(db, document, anonymized_text)
 
     from app.services.llm_extraction_service import extract_with_llm
 
@@ -803,6 +840,25 @@ async def get_compliance_report(
     }
     from app.config import get_settings
     settings = get_settings()
+    llm_privacy_gate: dict[str, Any] | None = None
+    llm_gate_allows = False
+    if _external_mistral_enabled() and anonymized_preview:
+        try:
+            llm_privacy_gate = await evaluate_document_privacy_gate(
+                db,
+                document,
+                requested_action="external_ai",
+                anonymized_text=anonymized_preview,
+            )
+            llm_gate_allows = llm_privacy_gate.get("decision") == "allow"
+            if not llm_gate_allows:
+                logger.info(
+                    "compliance_llm_skipped_privacy_gate",
+                    document_id=str(document.id),
+                    decision=llm_privacy_gate.get("decision"),
+                )
+        except Exception as exc:
+            logger.warning("compliance_llm_privacy_gate_failed", error=str(exc))
     if (
         settings.SENSITIVE_CLIENT_MODE
         and settings.MISTRAL_ENABLED
@@ -817,6 +873,7 @@ async def get_compliance_report(
         and settings.MISTRAL_ENABLED
         and settings.MISTRAL_API_KEY
         and anonymized_preview
+        and llm_gate_allows
     ):
         try:
             prompt = (
@@ -888,7 +945,13 @@ async def get_compliance_report(
                 and settings.MISTRAL_ENABLED
                 and settings.MISTRAL_API_KEY
                 and anonymized_preview
+                and llm_gate_allows
                 and llm_report.get("summary") != "Rapport généré automatiquement."
+            ),
+            "privacy_gate": (
+                privacy_gate_public_summary(llm_privacy_gate)
+                if llm_privacy_gate
+                else None
             ),
         },
         "certifications": {
@@ -972,8 +1035,11 @@ async def get_compliance_certificate(
             anonymized_preview = await _get_anonymized_text(db, document)
 
         # Trust score computation
+        document_status = (
+            document.status.value if hasattr(document.status, "value") else str(document.status)
+        )
         trust = compute_document_trust_score(
-            status=document.status.value if hasattr(document.status, "value") else str(document.status),
+            status=document_status,
             risk_score=_risk_score_percent(risk_score_val),
             risk_level=risk_level,
             human_validated=human_validated,
@@ -1068,6 +1134,9 @@ async def compare_with_previous(
         raise http_400("Document courant non anonymisé. Lancez /anonymize d'abord.")
     if not prev_text:
         raise http_400("Document précédent non anonymisé. Lancez /anonymize d'abord.")
+
+    await _require_external_ai_gate_if_enabled(db, current_doc, current_text)
+    await _require_external_ai_gate_if_enabled(db, prev_doc, prev_text)
 
     result = await compare_documents(
         db=db,

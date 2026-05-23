@@ -10,11 +10,13 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
 from app.config import get_settings
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
+from app.services.agents.privacy_gate import evaluate_document_privacy_gate
 from app.services.llm_extraction_service import extract_with_llm
 from app.services.mistral_service import generate_summary_with_mistral, stream_mistral_response
 from app.services.ollama_service import generate_summary_with_ollama
@@ -47,6 +49,20 @@ def _select_llm_provider(requested: str) -> str:
     if ollama_ok:
         return "ollama"
     return "disabled"
+
+
+def _privacy_action_for_provider(provider: str) -> str:
+    return "external_ai" if provider == "mistral" else "internal_review"
+
+
+def _privacy_action_for_review_agent() -> str:
+    s = get_settings()
+    external_mistral_possible = bool(
+        not getattr(s, "SENSITIVE_CLIENT_MODE", False)
+        and getattr(s, "MISTRAL_ENABLED", False)
+        and getattr(s, "MISTRAL_API_KEY", "")
+    )
+    return "external_ai" if external_mistral_possible else "internal_review"
 
 
 async def _get_document_or_404(db: DbSession, document_id: str, user_id: uuid.UUID) -> Document:
@@ -122,6 +138,35 @@ async def ai_providers(current_user: CurrentUser) -> JSONResponse:
     })
 
 
+@router.get(
+    "/privacy-gate/{document_id}",
+    response_class=JSONResponse,
+    status_code=status.HTTP_200_OK,
+    summary="Décision DPO agentique avant IA, export ou partage",
+)
+async def ai_privacy_gate(
+    document_id: str,
+    current_user: CurrentUser,
+    db: DbSession,
+    requested_action: str = Query(
+        default="external_ai",
+        description="external_ai|export|share|demo|internal_review",
+    ),
+) -> JSONResponse:
+    """Run the deterministic LangGraph Privacy Gate agent.
+
+    The agent only consumes metadata, risk scores and anonymization state. It
+    never returns raw or anonymized document text.
+    """
+    document = await _get_document_or_404(db, document_id, current_user.id)
+    result = await evaluate_document_privacy_gate(
+        db,
+        document,
+        requested_action=requested_action,
+    )
+    return JSONResponse(result)
+
+
 @router.post(
     "/summary/{document_id}",
     response_class=JSONResponse,
@@ -193,6 +238,13 @@ async def ai_summary(
             },
         })
 
+    privacy_gate = await require_privacy_gate(
+        db,
+        document,
+        _privacy_action_for_provider(selected_provider),
+        anonymized_text=anonymized_text,
+    )
+
     try:
         if selected_provider == "mistral":
             llm = await generate_summary_with_mistral(ai_payload, prudent_mode=False, mode=mode)
@@ -215,6 +267,7 @@ async def ai_summary(
         "payload_policy": {
             "raw_text_sent": False,
             "anonymized_only": True,
+            "privacy_gate": privacy_gate_public_summary(privacy_gate),
         },
     })
 
@@ -251,6 +304,13 @@ async def ai_stream(
     )
 
     stream_provider = _select_llm_provider(llm_provider)
+    if stream_provider == "mistral":
+        await require_privacy_gate(
+            db,
+            document,
+            "external_ai",
+            anonymized_text=anonymized_text,
+        )
 
     async def _event_stream():
         try:
@@ -341,16 +401,26 @@ async def ai_extract(
             "business_rules": {},
         }
     else:
+        privacy_gate = await require_privacy_gate(
+            db,
+            document,
+            _privacy_action_for_provider(selected_provider),
+            anonymized_text=anonymized_text,
+        )
         extraction = await extract_with_llm(anonymized_text)
+
+    payload_policy = {
+        "method": extraction.get("source", "llm:mistral-large"),
+        "anonymized_only": True,
+        "external_ai_disabled": selected_provider == "disabled",
+    }
+    if selected_provider != "disabled":
+        payload_policy["privacy_gate"] = privacy_gate_public_summary(privacy_gate)
 
     return JSONResponse({
         "document_id": str(document.id),
         "extraction": extraction,
-        "payload_policy": {
-            "method": extraction.get("source", "llm:mistral-large"),
-            "anonymized_only": True,
-            "external_ai_disabled": selected_provider == "disabled",
-        },
+        "payload_policy": payload_policy,
     })
 
 
@@ -400,6 +470,13 @@ async def ai_review(
 
         return StreamingResponse(_blocked(), media_type="text/event-stream")
 
+    privacy_gate = await require_privacy_gate(
+        db,
+        document,
+        _privacy_action_for_review_agent(),
+        anonymized_text=anonymized_text,
+    )
+
     # Get entity summary for richer analysis
     from app.models.entity_detection import EntityDetection
     entity_summary: dict[str, int] = {}
@@ -425,7 +502,7 @@ async def ai_review(
             "step": "classify",
             "label": "Classification du document",
             "status": "running",
-            "data": {},
+            "data": {"privacy_gate": privacy_gate_public_summary(privacy_gate)},
         }, ensure_ascii=False) + "\n\n"
 
         try:
@@ -471,6 +548,13 @@ async def ai_review_sync(
     if not anonymized_text:
         raise http_400("Aucun texte anonymise. Lancez d'abord l'anonymisation.")
 
+    privacy_gate = await require_privacy_gate(
+        db,
+        document,
+        _privacy_action_for_review_agent(),
+        anonymized_text=anonymized_text,
+    )
+
     from app.models.entity_detection import EntityDetection
     entity_summary: dict[str, int] = {}
     try:
@@ -501,6 +585,7 @@ async def ai_review_sync(
 
     return JSONResponse({
         "document_id": str(document.id),
+        "privacy_gate": privacy_gate_public_summary(privacy_gate),
         "review": result,
     })
 

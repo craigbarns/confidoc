@@ -295,6 +295,22 @@ async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch)
         calls["gate_document"] = checked_document
         calls["gate_user"] = checked_user
 
+    async def fake_privacy_gate(
+        _db: Any,
+        checked_document: Any,
+        requested_action: str,
+        *,
+        anonymized_text: str | None = None,
+    ) -> dict[str, Any]:
+        calls.setdefault("privacy_gate_actions", []).append(requested_action)
+        calls["privacy_gate_document"] = checked_document
+        calls["privacy_gate_text"] = anonymized_text
+        return {"decision": "allow"}
+
+    async def fake_external_gate(_db: Any, checked_document: Any, anonymized_text: str) -> None:
+        calls["external_gate_document"] = checked_document
+        calls["external_gate_text"] = anonymized_text
+
     async def fake_get_text(_db: Any, checked_document: Any) -> str:
         calls["text_document"] = checked_document
         return "Facture anonymisee total 1200 EUR"
@@ -311,6 +327,8 @@ async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch)
 
     monkeypatch.setattr(_doc_export, "_get_user_document_or_404", fake_get_document)
     monkeypatch.setattr(_doc_export, "_check_export_gate", fake_check_gate)
+    monkeypatch.setattr(_doc_export, "require_privacy_gate", fake_privacy_gate)
+    monkeypatch.setattr(_doc_export, "_require_external_ai_gate_if_enabled", fake_external_gate)
     monkeypatch.setattr(_doc_export, "_get_anonymized_text", fake_get_text)
 
     import app.services.llm_extraction_service as extraction_service
@@ -325,6 +343,11 @@ async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch)
     assert calls["permission"] == "exports.download"
     assert calls["gate_document"] is document
     assert calls["gate_user"] is user
+    assert calls["privacy_gate_actions"] == ["export"]
+    assert calls["privacy_gate_document"] is document
+    assert calls["privacy_gate_text"] == "Facture anonymisee total 1200 EUR"
+    assert calls["external_gate_document"] is document
+    assert calls["external_gate_text"] == "Facture anonymisee total 1200 EUR"
     assert calls["text_document"] is document
     assert calls["extract_text"] == "Facture anonymisee total 1200 EUR"
     assert calls["doc_type"] == "facture"

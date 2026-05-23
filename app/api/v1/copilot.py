@@ -9,6 +9,8 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
+from app.config import get_settings
 from app.core.exceptions import http_400, http_404
 from app.models.document import Document
 from app.models.document_version import DocumentVersion, DocumentVersionType
@@ -26,6 +28,16 @@ from app.services.copilot_service import (
 )
 
 router = APIRouter()
+
+
+def _copilot_privacy_action() -> str:
+    settings = get_settings()
+    external_mistral_possible = bool(
+        not getattr(settings, "SENSITIVE_CLIENT_MODE", False)
+        and getattr(settings, "MISTRAL_ENABLED", False)
+        and getattr(settings, "MISTRAL_API_KEY", "")
+    )
+    return "external_ai" if external_mistral_possible else "internal_review"
 
 
 async def _get_document_or_404(db: DbSession, document_id: str, user_id: uuid.UUID) -> Document:
@@ -80,10 +92,19 @@ async def copilot_ask(
     if not anonymized_text:
         raise http_400("Aucun texte anonymisé disponible. Lancez d'abord l'anonymisation.")
 
-    citations = retrieve_citations(body.question, anonymized_text, top_k=3 if body.mode != "quick" else 2)
+    privacy_gate = await require_privacy_gate(
+        db,
+        document,
+        _copilot_privacy_action(),
+        anonymized_text=anonymized_text,
+    )
+    top_k = 3 if body.mode != "quick" else 2
+    citations = retrieve_citations(body.question, anonymized_text, top_k=top_k)
     answer = await generate_copilot_answer(body.question, citations)
     confidence = confidence_bucket(citations)
-    warnings: list[str] = []
+    warnings: list[str] = [
+        *privacy_gate_public_summary(privacy_gate).get("warnings", []),
+    ]
     if confidence != "high":
         warnings.append("Réponse à valider humainement avant décision.")
     latency_ms = int((time.perf_counter() - t0) * 1000)
@@ -119,15 +140,30 @@ async def copilot_compare(
     text_b = await _get_anonymized_text(db, doc_b)
     if not text_a or not text_b:
         raise http_400(
-            "Les deux documents doivent avoir un texte anonymisé. Lancez l'anonymisation sur chacun."
+            "Les deux documents doivent avoir un texte anonymisé. "
+            "Lancez l'anonymisation sur chacun."
         )
 
+    privacy_gate_a = await require_privacy_gate(
+        db,
+        doc_a,
+        _copilot_privacy_action(),
+        anonymized_text=text_a,
+    )
+    privacy_gate_b = await require_privacy_gate(
+        db,
+        doc_b,
+        _copilot_privacy_action(),
+        anonymized_text=text_b,
+    )
     question = (body.question or "").strip() or DEFAULT_COMPARE_QUESTION
     combined = build_dual_corpus(text_a, text_b)
     citations = retrieve_citations(question, combined, top_k=4)
     answer = await generate_copilot_answer(question, citations)
     confidence = confidence_bucket(citations)
     warnings: list[str] = [
+        *privacy_gate_public_summary(privacy_gate_a).get("warnings", []),
+        *privacy_gate_public_summary(privacy_gate_b).get("warnings", []),
         "Comparaison indicative — validation humaine obligatoire avant toute décision.",
     ]
     if confidence != "high":
@@ -137,7 +173,8 @@ async def copilot_compare(
     tag_b = (doc_b.tags or [])[:1]
     if tag_a and tag_b and tag_a[0] != tag_b[0]:
         warnings.append(
-            "Les tags client diffèrent entre les deux documents — vérifiez qu'il s'agit bien du même dossier."
+            "Les tags client diffèrent entre les deux documents — vérifiez qu'il s'agit "
+            "bien du même dossier."
         )
 
     latency_ms = int((time.perf_counter() - t0) * 1000)
