@@ -503,6 +503,34 @@
 
       <!-- DASHBOARD -->
       <div id="panel-dashboard" class="panel">
+
+        <!-- ── Redesign briefing (spec §5.1) ──
+             Progressive scaffolding: rendered above the legacy dashboard
+             content. JS will populate via window.renderHome(data). -->
+        <section class="home-hero" data-redesign-home>
+          <h1 class="hero-literary" id="home-hero">
+            Bonjour <span id="home-user-name">—</span>. Aujourd'hui,
+            <em class="literary" id="home-priority-count">— documents</em>
+            attendent ta revue.
+          </h1>
+          <p class="hero-lead" id="home-hero-lead">Chargement de ton briefing…</p>
+        </section>
+
+        <section class="home-section" data-redesign-home>
+          <h2 class="section-title">À reviewer en premier</h2>
+          <ol class="priority-list" id="home-priority-list"></ol>
+        </section>
+
+        <section class="home-section" data-redesign-home>
+          <h2 class="section-title">Activité du jour</h2>
+          <div class="timeline" id="home-timeline"></div>
+        </section>
+
+        <section class="home-section" data-redesign-home>
+          <h2 class="section-title">Vue d'ensemble</h2>
+          <div class="kpis" id="home-kpis"></div>
+        </section>
+
         <div class="panel-header">
           <h2>Accueil cabinet</h2>
           <div class="panel-actions">
@@ -727,6 +755,57 @@
         </div>
       </div>
 
+      <!-- ── Documents redesign (spec §5.2) ──
+           Progressive scaffolding: segment + filter + table that will
+           absorb upload + anon workflows in the next migration pass. -->
+      <div id="panel-documents" class="panel" data-redesign-documents hidden>
+        <header class="panel-head">
+          <div>
+            <h1 class="page-title">Documents</h1>
+            <p class="page-lead" id="documents-summary">— · — · —</p>
+          </div>
+          <div class="panel-actions">
+            <button class="btn-ghost" data-action="open-batch-upload">Importer un dossier</button>
+            <button class="btn-primary" data-action="open-upload"><span aria-hidden="true">+</span> Nouveau document</button>
+          </div>
+        </header>
+
+        <div class="segment" role="tablist" id="documents-segments">
+          <button role="tab" data-segment="seg-all" aria-pressed="true">Tous <span class="count" data-count="all">—</span></button>
+          <button role="tab" data-segment="seg-review" aria-pressed="false">À reviewer <span class="count" data-count="review">—</span></button>
+          <button role="tab" data-segment="seg-anon" aria-pressed="false">Anonymisés <span class="count" data-count="anon">—</span></button>
+          <button role="tab" data-segment="seg-draft" aria-pressed="false">Brouillons <span class="count" data-count="draft">—</span></button>
+          <button role="tab" data-segment="seg-exported" aria-pressed="false">Exportés <span class="count" data-count="exported">—</span></button>
+        </div>
+
+        <div class="filter-bar">
+          <input type="search" class="input" id="documents-search" placeholder="⌕ Filtrer par nom, dossier, client…">
+          <button class="chip" data-filter="filter-dossier">Dossier · Tous ▾</button>
+          <button class="chip" data-filter="filter-type">Type · Tous ▾</button>
+          <button class="chip" data-filter="filter-trust">Trust ▾</button>
+          <button class="chip" data-filter="filter-date">Date ▾</button>
+        </div>
+
+        <table class="table" id="documents-table">
+          <thead>
+            <tr>
+              <th data-col="check" aria-label=""></th>
+              <th data-col="name">Document</th>
+              <th data-col="status">Statut</th>
+              <th data-col="dossier">Dossier</th>
+              <th data-col="trust">Trust</th>
+              <th data-col="modified">Modifié</th>
+              <th data-col="actions" aria-label=""></th>
+            </tr>
+          </thead>
+          <tbody id="documents-tbody"></tbody>
+        </table>
+
+        <div class="drop-zone" id="documents-dropzone" tabindex="0">
+          <p><strong>Glisse un PDF ici</strong> pour démarrer une anonymisation, ou <button class="link" data-action="open-upload">parcours tes fichiers</button>.</p>
+        </div>
+      </div>
+
       <!-- AJOUT -->
       <div id="panel-upload" class="panel active">
         <h2>Ajouter un document</h2>
@@ -798,6 +877,76 @@
 
       <!-- ANONYMISATION -->
       <div id="panel-anon" class="panel">
+
+        <!-- ── Document detail redesign anchor (spec §5.3) ──
+             Progressive scaffolding: provides the 3-column layout markers
+             that the new design will populate. The legacy anon UI below
+             keeps rendering until JS migrates content here. -->
+        <section class="detail-redesign" data-document-detail data-privacy-lens="off" data-privacy-zones="[]" hidden>
+          <header class="detail-topbar">
+            <button class="btn-ghost" data-action="back-to-documents">← Documents</button>
+            <div class="crumb">
+              <span id="detail-dossier-name">—</span>
+              <span class="crumb__sep" aria-hidden="true">/</span>
+              <span class="crumb__doc" data-active-document id="detail-doc-name">—</span>
+            </div>
+            <span class="pill pill-review" id="detail-status">À reviewer</span>
+            <div class="detail-topbar__actions">
+              <button class="btn-ghost" data-action="toggle-mode">Mode : Pseudonymiser ▾</button>
+              <button class="btn-ghost" data-privacy-lens-toggle>Privacy Lens <span class="kbd">⌘L</span></button>
+              <button class="btn-ghost" data-action="open-export">Exporter…</button>
+              <button class="btn-primary-ok" data-action="validate-anonymization">
+                ✓ Valider l'anonymisation <span class="kbd">⌘↵</span>
+              </button>
+            </div>
+          </header>
+
+          <div class="detail-grid">
+            <section class="pane pane-original" id="pane-original">
+              <header class="pane-head"><span class="pane-dot pane-dot--raw"></span> Original <span class="pane-meta" id="pane-original-meta">— pages</span></header>
+              <div class="viewer viewer-original"><div class="viewer-placeholder">Chargement du document…</div></div>
+              <div class="privacy-lens-overlay"></div>
+            </section>
+
+            <section class="pane pane-anonymized" id="pane-anonymized">
+              <header class="pane-head"><span class="pane-dot pane-dot--accent"></span> Anonymisé <span class="pane-meta" id="pane-anon-meta">— entités</span></header>
+              <div class="viewer viewer-anonymized"><div class="viewer-placeholder">En attente d'anonymisation…</div></div>
+            </section>
+
+            <aside class="rail">
+              <section class="rail-section" id="rail-trust">
+                <h2 class="rail-h">Trust score</h2>
+                <trust-gauge id="detail-trust-gauge" data-size="140" data-pii="0" data-quasi="0" data-coherence="0" data-reversibility="0"></trust-gauge>
+                <ul class="rail-trust__legend" id="detail-trust-legend"></ul>
+              </section>
+
+              <section class="rail-section" id="rail-metadata">
+                <h2 class="rail-h">Métadonnées</h2>
+                <dl class="meta-list" id="detail-metadata"></dl>
+              </section>
+
+              <section class="rail-section" id="rail-copilot">
+                <h2 class="rail-h">Copilot IA</h2>
+                <div id="detail-copilot-alerts"></div>
+                <button class="rail-copilot-ask" data-action="open-copilot">Demander au Copilot… <span class="kbd">⌘J</span></button>
+              </section>
+
+              <section class="rail-section" id="rail-audit">
+                <h2 class="rail-h">Audit (extraits)</h2>
+                <ol class="audit-log" id="detail-audit-log"></ol>
+              </section>
+            </aside>
+          </div>
+
+          <footer class="detail-actionbar">
+            <span class="detail-actionbar__summary" id="detail-summary">— entités · — PII résiduel</span>
+            <div class="detail-actionbar__actions">
+              <button class="btn-ghost" data-action="re-anonymize-strict">Re-anonymiser (règles strictes)</button>
+              <button class="btn-ghost" data-action="preview-redacted">Aperçu PDF redacté</button>
+              <button class="btn-primary-ok" data-action="validate-anonymization">Valider &amp; exporter</button>
+            </div>
+          </footer>
+        </section>
 
         <div id="anon-doc-bar" class="anon-doc-bar" style="display:none">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--accent);flex-shrink:0">
