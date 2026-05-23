@@ -1,5 +1,13 @@
-/* ConfiDoc Design System v2.0 — Premium Document Security Platform */
+/* ConfiDoc Design System v3.0 — Sober Professional + signature */
 /* ════════════════════════════════════════════════════════════════ */
+
+@import "./tokens.css";
+@import "./base.css";
+@import "./components.css";
+@import "./signatures.css";
+@import "./screens.css";
+
+/* Legacy content below — to be migrated and deleted in Phase 9 */
 
 /* ─── DESIGN TOKENS ────────────────────────────────────────────── */
 :root {
