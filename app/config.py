@@ -252,6 +252,16 @@ class Settings(BaseSettings):
     RATE_LIMIT_UPLOAD: str = "30/minute"
     RATE_LIMIT_DEFAULT: str = "120/minute"
 
+    @staticmethod
+    def _is_insecure_secret(value: str | None) -> bool:
+        """Return True for default, placeholder or too-short production secrets."""
+        normalized = (value or "").strip()
+        if not normalized:
+            return True
+        if "CHANGE-ME" in normalized.upper():
+            return True
+        return len(normalized.encode("utf-8")) < 32
+
     @model_validator(mode="after")
     def _block_insecure_defaults(self) -> "Settings":
         """Block startup when production runs with default secrets."""
@@ -263,7 +273,7 @@ class Settings(BaseSettings):
                 "ENCRYPTION_MASTER_KEY",
                 "PSEUDO_MAPPING_KEY",
             ):
-                if getattr(self, key) == "CHANGE-ME":
+                if self._is_insecure_secret(getattr(self, key)):
                     insecure.append(key)
 
             if self.JWT_ALGORITHM.startswith("RS") and (

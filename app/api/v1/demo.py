@@ -540,7 +540,7 @@ async def _create_investor_demo_document(
         storage_backend=storage_backend,
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
-        raw_content=content if storage_backend == "database" else None,
+        raw_content=content if storage_backend in {"database", "local"} else None,
         tags=["Démonstration", "Investor Demo", "Synthetic"],
         client_name="Démo Investisseur",
         exercice="2025",

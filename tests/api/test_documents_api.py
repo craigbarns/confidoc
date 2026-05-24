@@ -9,6 +9,10 @@ Couvre :
 
 from __future__ import annotations
 
+import uuid
+from types import SimpleNamespace
+from typing import Any
+
 import pytest
 
 # ══════════════════════════════════════════════════════════════════════
@@ -259,3 +263,52 @@ class TestDocumentsFakeToken:
             headers={"Authorization": "Bearer "},
         )
         assert resp.status_code == 401
+
+
+class TestDocumentsSearchQuery:
+    """Regression guards for document list query construction."""
+
+    @pytest.mark.asyncio
+    async def test_filename_search_does_not_require_anonymized_preview_version(
+        self,
+        monkeypatch,
+    ):
+        """A filename hit must remain visible before anonymization creates a preview row."""
+        from sqlalchemy.dialects import postgresql
+
+        from app.api.v1 import _doc_crud
+
+        captured: dict[str, Any] = {}
+
+        class _EmptyResult:
+            def all(self):
+                return []
+
+        class _Db:
+            async def execute(self, stmt):
+                captured["stmt"] = stmt
+                return _EmptyResult()
+
+        async def _no_orgs(_db, _user_id):
+            return []
+
+        monkeypatch.setattr(_doc_crud, "user_active_org_ids", _no_orgs)
+
+        docs = await _doc_crud.list_documents(
+            current_user=SimpleNamespace(id=uuid.uuid4()),
+            db=_Db(),
+            limit=50,
+            offset=0,
+            include_deleted=False,
+            client_name="",
+            q="facture",
+            status_filter="",
+        )
+
+        assert docs == []
+        compiled = str(captured["stmt"].compile(dialect=postgresql.dialect()))
+        join_sql, where_sql = compiled.split("WHERE", 1)
+
+        assert "LEFT OUTER JOIN document_versions" in join_sql
+        assert "document_versions.version_type" in join_sql
+        assert "documents.original_filename ILIKE" in where_sql

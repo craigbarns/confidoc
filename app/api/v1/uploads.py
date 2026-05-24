@@ -72,6 +72,33 @@ def _normalize_client_name(value: str | None) -> str:
     return re.sub(r"\s+", " ", raw)
 
 
+def _upload_metadata_fingerprint(
+    *,
+    client_name: str = "",
+    client_id: uuid.UUID | None = None,
+    dossier_id: uuid.UUID | None = None,
+    exercice: str = "",
+    doc_category: str = "",
+) -> dict[str, str]:
+    """Stable metadata fragment included in idempotency request hashes."""
+    return {
+        "client_name": _normalize_client_name(client_name),
+        "client_id": str(client_id) if client_id else "",
+        "dossier_id": str(dossier_id) if dossier_id else "",
+        "exercice": exercice.strip(),
+        "doc_category": doc_category.strip(),
+    }
+
+
+def _should_persist_raw_content(storage_backend: str) -> bool:
+    """Keep DB fallback bytes for DB and local storage.
+
+    Local storage is ephemeral on Railway/redeploys; retaining raw_content lets
+    the original document preview survive when the local file disappears.
+    """
+    return storage_backend in {"database", "local"}
+
+
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,
@@ -152,7 +179,13 @@ async def upload_document(
             "auto_anonymize": auto_anonymize,
             "profile": profile,
             "document_type": document_type,
-            "client_name": _normalize_client_name(client_name),
+            **_upload_metadata_fingerprint(
+                client_name=client_name,
+                client_id=client_id,
+                dossier_id=dossier_id,
+                exercice=exercice,
+                doc_category=doc_category,
+            ),
         })
         replay = await get_idempotency_replay(
             db,
@@ -355,7 +388,9 @@ async def _upload_document_body(
         storage_backend=storage_backend,
         storage_key=storage_key,
         status=DocumentStatus.UPLOADED,
-        raw_content=file_path.read_bytes() if storage_backend == "database" else None,
+        raw_content=(
+            file_path.read_bytes() if _should_persist_raw_content(storage_backend) else None
+        ),
         tags=[resolved_client_name],
         client_name=resolved_client_name,
         client_id=resolved_client_id,
@@ -569,7 +604,11 @@ async def upload_batch(
                 "auto_anonymize": auto_anonymize,
                 "profile": profile,
                 "document_type": document_type,
-                "client_name": _normalize_client_name(client_name),
+                **_upload_metadata_fingerprint(
+                    client_name=client_name,
+                    exercice=exercice,
+                    doc_category=doc_category,
+                ),
             })
             replay = await get_idempotency_replay(
                 db,
@@ -601,6 +640,8 @@ async def upload_batch(
                         profile=profile,
                         document_type=document_type,
                         client_name=client_name,
+                        exercice=exercice,
+                        doc_category=doc_category,
                         background_tasks=background_tasks,
                         org_id_override=org_id,
                     )

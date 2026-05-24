@@ -1,13 +1,14 @@
 """ConfiDoc Backend — File Sandbox and Malware Scanning."""
 
-import os
 import mimetypes
 from pathlib import Path
-from typing import Any
+
+from app.core.logging import get_logger
 
 HAS_MAGIC = False
 try:
     import magic
+
     # Check if libmagic is actually available by trying a dummy call
     try:
         magic.from_buffer(b"test")
@@ -16,8 +17,6 @@ try:
         pass
 except ImportError:
     pass
-
-from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
@@ -29,7 +28,7 @@ class SandboxError(Exception):
 
 def scan_file_for_malware(file_path: str | Path, expected_extension: str) -> bool:
     """Perform basic security checks on a file.
-    
+
     1. Verify MIME type matches extension
     2. Check for suspicious signatures
     3. Verify file integrity
@@ -41,13 +40,13 @@ def scan_file_for_malware(file_path: str | Path, expected_extension: str) -> boo
     # 1. MIME Type verification
     ext = expected_extension.lower().strip(".")
     mime = None
-    
+
     if HAS_MAGIC:
         try:
             mime = magic.from_file(str(path), mime=True)
         except Exception as e:
             logger.warning("magic_failed_using_mimetypes_fallback", error=str(e))
-    
+
     if not mime:
         # Fallback to standard library (less secure as it only checks extension)
         mime, _ = mimetypes.guess_type(str(path))
@@ -61,18 +60,17 @@ def scan_file_for_malware(file_path: str | Path, expected_extension: str) -> boo
         "tiff": ["image/tiff"],
         "tif": ["image/tiff"],
     }
-    
-    if ext in valid_mimes and mime:
-        if mime not in valid_mimes[ext]:
-            logger.warning(
-                "sandbox_mime_mismatch",
-                filename=path.name,
-                extension=ext,
-                detected_mime=mime
-            )
-            # In production, this mismatch should block the upload
-            if HAS_MAGIC:
-                raise SandboxError(f"File signature mismatch: expected {ext}, detected {mime}")
+
+    if ext in valid_mimes and mime and mime not in valid_mimes[ext]:
+        logger.warning(
+            "sandbox_mime_mismatch",
+            filename=path.name,
+            extension=ext,
+            detected_mime=mime,
+        )
+        # In production, this mismatch should block the upload
+        if HAS_MAGIC:
+            raise SandboxError(f"File signature mismatch: expected {ext}, detected {mime}")
 
     # 2. Check for suspicious markers (e.g., PHP tags in images)
     suspicious_markers = [b"<?php", b"eval(", b"base64_decode("]
@@ -82,7 +80,11 @@ def scan_file_for_malware(file_path: str | Path, expected_extension: str) -> boo
             head = f.read(8192)
             for marker in suspicious_markers:
                 if marker in head:
-                    logger.error("sandbox_malicious_marker_found", marker=marker, filename=path.name)
+                    logger.error(
+                        "sandbox_malicious_marker_found",
+                        marker=marker,
+                        filename=path.name,
+                    )
                     raise SandboxError("Suspicious content detected in file.")
     except SandboxError:
         raise

@@ -254,3 +254,97 @@ class TestUploadHappyPath:
             "Pre-fix code raised NameError before reaching this call."
         )
         assert scheduled[0]["doc_id"] == body["document_id"]
+
+
+class TestUploadBackendHardening:
+    """Regression guards for storage fallback and idempotency metadata."""
+
+    def test_upload_metadata_fingerprint_includes_manual_metadata(self):
+        from app.api.v1.uploads import _upload_metadata_fingerprint
+
+        client_id = uuid.uuid4()
+        dossier_id = uuid.uuid4()
+
+        fingerprint = _upload_metadata_fingerprint(
+            client_name="  ACME   SAS  ",
+            client_id=client_id,
+            dossier_id=dossier_id,
+            exercice=" 2025 ",
+            doc_category=" bilan ",
+        )
+
+        assert fingerprint == {
+            "client_name": "ACME SAS",
+            "client_id": str(client_id),
+            "dossier_id": str(dossier_id),
+            "exercice": "2025",
+            "doc_category": "bilan",
+        }
+
+    @pytest.mark.asyncio
+    async def test_local_storage_upload_keeps_raw_content_database_fallback(
+        self,
+        monkeypatch,
+        tmp_path,
+    ):
+        """Local storage is ephemeral, so uploaded bytes must remain recoverable."""
+        import app.api.v1.uploads as uploads_mod
+
+        file_path = tmp_path / "original.pdf"
+        file_bytes = b"%PDF-1.4\nlocal fallback\n%%EOF"
+        file_path.write_bytes(file_bytes)
+
+        async def _allow_upload_permission(*_args, **_kwargs):
+            return None
+
+        async def _noop_audit(*_args, **_kwargs):
+            return None
+
+        monkeypatch.setattr(uploads_mod, "require_org_permission", _allow_upload_permission)
+        monkeypatch.setattr(uploads_mod, "record_document_audit_event", _noop_audit)
+        monkeypatch.setattr(
+            uploads_mod,
+            "build_metadata_suggestions",
+            lambda *_args, **_kwargs: {
+                "client_suggestion": None,
+                "exercice": None,
+                "doc_category": None,
+            },
+        )
+        monkeypatch.setattr(
+            uploads_mod,
+            "store_file",
+            lambda **_kwargs: ("local", str(file_path)),
+        )
+        monkeypatch.setattr(
+            uploads_mod,
+            "should_dispatch_document_task_to_celery",
+            lambda **_kwargs: False,
+        )
+
+        db = _MinimalFakeSession()
+        user = SimpleNamespace(
+            id=uuid.uuid4(),
+            org_id=uuid.uuid4(),
+            is_active=True,
+            email="qa@confidoc.test",
+        )
+
+        await uploads_mod._upload_document_body(
+            db=db,
+            current_user=user,
+            file=SimpleNamespace(content_type="application/pdf"),
+            file_path=file_path,
+            filename="original.pdf",
+            extension="pdf",
+            size=len(file_bytes),
+            sha256="a" * 64,
+            auto_anonymize=False,
+            profile="moderate",
+            document_type="auto",
+            client_name="ACME SAS",
+        )
+
+        document = next(obj for obj in db.added if obj.__class__.__name__ == "Document")
+        assert document.storage_backend == "local"
+        assert document.raw_content == file_bytes

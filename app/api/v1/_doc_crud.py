@@ -10,7 +10,7 @@ from datetime import UTC, datetime
 from urllib.parse import quote
 
 from fastapi import APIRouter, Query, Request, Response, status
-from sqlalchemy import delete, desc, func, or_, select
+from sqlalchemy import String, and_, cast, delete, desc, func, or_, select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import (
@@ -110,21 +110,28 @@ async def list_documents(
         from app.models.document_version import DocumentVersion, DocumentVersionType
 
         ts_query = func.plainto_tsquery("french", q_norm)
+        content_text = func.coalesce(DocumentVersion.content_text, "")
+        content_match = func.to_tsvector("french", content_text).op("@@")(ts_query)
+        filename_match = Document.original_filename.ilike(f"%{q_norm}%")
         snippet_expr = func.ts_headline(
             "french",
-            DocumentVersion.content_text,
+            content_text,
             ts_query,
             "MaxWords=15, MinWords=5",
         ).label("snippet")
 
         query = (
             select(Document, snippet_expr)
-            .join(DocumentVersion, Document.id == DocumentVersion.document_id)
+            .outerjoin(
+                DocumentVersion,
+                and_(
+                    Document.id == DocumentVersion.document_id,
+                    DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
+                ),
+            )
             .where(
                 visibility_clause,
-                DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
-                func.to_tsvector("french", DocumentVersion.content_text).op("@@")(ts_query)
-                | Document.original_filename.ilike(f"%{q_norm}%"),
+                filename_match | content_match,
             )
         )
     else:
@@ -154,9 +161,7 @@ async def list_documents(
             )
         else:
             # Note: this might need adjustment depending on how your Enum is stored
-            query = query.where(
-                func.cast(Document.status, __import__("sqlalchemy").String).ilike(status_norm)
-            )
+            query = query.where(cast(Document.status, String).ilike(status_norm))
     elif status_norm == "deleted":
         query = query.where(Document.is_deleted.is_(True))
 

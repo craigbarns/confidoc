@@ -88,6 +88,36 @@ def test_production_blocks_if_any_secret_missing():
         )
 
 
+def test_production_blocks_placeholder_secret_variants():
+    """Production must reject .env.example placeholders, not only exact CHANGE-ME."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
+        Settings(
+            APP_ENV="production",
+            STORAGE_BACKEND="database",
+            SECRET_KEY="real-secret-key-32-chars-long-enough-ok",
+            JWT_SECRET_KEY="CHANGE-ME-USE-openssl-rand-hex-64",
+            ENCRYPTION_MASTER_KEY="real-key-32-chars-long-enough-ok",
+            PSEUDO_MAPPING_KEY="real-pseudo-32-chars-long-enough!",
+        )
+
+
+def test_production_blocks_short_hs256_secret():
+    """HS256 JWT secrets under 32 bytes are not acceptable in production."""
+    from pydantic import ValidationError
+
+    with pytest.raises(ValidationError, match="JWT_SECRET_KEY"):
+        Settings(
+            APP_ENV="production",
+            STORAGE_BACKEND="database",
+            SECRET_KEY="real-secret-key-32-chars-long-enough-ok",
+            JWT_SECRET_KEY="too-short",
+            ENCRYPTION_MASTER_KEY="real-key-32-chars-long-enough-ok",
+            PSEUDO_MAPPING_KEY="real-pseudo-32-chars-long-enough!",
+        )
+
+
 def test_development_no_warning():
     """Development mode does not warn on default secrets."""
     with warnings.catch_warnings(record=True) as w:
