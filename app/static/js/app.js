@@ -6444,7 +6444,7 @@ function prepulateLedger(entityCount) {
     <td><span style="color: var(--text);">Anonymisation déterministe</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Traitement réussi de ${entityCount} entités sensibles</small></td>
     <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
     <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
-    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Certifié</span></td>
+    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Intègre</span></td>
   `;
   tbody.appendChild(tr3);
   
@@ -6456,7 +6456,7 @@ function prepulateLedger(entityCount) {
     <td><span style="color: var(--text);">Numérisation & OCR Souverain</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Extraction de texte via modèle de vision local</small></td>
     <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
     <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
-    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Certifié</span></td>
+    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Intègre</span></td>
   `;
   tbody.appendChild(tr2);
 
@@ -6468,7 +6468,7 @@ function prepulateLedger(entityCount) {
     <td><span style="color: var(--text);">Dépôt sécurisé & Scan de malware</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Fichier vérifié intègre, taille conforme</small></td>
     <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
     <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
-    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Certifié</span></td>
+    <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Intègre</span></td>
   `;
   tbody.appendChild(tr1);
 }
