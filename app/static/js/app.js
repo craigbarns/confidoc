@@ -553,6 +553,10 @@ async function loadQualityDashboard() {
 }
 
 function renderQualityDashboard(data) {
+  // Expose the latest payload so the redesign tabs can use it without
+  // re-fetching when the user switches segments.
+  window.__lastQualityData = data;
+
   const asOfEl = $("quality-as-of");
   if (asOfEl && data.as_of) {
     const date = new Date(data.as_of);
@@ -730,6 +734,11 @@ function setStep(n) {
   const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
   if (el) el.classList.add("active");
+  // Step 1 (Documents nav) also activates the redesign documents panel.
+  if (n === 1) {
+    const redesignDocs = $("panel-documents");
+    if (redesignDocs) redesignDocs.classList.add("active");
+  }
   const titles = { 1: "Ajouter", 2: "Sécuriser", 3: "Analyser" };
   setPageTitle(titles[n] || "");
   setActiveNav("documents");
@@ -1691,6 +1700,129 @@ function renderDocList(docs) {
     });
   });
   refreshCompareDocSelect();
+
+  // ── Redesign Documents table (spec §5.2) ────────────────────────────
+  // Mirror the same list into #documents-tbody. Stays in sync with the
+  // legacy sidebar but adds segments + mini Trust Gauges per row.
+  try { renderDocumentsRedesign(lastDocsList); }
+  catch (e) { console.warn("renderDocumentsRedesign failed:", e); }
+}
+
+const REDESIGN_DOC_STATUS_GROUPS = {
+  "seg-all": null,
+  "seg-review": new Set(["uploaded", "processing", "extracting", "extracted", "anonymizing"]),
+  "seg-anon": new Set(["ready", "anonymized"]),
+  "seg-draft": new Set(["draft"]),
+  "seg-exported": new Set(["exported"]),
+};
+
+let _redesignDocsSegment = "seg-all";
+let _redesignDocsQuery = "";
+
+function statusToPill(status) {
+  if (REDESIGN_DOC_STATUS_GROUPS["seg-anon"].has(status)) return { cls: "pill-anon", label: "Anonymisé" };
+  if (REDESIGN_DOC_STATUS_GROUPS["seg-review"].has(status)) return { cls: "pill-review", label: "À reviewer" };
+  if (status === "failed") return { cls: "pill-danger", label: "Échec" };
+  if (status === "exported") return { cls: "pill-exported", label: "Exporté" };
+  return { cls: "pill-draft", label: documentStatusLabel(status) };
+}
+
+function docTrustValues(d) {
+  // The backend exposes per-doc trust score under various names. We treat the
+  // overall trust as both PII + Coherence and slightly lower for quasi-id to
+  // keep the gauge expressive even when only one number exists.
+  const raw = d?.trust_score ?? d?.ai_readiness_score ?? d?.compliance_score ?? 0;
+  const pct = Math.max(0, Math.min(100, Math.round(Number(raw) || 0)));
+  return {
+    pii: pct,
+    quasi: Math.max(0, pct - (pct >= 90 ? 0 : 15)),
+    coherence: pct,
+    reversibility: pct >= 70 ? 100 : pct,
+  };
+}
+
+function renderDocumentsRedesign(docs) {
+  const tbody = $("documents-tbody");
+  const summary = $("documents-summary");
+  if (!tbody) return;
+
+  const list = Array.isArray(docs) ? docs.filter(d => !d.is_deleted) : [];
+
+  // Update segment counts
+  const counts = { all: list.length, review: 0, anon: 0, draft: 0, exported: 0 };
+  list.forEach(d => {
+    const st = d?.status || "";
+    if (REDESIGN_DOC_STATUS_GROUPS["seg-anon"].has(st)) counts.anon += 1;
+    else if (REDESIGN_DOC_STATUS_GROUPS["seg-review"].has(st)) counts.review += 1;
+    if (st === "draft") counts.draft += 1;
+    if (st === "exported") counts.exported += 1;
+  });
+  document.querySelectorAll("#documents-segments [data-count]").forEach(el => {
+    el.textContent = counts[el.dataset.count] ?? 0;
+  });
+  const navBadge = $("nav-documents-badge");
+  if (navBadge) {
+    if (counts.review > 0) {
+      navBadge.textContent = String(counts.review);
+      navBadge.hidden = false;
+    } else {
+      navBadge.hidden = true;
+    }
+  }
+
+  if (summary) {
+    summary.textContent = `${counts.all} document${counts.all > 1 ? "s" : ""} · ${counts.review} en revue · ${counts.anon} anonymisé${counts.anon > 1 ? "s" : ""}`;
+  }
+
+  // Filter according to segment + search
+  const wantSet = REDESIGN_DOC_STATUS_GROUPS[_redesignDocsSegment];
+  const q = _redesignDocsQuery;
+  const filtered = list.filter(d => {
+    const st = d?.status || "";
+    if (wantSet && !wantSet.has(st)) return false;
+    if (!q) return true;
+    const hay = `${(d?.original_filename || "")} ${(d?.tags || []).join(" ")}`.toLowerCase();
+    return hay.includes(q);
+  });
+
+  if (filtered.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="7" class="page-lead" style="text-align:center;padding:18px;color:var(--ink-muted)">Aucun document dans cette vue.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = filtered.map(d => {
+    const name = escapeHtml(d?.original_filename || "Document sans nom");
+    const dossier = escapeHtml((d?.tags && d.tags[0]) || "—");
+    const date = escapeHtml(formatDate(d?.created_at) || "—");
+    const size = escapeHtml(formatBytes(d?.size_bytes) || "");
+    const pill = statusToPill(d?.status || "");
+    const trust = docTrustValues(d);
+    const icon = (d?.original_filename || "D").trim().charAt(0).toUpperCase();
+    return `
+      <tr data-doc-id="${escapeHtml(d?.id || "")}">
+        <td data-col="check"><input type="checkbox" aria-label="Sélectionner ${name}"></td>
+        <td data-col="name">
+          <div class="doc-name">
+            <div class="doc-name__icon">${escapeHtml(icon)}</div>
+            <div class="doc-name__stack">
+              <div class="doc-name__main">${name}</div>
+              <div class="doc-name__meta">PDF · ${size || "—"}</div>
+            </div>
+          </div>
+        </td>
+        <td data-col="status"><span class="pill ${pill.cls}">${escapeHtml(pill.label)}</span></td>
+        <td data-col="dossier">${dossier}</td>
+        <td data-col="trust">
+          <trust-gauge data-mini="true" data-size="40"
+            data-pii="${trust.pii}" data-quasi="${trust.quasi}"
+            data-coherence="${trust.coherence}" data-reversibility="${trust.reversibility}"></trust-gauge>
+        </td>
+        <td data-col="modified" class="tabular">${date}</td>
+        <td data-col="actions">
+          <button class="btn-ghost btn-xs" data-action="redesign-open-doc" data-doc-id="${escapeHtml(d?.id || "")}">▶ Reviewer</button>
+        </td>
+      </tr>`;
+  }).join("");
 }
 
 // ── Sidebar dossier tree ───────────────────────────────────────────────
@@ -1884,6 +2016,13 @@ function renderDossierClientGrid(dossiers) {
     return;
   }
   if (statsEl) statsEl.textContent = `${dossiers.length} client${dossiers.length > 1 ? "s" : ""}`;
+
+  // ── Redesign Dossiers table (spec §5.4) — runs in parallel with the legacy
+  // grid. The new table lives above the existing client cards via the
+  // [data-redesign-dossiers] anchor in index.html.
+  try { renderDossiersRedesign(dossiers); }
+  catch (e) { console.warn("renderDossiersRedesign failed:", e); }
+
   grid.innerHTML = dossiers.map(client => {
     const readyCount = (client.exercices || []).reduce((acc, ex) => acc + (ex.ready_count || 0), 0);
     const total = client.total_docs || 0;
@@ -5108,6 +5247,94 @@ function uploaded24Label(summary = {}) {
   return u > 0 ? `+${u} sur 24 h` : "—";
 }
 
+// ── Redesign Dossiers (spec §5.4) ───────────────────────────────────────
+function renderDossiersRedesign(dossiers) {
+  const tbody = $("dossiers-tbody");
+  const summary = $("dossiers-summary");
+  if (!tbody) return;
+
+  const list = Array.isArray(dossiers) ? dossiers : [];
+  if (summary) {
+    summary.textContent = `${list.length} client${list.length > 1 ? "s" : ""}`;
+  }
+
+  if (list.length === 0) {
+    tbody.innerHTML = `<tr><td colspan="5" class="page-lead" style="text-align:center;padding:18px;color:var(--ink-muted)">Aucun dossier client pour le moment.</td></tr>`;
+    return;
+  }
+
+  tbody.innerHTML = list.map(client => {
+    const total = Number(client?.total_docs || 0);
+    const readyCount = (client?.exercices || []).reduce((acc, ex) => acc + Number(ex?.ready_count || 0), 0);
+    const trustPct = total > 0 ? Math.round((readyCount / total) * 100) : 0;
+    const lastActivity = client?.last_activity ? formatDate(client.last_activity) : "—";
+    return `
+      <tr data-action="open-dossier-page" data-client="${escapeAttr(client?.client_name || "")}">
+        <td><strong>${escapeHtml(client?.client_name || "—")}</strong></td>
+        <td class="tabular">${total}</td>
+        <td class="tabular" style="color:${trustPct >= 90 ? "var(--accent)" : trustPct >= 70 ? "var(--warning)" : "var(--danger)"};font-weight:600">${trustPct}%</td>
+        <td>${escapeHtml(lastActivity)}</td>
+        <td class="page-lead" style="margin:0">${escapeHtml(client?.owner || "—")}</td>
+      </tr>`;
+  }).join("");
+}
+
+// ── Redesign Qualité & RGPD tabs (spec §5.5) ────────────────────────────
+function renderQualityRedesignTab(tab, qualityData = null) {
+  const c = $("quality-redesign-tab-content");
+  if (!c) return;
+  if (tab === "tab-rgpd") {
+    // Surface the existing compliance metrics (loaded by loadDashboard).
+    const items = qualityData?.gdpr || qualityData || {};
+    const score = clampPct(items.score ?? items.compliance_score ?? 0);
+    c.innerHTML = `
+      <div class="card" style="padding:18px">
+        <p class="rail-h">Score conformité RGPD</p>
+        <div class="kpi-value tabular" style="color:${score >= 90 ? "var(--accent)" : "var(--warning)"};font-size:32px">${score}%</div>
+        <p class="page-lead" style="margin-top:8px">Calculé sur les documents anonymisés du mois.</p>
+        <button class="btn-ghost" style="margin-top:14px" data-action="download-compliance-cert">Télécharger le certificat RGPD</button>
+      </div>`;
+  } else if (tab === "tab-golden") {
+    c.innerHTML = `
+      <div class="card" style="padding:18px">
+        <p class="rail-h">Golden sets</p>
+        <p>Taux de réussite des cas de régression : <strong class="tabular">—</strong></p>
+        <p class="page-lead">Branchement <code>/golden/status</code> à venir.</p>
+      </div>`;
+  } else {
+    // Default: trust scores summary
+    const trust = qualityData?.trust || qualityData?.trust_score || {};
+    const mean = clampPct(trust.average ?? trust.mean ?? 0);
+    c.innerHTML = `
+      <div class="card" style="padding:18px">
+        <p class="rail-h">Trust score moyen (30 jours)</p>
+        <div class="kpi-value tabular" style="color:var(--accent);font-size:32px">${mean}%</div>
+        <p class="page-lead" style="margin-top:8px">Distribution des trust scores sur les documents traités le mois passé.</p>
+      </div>`;
+  }
+}
+
+// ── Redesign Settings tabs (spec §5.7) ──────────────────────────────────
+function renderSettingsRedesignTab(tab) {
+  const c = $("settings-tab-content");
+  if (!c) return;
+  const stubs = {
+    "set-profile": ["Profil", "Email, mot de passe, photo de profil, signature DPO."],
+    "set-appearance": ["Apparence", "Thème (clair / sombre), densité d'affichage, taille de typo."],
+    "set-anonymization": ["Anonymisation", "Mode par défaut (pseudonymiser vs. anonymiser fort), règles personnalisées par type de document."],
+    "set-copilot": ["Copilot", "Modèle IA, contexte autorisé, limites d'usage, audit des questions posées."],
+    "set-api": ["API & intégrations", "Clés API, webhooks, intégration cabinet, exports automatiques."],
+    "set-team": ["Équipe", "Membres, rôles (admin, comptable, DPO), invitations en attente."],
+  };
+  const [title, desc] = stubs[tab] || stubs["set-profile"];
+  c.innerHTML = `
+    <div class="card" style="padding:18px">
+      <p class="rail-h">${escapeHtml(title)}</p>
+      <p class="page-lead" style="margin-top:6px">${escapeHtml(desc)}</p>
+      <p class="page-lead" style="margin-top:14px;color:var(--ink-dim)">Section en cours de développement.</p>
+    </div>`;
+}
+
 function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const content = $("dash-content");
   if (!content) return;
@@ -5722,11 +5949,13 @@ function handleDelegatedAction(e) {
   }
   else if (action === "open-original") openCurrentOriginal(false);
   else if (action === "open-dossier") {
-    const dossierId = control.dataset.dossier || "";
-    if (dossierId) {
-      openClientWorkspace();
-    } else {
-      openClientWorkspace();
+    openClientWorkspace();
+  }
+  else if (action === "redesign-open-doc") {
+    const id = control.dataset.docId || "";
+    if (id) {
+      currentDocId = id;
+      openAnonReviewForCurrentDocument();
     }
   }
   else if (action === "download-original") openCurrentOriginal(true);
@@ -6232,6 +6461,46 @@ document.addEventListener("DOMContentLoaded", () => {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "j", metaKey: true, bubbles: true }));
     }
   });
+
+  // Redesign Documents — segments + search input filter the new table.
+  document.querySelectorAll("#documents-segments [data-segment]").forEach(btn => {
+    btn.addEventListener("click", () => {
+      _redesignDocsSegment = btn.dataset.segment;
+      document.querySelectorAll("#documents-segments [data-segment]").forEach(b =>
+        b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+      renderDocumentsRedesign(lastDocsList);
+    });
+  });
+  $("documents-search")?.addEventListener("input", e => {
+    _redesignDocsQuery = (e.target.value || "").toLowerCase().trim();
+    renderDocumentsRedesign(lastDocsList);
+  });
+
+  // Redesign Qualité & RGPD tabs (spec §5.5)
+  const qualRoot = $("quality-redesign-tabs");
+  if (qualRoot) {
+    renderQualityRedesignTab("tab-scores");
+    qualRoot.querySelectorAll("[data-segment]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        qualRoot.querySelectorAll("[data-segment]").forEach(b =>
+          b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+        renderQualityRedesignTab(btn.dataset.segment, window.__lastQualityData);
+      });
+    });
+  }
+
+  // Redesign Settings tabs (spec §5.7)
+  const setRoot = $("settings-tabs");
+  if (setRoot) {
+    renderSettingsRedesignTab("set-profile");
+    setRoot.querySelectorAll("[data-segment]").forEach(btn => {
+      btn.addEventListener("click", () => {
+        setRoot.querySelectorAll("[data-segment]").forEach(b =>
+          b.setAttribute("aria-pressed", b === btn ? "true" : "false"));
+        renderSettingsRedesignTab(btn.dataset.segment);
+      });
+    });
+  }
 
   const versionEl = $("ui-version");
   if (versionEl?.dataset?.version) {

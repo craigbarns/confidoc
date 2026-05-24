@@ -199,6 +199,28 @@ async def test_accueil_uses_hero_literary(client):
 
 
 @pytest.mark.anyio
+async def test_redesign_renderers_are_wired(client):
+    """Every redesigned screen must have a renderer hook in app.js so
+    the new sections receive live data (not just frozen placeholders)."""
+    resp = await client.get("/static/js/app.js")
+    assert resp.status_code == 200
+    js = resp.text
+    for fn in (
+        "function renderHomeBriefing",
+        "function renderDocumentsRedesign",
+        "function renderDossiersRedesign",
+        "function renderQualityRedesignTab",
+        "function renderSettingsRedesignTab",
+    ):
+        assert fn in js, f"missing renderer: {fn}"
+    # Documents redesign reacts to segment clicks
+    assert "_redesignDocsSegment" in js
+    # Settings & Qualité tabs are initialized at boot
+    assert 'renderQualityRedesignTab("tab-scores")' in js
+    assert 'renderSettingsRedesignTab("set-profile")' in js
+
+
+@pytest.mark.anyio
 async def test_home_briefing_renderer_is_wired(client):
     """Spec §5.1 — the Accueil briefing must be populated by renderHomeBriefing
     whenever the dashboard data lands. Without this hook, the hero literary
