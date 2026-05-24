@@ -133,6 +133,11 @@ body.legacy-sidebar-hidden #sidebar-backdrop {
   font-family: inherit; font-size: inherit;
 }
 
+/* Hide legacy elements when the redesigned document detail view is visible */
+#panel-anon:has([data-document-detail]:not([hidden])) > :not([data-document-detail]) {
+  display: none !important;
+}
+
 /* ── Document detail (3-column layout) ──────────────────────────── */
 .detail-topbar {
   display: flex;

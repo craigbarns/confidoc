@@ -913,7 +913,7 @@
              Progressive scaffolding: provides the 3-column layout markers
              that the new design will populate. The legacy anon UI below
              keeps rendering until JS migrates content here. -->
-        <section class="detail-redesign" data-document-detail data-privacy-lens="off" data-privacy-zones="[]">
+        <section class="detail-redesign" data-document-detail data-privacy-lens="off" data-privacy-zones="[]" hidden>
           <header class="detail-topbar">
             <button class="btn-ghost" data-action="back-to-documents">← Documents</button>
             <div class="crumb">
@@ -1179,7 +1179,7 @@
               <div class="review-pane anonymized-pane">
                 <div class="pane-header">Texte anonymisé modifiable</div>
                 <div class="viewer-container">
-                   <div id="preview-anon-text" class="preview-text interactive-text" contenteditable="true" spellcheck="false"></div>
+                   <div id="preview-anon-text-legacy" class="preview-text interactive-text" contenteditable="true" spellcheck="false"></div>
                 </div>
               </div>
             </div>

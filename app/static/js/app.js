@@ -3122,7 +3122,7 @@ function renderDocumentDetailShell(details = {}) {
   const anonymizedViewer = root.querySelector(".viewer-anonymized");
   if (anonymizedViewer) {
     anonymizedViewer.innerHTML = previewText
-      ? `<div class="preview-text interactive-text">${highlightTags(previewText)}</div>`
+      ? `<div id="preview-anon-text" class="preview-text interactive-text" contenteditable="true" spellcheck="false">${highlightTags(previewText)}</div>`
       : '<div class="viewer-placeholder">Texte anonymisé en attente.</div>';
   }
 
@@ -3834,7 +3834,6 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   window.currentBaseRiskScore = risk ? normalizeRiskPercent(risk.score || risk.risk_score) : 12;
   window.initialTagsCount = count ?? 0;
 
-  $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
   renderDocumentDetailShell({
     previewText,
     count,
@@ -3843,6 +3842,11 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
     status: currentDocStatus,
     sizeBytes: currentDocSize,
   });
+
+  const pText = $("preview-anon-text");
+  if (pText) {
+    pText.innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+  }
 
   // Prepopulate DPO dynamic mapping and ledger logs
   if (typeof buildDynamicTagOriginalMap === "function") {
