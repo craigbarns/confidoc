@@ -196,3 +196,19 @@ async def test_accueil_uses_hero_literary(client):
     assert 'id="home-priority-list"' in html
     assert 'id="home-timeline"' in html
     assert 'id="home-kpis"' in html
+
+
+@pytest.mark.anyio
+async def test_home_briefing_renderer_is_wired(client):
+    """Spec §5.1 — the Accueil briefing must be populated by renderHomeBriefing
+    whenever the dashboard data lands. Without this hook, the hero literary
+    line stays frozen on its '—' placeholders."""
+    resp = await client.get("/static/js/app.js")
+    assert resp.status_code == 200
+    js = resp.text
+    assert "function renderHomeBriefing" in js
+    assert "renderHomeBriefing(data, summary, dossier360)" in js
+    assert 'home-priority-count' in js
+    assert 'home-priority-list' in js
+    assert 'home-timeline' in js
+    assert 'home-kpis' in js

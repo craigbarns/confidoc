@@ -4981,10 +4981,141 @@ function renderTrustDashboardSection(trust) {
   ].join("");
 }
 
+// ── Redesign Accueil briefing (spec §5.1) ──────────────────────────────
+// Populate the hero literary headline, priority list, timeline, and KPI
+// row at the top of panel-dashboard from the data already fetched by
+// loadDashboard(). Defensive: works partially even with missing fields.
+function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
+  const userName = ($("user-info")?.textContent || "").split("@")[0] || "vous";
+  const userNameEl = $("home-user-name");
+  if (userNameEl) userNameEl.textContent = userName;
+
+  const sc = data.status_counts || {};
+  const reviewCount = Number(sc.processing ?? sc.extracting ?? 0) + Number(sc.uploaded ?? 0);
+  const totalDocs = Number(data.total_documents || 0);
+
+  const countEl = $("home-priority-count");
+  if (countEl) {
+    countEl.textContent = reviewCount > 0
+      ? `${reviewCount} document${reviewCount > 1 ? "s" : ""}`
+      : "aucun document";
+  }
+
+  const leadEl = $("home-hero-lead");
+  if (leadEl) {
+    if (reviewCount === 0 && totalDocs === 0) {
+      leadEl.textContent = "Aucun document n'a encore été uploadé. Importe ton premier PDF pour démarrer.";
+    } else if (reviewCount === 0) {
+      leadEl.textContent = "Aucun document n'attend ta revue.";
+    } else {
+      const failed = Number(summary.failed ?? sc.failed ?? 0);
+      leadEl.textContent = failed > 0
+        ? `${failed} document${failed > 1 ? "s ont" : " a"} échoué — pense à les ré-anonymiser.`
+        : "Tout est sous contrôle, prends ton café et review tranquillement.";
+    }
+  }
+
+  // Priority list: pull from dossier360.dossiers when available, else show a polite empty state.
+  const list = $("home-priority-list");
+  if (list) {
+    const items = Array.isArray(dossier360?.dossiers) ? dossier360.dossiers.slice(0, 3) : [];
+    if (items.length === 0) {
+      list.innerHTML = `
+        <li>
+          <div></div>
+          <div><div class="name">Aucun document à reviewer.</div><div class="meta">Glisse un PDF dans Documents pour démarrer.</div></div>
+          <div></div>
+          <button class="btn-ghost" data-action="open-upload">+ Importer</button>
+        </li>`;
+    } else {
+      list.innerHTML = items.map(d => {
+        const trustPct = clampPct(d?.trust_avg ?? d?.trust_score ?? 0);
+        const dimPct = Math.max(50, trustPct);
+        const docCount = Number(d?.documents_count ?? d?.documents ?? 0);
+        const name = escapeHtml(d?.client_name || d?.name || d?.dossier_name || "Dossier sans nom");
+        const meta = `${docCount} document${docCount > 1 ? "s" : ""}`;
+        return `
+          <li>
+            <trust-gauge data-mini="true" data-size="40"
+              data-pii="${trustPct}" data-quasi="${trustPct}"
+              data-coherence="${dimPct}" data-reversibility="${dimPct}"></trust-gauge>
+            <div>
+              <div class="name">${name}</div>
+              <div class="meta">${meta}</div>
+            </div>
+            <span class="pill pill-review">À reviewer</span>
+            <button class="btn-ghost" data-action="open-dossier" data-dossier="${escapeHtml(d?.client_id || d?.id || "")}">▶ Reviewer</button>
+          </li>`;
+      }).join("");
+    }
+  }
+
+  // Editorial timeline: assemble a few human sentences from the summary buckets.
+  const tl = $("home-timeline");
+  if (tl) {
+    const events = [];
+    const uploaded24 = Number(summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
+    if (uploaded24 > 0) events.push(`<div class="ev"><span class="ts">24 h</span> · ${uploaded24} document${uploaded24 > 1 ? "s" : ""} uploadé${uploaded24 > 1 ? "s" : ""}</div>`);
+    const ready = Number(summary.ready ?? sc.ready ?? 0) + Number(summary.anonymized ?? sc.anonymized ?? 0);
+    if (ready > 0) events.push(`<div class="ev"><span class="ts">Cumulé</span> · ${ready} anonymisation${ready > 1 ? "s" : ""} validée${ready > 1 ? "s" : ""}</div>`);
+    const failed = Number(summary.failed ?? sc.failed ?? 0);
+    if (failed > 0) events.push(`<div class="ev" style="color:var(--warning)"><span class="ts">À voir</span> · ${failed} document${failed > 1 ? "s en" : " en"} échec à reprendre</div>`);
+    tl.innerHTML = events.length > 0
+      ? events.join("")
+      : '<div class="ev" style="color:var(--ink-muted)">Aucune activité récente.</div>';
+  }
+
+  // Secondary KPI row.
+  const kpisEl = $("home-kpis");
+  if (kpisEl) {
+    const trustAvg = clampPct(data?.trust_score?.average ?? data?.trust_score?.mean ?? 0);
+    const entitiesMasked = Number(data?.total_entities_masked || 0);
+    const ready = Number(summary.ready ?? sc.ready ?? 0) + Number(summary.anonymized ?? sc.anonymized ?? 0);
+    kpisEl.innerHTML = `
+      <div class="card kpi-card">
+        <div class="kpi-label">Documents traités</div>
+        <div class="kpi-value tabular">${totalDocs}</div>
+        <div class="kpi-delta">${uploaded24Label(summary)}</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">En revue</div>
+        <div class="kpi-value tabular">${reviewCount}</div>
+        <div class="kpi-delta${reviewCount > 0 ? " is-warning" : ""}">${reviewCount > 0 ? "à traiter" : "rien à faire"}</div>
+      </div>
+      <div class="card kpi-card kpi-card--trust">
+        <div class="kpi-label">Trust score moyen</div>
+        <div class="kpi-value tabular">${trustAvg}<span style="font-size:14px;opacity:.6">%</span></div>
+        <div class="kpi-delta">sur ${ready} doc${ready > 1 ? "s" : ""} validés</div>
+      </div>
+      <div class="card kpi-card">
+        <div class="kpi-label">Entités masquées</div>
+        <div class="kpi-value tabular">${entitiesMasked}</div>
+        <div class="kpi-delta">PII protégés</div>
+      </div>
+    `;
+  }
+}
+
+function clampPct(value) {
+  const n = Number(value);
+  if (!isFinite(n)) return 0;
+  if (n <= 1 && n >= 0) return Math.round(n * 100);
+  return Math.max(0, Math.min(100, Math.round(n)));
+}
+
+function uploaded24Label(summary = {}) {
+  const u = Number(summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
+  return u > 0 ? `+${u} sur 24 h` : "—";
+}
+
 function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const content = $("dash-content");
   if (!content) return;
   content.style.display = "";
+
+  // ── Redesign Accueil briefing (spec §5.1) — runs alongside legacy KPIs.
+  try { renderHomeBriefing(data, summary, dossier360); }
+  catch (e) { console.warn("renderHomeBriefing failed:", e); }
 
   // KPIs
   const sc = data.status_counts || {};
@@ -5590,6 +5721,14 @@ function handleDelegatedAction(e) {
     if (!batchMode) toggleBatchMode();
   }
   else if (action === "open-original") openCurrentOriginal(false);
+  else if (action === "open-dossier") {
+    const dossierId = control.dataset.dossier || "";
+    if (dossierId) {
+      openClientWorkspace();
+    } else {
+      openClientWorkspace();
+    }
+  }
   else if (action === "download-original") openCurrentOriginal(true);
   else if (action === "back-to-documents") setStep(1);
   else if (action === "validate-anonymization") $("btn-validate")?.click();
