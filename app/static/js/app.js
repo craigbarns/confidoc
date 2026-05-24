@@ -735,16 +735,21 @@ function showStubPanel(panelId, navKey, title) {
 
 function setStep(n) {
   document.querySelectorAll(".panel").forEach(p => p.classList.remove("active"));
-  const panels = { 1: "panel-upload", 2: "panel-anon", 3: "panel-ai" };
+  const panels = { 1: "panel-documents", 2: "panel-anon", 3: "panel-ai" };
   const el = $(panels[n]);
   if (el) el.classList.add("active");
-  // Step 1 (Documents nav) also activates the redesign documents panel.
-  if (n === 1) {
-    const redesignDocs = $("panel-documents");
-    if (redesignDocs) redesignDocs.classList.add("active");
-  }
-  const titles = { 1: "Ajouter", 2: "Sécuriser", 3: "Analyser" };
+  const titles = { 1: "Documents", 2: "Sécuriser", 3: "Analyser" };
   setPageTitle(titles[n] || "");
+  setActiveNav("documents");
+  syncDocContextActions();
+  syncLegacySidebarVisibility();
+}
+
+function showUploadPanel() {
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  const panel = $("panel-upload");
+  if (panel) panel.classList.add("active");
+  setPageTitle("Ajouter");
   setActiveNav("documents");
   syncDocContextActions();
   syncLegacySidebarVisibility();
@@ -2580,9 +2585,9 @@ function renderDossierDocCard(doc) {
 }
 
 function openUploadForDossierClient() {
+  startNewDocument();
   const nameEl = $("upload-client-name");
   if (nameEl && currentDossierClient) nameEl.value = currentDossierClient;
-  setStep(1);
 }
 
 async function openEditMetadataModal(docId) {
@@ -6221,7 +6226,7 @@ function startNewDocument() {
   renderExportGuard({});
   updatePipelineTimeline({});
   setSidebarMode("flat");
-  setStep(1);
+  showUploadPanel();
 }
 
 function handleDelegatedAction(e) {
