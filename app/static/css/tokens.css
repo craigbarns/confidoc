@@ -77,3 +77,54 @@
     --t-scan: 0ms;
   }
 }
+
+/* ── Legacy token bridge ──────────────────────────────────────────
+   The old style.css references --grad-brand, --accent-glow, --bg-card,
+   --glass, etc. We can't delete the rules that use them without risking
+   regressions, so we redefine these legacy tokens as aliases to the new
+   palette. Result: no more indigo→violet gradient, no more glassmorphism
+   blur, but all legacy selectors keep working with the new aesthetic. */
+:root {
+  --bg: var(--surface);
+  --bg-card: var(--surface-2);
+  --bg-sidebar: var(--surface);
+  --bg-surface: var(--surface);
+  --bg-input: var(--surface-2);
+  --bg-hover: var(--surface-muted);
+  --glass: none;
+  --border-light: var(--border);
+  --border-accent: var(--accent-border);
+  --text: var(--ink);
+  --text-muted: var(--ink-muted);
+  --text-dim: var(--ink-dim);
+  --accent-hover: var(--accent-soft-ink);
+  --accent-light: var(--accent);
+  --accent-dim: var(--accent-soft);
+  --accent-glow: rgba(4, 120, 87, 0.15);
+  --success: var(--accent);
+  --success-dim: var(--accent-soft);
+  --warning-dim: var(--warning-soft);
+  --danger-dim: rgba(185, 28, 28, 0.10);
+  --radius: var(--r-xl);
+  --radius-lg: var(--r-2xl);
+  --radius-xl: var(--r-2xl);
+  --shadow-sm: none;
+  --shadow-md: var(--shadow-docked);
+  --shadow-lg: var(--shadow-docked);
+  --shadow-accent: none;
+  --ease: cubic-bezier(0.16, 1, 0.3, 1);
+  --t: var(--t-fast);
+  --t-slow: var(--t-drawer);
+  --grad-brand: var(--accent);
+  --grad-surface: var(--surface-muted);
+  --grad-glow: transparent;
+}
+
+/* Kill any leftover backdrop-filter so glassmorphism is fully gone */
+.glass,
+.glass-sidebar,
+.app-header.glass,
+[class*="glass"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}

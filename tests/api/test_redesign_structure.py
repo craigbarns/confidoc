@@ -25,8 +25,12 @@ async def test_ui_uses_new_design_tokens(client):
     assert "--raw: #A4471E" in css
     assert "--surface: #FAFAF7" in css
     assert "--ink: #0F0F12" in css
-    # No legacy purple gradient brand token
-    assert "--grad-brand" not in css
+    # The legacy --grad-brand token is bridged to the new accent (no longer
+    # the indigo→violet gradient). Either it is absent, or it aliases the
+    # new accent — in both cases the old purple gradient is gone.
+    if "--grad-brand" in css:
+        assert "#6366f1" not in css, "legacy indigo brand value still present"
+        assert "#a855f7" not in css, "legacy violet brand value still present"
 
 
 @pytest.mark.anyio
