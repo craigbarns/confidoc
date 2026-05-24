@@ -433,6 +433,37 @@
       <!-- DOSSIER CLIENTS -->
       <div id="panel-dossier" class="panel">
 
+        <!-- ── Dossiers redesign anchor (spec §5.4) ──
+             Progressive scaffolding above the legacy overview. -->
+        <section data-redesign-dossiers hidden>
+          <header class="panel-head">
+            <div>
+              <h1 class="page-title">Dossiers</h1>
+              <p class="page-lead" id="dossiers-summary">—</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn-primary" data-action="new-dossier"><span aria-hidden="true">+</span> Nouveau dossier</button>
+            </div>
+          </header>
+
+          <div class="filter-bar">
+            <input type="search" class="input" id="dossiers-search" placeholder="⌕ Filtrer par nom de client…">
+          </div>
+
+          <table class="table" id="dossiers-table">
+            <thead>
+              <tr>
+                <th>Client</th>
+                <th>Documents</th>
+                <th>Trust moyen</th>
+                <th>Dernière activité</th>
+                <th>Propriétaire</th>
+              </tr>
+            </thead>
+            <tbody id="dossiers-tbody"></tbody>
+          </table>
+        </section>
+
         <!-- Vue 1 : grille de tous les clients -->
         <div id="dossier-overview">
           <div class="dossier-overview-header">
@@ -1402,6 +1433,29 @@
 
       <!-- QUALITÉ -->
       <div id="panel-quality" class="panel">
+
+        <!-- ── Qualité & RGPD fusion anchor (spec §5.5) ──
+             Three-tab fusion of legacy Qualité and Conformité content.
+             Progressive: legacy panel-compliance content stays available
+             until JS migration moves it into the "Conformité RGPD" tab. -->
+        <section data-redesign-quality hidden>
+          <header class="panel-head">
+            <div>
+              <h1 class="page-title">Qualité &amp; RGPD</h1>
+              <p class="page-lead">Tableau de bord trust pour l'équipe et le DPO.</p>
+            </div>
+            <div class="panel-actions">
+              <button class="btn-ghost" data-action="download-compliance-cert">Télécharger le certificat RGPD</button>
+            </div>
+          </header>
+          <div class="segment" id="quality-redesign-tabs" role="tablist">
+            <button role="tab" data-segment="tab-scores" aria-pressed="true">Trust scores</button>
+            <button role="tab" data-segment="tab-rgpd" aria-pressed="false">Conformité RGPD</button>
+            <button role="tab" data-segment="tab-golden" aria-pressed="false">Golden sets</button>
+          </div>
+          <div id="quality-redesign-tab-content"></div>
+        </section>
+
         <div class="panel-header">
           <h2>Pilotage Qualité & Data Flywheel</h2>
           <div class="panel-actions">
@@ -1665,8 +1719,63 @@
         </div>
       </div>
 
+      <!-- JOURNAL D'AUDIT (spec §5.6) — top-level dedicated panel -->
+      <div id="panel-audit" class="panel">
+        <header class="panel-head">
+          <div>
+            <h1 class="page-title">Journal d'audit</h1>
+            <p class="page-lead">Toutes les actions horodatées sur les documents.</p>
+          </div>
+          <div class="panel-actions">
+            <button class="btn-ghost" data-action="export-audit">Exporter CSV</button>
+          </div>
+        </header>
+        <div class="filter-bar">
+          <input type="search" class="input" id="audit-search" placeholder="⌕ Filtrer par utilisateur, document, type d'action…">
+          <button class="chip" data-filter="audit-user">Utilisateur ▾</button>
+          <button class="chip" data-filter="audit-action">Action ▾</button>
+          <button class="chip" data-filter="audit-period">Période ▾</button>
+        </div>
+        <table class="table" id="audit-table">
+          <thead>
+            <tr>
+              <th>Horodatage</th>
+              <th>Utilisateur</th>
+              <th>Action</th>
+              <th>Objet</th>
+            </tr>
+          </thead>
+          <tbody id="audit-tbody">
+            <tr><td colspan="4" class="page-lead" style="text-align:center;padding:22px">Le journal d'audit s'affichera ici. Branchement API à venir.</td></tr>
+          </tbody>
+        </table>
+      </div>
+
       <!-- PARAMÈTRES (stub) -->
       <div id="panel-settings" class="panel">
+
+        <!-- ── Paramètres redesign anchor (spec §5.7) ──
+             Six-tab segment control above the legacy stub. -->
+        <section data-redesign-settings hidden>
+          <header class="panel-head">
+            <div>
+              <h1 class="page-title">Paramètres</h1>
+              <p class="page-lead">Préférences, anonymisation, équipe.</p>
+            </div>
+          </header>
+          <div class="segment" id="settings-tabs" role="tablist">
+            <button role="tab" data-segment="set-profile" aria-pressed="true">Profil</button>
+            <button role="tab" data-segment="set-appearance" aria-pressed="false">Apparence</button>
+            <button role="tab" data-segment="set-anonymization" aria-pressed="false">Anonymisation</button>
+            <button role="tab" data-segment="set-copilot" aria-pressed="false">Copilot</button>
+            <button role="tab" data-segment="set-api" aria-pressed="false">API &amp; intégrations</button>
+            <button role="tab" data-segment="set-team" aria-pressed="false">Équipe</button>
+          </div>
+          <div id="settings-tab-content">
+            <p class="page-lead">Sélectionne un onglet pour afficher les paramètres.</p>
+          </div>
+        </section>
+
         <div class="panel-stub">
           <div class="panel-stub-icon" aria-hidden="true">
             <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6" stroke-linecap="round" stroke-linejoin="round">

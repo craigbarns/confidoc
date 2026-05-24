@@ -493,6 +493,16 @@ function showCompliancePanel() {
   if (!dashboardLoaded) loadDashboard();
 }
 
+function showAuditPanel() {
+  // Spec §5.6 — Journal d'audit promoted to top-level.
+  document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
+  const panel = $("panel-audit");
+  if (panel) panel.classList.add("active");
+  setActiveNav("audit");
+  setPageTitle("Journal d'audit");
+  closeAppNavDrawer();
+}
+
 function showQualityPanel() {
   document.querySelectorAll(".panel").forEach((p) => p.classList.remove("active"));
   const panel = $("panel-quality");
@@ -6068,9 +6078,7 @@ document.addEventListener("DOMContentLoaded", () => {
           showQualityPanel();
           break;
         case "audit":
-          // Promoted to top-level per spec §4.1. Reuse the compliance panel until
-          // a dedicated audit panel ships in Phase 7 — both surface audit data.
-          showCompliancePanel();
+          showAuditPanel();
           break;
         case "settings":
           showStubPanel("panel-settings", "settings", "Paramètres");
