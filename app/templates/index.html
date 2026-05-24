@@ -1205,6 +1205,24 @@
           </div>
         </div>
 
+      <!-- ── Copilot drawer template (spec §6 + Phase 8) ──
+           Cloned into the ⌘J drawer body. Keeps panel-ai intact so
+           legacy code paths and tests continue to work. -->
+      <template id="tmpl-copilot">
+        <div class="copilot-drawer">
+          <p class="rail-h">Demander au Copilot</p>
+          <textarea class="input" rows="6" style="width:100%" placeholder="Pose une question sur le document ouvert…"></textarea>
+          <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
+            <button class="btn-ghost" data-action="copilot-summarize">Résumer le document</button>
+            <button class="btn-ghost" data-action="copilot-risks">Lister les risques RGPD</button>
+            <button class="btn-ghost" data-action="copilot-audit">Audit comptable</button>
+          </div>
+          <p class="rail-h" style="margin-top:18px">Réponses récentes</p>
+          <div id="copilot-recent" style="font-size:12px;color:var(--ink-muted)">Aucune question posée pour l'instant.</div>
+          <p style="margin-top:18px;font-size:11px;color:var(--ink-dim)">⌘J pour fermer · contexte basé sur le document actif</p>
+        </div>
+      </template>
+
       <!-- ANALYSE IA -->
       <div id="panel-ai" class="panel">
         <div id="ai-doc-bar" class="anon-doc-bar" style="display:none;margin-bottom:12px">
