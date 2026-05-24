@@ -490,6 +490,7 @@ function showCompliancePanel() {
   setActiveNav("compliance");
   setPageTitle("Conformité");
   closeAppNavDrawer();
+  syncLegacySidebarVisibility();
   if (!dashboardLoaded) loadDashboard();
 }
 
@@ -501,6 +502,7 @@ function showAuditPanel() {
   setActiveNav("audit");
   setPageTitle("Journal d'audit");
   closeAppNavDrawer();
+  syncLegacySidebarVisibility();
 }
 
 function showQualityPanel() {
@@ -510,6 +512,7 @@ function showQualityPanel() {
   setActiveNav("quality");
   setPageTitle("Qualité");
   closeAppNavDrawer();
+  syncLegacySidebarVisibility();
   loadQualityDashboard();
 }
 
@@ -727,6 +730,7 @@ function showStubPanel(panelId, navKey, title) {
   if (navKey) setActiveNav(navKey);
   if (title) setPageTitle(title);
   closeAppNavDrawer();
+  syncLegacySidebarVisibility();
 }
 
 function setStep(n) {
@@ -743,6 +747,23 @@ function setStep(n) {
   setPageTitle(titles[n] || "");
   setActiveNav("documents");
   syncDocContextActions();
+  syncLegacySidebarVisibility();
+}
+
+// ── Legacy sidebar retract (UX: reduce double-rail chrome) ──────────
+// The old "DOCUMENTS list" sidebar adds a second column next to the
+// main 3-zone nav. On any redesigned panel that carries its own list
+// or detail view, we hide it via a body-level class. Mirrors the CSS
+// :has() rule for browsers that don't support it.
+function syncLegacySidebarVisibility() {
+  const redesignActive =
+    $("panel-documents")?.classList.contains("active") ||
+    $("panel-anon")?.classList.contains("active") ||
+    $("panel-dossier")?.classList.contains("active") ||
+    $("panel-quality")?.classList.contains("active") ||
+    $("panel-audit")?.classList.contains("active") ||
+    $("panel-settings")?.classList.contains("active");
+  document.body.classList.toggle("legacy-sidebar-hidden", !!redesignActive);
 }
 
 function syncDocContextActions() {
@@ -4938,6 +4959,8 @@ function showDashboard() {
   setPageTitle("Accueil");
   setActiveNav("home");
   closeAppNavDrawer();
+  // Accueil doesn't carry its own list — show the legacy sidebar.
+  document.body.classList.remove("legacy-sidebar-hidden");
   if (!dashboardLoaded) loadDashboard();
 }
 

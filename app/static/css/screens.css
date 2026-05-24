@@ -1,5 +1,31 @@
 /* ConfiDoc — screens.css */
 
+/* ── Hide legacy doc-list sidebar on redesigned panels ───────────
+   The main left nav (Workspace / Confiance / Système) already handles
+   global navigation, and each redesigned screen has its own list. The
+   legacy .sidebar showing the doc-list is redundant — it just adds a
+   second column of chrome. We retract it whenever a redesign panel
+   that carries its own list is active. */
+body:has(#panel-documents.active) .sidebar,
+body:has(#panel-anon.active) .sidebar,
+body:has(#panel-dossier.active) .sidebar,
+body:has(#panel-quality.active) .sidebar,
+body:has(#panel-audit.active) .sidebar,
+body:has(#panel-settings.active) .sidebar,
+body.legacy-sidebar-hidden .sidebar {
+  display: none !important;
+}
+body.legacy-sidebar-hidden #btn-sidebar-expand,
+body.legacy-sidebar-hidden #sidebar-backdrop {
+  display: none !important;
+}
+
+/* Narrow main nav slightly so content gets more room */
+.app-nav {
+  width: 200px !important;
+  min-width: 200px;
+}
+
 /* ── Topbar (search + actions) ──────────────────────────────────── */
 .topbar__search {
   flex: 1;
