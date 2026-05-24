@@ -549,17 +549,33 @@
           </header>
 
           <!-- 1. Grande zone d'upload simplifiée -->
-          <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(124, 116, 255, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%); border: 2px dashed rgba(124, 116, 255, 0.3); border-radius:var(--radius-lg); padding:40px 24px; text-align:center; margin-bottom:28px; transition:all 0.2s; cursor:pointer;" ondragover="this.style.borderColor='var(--accent)';" ondragleave="this.style.borderColor='rgba(124, 116, 255, 0.3)';" data-action="new-document">
-            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 16px; opacity:0.85; filter:drop-shadow(0 0 8px rgba(124,116,255,0.4));">
-              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-              <polyline points="17 8 12 3 7 8"/>
-              <line x1="12" y1="3" x2="12" y2="15"/>
-            </svg>
-            <h3 style="font-family:'Outfit',sans-serif; font-size:18px; font-weight:700; color:#fff; margin-bottom:8px;">Déposer un document pour démarrer</h3>
-            <p style="color:var(--text-muted); font-size:12px; max-width:400px; margin:0 auto 20px; line-height:1.5;">Glissez-déposez votre pièce comptable ou juridique (PDF, image) ici, ou cliquez pour parcourir.</p>
-            <button class="btn btn-primary btn-md" data-action="open-upload" style="display:inline-flex; align-items:center; gap:8px;">
-              <span aria-hidden="true">+</span> Anonymiser maintenant
-            </button>
+          <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(124, 116, 255, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%); border: 1px solid rgba(124, 116, 255, 0.15); border-radius:var(--radius-lg); padding:32px 24px; margin-bottom:28px; transition:all 0.2s;">
+            
+            <div style="max-width: 480px; margin: 0 auto; text-align: left; margin-bottom: 20px;">
+              <label for="std-upload-client-name" style="display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Nom du Client (Obligatoire)</label>
+              <input id="std-upload-client-name" list="clients-suggestions" class="input-md" type="text" placeholder="ex: SCI Les Pins, Monsieur Martin..." style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; color:#fff; font-size:14px; font-family:'Outfit',sans-serif;" />
+            </div>
+
+            <div class="upload-zone" id="std-upload-zone" style="border: 2px dashed rgba(124, 116, 255, 0.3); border-radius:var(--radius-md); padding:32px 20px; text-align:center; cursor:pointer; background:rgba(255,255,255,0.01); transition:all 0.2s;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px; opacity:0.85; filter:drop-shadow(0 0 8px rgba(124,116,255,0.4));">
+                <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                <polyline points="17 8 12 3 7 8"/>
+                <line x1="12" y1="3" x2="12" y2="15"/>
+              </svg>
+              <h4 style="font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-bottom:6px;">Glissez-déposez votre document ici</h4>
+              <p style="color:var(--text-muted); font-size:11px; margin:0 0 16px;">PDF, PNG, JPG, TIFF (Max. 50 Mo)</p>
+              <label class="btn btn-primary btn-sm" for="std-file-input" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
+                <span>+</span> Choisir un fichier
+              </label>
+              <input id="std-file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
+            </div>
+
+            <!-- Barre de chargement intégrée -->
+            <div id="std-upload-progress" style="display:none; margin-top:20px;">
+              <div class="progress-bar" style="background:rgba(255,255,255,0.05); height:6px; border-radius:3px; overflow:hidden;"><div id="std-progress-fill" class="progress-fill" style="background:var(--accent); width:0%; height:100%; transition:width 0.2s;"></div></div>
+              <p id="std-upload-status" style="font-size:11px; color:var(--text-muted); margin-top:8px; text-align:center;">Envoi en cours…</p>
+            </div>
+
           </div>
 
           <!-- 2. Section des actions & cartes raccourcis -->

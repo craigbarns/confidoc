@@ -96,6 +96,10 @@ function normalizeClientFieldInput(raw) {
 }
 
 function getUploadClientName() {
+  const stdEl = $("std-upload-client-name");
+  if (stdEl && stdEl.value.trim()) {
+    return normalizeClientFieldInput(stdEl.value);
+  }
   const el = $("upload-client-name");
   return normalizeClientFieldInput(el && "value" in el ? el.value : "");
 }
@@ -3521,10 +3525,20 @@ async function uploadFile(file) {
   const statusEl = $("upload-status");
   const fill = $("progress-fill");
 
-  zone.style.display = "none";
-  progress.style.display = "";
-  statusEl.textContent = "Envoi en cours…";
-  fill.style.width = "30%";
+  const stdZone = $("std-upload-zone");
+  const stdProgress = $("std-upload-progress");
+  const stdStatusEl = $("std-upload-status");
+  const stdFill = $("std-progress-fill");
+
+  if (zone) zone.style.display = "none";
+  if (progress) progress.style.display = "";
+  if (statusEl) statusEl.textContent = "Envoi en cours…";
+  if (fill) fill.style.width = "30%";
+
+  if (stdZone) stdZone.style.display = "none";
+  if (stdProgress) stdProgress.style.display = "";
+  if (stdStatusEl) stdStatusEl.textContent = "Envoi en cours…";
+  if (stdFill) stdFill.style.width = "30%";
 
   const fd = new FormData();
   fd.append("file", file);
@@ -3533,11 +3547,16 @@ async function uploadFile(file) {
   const autoAnon = $("upload-auto-anonymize")?.checked ?? true;
 
   if (!clientName) {
-    zone.style.display = "";
-    progress.style.display = "none";
-    fill.style.width = "0";
+    if (zone) zone.style.display = "";
+    if (progress) progress.style.display = "none";
+    if (fill) fill.style.width = "0";
+    if (stdZone) stdZone.style.display = "";
+    if (stdProgress) stdProgress.style.display = "none";
+    if (stdFill) stdFill.style.width = "0";
+
     toast("Le nom client est obligatoire à l'upload.", "error");
-    $("upload-client-name")?.focus();
+    const clientInput = $("std-upload-client-name") || $("upload-client-name");
+    clientInput?.focus();
     throw new Error("client_name_required");
   }
 
@@ -3550,10 +3569,16 @@ async function uploadFile(file) {
     const catQp = ($("upload-doc-category")?.value || "").trim();
     if (exerciceQp) params.set("exercice", exerciceQp);
     if (catQp) params.set("doc_category", catQp);
+    
+    // Choose standard or legacy progress indicators
+    const isStdActive = stdProgress && stdProgress.style.display !== "none";
+    const activeFill = isStdActive ? stdFill : fill;
+    const activeStatusEl = isStdActive ? stdStatusEl : statusEl;
+
     const data = await uploadWithProgress(
       fd,
       `/uploads?${params.toString()}`,
-      fill, statusEl
+      activeFill, activeStatusEl
     );
     currentDocId = data.document_id;
     currentDocName = file.name;
@@ -3566,9 +3591,15 @@ async function uploadFile(file) {
     if (sidebarMode === "dossier") loadDossierTree();
 
     setTimeout(() => {
-      zone.style.display = "";
-      progress.style.display = "none";
-      fill.style.width = "0";
+      if (zone) zone.style.display = "";
+      if (progress) progress.style.display = "none";
+      if (fill) fill.style.width = "0";
+      if (stdZone) stdZone.style.display = "";
+      if (stdProgress) stdProgress.style.display = "none";
+      if (stdFill) stdFill.style.width = "0";
+      
+      const stdClientInput = $("std-upload-client-name");
+      if (stdClientInput) stdClientInput.value = "";
 
       if (!isBatchUpload) {
         setStep(2);
@@ -7315,6 +7346,37 @@ document.addEventListener("DOMContentLoaded", () => {
     if (files.length) enqueueUpload(files);
     fileInput.value = "";
   });
+
+  // Standard Dashboard Upload: drag-and-drop
+  const stdZone = $("std-upload-zone");
+  if (stdZone) {
+    stdZone.addEventListener("dragover", e => {
+      e.preventDefault();
+      stdZone.style.borderColor = "var(--accent)";
+      stdZone.style.background = "rgba(4,120,87,0.02)";
+    });
+    stdZone.addEventListener("dragleave", () => {
+      stdZone.style.borderColor = "rgba(124, 116, 255, 0.3)";
+      stdZone.style.background = "rgba(255,255,255,0.01)";
+    });
+    stdZone.addEventListener("drop", e => {
+      e.preventDefault();
+      stdZone.style.borderColor = "rgba(124, 116, 255, 0.3)";
+      stdZone.style.background = "rgba(255,255,255,0.01)";
+      const files = Array.from(e.dataTransfer.files || []);
+      if (files.length) enqueueUpload(files);
+    });
+  }
+
+  // Standard Dashboard Upload: file input
+  const stdFileInput = $("std-file-input");
+  if (stdFileInput) {
+    stdFileInput.addEventListener("change", () => {
+      const files = Array.from(stdFileInput.files || []);
+      if (files.length) enqueueUpload(files);
+      stdFileInput.value = "";
+    });
+  }
 
   // Anonymiser
   $("btn-anonymize").addEventListener("click", anonymize);
