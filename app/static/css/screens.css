@@ -168,8 +168,46 @@
   color: var(--ink);
   overflow: auto;
 }
-.viewer-original { background: var(--raw-soft); }
+.viewer-original {
+  background: var(--raw-soft);
+  display: flex;
+  flex-direction: column;
+  padding: 0;
+}
 .viewer-anonymized { background: var(--surface-2); }
+
+.document-original-strip {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 10px 16px;
+  border-bottom: 1px solid var(--border);
+  background: var(--surface-2);
+  gap: 12px;
+}
+.document-original-strip .rail-h { color: var(--ink-muted); }
+.document-original-strip .page-lead {
+  font-weight: 500;
+  color: var(--ink);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  max-width: 320px;
+}
+.document-original-iframe {
+  flex: 1;
+  width: 100%;
+  border: 0;
+  background: #ffffff;
+  min-height: 480px;
+}
+.document-original-fallback {
+  flex: 1;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 22px 26px;
+}
 .document-original-card {
   max-width: 520px;
   margin: 0 auto;

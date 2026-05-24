@@ -2900,6 +2900,19 @@ function renderAIReadySummary(details = {}) {
   card.style.display = "";
 }
 
+async function loadOriginalIntoIframe(iframe, fallback) {
+  if (!iframe) return;
+  try {
+    const { url } = await fetchCurrentOriginalBlob();
+    iframe.src = url;
+    if (fallback) fallback.hidden = true;
+  } catch (e) {
+    console.warn("PDF inline preview unavailable:", e);
+    iframe.remove();
+    if (fallback) fallback.hidden = false;
+  }
+}
+
 function renderDocumentDetailShell(details = {}) {
   const root = document.querySelector("[data-document-detail]");
   if (!root) return;
@@ -2942,23 +2955,34 @@ function renderDocumentDetailShell(details = {}) {
 
   const originalViewer = root.querySelector(".viewer-original");
   if (originalViewer) {
+    // Layout : metadata strip on top, PDF iframe filling the rest.
     originalViewer.innerHTML = `
-      <div class="document-original-card">
-        <p class="rail-h">Document original</p>
-        <h3>${escapeHtml(name)}</h3>
-        <dl class="meta-list">
-          ${documentDetailRow("Client", client)}
-          ${documentDetailRow("Format", fileKind)}
-          ${documentDetailRow("Taille", size || "—")}
-          ${documentDetailRow("Statut", status)}
-          ${documentDetailRow("ID", fileId || "—")}
-        </dl>
+      <div class="document-original-strip">
+        <div>
+          <p class="rail-h" style="margin:0">${escapeHtml(fileKind)} · ${escapeHtml(size || "—")}</p>
+          <p class="page-lead" style="margin:2px 0 0">${escapeHtml(name)}</p>
+        </div>
         <div class="document-original-actions">
-          <button type="button" class="btn-ghost" data-action="open-original">Ouvrir l’original</button>
-          <button type="button" class="btn-ghost" data-action="download-original">Télécharger</button>
+          <button type="button" class="btn-ghost btn-xs" data-action="open-original">Ouvrir</button>
+          <button type="button" class="btn-ghost btn-xs" data-action="download-original">Télécharger</button>
+        </div>
+      </div>
+      <iframe class="document-original-iframe" title="Aperçu document original"></iframe>
+      <div class="document-original-fallback" hidden>
+        <div class="document-original-card">
+          <p class="rail-h">Aperçu indisponible</p>
+          <p class="page-lead">L'aperçu direct n'a pas pu être chargé. Utilisez les boutons ci-dessus pour ouvrir ou télécharger le document.</p>
+          <dl class="meta-list">
+            ${documentDetailRow("Client", client)}
+            ${documentDetailRow("Format", fileKind)}
+            ${documentDetailRow("Taille", size || "—")}
+            ${documentDetailRow("Statut", status)}
+            ${documentDetailRow("ID", fileId || "—")}
+          </dl>
         </div>
       </div>
     `;
+    loadOriginalIntoIframe(originalViewer.querySelector(".document-original-iframe"), originalViewer.querySelector(".document-original-fallback"));
   }
 
   const anonymizedViewer = root.querySelector(".viewer-anonymized");
