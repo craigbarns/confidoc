@@ -18,6 +18,7 @@ let copilotMode = false;
 let selectedCabinetDocType = "generique";
 let lastDocsList = [];
 let expertMode = false;
+let currentDocValidated = false;
 
 const CABINET_DOC_TYPE_PREFIX = {
   generique: "",
@@ -502,7 +503,7 @@ function setExpertMode(enabled) {
   }
 }
 
-function updateGuidedStepper(status) {
+function updateGuidedStepper(status, isValidated = false) {
   const step1 = $("std-step-1");
   const step2 = $("std-step-2");
   const step3 = $("std-step-3");
@@ -546,10 +547,14 @@ function updateGuidedStepper(status) {
     setStepState(step1, num1, 'checked');
     setStepState(step2, num2, 'active');
     if (line1) line1.style.background = "var(--accent)";
-  } else if (status === "ready" || status === "anonymized") {
+  } else if (status === "ready" || status === "anonymized" || status === "validated") {
     setStepState(step1, num1, 'checked');
     setStepState(step2, num2, 'checked');
-    setStepState(step3, num3, 'active');
+    if (isValidated || status === "validated") {
+      setStepState(step3, num3, 'checked');
+    } else {
+      setStepState(step3, num3, 'active');
+    }
     if (line1) line1.style.background = "var(--accent)";
     if (line2) line2.style.background = "var(--accent)";
   } else if (status === "failed") {
@@ -1352,10 +1357,15 @@ function renderExportGuard(payload = {}) {
     state = "ready";
     title = "Export validé";
     detail = `${scoreText}Validation humaine journalisée.`;
-  } else if (level === "medium") {
+  } else if (level === "medium" && !validated) {
     state = "watch";
     title = "Revue recommandée avant export IA";
     detail = `${scoreText}Contrôle recommandé avant partage externe.`;
+    canApprove = true;
+  } else if (level === "medium" && validated) {
+    state = "ready";
+    title = "Export validé";
+    detail = `${scoreText}Contrôle effectué et validé.`;
   }
 
   guard.className = `export-guard ${state}`;
@@ -1412,6 +1422,9 @@ async function refreshAIDocInsights(docId) {
     const trust = risk.trust || {};
     const score = normalizeRiskPercent(risk.risk_score ?? risk.risk?.score);
     const lastAudit = auditEntries.length ? auditEntries[0] : null;
+    const validated = !!(risk.human_validated ?? risk.humanValidated);
+    currentDocValidated = validated;
+    updateGuidedStepper(st.status || currentDocStatus, validated);
     renderAIDocInsights({
       status: documentStatusLabel(st.status || currentDocStatus),
       ocrStatus: st?.extraction?.done ? `OK · ${st?.extraction?.text_length ?? 0} car.` : "À lancer",
@@ -3326,7 +3339,7 @@ async function openAnonReviewForCurrentDocument() {
   const clientLabel = getDocClientLabel(currentDocId);
   setStep(2);
   try {
-    updateGuidedStepper(currentDocStatus);
+    updateGuidedStepper(currentDocStatus, currentDocValidated);
   } catch (e) {
     console.warn("updateGuidedStepper failed:", e);
   }
@@ -6357,6 +6370,7 @@ function startNewDocument() {
   currentDocName = "";
   currentDocStatus = "";
   currentDocSize = 0;
+  currentDocValidated = false;
   document.querySelectorAll(".doc-item").forEach(el => el.classList.remove("selected"));
   updateHeaderContext();
   renderAIDocInsights({});
