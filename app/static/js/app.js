@@ -4205,6 +4205,13 @@ async function validate() {
         final_text: finalText.trim() ? finalText : undefined,
       }),
     });
+
+    // Premium Ceremony: trigger emerald sweep and bouncy checkmark on successful validation
+    const container = $("review-container") || document.querySelector(".review-container");
+    if (typeof window.triggerScanReveal === "function" && container) {
+      await window.triggerScanReveal(container);
+    }
+
     setStep(3);
     updateAIDocBar(currentDocName, currentDocSize);
     await refreshAIDocInsights(currentDocId);

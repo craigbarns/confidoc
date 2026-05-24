@@ -155,6 +155,7 @@ async def test_redesign_actions_are_wired_in_app_js(client):
         assert f'action === "{action}"' in js
     assert "renderDocumentDetailShell" in js
     assert "openAnonReviewForCurrentDocument" in js
+    assert "triggerScanReveal" in js
 
 
 # --- Phase 4 · Documents list --------------------------------------------------
