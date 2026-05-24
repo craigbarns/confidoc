@@ -127,6 +127,23 @@ async def compare_documents(
                 f"Bilan N-1 déséquilibré : Actif {actif_n1:,.0f} ≠ Passif {passif_n1:,.0f}"
             )
 
+    # General financial trends coherence checks
+    rn_n = _to_float(current_fields.get("resultat_net") or current_fields.get("resultat_de_l_exercice") or current_fields.get("resultat_exercice") or current_fields.get("poste_resultat_net"))
+    rn_n1 = _to_float(previous_fields.get("resultat_net") or previous_fields.get("resultat_de_l_exercice") or previous_fields.get("resultat_exercice") or previous_fields.get("poste_resultat_net"))
+    if rn_n is not None and rn_n < 0 and rn_n1 is not None and rn_n1 > 0:
+        coherence_flags.append(
+            f"Bilan déficitaire : L'entreprise enregistre un résultat net négatif en N ({rn_n:,.0f} €) alors qu'elle était bénéficiaire en N-1 ({rn_n1:,.0f} €)."
+        )
+
+    ca_n = _to_float(current_fields.get("chiffre_d_affaires") or current_fields.get("chiffre_affaires") or current_fields.get("poste_chiffre_d_affaires"))
+    ca_n1 = _to_float(previous_fields.get("chiffre_d_affaires") or previous_fields.get("chiffre_affaires") or previous_fields.get("poste_chiffre_d_affaires"))
+    if ca_n is not None and ca_n1 is not None and ca_n1 > 0:
+        ca_var = (ca_n - ca_n1) / ca_n1 * 100
+        if ca_var < -30:
+            coherence_flags.append(
+                f"Baisse critique de l'activité : Le chiffre d'affaires a diminué de {abs(ca_var):.1f}% sur l'exercice (N: {ca_n:,.0f} € vs N-1: {ca_n1:,.0f} €)."
+            )
+
     # 4) Summary generation
     critical_count = sum(1 for v in variations if v["severity"] == "critical")
     warning_count = sum(1 for v in variations if v["severity"] == "warning")

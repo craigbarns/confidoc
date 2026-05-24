@@ -2258,6 +2258,104 @@ async function initDossierComparisonTab() {
   }
 }
 
+function generateComparisonSVGChart(variations) {
+  // Filter for numeric variations that have both N and N-1 values
+  const numericVars = variations.filter(v => 
+    v.current_value !== null && v.previous_value !== null &&
+    !isNaN(v.current_value) && !isNaN(v.previous_value) &&
+    v.field !== "total_actif" && v.field !== "total_passif"
+  ).slice(0, 4); // Take top 4 fields
+
+  if (numericVars.length === 0) return "";
+
+  const chartWidth = 500;
+  const chartHeight = 180;
+  const padding = 30;
+  const barWidth = 24;
+  const gap = 45;
+
+  // Find max value for scale
+  const allValues = [];
+  numericVars.forEach(v => {
+    allValues.push(Math.abs(v.current_value));
+    allValues.push(Math.abs(v.previous_value));
+  });
+  const maxVal = Math.max(...allValues, 1);
+
+  const scale = (chartHeight - padding * 2) / maxVal;
+
+  let barsHtml = "";
+  numericVars.forEach((v, index) => {
+    const x = padding + index * (barWidth * 2 + gap) + 40;
+    
+    // N-1 Bar (Gray/Translucent)
+    const hN1 = Math.abs(v.previous_value) * scale;
+    const yN1 = chartHeight - padding - hN1;
+    
+    // N Bar (Vibrant green/red based on trend)
+    const hN = Math.abs(v.current_value) * scale;
+    const yN = chartHeight - padding - hN;
+    const isUp = v.current_value >= v.previous_value;
+    const barColor = isUp ? "url(#grad-up)" : "url(#grad-down)";
+    
+    const fieldLabel = v.field.replace("total_", "").replace("poste_", "").replace(/_/g, " ").toUpperCase().slice(0, 15);
+
+    barsHtml += `
+      <!-- Field group: ${v.field} -->
+      <g>
+        <!-- N-1 Bar -->
+        <rect x="${x}" y="${yN1}" width="${barWidth}" height="${hN1}" rx="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1">
+          <title>Exercice N-1 : ${v.previous_value.toLocaleString()} €</title>
+        </rect>
+        
+        <!-- N Bar -->
+        <rect x="${x + barWidth + 6}" y="${yN}" width="${barWidth}" height="${hN}" rx="3" fill="${barColor}" stroke="rgba(255,255,255,0.15)" stroke-width="1">
+          <title>Exercice N : ${v.current_value.toLocaleString()} €</title>
+        </rect>
+
+        <!-- Label below -->
+        <text x="${x + barWidth + 3}" y="${chartHeight - 10}" fill="var(--text-muted)" font-size="8" font-weight="700" text-anchor="middle">${escapeHtml(fieldLabel)}</text>
+      </g>
+    `;
+  });
+
+  return `
+    <div class="comparison-chart-card animate-fade-in" style="background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
+      <h4 style="font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; color: #fff; margin-top: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
+        📊 Représentation Graphique des Ratios (N vs N-1)
+      </h4>
+      <div style="display:flex; justify-content:center; align-items:center;">
+        <svg width="100%" height="${chartHeight}" viewBox="0 0 ${chartWidth} ${chartHeight}" style="max-width: ${chartWidth}px; overflow: visible;">
+          <defs>
+            <linearGradient id="grad-up" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#34d399" />
+              <stop offset="100%" stop-color="#10b981" />
+            </linearGradient>
+            <linearGradient id="grad-down" x1="0%" y1="0%" x2="0%" y2="100%">
+              <stop offset="0%" stop-color="#f87171" />
+              <stop offset="100%" stop-color="#ef4444" />
+            </linearGradient>
+          </defs>
+          
+          <!-- Grid lines -->
+          <line x1="20" y1="${chartHeight - padding}" x2="${chartWidth - 20}" y2="${chartHeight - padding}" stroke="rgba(255,255,255,0.08)" stroke-width="1" />
+          
+          ${barsHtml}
+          
+          <!-- Legend -->
+          <g transform="translate(${chartWidth - 110}, 15)">
+            <rect x="0" y="0" width="8" height="8" rx="1.5" fill="rgba(255,255,255,0.08)" />
+            <text x="12" y="8" fill="var(--text-muted)" font-size="9">Exercice N-1</text>
+            
+            <rect x="0" y="12" width="8" height="8" rx="1.5" fill="url(#grad-up)" />
+            <text x="12" y="20" fill="var(--text-muted)" font-size="9">Exercice N</text>
+          </g>
+        </svg>
+      </div>
+    </div>
+  `;
+}
+
 async function runDossierComparison() {
   const docIdN = $("compare-doc-n").value;
   const docIdN1 = $("compare-doc-n1").value;
@@ -2292,6 +2390,8 @@ async function runDossierComparison() {
     const summary = data.summary || "Aucun résumé disponible.";
     const globalTrend = data.global_trend || "Stable";
     
+    const chartHtml = generateComparisonSVGChart(variations);
+    
     let resultsHtml = `
       <div class="comparison-summary-card animate-fade-in" style="background: rgba(99, 102, 241, 0.04); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; flex-wrap:wrap; gap:8px;">
@@ -2300,6 +2400,7 @@ async function runDossierComparison() {
         </div>
         <p style="color: var(--text-muted); font-size: 13px; line-height: 1.6; margin:0;">${escapeHtml(summary)}</p>
       </div>
+      ${chartHtml}
     `;
     
     if (coherenceFlags.length > 0) {
@@ -4422,7 +4523,12 @@ function renderStructuredAnswer(bodyEl, text) {
     .map((s) => {
       const icon = getIcon(s.title);
       const cls = getSectionClass(s.title);
-      return `<div class="ai-section ${cls}"><div class="ai-section-title">${icon} ${escapeHtml(s.title)}</div><ul>${s.items.map((it) => `<li>${escapeHtml(it)}</li>`).join("")}</ul></div>`;
+      return `<div class="ai-section ${cls}"><div class="ai-section-title">${icon} ${escapeHtml(s.title)}</div><ul>${s.items.map((it) => {
+        const enriched = escapeHtml(it).replace(/(\[[A-Z]+_\d+\])/g, (match) => {
+          return `<span class="citation-highlight-trigger" style="color: #a5b4fc; font-weight: 700; cursor: pointer; border-bottom: 1px dashed #a5b4fc;" data-token="${escapeAttr(match)}">${escapeHtml(match)}</span>`;
+        });
+        return `<li>${enriched}</li>`;
+      }).join("")}</ul></div>`;
     })
     .join("");
 
@@ -5349,12 +5455,83 @@ function renderQualityRedesignTab(tab, qualityData = null) {
     const items = qualityData?.gdpr || qualityData || {};
     const score = clampPct(items.score ?? items.compliance_score ?? 0);
     c.innerHTML = `
-      <div class="card" style="padding:18px">
-        <p class="rail-h">Score conformité RGPD</p>
-        <div class="kpi-value tabular" style="color:${score >= 90 ? "var(--accent)" : "var(--warning)"};font-size:32px">${score}%</div>
-        <p class="page-lead" style="margin-top:8px">Calculé sur les documents anonymisés du mois.</p>
-        <button class="btn-ghost" style="margin-top:14px" data-action="download-compliance-cert">Télécharger le certificat RGPD</button>
+      <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; flex-wrap: wrap; margin-bottom: 20px;">
+        <div class="card animate-fade-in" style="padding:24px; margin: 0;">
+          <p class="rail-h" style="margin-top:0; font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Score global de conformité RGPD [Donnée réelle Backend]</p>
+          <div class="kpi-value tabular" style="color:${score >= 90 ? "var(--accent)" : "var(--warning)"};font-size:42px; font-weight:800; font-family:'Outfit',sans-serif; margin: 10px 0;">${score}%</div>
+          <p class="page-lead" style="margin:8px 0 16px 0; font-size:12px; line-height:1.5;">Calculé sur l'ensemble des documents anonymisés du mois. Ce score atteste de l'excellence de votre posture de protection.</p>
+          <button class="btn btn-primary btn-sm" data-action="download-compliance-cert" style="display:inline-flex; align-items:center; gap:6px;">
+            <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
+            Télécharger le certificat RGPD
+          </button>
+        </div>
+
+        <div class="card animate-fade-in" style="padding:24px; margin: 0;">
+          <h3 style="font-family:'Outfit', sans-serif; font-size: 14px; font-weight:700; color:#fff; margin-top:0; margin-bottom:12px;">🛡️ Registre des Traitements & Purge DPO</h3>
+          <div class="table-container" style="border: 1px solid var(--border); border-radius: var(--radius-md); overflow:hidden; background:rgba(0,0,0,0.15);">
+            <table style="width:100%; border-collapse:collapse; font-size:11px; text-align:left;">
+              <thead>
+                <tr style="background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border);">
+                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Donnée</th>
+                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Rétention [Donnée réelle Backend]</th>
+                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Prochaine Purge [Calculé côté Frontend / Simulé pour la démo]</th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Pièces brutes (Source)</td>
+                  <td style="padding:8px 10px;">90j (Backend)</td>
+                  <td style="padding:8px 10px; font-family: monospace; font-variant-numeric: tabular-nums; color:#fbbf24;" id="purge-countdown-files">Calcul...</td>
+                </tr>
+                <tr style="border-bottom:1px solid var(--border);">
+                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Mappings Fernet</td>
+                  <td style="padding:8px 10px;">30j (Backend)</td>
+                  <td style="padding:8px 10px; font-family: monospace; font-variant-numeric: tabular-nums; color:#fbbf24;" id="purge-countdown-mappings">Calcul...</td>
+                </tr>
+                <tr>
+                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Logs d'audit DPO</td>
+                  <td style="padding:8px 10px;">3 ans (Backend)</td>
+                  <td style="padding:8px 10px; color:var(--text-muted);">Processus continu</td>
+                </tr>
+              </tbody>
+            </table>
+          </div>
+        </div>
+      </div>
+
+      <div class="card animate-fade-in" style="padding: 24px; margin-top: 0;">
+        <h3 style="font-family:'Outfit', sans-serif; font-size: 14px; font-weight:700; color:#fff; margin-top:0; margin-bottom:8px;">🔬 Simulateur de Risque CNIL [Simulation Pédagogique Démo, calculé côté Frontend]</h3>
+        <p class="page-lead" style="margin-bottom:16px; font-size:12px; line-height:1.5;">Décochez ou cochez les quasi-identifiants ci-dessous pour simuler en temps réel la résistance des exports face aux attaques par croisement de données externes.</p>
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
+          <div>
+            <div style="display:flex; flex-direction:column; gap:8px;">
+              <label style="font-size:12px; display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; user-select:none;">
+                <input type="checkbox" id="sim-city" checked onchange="updateSimScore()" /> 📍 Ville &amp; Code Postal visibles
+              </label>
+              <label style="font-size:12px; display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; user-select:none;">
+                <input type="checkbox" id="sim-age" onchange="updateSimScore()" /> 🎂 Tranche d'âge / Dates non masquées
+              </label>
+              <label style="font-size:12px; display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; user-select:none;">
+                <input type="checkbox" id="sim-siret" onchange="updateSimScore()" /> 🏢 Numéros SIRET / SIREN résiduels
+              </label>
+              <label style="font-size:12px; display:flex; align-items:center; gap:8px; color:var(--text); cursor:pointer; user-select:none;">
+                <input type="checkbox" id="sim-detention" onchange="updateSimScore()" /> 📊 Parts sociales et pourcentages précis
+              </label>
+            </div>
+          </div>
+          <div style="background:rgba(0,0,0,0.15); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
+            <span style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Indice de Vulnerabilité [Calculé côté Frontend / Simulé]</span>
+            <div style="font-size:36px; font-weight:800; font-family:'Outfit',sans-serif; color:#34d399; line-height:1; transition: color 0.2s;" id="sim-prob-score">12%</div>
+            <span style="font-size:10px; color:#34d399; font-weight:700; margin-top:8px; text-transform:uppercase; letter-spacing:0.05em; transition: color 0.2s;" id="sim-status-label">FAIBLE RISQUE</span>
+          </div>
+        </div>
       </div>`;
+    
+    // Launch interactive mechanisms
+    setTimeout(() => {
+      startDPOCountdowns();
+      updateSimScore();
+    }, 50);
   } else if (tab === "tab-golden") {
     c.innerHTML = `
       <div class="card" style="padding:18px">
@@ -5374,6 +5551,68 @@ function renderQualityRedesignTab(tab, qualityData = null) {
       </div>`;
   }
 }
+
+// Interactive helper functions for DPO Dashboard
+let dpoCountdownTimer = null;
+function startDPOCountdowns() {
+  if (dpoCountdownTimer) clearInterval(dpoCountdownTimer);
+  
+  const updateTimes = () => {
+    const now = new Date();
+    const midnight = new Date();
+    midnight.setHours(24, 0, 0, 0);
+    const diff = midnight - now;
+
+    const hours = Math.floor(diff / (1000 * 60 * 60));
+    const minutes = Math.floor((diff % (1000 * 60 * 60)) / (1000 * 60));
+    const seconds = Math.floor((diff % (1000 * 60)) / 1000);
+
+    const pad = (num) => String(num).padStart(2, '0');
+    const timeStr = `${pad(hours)}h ${pad(minutes)}m ${pad(seconds)}s`;
+
+    const el1 = document.getElementById("purge-countdown-files");
+    const el2 = document.getElementById("purge-countdown-mappings");
+    if (el1) el1.textContent = timeStr;
+    if (el2) el2.textContent = timeStr;
+  };
+  
+  updateTimes();
+  dpoCountdownTimer = setInterval(updateTimes, 1000);
+}
+
+function updateSimScore() {
+  const city = document.getElementById("sim-city")?.checked || false;
+  const age = document.getElementById("sim-age")?.checked || false;
+  const siret = document.getElementById("sim-siret")?.checked || false;
+  const detention = document.getElementById("sim-detention")?.checked || false;
+
+  let score = 0;
+  if (city) score += 12;
+  if (age) score += 30;
+  if (siret) score += 43;
+  if (detention) score += 13;
+
+  const scoreEl = document.getElementById("sim-prob-score");
+  const statusEl = document.getElementById("sim-status-label");
+  if (!scoreEl || !statusEl) return;
+
+  scoreEl.textContent = `${score}%`;
+
+  if (score >= 70) {
+    scoreEl.style.color = "#f87171"; // critical red
+    statusEl.textContent = "CRITIQUE (Export bloqué)";
+    statusEl.style.color = "#f87171";
+  } else if (score >= 35) {
+    scoreEl.style.color = "#fbbf24"; // warning amber
+    statusEl.textContent = "MODÉRÉ (Validation requise)";
+    statusEl.style.color = "#fbbf24";
+  } else {
+    scoreEl.style.color = "#34d399"; // success green
+    statusEl.textContent = "FAIBLE RISQUE";
+    statusEl.style.color = "#34d399";
+  }
+}
+window.updateSimScore = updateSimScore;
 
 // ── Redesign Settings tabs (spec §5.7) ──────────────────────────────────
 function renderSettingsRedesignTab(tab) {
@@ -6164,7 +6403,6 @@ window.addAuditLedgerEntry = function(action, operator, details = "") {
   
   const now = new Date();
   const timeStr = now.toLocaleTimeString("fr-FR") + "." + String(now.getMilliseconds()).padStart(3, "0");
-  
   const hash = generateSHA256Mock();
   
   const tr = document.createElement("tr");
@@ -6178,7 +6416,7 @@ window.addAuditLedgerEntry = function(action, operator, details = "") {
         <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;">
           <polyline points="20 6 9 17 4 12"></polyline>
         </svg>
-        Certifié
+        Intègre
       </span>
     </td>
   `;
@@ -6920,17 +7158,60 @@ document.addEventListener("DOMContentLoaded", () => {
   }
   document.addEventListener("click", (e) => {
     const control = e.target instanceof Element ? e.target.closest("[data-decision-action]") : null;
-    if (!control) return;
-    const action = control.dataset.decisionAction;
-    if (action === "analyze") goToChat();
-    else if (action === "report" || action === "audit") downloadAuditReport();
-    else if (action === "correct") setReviewMode("split");
-    else if (action === "validate") validate();
-    else if (action === "why") {
-      const details = $("why-score-details");
-      if (details) details.style.display = "";
-    } else if (action === "retry") {
-      $("btn-anonymize")?.click();
+    if (control) {
+      const action = control.dataset.decisionAction;
+      if (action === "analyze") goToChat();
+      else if (action === "report" || action === "audit") downloadAuditReport();
+      else if (action === "correct") setReviewMode("split");
+      else if (action === "validate") validate();
+      else if (action === "why") {
+        const details = $("why-score-details");
+        if (details) details.style.display = "";
+      } else if (action === "retry") {
+        $("btn-anonymize")?.click();
+      }
+      return;
+    }
+
+    // Citation highlighting logic (Chantier C.1)
+    const citation = e.target instanceof Element ? e.target.closest(".citation-highlight-trigger") : null;
+    if (citation) {
+      const token = citation.dataset.token;
+      if (!token) return;
+      
+      const previewContainer = document.querySelector(".preview-text.interactive-text");
+      if (!previewContainer) return;
+      
+      const tokens = Array.from(previewContainer.querySelectorAll(".redact-token"));
+      const targetTokenEl = tokens.find(el => el.textContent.trim() === token || el.getAttribute("title")?.includes(token));
+      
+      if (targetTokenEl) {
+        targetTokenEl.style.transition = "all 0.3s ease";
+        targetTokenEl.style.boxShadow = "0 0 20px var(--accent-light), 0 0 5px var(--accent-light)";
+        targetTokenEl.style.transform = "scale(1.2)";
+        targetTokenEl.style.borderColor = "var(--accent-light)";
+        
+        targetTokenEl.scrollIntoView({ behavior: "smooth", block: "center" });
+        
+        setTimeout(() => {
+          targetTokenEl.style.boxShadow = "";
+          targetTokenEl.style.transform = "";
+          targetTokenEl.style.borderColor = "";
+        }, 1500);
+        
+        toast(`Citation repérée : ${token}`, "success");
+      } else {
+        if (!citation.querySelector(".citation-not-found")) {
+          const fallbackBadge = document.createElement("span");
+          fallbackBadge.className = "citation-not-found";
+          fallbackBadge.style.cssText = "font-size: 10px; color: #f87171; font-weight: normal; margin-left: 6px; border: 1px solid rgba(248,113,113,0.3); background: rgba(248,113,113,0.1); padding: 1px 4px; border-radius: 4px; display: inline-block; vertical-align: middle;";
+          fallbackBadge.textContent = "source non retrouvée";
+          citation.appendChild(fallbackBadge);
+          citation.style.borderColor = "#f87171";
+          citation.style.color = "#f87171";
+        }
+        toast(`Source non retrouvée pour ${token} (donnée potentiellement purgée ou absente)`, "warning");
+      }
     }
   });
 

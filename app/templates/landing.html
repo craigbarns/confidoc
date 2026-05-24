@@ -523,6 +523,26 @@
         </button>
       </div>
 
+      <!-- Processing Timeline (Ceremony A.1) -->
+      <div class="sandbox-timeline-ceremony" id="sandbox-timeline-ceremony" style="display:none; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; padding: 12px; background: rgba(99, 102, 241, 0.03); border: 1px solid var(--border); border-radius: var(--radius-md);">
+        <div class="timeline-step" id="t-step-1" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
+          <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
+          <span>1. Sandbox Antivirus</span>
+        </div>
+        <div class="timeline-step" id="t-step-2" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
+          <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
+          <span>2. OCR & Structure</span>
+        </div>
+        <div class="timeline-step" id="t-step-3" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
+          <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
+          <span>3. Caviardage PII</span>
+        </div>
+        <div class="timeline-step" id="t-step-4" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
+          <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
+          <span>4. Post-OCR Guard</span>
+        </div>
+      </div>
+
       <div class="sandbox-metrics">
         <div class="sandbox-metric-card">
           <strong id="sb-risk-score">0%</strong>
@@ -727,7 +747,7 @@
         <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="faq-content">
-        La pseudonymisation remplace les données par des identifiants réversibles via une table de clés cryptographiques. L'anonymisation forte supprime définitivement le risque de réidentification par regroupement de données, conformément aux recommandations strictes du G29 et de la CNIL.
+        La pseudonymisation remplace les données par des identifiants réversibles via une table de clés cryptographiques. L'anonymisation forte supprime définitivement le risque de réidentification par regroupement de données, s'inspirant des bonnes pratiques de la CNIL et des recommandations du G29.
       </div>
     </div>
   </section>
@@ -900,16 +920,60 @@ Par exemple, un nom comme Sophie Bernard, un SIRET 123 456 789 00012, un email t
     function triggerAnonymize(silent = false) {
       if (!textarea || !output) return;
       
+      const timeline = $('sandbox-timeline-ceremony');
+      
       if (!silent) {
         shell.classList.add('scan-active');
+        if (timeline) {
+          timeline.style.display = 'grid';
+        }
         statusText.textContent = 'Moteur de sécurité ConfiDoc en action...';
         redactBtn.disabled = true;
+        
+        // Reset steps helper
+        const setStepState = (stepNum, state) => {
+          const stepEl = $(`t-step-${stepNum}`);
+          if (!stepEl) return;
+          const dot = stepEl.querySelector('.step-dot');
+          if (state === 'pending') {
+            dot.style.background = 'rgba(255,255,255,0.1)';
+            stepEl.style.color = 'var(--text-muted)';
+          } else if (state === 'active') {
+            dot.style.background = '#a855f7'; // purple accent
+            stepEl.style.color = '#fff';
+          } else if (state === 'success') {
+            dot.style.background = '#10b981'; // green success
+            stepEl.style.color = '#a7f3d0';
+          }
+        };
+
+        // Reset all steps to pending
+        [1, 2, 3, 4].forEach(n => setStepState(n, 'pending'));
+
+        // Sequence steps
+        setTimeout(() => setStepState(1, 'active'), 50);
         setTimeout(() => {
+          setStepState(1, 'success');
+          setStepState(2, 'active');
+        }, 350);
+        setTimeout(() => {
+          setStepState(2, 'success');
+          setStepState(3, 'active');
+        }, 700);
+        setTimeout(() => {
+          setStepState(3, 'success');
+          setStepState(4, 'active');
+        }, 1050);
+        setTimeout(() => {
+          setStepState(4, 'success');
           shell.classList.remove('scan-active');
           redactBtn.disabled = false;
           processText();
-        }, 800);
+        }, 1400);
       } else {
+        if (timeline) {
+          timeline.style.display = 'none';
+        }
         processText();
       }
     }
