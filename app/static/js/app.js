@@ -96,12 +96,33 @@ function normalizeClientFieldInput(raw) {
 }
 
 function getUploadClientName() {
-  const stdEl = $("std-upload-client-name");
-  if (stdEl && stdEl.value.trim()) {
-    return normalizeClientFieldInput(stdEl.value);
+  const isExpert = document.body.classList.contains("mode-expert");
+  if (isExpert) {
+    const el = $("upload-client-name");
+    const val = normalizeClientFieldInput(el && "value" in el ? el.value : "");
+    if (val) return val;
+  } else {
+    const stdEl = $("std-upload-client-name");
+    const val = normalizeClientFieldInput(stdEl && "value" in stdEl ? stdEl.value : "");
+    if (val) return val;
   }
-  const el = $("upload-client-name");
-  return normalizeClientFieldInput(el && "value" in el ? el.value : "");
+
+  // Fallback 1: Try other mode's input if the active one is empty
+  const otherEl = isExpert ? $("std-upload-client-name") : $("upload-client-name");
+  const otherVal = normalizeClientFieldInput(otherEl && "value" in otherEl ? otherEl.value : "");
+  if (otherVal) return otherVal;
+
+  // Fallback 2: Try active client workspace/dossier context
+  if (typeof currentDossierClient === "string" && currentDossierClient.trim()) {
+    return normalizeClientFieldInput(currentDossierClient);
+  }
+
+  // Fallback 3: Try active filter value
+  if (typeof currentClientFilter === "string" && currentClientFilter.trim()) {
+    return normalizeClientFieldInput(currentClientFilter);
+  }
+
+  return "";
 }
 
 function saveFilterState() {
@@ -3480,7 +3501,10 @@ function enqueueUpload(files) {
   const clientName = getUploadClientName();
   if (!clientName) {
     toast("Le nom client est obligatoire à l'upload.", "error");
-    $("upload-client-name")?.focus();
+    const activeInput = document.body.classList.contains("mode-expert")
+      ? $("upload-client-name")
+      : $("std-upload-client-name");
+    activeInput?.focus();
     return;
   }
   isBatchUpload = files.length > 1;
@@ -3555,7 +3579,9 @@ async function uploadFile(file) {
     if (stdFill) stdFill.style.width = "0";
 
     toast("Le nom client est obligatoire à l'upload.", "error");
-    const clientInput = $("std-upload-client-name") || $("upload-client-name");
+    const clientInput = document.body.classList.contains("mode-expert")
+      ? $("upload-client-name")
+      : $("std-upload-client-name");
     clientInput?.focus();
     throw new Error("client_name_required");
   }
