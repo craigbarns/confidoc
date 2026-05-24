@@ -194,19 +194,20 @@
   white-space: nowrap;
   max-width: 320px;
 }
-.document-original-iframe {
+.document-original-body {
   flex: 1;
-  width: 100%;
-  border: 0;
-  background: #ffffff;
-  min-height: 480px;
-}
-.document-original-fallback {
-  flex: 1;
-  display: flex;
-  align-items: center;
-  justify-content: center;
+  overflow: auto;
   padding: 22px 26px;
+  background: var(--raw-soft);
+}
+.viewer-original-text {
+  font-family: 'Inter', system-ui, sans-serif;
+  font-size: 13px;
+  line-height: 1.75;
+  color: var(--ink);
+  white-space: pre-wrap;
+  word-wrap: break-word;
+  margin: 0;
 }
 .document-original-card {
   max-width: 520px;

@@ -2900,15 +2900,35 @@ function renderAIReadySummary(details = {}) {
   card.style.display = "";
 }
 
-async function loadOriginalIntoIframe(iframe, fallback) {
-  if (!iframe) return;
+async function loadOriginalTextInto(target, fallback) {
+  if (!target) return;
+  target.innerHTML = '<div class="viewer-placeholder">Chargement du texte original…</div>';
   try {
-    const { url } = await fetchCurrentOriginalBlob();
-    iframe.src = url;
+    const docId = currentDocId;
+    if (!docId) {
+      target.innerHTML = '<div class="viewer-placeholder">Aucun document sélectionné.</div>';
+      return;
+    }
+    let text = "";
+    if (publicDemoMode && currentDemoDocument?.original_excerpt) {
+      text = currentDemoDocument.original_excerpt;
+    } else {
+      const data = await apiFetch(`/documents/${docId}/extracted-text`);
+      text = (data && data.text) ? data.text : "";
+    }
+    if (!text) {
+      target.innerHTML = '<div class="viewer-placeholder">Texte original non disponible — lancez l\'anonymisation pour extraire le texte.</div>';
+      if (fallback) fallback.hidden = false;
+      return;
+    }
+    const pre = document.createElement("pre");
+    pre.className = "viewer-original-text";
+    pre.textContent = text;
+    target.replaceChildren(pre);
     if (fallback) fallback.hidden = true;
   } catch (e) {
-    console.warn("PDF inline preview unavailable:", e);
-    iframe.remove();
+    console.warn("loadOriginalTextInto error:", e);
+    target.innerHTML = '<div class="viewer-placeholder">Impossible de charger le texte original.</div>';
     if (fallback) fallback.hidden = false;
   }
 }
@@ -2955,7 +2975,7 @@ function renderDocumentDetailShell(details = {}) {
 
   const originalViewer = root.querySelector(".viewer-original");
   if (originalViewer) {
-    // Layout : metadata strip on top, PDF iframe filling the rest.
+    // Layout : metadata strip on top, original extracted text filling the rest.
     originalViewer.innerHTML = `
       <div class="document-original-strip">
         <div>
@@ -2963,26 +2983,13 @@ function renderDocumentDetailShell(details = {}) {
           <p class="page-lead" style="margin:2px 0 0">${escapeHtml(name)}</p>
         </div>
         <div class="document-original-actions">
-          <button type="button" class="btn-ghost btn-xs" data-action="open-original">Ouvrir</button>
+          <button type="button" class="btn-ghost btn-xs" data-action="open-original">Ouvrir le PDF</button>
           <button type="button" class="btn-ghost btn-xs" data-action="download-original">Télécharger</button>
         </div>
       </div>
-      <iframe class="document-original-iframe" title="Aperçu document original"></iframe>
-      <div class="document-original-fallback" hidden>
-        <div class="document-original-card">
-          <p class="rail-h">Aperçu indisponible</p>
-          <p class="page-lead">L'aperçu direct n'a pas pu être chargé. Utilisez les boutons ci-dessus pour ouvrir ou télécharger le document.</p>
-          <dl class="meta-list">
-            ${documentDetailRow("Client", client)}
-            ${documentDetailRow("Format", fileKind)}
-            ${documentDetailRow("Taille", size || "—")}
-            ${documentDetailRow("Statut", status)}
-            ${documentDetailRow("ID", fileId || "—")}
-          </dl>
-        </div>
-      </div>
+      <div class="document-original-body"></div>
     `;
-    loadOriginalIntoIframe(originalViewer.querySelector(".document-original-iframe"), originalViewer.querySelector(".document-original-fallback"));
+    loadOriginalTextInto(originalViewer.querySelector(".document-original-body"));
   }
 
   const anonymizedViewer = root.querySelector(".viewer-anonymized");
