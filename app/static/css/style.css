@@ -5699,5 +5699,82 @@ body {
   flex-wrap: wrap;
 }
 
+/* ─── FINAL REDESIGN TOKEN BRIDGE ──────────────────────────────────────
+   style.css still contains the legacy token block above. This final bridge
+   deliberately wins the cascade used by /ui, preserving the old selectors
+   while forcing the new emerald/terracotta palette at runtime. */
+:root {
+  --surface: #0A0A14;
+  --surface-2: #15151F;
+  --surface-muted: #1F1F2A;
+  --border: rgba(255, 255, 255, 0.06);
+  --border-strong: rgba(255, 255, 255, 0.10);
+  --ink: #EDEDF5;
+  --ink-2: #C5C5D2;
+  --ink-muted: #A0A0B8;
+  --ink-dim: #7A7A92;
+  --accent: #10B981;
+  --accent-soft: rgba(16, 185, 129, 0.12);
+  --accent-soft-ink: #6EE7B7;
+  --accent-border: rgba(16, 185, 129, 0.35);
+  --raw: #C97B5C;
+  --raw-soft: rgba(201, 123, 92, 0.10);
+  --raw-soft-ink: #E0A88A;
+
+  --bg: var(--surface);
+  --bg-card: var(--surface-2);
+  --bg-sidebar: var(--surface);
+  --bg-surface: var(--surface);
+  --bg-input: var(--surface-2);
+  --bg-hover: var(--surface-muted);
+  --glass: none;
+  --border-light: var(--border);
+  --border-accent: var(--accent-border);
+  --text: var(--ink);
+  --text-muted: var(--ink-muted);
+  --text-dim: var(--ink-dim);
+  --accent-hover: var(--accent-soft-ink);
+  --accent-light: var(--accent);
+  --accent-dim: var(--accent-soft);
+  --accent-glow: rgba(16, 185, 129, 0.15);
+  --success: var(--accent);
+  --success-dim: var(--accent-soft);
+  --warning-dim: var(--warning-soft);
+  --danger-dim: rgba(185, 28, 28, 0.10);
+  --shadow-sm: none;
+  --shadow-md: var(--shadow-docked);
+  --shadow-lg: var(--shadow-docked);
+  --shadow-accent: none;
+  --grad-brand: var(--accent);
+  --grad-surface: var(--surface-muted);
+  --grad-glow: transparent;
+}
+
+:root.theme-light {
+  --surface: #FAFAF7;
+  --surface-2: #FFFFFF;
+  --surface-muted: #F0EFE9;
+  --border: #ECEBE4;
+  --border-strong: #D6D3C6;
+  --ink: #0F0F12;
+  --ink-2: #3F3F44;
+  --ink-muted: #6E6E72;
+  --ink-dim: #9A9A9F;
+  --accent: #047857;
+  --accent-soft: #ECFDF5;
+  --accent-soft-ink: #065F46;
+  --accent-border: #A7F3D0;
+  --raw: #A4471E;
+  --raw-soft: #FDF6F1;
+  --raw-soft-ink: #A4471E;
+}
+
+.glass,
+.glass-sidebar,
+.app-header.glass,
+[class*="glass"] {
+  backdrop-filter: none !important;
+  -webkit-backdrop-filter: none !important;
+}
 
 

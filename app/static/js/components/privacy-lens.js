@@ -34,13 +34,32 @@ function renderZones(root) {
   const container = root.querySelector(".privacy-lens-overlay");
   if (!container) return;
   if (root.getAttribute("data-privacy-lens") !== "on") {
-    container.innerHTML = "";
+    container.replaceChildren();
     return;
   }
   const rawZones = root.getAttribute("data-privacy-zones") || "[]";
   let zones;
   try { zones = JSON.parse(rawZones); } catch { return; }
-  container.innerHTML = zones.map(z =>
-    `<div class="privacy-lens-zone" style="top:${z.top};left:${z.left};width:${z.width};height:${z.height}" title="${(z.label || "").replace(/"/g, "&quot;")}">${z.label || ""}</div>`
-  ).join("");
+  if (!Array.isArray(zones)) return;
+
+  const fragment = document.createDocumentFragment();
+  zones.forEach(z => {
+    const zone = document.createElement("div");
+    zone.className = "privacy-lens-zone";
+    zone.style.top = safeCssLength(z.top);
+    zone.style.left = safeCssLength(z.left);
+    zone.style.width = safeCssLength(z.width);
+    zone.style.height = safeCssLength(z.height);
+    zone.title = String(z.label || "");
+    zone.textContent = String(z.label || "");
+    fragment.appendChild(zone);
+  });
+  container.replaceChildren(fragment);
+}
+
+function safeCssLength(value) {
+  if (typeof value === "number" && Number.isFinite(value)) return `${value}%`;
+  const raw = String(value ?? "").trim();
+  if (/^-?\d+(\.\d+)?(px|%)$/.test(raw)) return raw;
+  return "0%";
 }

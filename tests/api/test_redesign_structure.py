@@ -10,10 +10,17 @@ and document-detail layout.
 
 from __future__ import annotations
 
+import re
+
 import pytest
 
-
 # --- Phase 1 · Tokens & primitives ---------------------------------------------
+
+
+def _last_css_var(css: str, name: str) -> str:
+    matches = re.findall(rf"{re.escape(name)}\s*:\s*([^;]+);", css)
+    return matches[-1].strip() if matches else ""
+
 
 @pytest.mark.anyio
 async def test_ui_uses_new_design_tokens(client):
@@ -31,6 +38,20 @@ async def test_ui_uses_new_design_tokens(client):
     if "--grad-brand" in css:
         assert "#6366f1" not in css, "legacy indigo brand value still present"
         assert "#a855f7" not in css, "legacy violet brand value still present"
+
+
+@pytest.mark.anyio
+async def test_style_css_runtime_bridge_wins_after_legacy_tokens(client):
+    resp = await client.get("/static/css/style.css")
+    assert resp.status_code == 200
+    css = resp.text
+    assert css.rfind("FINAL REDESIGN TOKEN BRIDGE") > css.rfind(
+        "linear-gradient(135deg, #6366f1"
+    )
+    assert _last_css_var(css, "--grad-brand") == "var(--accent)"
+    assert _last_css_var(css, "--glass") == "none"
+    assert _last_css_var(css, "--accent") == "#047857"
+    assert _last_css_var(css, "--raw") == "#A4471E"
 
 
 @pytest.mark.anyio
@@ -94,6 +115,16 @@ async def test_signature_components_modules_exist(client):
         assert resp.status_code == 200, f"missing component module {name}"
 
 
+@pytest.mark.anyio
+async def test_privacy_lens_uses_safe_dom_rendering(client):
+    resp = await client.get("/static/js/components/privacy-lens.js")
+    assert resp.status_code == 200
+    js = resp.text
+    assert "document.createElement" in js
+    assert "textContent" in js
+    assert "container.innerHTML = zones.map" not in js
+
+
 # --- Phase 3 · Navigation ------------------------------------------------------
 
 @pytest.mark.anyio
@@ -113,6 +144,15 @@ async def test_topbar_has_search_and_copilot_hints(client):
     html = resp.text
     assert "⌘K" in html
     assert "⌘J" in html
+
+
+@pytest.mark.anyio
+async def test_redesign_actions_are_wired_in_app_js(client):
+    resp = await client.get("/static/js/app.js")
+    assert resp.status_code == 200
+    js = resp.text
+    for action in ("open-upload", "open-batch-upload", "open-copilot"):
+        assert f'action === "{action}"' in js
 
 
 # --- Phase 4 · Documents list --------------------------------------------------

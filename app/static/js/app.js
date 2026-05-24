@@ -5382,6 +5382,25 @@ function handleDelegatedAction(e) {
 
   if (action === "sidebar-mode") setSidebarMode(control.dataset.mode || "flat");
   else if (action === "new-document") startNewDocument();
+  else if (action === "open-upload") startNewDocument();
+  else if (action === "open-batch-upload") {
+    startNewDocument();
+    if (!batchMode) toggleBatchMode();
+  }
+  else if (action === "open-copilot") {
+    if (window.__confidocDrawer) {
+      window.__confidocDrawer.open();
+    } else {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "j", metaKey: true, bubbles: true }));
+    }
+  }
+  else if (action === "open-cmd-palette") {
+    if (window.__confidocCommandPalette) {
+      window.__confidocCommandPalette.open();
+    } else {
+      document.dispatchEvent(new KeyboardEvent("keydown", { key: "k", metaKey: true, bubbles: true }));
+    }
+  }
   else if (action === "open-documents") openDocumentWorkspace();
   else if (action === "open-clients") openClientWorkspace();
   else if (action === "resume-review") resumeWorkspaceReview();

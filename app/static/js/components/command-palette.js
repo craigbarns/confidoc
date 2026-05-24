@@ -39,6 +39,8 @@ export function init_command_palette() {
   };
   const run = i => { filtered[i]?.do(); close(); };
 
+  window.__confidocCommandPalette = { open, close };
+
   input.addEventListener("input", () => {
     const q = input.value.toLowerCase().trim();
     filtered = q ? ACTIONS.filter(a => a.label.toLowerCase().includes(q) || a.hint.toLowerCase().includes(q)) : ACTIONS.slice();
