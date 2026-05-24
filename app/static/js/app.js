@@ -17,6 +17,7 @@ let reportMode = false;
 let copilotMode = false;
 let selectedCabinetDocType = "generique";
 let lastDocsList = [];
+let expertMode = false;
 
 const CABINET_DOC_TYPE_PREFIX = {
   generique: "",
@@ -466,6 +467,98 @@ function setActiveNav(key) {
       el.removeAttribute("aria-current");
     }
   });
+}
+
+function setExpertMode(enabled) {
+  expertMode = !!enabled;
+  localStorage.setItem("expertMode", expertMode ? "true" : "false");
+  
+  const chk = $("chk-expert-mode");
+  if (chk) chk.checked = expertMode;
+  
+  const label = $("label-expert-mode");
+  if (label) {
+    if (expertMode) {
+      label.style.borderColor = "var(--accent)";
+      label.style.boxShadow = "0 0 10px rgba(16, 185, 129, 0.2)";
+      label.style.color = "#fff";
+    } else {
+      label.style.borderColor = "var(--border)";
+      label.style.boxShadow = "none";
+      label.style.color = "var(--text-muted)";
+    }
+  }
+  
+  document.body.classList.toggle("mode-expert", expertMode);
+  document.body.classList.toggle("mode-standard", !expertMode);
+  
+  // Re-sync UI panels and elements
+  syncLegacySidebarVisibility();
+  if (expertMode) {
+    const activePanel = document.querySelector(".panel.active");
+    if (activePanel && activePanel.id === "panel-quality") {
+      loadQualityDashboard();
+    }
+  }
+}
+
+function updateGuidedStepper(status) {
+  const step1 = $("std-step-1");
+  const step2 = $("std-step-2");
+  const step3 = $("std-step-3");
+  const line1 = $("std-step-line-1");
+  const line2 = $("std-step-line-2");
+  const num1 = $("std-step-num-1");
+  const num2 = $("std-step-num-2");
+  const num3 = $("std-step-num-3");
+  
+  if (!step1 || !step2 || !step3) return;
+  
+  const setStepState = (stepEl, numEl, state) => {
+    if (state === 'checked') {
+      stepEl.style.color = "var(--accent)";
+      numEl.style.background = "var(--accent)";
+      numEl.style.color = "#fff";
+      numEl.textContent = "✓";
+      numEl.classList.remove("animate-pulse");
+    } else if (state === 'active') {
+      stepEl.style.color = "var(--accent)";
+      numEl.style.background = "var(--accent)";
+      numEl.style.color = "#fff";
+      numEl.textContent = numEl.id.slice(-1);
+      numEl.classList.add("animate-pulse");
+    } else {
+      stepEl.style.color = "var(--text-muted)";
+      numEl.style.background = "var(--border)";
+      numEl.style.color = "var(--text-muted)";
+      numEl.textContent = numEl.id.slice(-1);
+      numEl.classList.remove("animate-pulse");
+    }
+  };
+  
+  setStepState(step1, num1, 'muted');
+  setStepState(step2, num2, 'muted');
+  setStepState(step3, num3, 'muted');
+  if (line1) line1.style.background = "var(--border)";
+  if (line2) line2.style.background = "var(--border)";
+  
+  if (status === "uploaded" || status === "processing" || status === "extracting" || status === "anonymizing") {
+    setStepState(step1, num1, 'checked');
+    setStepState(step2, num2, 'active');
+    if (line1) line1.style.background = "var(--accent)";
+  } else if (status === "ready" || status === "anonymized") {
+    setStepState(step1, num1, 'checked');
+    setStepState(step2, num2, 'checked');
+    setStepState(step3, num3, 'active');
+    if (line1) line1.style.background = "var(--accent)";
+    if (line2) line2.style.background = "var(--accent)";
+  } else if (status === "failed") {
+    setStepState(step1, num1, 'checked');
+    step2.style.color = "var(--danger)";
+    num2.style.background = "var(--danger)";
+    num2.style.color = "#fff";
+    num2.textContent = "✕";
+  }
 }
 
 function closeAppNavDrawer() {
@@ -1661,6 +1754,17 @@ function renderDocList(docs) {
         </div>`
       : "";
 
+    let stdDocBtn = "";
+    if (!isDeleted && !batchMode) {
+      if (d.status === "uploaded") {
+        stdDocBtn = `<button class="btn btn-accent btn-xs std-doc-btn standard-only" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" style="margin-top: 6px; padding: 2px 8px; font-size: 10px; width: fit-content; border: 1px solid var(--accent); background: rgba(4,120,87,0.1);">Sécuriser</button>`;
+      } else if (d.status === "ready" || d.status === "anonymized") {
+        stdDocBtn = `<button class="btn btn-primary btn-xs std-doc-btn standard-only" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" style="margin-top: 6px; padding: 2px 8px; font-size: 10px; width: fit-content; border: 1px solid var(--border-accent); background: rgba(99,102,241,0.1);">Vérifier</button>`;
+      } else if (d.status === "failed") {
+        stdDocBtn = `<button class="btn btn-danger btn-xs std-doc-btn standard-only" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" style="margin-top: 6px; padding: 2px 8px; font-size: 10px; width: fit-content; border: 1px solid rgba(239,68,68,0.5); background: rgba(239,68,68,0.1);">Réessayer</button>`;
+      }
+    }
+
     return `<div class="doc-item${selected}${cardClass}${batchModeClass}${batchSelectedClass}" data-id="${escapeHtml(d.id)}" data-status="${escapeHtml(d.status)}" data-name="${rawName}" data-size="${d.size_bytes || 0}" data-deleted="${isDeleted ? "1" : "0"}">
       <div class="doc-item-name" style="display:flex;align-items:center;gap:6px">${batchCheck}${riskDot}${name}</div>
       <div class="doc-item-meta">
@@ -1669,6 +1773,7 @@ function renderDocList(docs) {
         ${clientTag}
         ${meta ? `<span>${escapeHtml(meta)}</span>` : ""}
       </div>
+      ${stdDocBtn}
       ${deleteBtn}
       ${trashActions}
     </div>`;
@@ -1723,6 +1828,14 @@ function renderDocList(docs) {
     btn.addEventListener("click", async e => {
       e.stopPropagation();
       await permanentDeleteDoc(btn.dataset.id, btn.dataset.name);
+    });
+  });
+  list.querySelectorAll(".std-doc-btn").forEach(btn => {
+    btn.addEventListener("click", (e) => {
+      e.stopPropagation();
+      const id = btn.dataset.id;
+      const status = btn.dataset.status;
+      handleStandardDocAction(id, status);
     });
   });
   refreshCompareDocSelect();
@@ -3212,6 +3325,11 @@ async function openAnonReviewForCurrentDocument() {
   if (!currentDocId) return;
   const clientLabel = getDocClientLabel(currentDocId);
   setStep(2);
+  try {
+    updateGuidedStepper(currentDocStatus);
+  } catch (e) {
+    console.warn("updateGuidedStepper failed:", e);
+  }
   resetAnonPanel();
   updateAnonDocBar(currentDocName, currentDocSize, clientLabel);
   if (isReadyStatus(currentDocStatus)) {
@@ -5544,7 +5662,7 @@ function renderQualityRedesignTab(tab, qualityData = null) {
   } else if (tab === "tab-golden") {
     c.innerHTML = `
       <div class="card" style="padding:18px">
-        <p class="rail-h">Golden sets</p>
+        <p class="rail-h"><span class="standard-only">Jeux de contrôle qualité</span><span class="expert-only">Golden sets</span></p>
         <p>Taux de réussite des cas de régression : <strong class="tabular">—</strong></p>
         <p class="page-lead">Branchement <code>/golden/status</code> à venir.</p>
       </div>`;
@@ -5655,6 +5773,21 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
 
   // KPIs
   const sc = data.status_counts || {};
+  
+  // Update standard-only dashboard elements
+  if ($("std-kpi-pending-count")) {
+    const pendingCount = (summary.uploaded ?? sc.uploaded ?? 0) + (summary.failed ?? sc.failed ?? 0);
+    animateNumber($("std-kpi-pending-count"), pendingCount);
+  }
+  if ($("std-kpi-ready-count")) {
+    const readyCount = (summary.ready ?? sc.ready ?? 0) + (summary.anonymized ?? sc.anonymized ?? 0);
+    animateNumber($("std-kpi-ready-count"), readyCount);
+  }
+  try {
+    renderStandardPendingActions();
+  } catch (e) {
+    console.warn("renderStandardPendingActions failed:", e);
+  }
   const readyCount = (sc.ready || 0) + (sc.anonymized || 0);
   const summaryReady = (summary.ready ?? sc.ready ?? 0) + (summary.anonymized ?? sc.anonymized ?? 0);
   const summaryProcessing =
@@ -6280,6 +6413,17 @@ function handleDelegatedAction(e) {
       document.dispatchEvent(new KeyboardEvent("keydown", { key: "j", metaKey: true, bubbles: true }));
     }
   }
+  else if (action === "copilot-summarize" || action === "copilot-risks" || action === "copilot-audit") {
+    let q = "";
+    if (action === "copilot-summarize") q = "Résumer le document";
+    else if (action === "copilot-risks") q = "Lister les risques RGPD";
+    else if (action === "copilot-audit") q = "Audit comptable";
+    
+    const drawerInput = document.querySelector(".copilot-drawer textarea");
+    if (drawerInput) drawerInput.value = q;
+    
+    askCopilotFromDrawer(q);
+  }
   else if (action === "open-cmd-palette") {
     if (window.__confidocCommandPalette) {
       window.__confidocCommandPalette.open();
@@ -6291,7 +6435,7 @@ function handleDelegatedAction(e) {
   else if (action === "open-clients") openClientWorkspace();
   else if (action === "resume-review") resumeWorkspaceReview();
   else if (action === "demo-investor") createDemoDocument();
-  else if (action === "create-client") openCreateClientModal();
+  else if (action === "create-client" || action === "new-dossier") openCreateClientModal();
   else if (action === "dossier-overview") openDossierOverview();
   else if (action === "upload-for-dossier") openUploadForDossierClient();
   else if (action === "review-mode") setReviewMode(control.dataset.mode || "split");
@@ -6307,6 +6451,18 @@ function handleDelegatedAction(e) {
     toggleDossierExercice(control);
   } else if (action === "select-doc") {
     selectDoc(control.dataset.docId || "");
+  } else if (action === "download-compliance-cert") {
+    if (currentDocId) {
+      downloadComplianceCertificate();
+    } else {
+      downloadDossier360Report();
+    }
+  } else if (action === "std-filter-uploaded") {
+    setFilterStatusAndGoToDocs("uploaded");
+  } else if (action === "std-filter-ready") {
+    setFilterStatusAndGoToDocs("ready");
+  } else if (action === "std-doc-action") {
+    handleStandardDocAction(control.dataset.docId || "", control.dataset.docStatus || "");
   }
 }
 
@@ -6755,6 +6911,20 @@ function initDpoInteractivity() {
 // ── Event listeners ────────────────────────────────────────────────────
 
 document.addEventListener("DOMContentLoaded", () => {
+  // Initialize Expert/Standard Mode
+  expertMode = localStorage.getItem("expertMode") === "true";
+  setExpertMode(expertMode);
+  
+  const chkExpert = $("chk-expert-mode");
+  if (chkExpert) {
+    chkExpert.addEventListener("change", (e) => {
+      setExpertMode(e.target.checked);
+      if (document.getElementById("panel-dashboard")?.classList.contains("active")) {
+        loadDashboard();
+      }
+    });
+  }
+
   initDpoInteractivity();
   initDossierTabsAndComparison();
 
@@ -7496,3 +7666,117 @@ document.addEventListener("keydown", (e) => {
   search.focus();
 });
 let _dashboard_original_html = ''; window.addEventListener('DOMContentLoaded', () => { const el = document.getElementById('dash-content'); if(el) _dashboard_original_html = el.innerHTML; });
+
+// ── Drawer Copilot Live Integration ──────────────────────────────────────
+async function askCopilotFromDrawer(question) {
+  if (!currentDocId) {
+    toast("Veuillez d'abord ouvrir un document.", "warning");
+    return;
+  }
+  const recentEl = document.getElementById("copilot-recent");
+  if (!recentEl) return;
+  
+  recentEl.innerHTML = `<div class="streaming" style="color:var(--text-muted)">Copilot réfléchit...</div>`;
+  try {
+    const resp = await apiFetch(`/copilot/${currentDocId}/ask`, {
+      method: "POST",
+      body: JSON.stringify({ question: question, mode: "expert" }),
+    });
+    
+    let answer = resp.answer || "Aucune réponse.";
+    if (typeof formatCitations === "function") {
+      answer = formatCitations(answer);
+    }
+    
+    recentEl.innerHTML = `
+      <div style="background:rgba(255,255,255,0.05); border-left:3px solid var(--accent); padding:10px; border-radius:4px; margin-bottom:12px; font-size:12px; line-height:1.4;">
+        <strong style="display:block; margin-bottom:4px; color:var(--text-muted)">Question: ${escapeHtml(question)}</strong>
+        <div style="color:#fff">${answer}</div>
+      </div>
+    `;
+  } catch (e) {
+    recentEl.innerHTML = `<div style="color:var(--danger)">Erreur Copilot: ${escapeHtml(e.message)}</div>`;
+  }
+}
+
+document.addEventListener("keydown", async e => {
+  if (e.target && e.target.closest(".copilot-drawer") && e.target.tagName === "TEXTAREA" && e.key === "Enter" && !e.shiftKey) {
+    e.preventDefault();
+    const question = e.target.value.trim();
+    if (question) {
+      e.target.value = "";
+      await askCopilotFromDrawer(question);
+    }
+  }
+});
+
+// ── Standard Dashboard Utilities (Zero Friction UX) ─────────────────────
+function renderStandardPendingActions() {
+  const container = $("std-pending-actions-list");
+  if (!container) return;
+  
+  const pendingDocs = lastDocsList.filter(d => !d.is_deleted && ["uploaded", "ready", "failed"].includes(d.status));
+  
+  if (!pendingDocs.length) {
+    container.innerHTML = `
+      <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:16px; color:var(--accent); font-size:12px; font-weight:600;">
+        <span>✓</span> Aucun document en attente. Votre dossier est parfaitement conforme !
+      </div>
+    `;
+    return;
+  }
+  
+  container.innerHTML = pendingDocs.slice(0, 5).map(d => {
+    let actionLabel = "";
+    let btnText = "";
+    let btnClass = "";
+    let actionIcon = "";
+    
+    if (d.status === "uploaded") {
+      actionLabel = `Document <strong>${escapeHtml(d.original_filename)}</strong> importé. Sécurisation requise.`;
+      btnText = "Sécuriser";
+      btnClass = "btn-primary";
+      actionIcon = "📥";
+    } else if (d.status === "ready") {
+      actionLabel = `Document <strong>${escapeHtml(d.original_filename)}</strong> sécurisé. Revue finale requise.`;
+      btnText = "Vérifier";
+      btnClass = "btn-success";
+      actionIcon = "🔍";
+    } else if (d.status === "failed") {
+      actionLabel = `Échec de traitement pour <strong>${escapeHtml(d.original_filename)}</strong>.`;
+      btnText = "Réessayer";
+      btnClass = "btn-danger";
+      actionIcon = "⚠️";
+    }
+    
+    return `
+      <div class="animate-fade-in" style="display:flex; justify-content:space-between; align-items:center; background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:8px; padding:12px 16px; gap:12px;">
+        <div style="display:flex; align-items:center; gap:10px; font-size:12px;">
+          <span style="font-size:18px;">${actionIcon}</span>
+          <span style="color:var(--text); line-height:1.4;">${actionLabel}</span>
+        </div>
+        <button class="btn ${btnClass} btn-xs" style="flex-shrink:0;" data-action="std-doc-action" data-doc-id="${d.id}" data-doc-status="${d.status}">${btnText}</button>
+      </div>
+    `;
+  }).join("");
+}
+
+function handleStandardDocAction(docId, status) {
+  currentDocId = docId;
+  openAnonReviewForCurrentDocument();
+  
+  if (status === "uploaded") {
+    setTimeout(() => {
+      $("btn-anonymize")?.click();
+    }, 200);
+  }
+}
+
+function setFilterStatusAndGoToDocs(status) {
+  const filterSelect = $("filter-status");
+  if (filterSelect) {
+    filterSelect.value = status;
+    filterSelect.dispatchEvent(new Event("change"));
+  }
+  setStep(1);
+}

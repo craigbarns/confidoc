@@ -5777,4 +5777,9 @@ body {
   -webkit-backdrop-filter: none !important;
 }
 
-
+body.mode-standard .expert-only {
+  display: none !important;
+}
+body.mode-expert .standard-only {
+  display: none !important;
+}

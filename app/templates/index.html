@@ -141,6 +141,10 @@
       <button type="button" class="btn-ghost topbar__copilot-btn" data-action="open-copilot" aria-label="Ouvrir le Copilot IA">
         Copilot <span class="kbd" aria-hidden="true">⌘J</span>
       </button>
+      <label class="expert-mode-switch" style="display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; margin-right: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px; transition: all 0.2s;" id="label-expert-mode">
+        <input type="checkbox" id="chk-expert-mode" style="cursor: pointer; accent-color: var(--accent);" />
+        <span style="font-weight:700; text-transform:uppercase; letter-spacing:0.05em;">Mode Expert</span>
+      </label>
       <button id="btn-theme" class="btn-theme-toggle theme-switch" aria-label="Changer le thème" role="switch" aria-checked="false"></button>
       <span id="user-info" class="user-info"></span>
       <button id="btn-logout" class="btn btn-ghost btn-sm" style="display:none">
@@ -300,7 +304,7 @@
           </li>
         </ul>
       </div>
-      <div class="nav-group">
+      <div class="nav-group expert-only">
         <div class="nav-group__label">Confiance</div>
         <ul class="app-nav-list">
           <li>
@@ -535,10 +539,77 @@
       <!-- DASHBOARD -->
       <div id="panel-dashboard" class="panel">
 
+        <!-- ── Standard Collaborateur Dashboard ── -->
+        <div class="standard-only standard-dashboard animate-fade-in" style="padding: 24px;">
+          <header class="panel-head" style="margin-bottom:24px;">
+            <div>
+              <h1 class="page-title" style="font-family:'Outfit',sans-serif; font-size:28px; font-weight:800; background:linear-gradient(135deg, #fff 0%, var(--text-muted) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Bonjour, <span class="collaborator-user-name">Collaborateur</span> 👋</h1>
+              <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">Sécurisez et anonymisez vos documents en quelques secondes.</p>
+            </div>
+          </header>
+
+          <!-- 1. Grande zone d'upload simplifiée -->
+          <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(124, 116, 255, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%); border: 2px dashed rgba(124, 116, 255, 0.3); border-radius:var(--radius-lg); padding:40px 24px; text-align:center; margin-bottom:28px; transition:all 0.2s; cursor:pointer;" ondragover="this.style.borderColor='var(--accent)';" ondragleave="this.style.borderColor='rgba(124, 116, 255, 0.3)';" data-action="new-document">
+            <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 16px; opacity:0.85; filter:drop-shadow(0 0 8px rgba(124,116,255,0.4));">
+              <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+              <polyline points="17 8 12 3 7 8"/>
+              <line x1="12" y1="3" x2="12" y2="15"/>
+            </svg>
+            <h3 style="font-family:'Outfit',sans-serif; font-size:18px; font-weight:700; color:#fff; margin-bottom:8px;">Déposer un document pour démarrer</h3>
+            <p style="color:var(--text-muted); font-size:12px; max-width:400px; margin:0 auto 20px; line-height:1.5;">Glissez-déposez votre pièce comptable ou juridique (PDF, image) ici, ou cliquez pour parcourir.</p>
+            <button class="btn btn-primary btn-md" data-action="open-upload" style="display:inline-flex; align-items:center; gap:8px;">
+              <span aria-hidden="true">+</span> Anonymiser maintenant
+            </button>
+          </div>
+
+          <!-- 2. Section des actions & cartes raccourcis -->
+          <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; margin-bottom:28px;">
+            <!-- Carte : Documents en attente de validation -->
+            <div class="card shortcut-card animate-fade-in" style="padding:20px; cursor:pointer;" data-action="std-filter-uploaded">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-size:24px;">⏳</span>
+                <span class="badge badge-warning" id="std-kpi-pending-count" style="font-size:12px; font-weight:700;">0</span>
+              </div>
+              <h4 style="font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">À vérifier</h4>
+              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Documents analysés nécessitant un contrôle ou une validation humaine.</p>
+            </div>
+
+            <!-- Carte : Derniers documents traités -->
+            <div class="card shortcut-card animate-fade-in" style="padding:20px; cursor:pointer;" data-action="std-filter-ready">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-size:24px;">✨</span>
+                <span class="badge badge-success" id="std-kpi-ready-count" style="font-size:12px; font-weight:700;">0</span>
+              </div>
+              <h4 style="font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Prêts à télécharger</h4>
+              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Pièces entièrement anonymisées et validées pour vos IA ou exports.</p>
+            </div>
+
+            <!-- Carte : Accès dossiers clients -->
+            <div class="card shortcut-card animate-fade-in" style="padding:20px; cursor:pointer;" data-action="open-clients">
+              <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                <span style="font-size:24px;">🏢</span>
+                <span style="font-size:11px; color:var(--text-muted); font-weight:600;">Accès rapide</span>
+              </div>
+              <h4 style="font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Mes dossiers clients</h4>
+              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les pièces organisées par client et exercice.</p>
+            </div>
+          </div>
+
+          <!-- 3. Liste simplifiée "Mes actions recommandées" -->
+          <div class="card animate-fade-in" style="padding:24px;">
+            <h3 style="font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-top:0; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+              📋 Vos tâches en attente
+            </h3>
+            <div id="std-pending-actions-list" style="display:flex; flex-direction:column; gap:12px;">
+              <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:12px 0;">Chargement des tâches...</div>
+            </div>
+          </div>
+        </div>
+
         <!-- ── Redesign briefing (spec §5.1) ──
              Progressive scaffolding: rendered above the legacy dashboard
              content. JS will populate via window.renderHome(data). -->
-        <section class="home-hero" data-redesign-home>
+        <section class="home-hero expert-only" data-redesign-home>
           <h1 class="hero-literary" id="home-hero">
             Bonjour <span id="home-user-name">—</span>. Aujourd'hui,
             <em class="literary" id="home-priority-count">— documents</em>
@@ -547,22 +618,22 @@
           <p class="hero-lead" id="home-hero-lead">Chargement de ton briefing…</p>
         </section>
 
-        <section class="home-section" data-redesign-home>
+        <section class="home-section expert-only" data-redesign-home>
           <h2 class="section-title">À reviewer en premier</h2>
           <ol class="priority-list" id="home-priority-list"></ol>
         </section>
 
-        <section class="home-section" data-redesign-home>
+        <section class="home-section expert-only" data-redesign-home>
           <h2 class="section-title">Activité du jour</h2>
           <div class="timeline" id="home-timeline"></div>
         </section>
 
-        <section class="home-section" data-redesign-home>
+        <section class="home-section expert-only" data-redesign-home>
           <h2 class="section-title">Vue d'ensemble</h2>
           <div class="kpis" id="home-kpis"></div>
         </section>
 
-        <div class="panel-header">
+        <div class="panel-header expert-only">
           <h2>Accueil cabinet</h2>
           <div class="panel-actions">
             <button id="btn-dash-upload" class="btn btn-primary btn-sm">
@@ -589,7 +660,7 @@
           <p>Chargement des statistiques…</p>
         </div>
 
-        <div id="dash-content" style="display:none">
+        <div id="dash-content" class="expert-only" style="display:none">
           <!-- Guide de Démarrage Rapide Novice (Premium glassmorphic collapse) -->
           <div class="card onboarding-guide-card" id="onboarding-guide" style="margin-bottom: 20px; background: linear-gradient(135deg, rgba(99, 102, 241, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%); border: 1px solid var(--border-accent); border-radius: var(--radius-lg); padding: 24px; position: relative;">
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
@@ -924,13 +995,31 @@
             <span class="pill pill-review" id="detail-status">À reviewer</span>
             <div class="detail-topbar__actions">
               <button class="btn-ghost" data-action="toggle-mode">Mode : Pseudonymiser ▾</button>
-              <button class="btn-ghost" data-privacy-lens-toggle>Privacy Lens <span class="kbd">⌘L</span></button>
+              <button class="btn-privacy-lens-toggle btn-ghost" data-privacy-lens-toggle>Privacy Lens <span class="kbd">⌘L</span></button>
               <button class="btn-ghost" data-action="open-export">Exporter…</button>
               <button class="btn-primary-ok" data-action="validate-anonymization">
                 ✓ Valider l'anonymisation <span class="kbd">⌘↵</span>
               </button>
             </div>
           </header>
+
+          <!-- Guided Stepper (Zero Friction UX) -->
+          <div class="guided-stepper" style="display:flex; align-items:center; justify-content:center; gap:20px; background:rgba(0,0,0,0.15); padding:10px 24px; border-bottom:1px solid var(--border); font-size:12px;" id="detail-stepper">
+            <div class="step-item" id="std-step-1" style="display:flex; align-items:center; gap:8px; font-weight:700; color:var(--accent); transition:all 0.2s;">
+              <span class="step-num" id="std-step-num-1" style="width:20px; height:20px; border-radius:50%; background:var(--accent); color:#fff; display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800;">1</span>
+              <span>Déposer</span>
+            </div>
+            <div style="flex:1; max-width:80px; height:2px; background:var(--border); transition:all 0.2s;" id="std-step-line-1"></div>
+            <div class="step-item" id="std-step-2" style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--text-muted); transition:all 0.2s;">
+              <span class="step-num" id="std-step-num-2" style="width:20px; height:20px; border-radius:50%; background:var(--border); color:var(--text-muted); display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800;">2</span>
+              <span>Vérifier</span>
+            </div>
+            <div style="flex:1; max-width:80px; height:2px; background:var(--border); transition:all 0.2s;" id="std-step-line-2"></div>
+            <div class="step-item" id="std-step-3" style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--text-muted); transition:all 0.2s;">
+              <span class="step-num" id="std-step-num-3" style="width:20px; height:20px; border-radius:50%; background:var(--border); color:var(--text-muted); display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800;">3</span>
+              <span>Télécharger</span>
+            </div>
+          </div>
 
           <div class="detail-grid">
             <section class="pane pane-original" id="pane-original">
@@ -970,7 +1059,7 @@
           </div>
 
           <footer class="detail-actionbar">
-            <span class="detail-actionbar__summary" id="detail-summary">— entités · — PII résiduel</span>
+            <span class="detail-actionbar__summary" id="detail-summary">— entités · <span class="standard-only">— Risque résiduel</span><span class="expert-only">— PII résiduel</span></span>
             <div class="detail-actionbar__actions">
               <button class="btn-ghost" data-action="re-anonymize-strict">Re-anonymiser (règles strictes)</button>
               <button class="btn-ghost" data-action="preview-redacted">Aperçu PDF redacté</button>
