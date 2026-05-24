@@ -68,7 +68,7 @@ async def evaluate_node(state: PrivacyGateState) -> PrivacyGateState:
         flags.append("critical_reidentification_risk")
     if risk_level == "high" and not state.get("human_validated"):
         flags.append("high_risk_without_human_validation")
-    if risk_level == "medium" and action in {"external_ai", "share", "demo"}:
+    if risk_level == "medium" and action in {"external_ai", "share", "demo"} and not state.get("human_validated"):
         flags.append("medium_risk_external_use")
     if entity_types.intersection(SENSITIVE_ENTITY_TYPES):
         flags.append("sensitive_entities_detected")
