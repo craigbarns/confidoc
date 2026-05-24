@@ -170,6 +170,27 @@
 }
 .viewer-original { background: var(--raw-soft); }
 .viewer-anonymized { background: var(--surface-2); }
+.document-original-card {
+  max-width: 520px;
+  margin: 0 auto;
+  padding: 18px;
+  border: 1px solid var(--border);
+  border-radius: var(--r-lg);
+  background: var(--surface-2);
+}
+.document-original-card h3 {
+  margin: 0 0 14px;
+  font-size: 16px;
+  line-height: 1.35;
+  color: var(--ink);
+  overflow-wrap: anywhere;
+}
+.document-original-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 14px;
+}
 
 .rail { background: var(--surface); padding: 16px 18px; overflow: auto; }
 .rail-section { margin-bottom: 22px; }

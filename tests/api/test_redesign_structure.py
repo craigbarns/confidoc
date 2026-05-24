@@ -151,8 +151,10 @@ async def test_redesign_actions_are_wired_in_app_js(client):
     resp = await client.get("/static/js/app.js")
     assert resp.status_code == 200
     js = resp.text
-    for action in ("open-upload", "open-batch-upload", "open-copilot"):
+    for action in ("open-upload", "open-batch-upload", "open-copilot", "open-original"):
         assert f'action === "{action}"' in js
+    assert "renderDocumentDetailShell" in js
+    assert "openAnonReviewForCurrentDocument" in js
 
 
 # --- Phase 4 · Documents list --------------------------------------------------

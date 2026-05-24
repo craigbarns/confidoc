@@ -1545,6 +1545,22 @@ function formatDate(isoStr) {
   return d.toLocaleDateString("fr-FR", { day: "2-digit", month: "2-digit" });
 }
 
+function getCurrentDocRecord() {
+  return lastDocsList.find((d) => d.id === currentDocId) || null;
+}
+
+function documentFileKind(doc = getCurrentDocRecord()) {
+  const contentType = String(doc?.content_type || "").split(";")[0].toLowerCase();
+  const extension = String(doc?.extension || currentDocName.split(".").pop() || "")
+    .replace(/^\./, "")
+    .toLowerCase();
+  if (contentType === "application/pdf" || extension === "pdf") return "PDF";
+  if (contentType.startsWith("image/") || ["png", "jpg", "jpeg", "tiff"].includes(extension)) {
+    return extension ? extension.toUpperCase() : "Image";
+  }
+  return contentType || (extension ? extension.toUpperCase() : "Fichier");
+}
+
 function renderDocList(docs) {
   lastDocsList = Array.isArray(docs) ? docs : [];
   const list = $("doc-list");
@@ -2521,10 +2537,11 @@ async function permanentDeleteDoc(id, name) {
 // ── Select document ─────────────────────────────────────────────────────
 
 async function selectDoc(id, status, name, sizeBytes) {
+  const selectedDoc = lastDocsList.find((d) => d.id === id);
   currentDocId = id;
-  currentDocName = name || "";
-  currentDocStatus = status;
-  currentDocSize = sizeBytes || 0;
+  currentDocName = name || selectedDoc?.original_filename || "";
+  currentDocStatus = status || selectedDoc?.status || "";
+  currentDocSize = Number(sizeBytes ?? selectedDoc?.size_bytes ?? 0);
   delete originalTextCache[id]; // invalide le cache si on recharge
   updateHeaderContext();
 
@@ -2652,6 +2669,7 @@ function updateAnonDocBar(name, sizeBytes, clientLabel) {
   st.textContent = documentStatusLabel(status);
   st.className = `doc-stage-badge ${status}`;
   bar.style.display = "";
+  renderDocumentDetailShell();
 }
 
 function updateAIDocBar(name, sizeBytes, clientLabel) {
@@ -2710,6 +2728,7 @@ function renderAIReadySummary(details = {}) {
   const client = details.client || getDocClientLabel(currentDocId) || "Client non renseigné";
   const status = documentStatusLabel(details.status || currentDocStatus || "ready");
   const size = formatBytes(details.sizeBytes ?? currentDocSize);
+  const fileKind = documentFileKind();
   const entities = details.entitiesText || formatEntitySummary(details.entitySummary);
   const exportTitle = $("export-guard-title")?.textContent || "Export prêt";
   const exportDetail = $("export-guard-detail")?.textContent || "Document anonymisé.";
@@ -2729,15 +2748,190 @@ function renderAIReadySummary(details = {}) {
       <div><dt>Client</dt><dd>${escapeHtml(client)}</dd></div>
       <div><dt>Statut</dt><dd>${escapeHtml(status)}</dd></div>
       <div><dt>Taille</dt><dd>${escapeHtml(size)}</dd></div>
+      <div><dt>Original</dt><dd>${escapeHtml(fileKind)} · source disponible</dd></div>
       <div><dt>Entités masquées</dt><dd>${entities}</dd></div>
       <div><dt>Score / export</dt><dd>${escapeHtml(exportTitle)} · ${escapeHtml(exportDetail)}</dd></div>
     </dl>
     <div class="ai-ready-actions">
       <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Analyser ce document</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="original">Ouvrir l’original</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger preuve DPO</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir l’anonymisation</button>
     </div>`;
   card.style.display = "";
+}
+
+function renderDocumentDetailShell(details = {}) {
+  const root = document.querySelector("[data-document-detail]");
+  if (!root) return;
+  if (!currentDocId) {
+    root.hidden = true;
+    return;
+  }
+
+  const doc = getCurrentDocRecord();
+  const name = details.name || currentDocName || doc?.original_filename || "Document";
+  const client = details.client || getDocClientLabel(currentDocId) || "Client non renseigné";
+  const statusRaw = details.status || currentDocStatus || doc?.status || "uploaded";
+  const status = documentStatusLabel(statusRaw);
+  const size = formatBytes(details.sizeBytes ?? currentDocSize ?? doc?.size_bytes);
+  const fileKind = documentFileKind(doc);
+  const count = details.count ?? details.detectionsCount ?? 0;
+  const risk = details.risk || null;
+  const riskScore = risk ? normalizeRiskPercent(risk.score || risk.risk_score) : null;
+  const trustScore = riskScore === null ? 100 : Math.max(0, Math.min(100, 100 - riskScore));
+  const previewText = details.previewText || "";
+  const entitySummary = details.summary || {};
+  const fileId = String(currentDocId || "").slice(0, 8);
+
+  root.hidden = false;
+  root.setAttribute("data-privacy-zones", "[]");
+
+  const setText = (id, value) => {
+    const el = $(id);
+    if (el) el.textContent = value;
+  };
+  setText("detail-dossier-name", client);
+  setText("detail-doc-name", name);
+  setText("detail-status", status);
+  setText("pane-original-meta", [fileKind, size].filter(Boolean).join(" · ") || "Source");
+  setText("pane-anon-meta", `${Number(count || 0)} entité(s)`);
+  setText(
+    "detail-summary",
+    `${Number(count || 0)} entité(s) · ${riskScore === null ? "risque —" : `risque ${Math.round(riskScore)}%`}`,
+  );
+
+  const originalViewer = root.querySelector(".viewer-original");
+  if (originalViewer) {
+    originalViewer.innerHTML = `
+      <div class="document-original-card">
+        <p class="rail-h">Document original</p>
+        <h3>${escapeHtml(name)}</h3>
+        <dl class="meta-list">
+          ${documentDetailRow("Client", client)}
+          ${documentDetailRow("Format", fileKind)}
+          ${documentDetailRow("Taille", size || "—")}
+          ${documentDetailRow("Statut", status)}
+          ${documentDetailRow("ID", fileId || "—")}
+        </dl>
+        <div class="document-original-actions">
+          <button type="button" class="btn-ghost" data-action="open-original">Ouvrir l’original</button>
+          <button type="button" class="btn-ghost" data-action="download-original">Télécharger</button>
+        </div>
+      </div>
+    `;
+  }
+
+  const anonymizedViewer = root.querySelector(".viewer-anonymized");
+  if (anonymizedViewer) {
+    anonymizedViewer.innerHTML = previewText
+      ? `<div class="preview-text interactive-text">${highlightTags(previewText)}</div>`
+      : '<div class="viewer-placeholder">Texte anonymisé en attente.</div>';
+  }
+
+  const metadata = $("detail-metadata");
+  if (metadata) {
+    metadata.innerHTML = [
+      documentDetailRow("Fichier", name),
+      documentDetailRow("Client", client),
+      documentDetailRow("Format", fileKind),
+      documentDetailRow("Taille", size || "—"),
+      documentDetailRow("Statut", status),
+      documentDetailRow("Entités", `${Number(count || 0)}`),
+      documentDetailRow("ID", fileId || "—"),
+    ].join("");
+  }
+
+  const gauge = $("detail-trust-gauge");
+  if (gauge) {
+    gauge.setAttribute("data-pii", String(trustScore));
+    gauge.setAttribute("data-quasi", String(trustScore));
+    gauge.setAttribute("data-coherence", "100");
+    gauge.setAttribute("data-reversibility", String(riskScore === null ? 100 : Math.max(0, 100 - riskScore)));
+  }
+
+  const legend = $("detail-trust-legend");
+  if (legend) {
+    const entities = formatEntitySummary(entitySummary);
+    legend.innerHTML = `
+      <li><span class="swatch" style="background:var(--accent)"></span>Entités masquées<span class="leg-val">${Number(count || 0)}</span></li>
+      <li><span class="swatch" style="background:var(--warning)"></span>Risque résiduel<span class="leg-val">${riskScore === null ? "—" : `${Math.round(riskScore)}%`}</span></li>
+      <li><span class="swatch" style="background:var(--raw)"></span>Types détectés<span class="leg-val">${escapeHtml(entities)}</span></li>
+    `;
+  }
+
+  const auditLog = $("detail-audit-log");
+  if (auditLog) {
+    auditLog.innerHTML = `
+      <li><span class="ts">now</span><span class="what"><strong>Original chargé</strong><br>${escapeHtml(fileKind)} · ${escapeHtml(size || "taille inconnue")}</span></li>
+      <li><span class="ts">DPO</span><span class="what"><strong>Anonymisation</strong><br>${Number(count || 0)} entité(s) suivie(s)</span></li>
+    `;
+  }
+}
+
+function documentDetailRow(label, value) {
+  return `<div class="row"><dt>${escapeHtml(label)}</dt><dd>${escapeHtml(value || "—")}</dd></div>`;
+}
+
+async function fetchCurrentOriginalBlob() {
+  if (!currentDocId) throw new Error("Aucun document sélectionné");
+  const doc = getCurrentDocRecord();
+  const filename = doc?.original_filename || currentDocName || `document_${currentDocId}`;
+  const fallbackType = doc ? doc.content_type : "application/pdf";
+  const rawPath = publicDemoMode && currentDemoDocument?.urls?.raw
+    ? currentDemoDocument.urls.raw
+    : `/documents/${currentDocId}/raw`;
+  const resp = await apiRequest(rawPath, { auth: !publicDemoMode });
+  const responseContentType = (resp.headers.get("content-type") || fallbackType || "")
+    .split(";")[0]
+    .toLowerCase();
+  if (responseContentType.includes("application/json")) {
+    throw new Error("L'endpoint original a renvoyé du JSON au lieu du fichier source.");
+  }
+  const blob = await resp.blob();
+  if (blob.size === 0) {
+    throw new Error("Le fichier original est vide ou inaccessible.");
+  }
+  if (originalBlobUrl) URL.revokeObjectURL(originalBlobUrl);
+  originalBlobUrl = URL.createObjectURL(blob);
+  return { blob, filename, url: originalBlobUrl };
+}
+
+async function openCurrentOriginal(download = false) {
+  try {
+    const { blob, filename, url } = await fetchCurrentOriginalBlob();
+    if (download) {
+      triggerDownload(blob, filename);
+      return;
+    }
+    window.open(url, "_blank", "noopener");
+  } catch (e) {
+    console.error("openCurrentOriginal error:", e);
+    toast(e.message || "Original indisponible", "error");
+  }
+}
+
+async function openAnonReviewForCurrentDocument() {
+  if (!currentDocId) return;
+  const clientLabel = getDocClientLabel(currentDocId);
+  setStep(2);
+  resetAnonPanel();
+  updateAnonDocBar(currentDocName, currentDocSize, clientLabel);
+  if (isReadyStatus(currentDocStatus)) {
+    try {
+      const preview = await apiFetch(`/documents/${currentDocId}/preview`);
+      showAnonResults(
+        preview.preview_text,
+        preview.detections_count,
+        preview.entity_summary || {},
+        preview.risk || null,
+      );
+      return;
+    } catch (e) {
+      console.warn("openAnonReviewForCurrentDocument preview error:", e);
+    }
+  }
+  await loadOriginalDocument(currentDocId);
 }
 
 
@@ -3344,6 +3538,14 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   window.initialTagsCount = count ?? 0;
 
   $("preview-anon-text").innerHTML = highlightTags(previewText || "(Aucun texte extrait)");
+  renderDocumentDetailShell({
+    previewText,
+    count,
+    summary,
+    risk,
+    status: currentDocStatus,
+    sizeBytes: currentDocSize,
+  });
 
   // Prepopulate DPO dynamic mapping and ledger logs
   if (typeof buildDynamicTagOriginalMap === "function") {
@@ -5387,6 +5589,13 @@ function handleDelegatedAction(e) {
     startNewDocument();
     if (!batchMode) toggleBatchMode();
   }
+  else if (action === "open-original") openCurrentOriginal(false);
+  else if (action === "download-original") openCurrentOriginal(true);
+  else if (action === "back-to-documents") setStep(1);
+  else if (action === "validate-anonymization") $("btn-validate")?.click();
+  else if (action === "preview-redacted") $("btn-export-pdf")?.click();
+  else if (action === "re-anonymize-strict") $("btn-anonymize")?.click();
+  else if (action === "open-export") $("btn-export-txt")?.click();
   else if (action === "open-copilot") {
     if (window.__confidocDrawer) {
       window.__confidocDrawer.open();
@@ -6219,7 +6428,7 @@ document.addEventListener("DOMContentLoaded", () => {
     });
   }
   if ($("btn-ai-back-anon")) {
-    $("btn-ai-back-anon").addEventListener("click", () => setStep(2));
+    $("btn-ai-back-anon").addEventListener("click", () => openAnonReviewForCurrentDocument());
   }
   if ($("btn-ai-audit-shortcut")) {
     $("btn-ai-audit-shortcut").addEventListener("click", () => {
@@ -6292,8 +6501,10 @@ document.addEventListener("DOMContentLoaded", () => {
         document.querySelector(".chat-input-zone")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else if (action === "proof") {
         ($("btn-compliance-certificate") || $("btn-compliance-report"))?.click();
+      } else if (action === "original") {
+        openCurrentOriginal(false);
       } else if (action === "review") {
-        setStep(2);
+        openAnonReviewForCurrentDocument();
       }
     });
   }
