@@ -7792,10 +7792,20 @@ async function askCopilotFromDrawer(question) {
       answer = formatCitations(answer);
     }
     
+    let warningsHtml = "";
+    if (resp.warnings && resp.warnings.length) {
+      warningsHtml = resp.warnings.map(w => `
+        <div style="margin-top: 6px; font-size: 11px; color: var(--warning); display: flex; align-items: flex-start; gap: 4px; background: rgba(245, 158, 11, 0.08); border-left: 2px solid var(--warning); padding: 4px 8px; border-radius: 2px;">
+          <span>⚠️</span> <span>${escapeHtml(w)}</span>
+        </div>
+      `).join("");
+    }
+    
     recentEl.innerHTML = `
       <div style="background:rgba(255,255,255,0.05); border-left:3px solid var(--accent); padding:10px; border-radius:4px; margin-bottom:12px; font-size:12px; line-height:1.4;">
         <strong style="display:block; margin-bottom:4px; color:var(--text-muted)">Question: ${escapeHtml(question)}</strong>
         <div style="color:#fff">${answer}</div>
+        ${warningsHtml}
       </div>
     `;
   } catch (e) {
@@ -7824,7 +7834,7 @@ function renderStandardPendingActions() {
   if (!pendingDocs.length) {
     container.innerHTML = `
       <div style="display:flex; align-items:center; justify-content:center; gap:8px; background:rgba(16,185,129,0.1); border:1px solid rgba(16,185,129,0.2); border-radius:8px; padding:16px; color:var(--accent); font-size:12px; font-weight:600;">
-        <span>✓</span> Aucun document en attente. Votre dossier est parfaitement conforme !
+        <span>✓</span> Aucun document en attente. Votre dossier est prêt pour revue !
       </div>
     `;
     return;
@@ -7971,7 +7981,7 @@ async function triggerDPOAutopilot() {
     font-size: 13px;
     margin-bottom: 24px;
   `;
-  subtitle.textContent = 'Optimisation réglementaire et neutralisation des risques...';
+  subtitle.textContent = 'Optimisation et réduction des risques de réidentification...';
 
   const logConsole = document.createElement('div');
   logConsole.style.cssText = `
@@ -7998,10 +8008,10 @@ async function triggerDPOAutopilot() {
   const logs = [
     { text: "🤖 [Agent DPO] Démarrage de l'agent de conformité...", delay: 200 },
     { text: "🔍 [Audit] Scan sémantique des PII résiduels...", delay: 800 },
-    { text: "🛡️ [Caviardage] Neutralisation à 100% des quasi-identifiants...", delay: 1600 },
-    { text: "📈 [RGPD] Recalcul du score de vulnérabilité CNIL ➔ 0%...", delay: 2400 },
+    { text: "🛡️ [Caviardage] Aucun résidu critique détecté...", delay: 1600 },
+    { text: "📈 [RGPD] Score RGPD amélioré, risque fortement réduit...", delay: 2400 },
     { text: "🔒 [Preuve] Signature de la preuve d'intégrité DPO...", delay: 3000 },
-    { text: "✨ [Prêt] Conformité absolue atteinte ! Export autorisé.", delay: 3600 }
+    { text: "✨ [Prêt] Contrôles automatiques réussis. Prêt pour revue.", delay: 3600 }
   ];
 
   for (const log of logs) {
@@ -8033,6 +8043,7 @@ async function triggerDPOAutopilot() {
       method: "POST",
       body: JSON.stringify({
         final_text: txt.trim() ? txt : undefined,
+        is_autopilot: true,
       }),
     });
 
@@ -8049,7 +8060,7 @@ async function triggerDPOAutopilot() {
     loadChatHistory(currentDocId);
     await loadDocList();
 
-    toast("🤖 Autopilote DPO : Risque résiduel neutralisé, score à 100% !", "success");
+    toast("🤖 Autopilote DPO : Contrôles automatiques réussis — risque fortement réduit !", "success");
 
   } catch (e) {
     console.error("Autopilot validation error:", e);

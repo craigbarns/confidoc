@@ -39,6 +39,7 @@ class PrivacyGateState(TypedDict, total=False):
     risk_score: float
     risk_level: str
     human_validated: bool
+    autopilot_validated: bool
     anonymized_text_available: bool
     detections_count: int
     entity_types: list[str]
@@ -62,6 +63,7 @@ def initial_privacy_gate_state(
     risk_score: float | int | None = None,
     risk_level: str | None = None,
     human_validated: bool = False,
+    autopilot_validated: bool = False,
     anonymized_text_available: bool = False,
     detections_count: int = 0,
     entity_types: list[str] | None = None,
@@ -75,6 +77,7 @@ def initial_privacy_gate_state(
         "risk_score": float(risk_score or 0.0),
         "risk_level": str(risk_level or "low"),
         "human_validated": bool(human_validated),
+        "autopilot_validated": bool(autopilot_validated),
         "anonymized_text_available": bool(anonymized_text_available),
         "detections_count": int(detections_count or 0),
         "entity_types": entity_types or [],

@@ -96,3 +96,89 @@ async def test_privacy_gate_allows_internal_review_for_high_risk_document() -> N
     assert result["decision"] == "allow"
     assert "high_risk_without_human_validation" in result["evidence"]["flags"]
     assert result["warnings"]
+
+
+@pytest.mark.asyncio
+async def test_privacy_gate_medium_risk_no_validation() -> None:
+    result = await run_privacy_gate(
+        document_id="doc-medium-no-val",
+        requested_action="external_ai",
+        status="ready",
+        risk_score=0.45,
+        risk_level="medium",
+        human_validated=False,
+        autopilot_validated=False,
+        anonymized_text_available=True,
+        audit_events_count=3,
+    )
+    assert result["decision"] == "human_review_required"
+    assert "medium_risk_external_use" in result["evidence"]["flags"]
+
+
+@pytest.mark.asyncio
+async def test_privacy_gate_medium_risk_autopilot_validated_only() -> None:
+    result = await run_privacy_gate(
+        document_id="doc-medium-auto-val",
+        requested_action="external_ai",
+        status="ready",
+        risk_score=0.45,
+        risk_level="medium",
+        human_validated=False,
+        autopilot_validated=True,
+        anonymized_text_available=True,
+        audit_events_count=3,
+    )
+    assert result["decision"] == "allow"
+    assert "autopilot_validated_external_use" in result["evidence"]["flags"]
+    assert any("validation humaine recommandée" in w for w in result["warnings"])
+
+
+@pytest.mark.asyncio
+async def test_privacy_gate_medium_risk_human_validated() -> None:
+    result = await run_privacy_gate(
+        document_id="doc-medium-human-val",
+        requested_action="external_ai",
+        status="ready",
+        risk_score=0.45,
+        risk_level="medium",
+        human_validated=True,
+        autopilot_validated=False,
+        anonymized_text_available=True,
+        audit_events_count=3,
+    )
+    assert result["decision"] == "allow"
+    assert "medium_risk_external_use" not in result["evidence"]["flags"]
+
+
+@pytest.mark.asyncio
+async def test_privacy_gate_high_risk_autopilot_validated_only() -> None:
+    result = await run_privacy_gate(
+        document_id="doc-high-auto-val",
+        requested_action="external_ai",
+        status="ready",
+        risk_score=0.75,
+        risk_level="high",
+        human_validated=False,
+        autopilot_validated=True,
+        anonymized_text_available=True,
+        audit_events_count=3,
+    )
+    assert result["decision"] == "human_review_required"
+    assert "high_risk_without_human_validation" in result["evidence"]["flags"]
+
+
+@pytest.mark.asyncio
+async def test_privacy_gate_high_risk_human_validated() -> None:
+    result = await run_privacy_gate(
+        document_id="doc-high-human-val",
+        requested_action="external_ai",
+        status="ready",
+        risk_score=0.75,
+        risk_level="high",
+        human_validated=True,
+        autopilot_validated=False,
+        anonymized_text_available=True,
+        audit_events_count=3,
+    )
+    assert result["decision"] == "allow"
+    assert "high_risk_without_human_validation" not in result["evidence"]["flags"]

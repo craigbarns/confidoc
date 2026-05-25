@@ -84,6 +84,10 @@ class ValidateDocumentRequest(BaseModel):
         default=None,
         description="Les données structurées après correction humaine (pour Golden Sets).",
     )
+    is_autopilot: bool = Field(
+        default=False,
+        description="Indique si la validation provient de l'Autopilote DPO.",
+    )
 
 
 class ManualCorrectionRequest(BaseModel):

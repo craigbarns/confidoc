@@ -68,16 +68,23 @@ async def evaluate_node(state: PrivacyGateState) -> PrivacyGateState:
         flags.append("critical_reidentification_risk")
     if risk_level == "high" and not state.get("human_validated"):
         flags.append("high_risk_without_human_validation")
-    if risk_level == "medium" and action in {"external_ai", "share", "demo"} and not state.get("human_validated"):
-        flags.append("medium_risk_external_use")
+    if risk_level == "medium" and action in {"external_ai", "share", "demo", "export"}:
+        if not state.get("human_validated"):
+            if state.get("autopilot_validated"):
+                flags.append("autopilot_validated_external_use")
+            else:
+                flags.append("medium_risk_external_use")
     if entity_types.intersection(SENSITIVE_ENTITY_TYPES):
         flags.append("sensitive_entities_detected")
     if (
-        action in {"external_ai", "share", "demo"}
+        action in {"external_ai", "share", "demo", "export"}
         and entity_types.intersection({"IBAN", "BANK", "CARTE_BANCAIRE", "NSS", "SOCIAL_SECURITY"})
-        and not state.get("human_validated")
     ):
-        flags.append("direct_identifier_external_use")
+        if not state.get("human_validated"):
+            if state.get("autopilot_validated"):
+                flags.append("autopilot_validated_external_use")
+            else:
+                flags.append("direct_identifier_external_use")
     if int(state.get("audit_events_count") or 0) <= 0:
         flags.append("missing_audit_trace")
 
@@ -129,6 +136,8 @@ async def decide_node(state: PrivacyGateState) -> PrivacyGateState:
         required_actions.append("Effectuer une revue humaine légère avant diffusion externe.")
 
     if decision == "allow":
+        if "autopilot_validated_external_use" in flags:
+            warnings.append("Contrôles automatiques réussis — validation humaine recommandée pour usage externe.")
         if risk_level in {"medium", "high"}:
             warnings.append("Usage autorisé avec conservation de la preuve DPO et journal d'audit.")
         if "sensitive_entities_detected" in flags:

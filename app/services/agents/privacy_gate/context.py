@@ -74,6 +74,7 @@ async def load_document_privacy_gate_context(
         "risk_score": getattr(mapping, "risk_score", None),
         "risk_level": getattr(mapping, "risk_level", None) or "low",
         "human_validated": bool(getattr(mapping, "human_validated", False)),
+        "autopilot_validated": bool(getattr(mapping, "autopilot_validated", False)),
         "anonymized_text_available": has_text,
         "detections_count": detections_count,
         "entity_types": entity_types,

@@ -95,6 +95,7 @@ async def init_database() -> None:
             ),
             "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS request_id varchar(64);",
             "ALTER TABLE audit_logs ADD COLUMN IF NOT EXISTS event_hash varchar(64);",
+            "ALTER TABLE pseudonym_mappings ADD COLUMN IF NOT EXISTS autopilot_validated boolean NOT NULL DEFAULT false;",
         ]
 
         for sql in manual_migrations:
