@@ -25,6 +25,7 @@ from app.services.firewall import (
     inspect_prompt,
     inspect_response,
 )
+from app.services.firewall.stats import record_scan
 
 logger = get_logger("ai_firewall")
 
@@ -43,7 +44,7 @@ def _sensitive_mode() -> bool:
     return bool(getattr(get_settings(), "SENSITIVE_CLIENT_MODE", False))
 
 
-def guard_outbound_prompt(text: str) -> tuple[str, dict | None]:
+async def guard_outbound_prompt(text: str) -> tuple[str, dict | None]:
     """Inspect an outbound prompt. Returns (text_to_send, summary|None).
 
     Raises ``http_400`` when the firewall blocks the call.
@@ -52,6 +53,7 @@ def guard_outbound_prompt(text: str) -> tuple[str, dict | None]:
         return text, None
 
     scan = inspect_prompt(text, sensitive_mode=_sensitive_mode())
+    await record_scan(scan)
     summary = firewall_summary(scan)
 
     if scan.verdict == BLOCK:
@@ -77,7 +79,7 @@ def guard_outbound_prompt(text: str) -> tuple[str, dict | None]:
     return text, summary
 
 
-def guard_inbound_response(text: str) -> tuple[str, dict | None]:
+async def guard_inbound_response(text: str) -> tuple[str, dict | None]:
     """Inspect an inbound AI response. Returns (safe_text, summary|None).
 
     Never raises: the model already ran. On a block verdict, a safe placeholder
@@ -87,6 +89,7 @@ def guard_inbound_response(text: str) -> tuple[str, dict | None]:
         return text, None
 
     scan = inspect_response(text, sensitive_mode=_sensitive_mode())
+    await record_scan(scan)
     summary = firewall_summary(scan)
 
     if scan.verdict == BLOCK:
