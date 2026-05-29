@@ -1,0 +1,57 @@
+/* ============================================================================
+   ConfiDoc — workspace simplification (Accueil)
+   Progressive disclosure + breathing room. Additive: no markup logic changes,
+   collapsed sections keep their DOM (JS untouched).
+   ========================================================================== */
+
+/* More space + a comfortable reading column on the home screen */
+#panel-dashboard {
+  max-width: 1100px;
+  margin-inline: auto;
+}
+#panel-dashboard .standard-dashboard {
+  padding: 44px 28px !important;
+}
+#panel-dashboard .home-hero {
+  padding: 16px 0 8px;
+}
+#panel-dashboard .home-section {
+  margin: 32px 0;
+}
+
+/* Quiet, premium disclosure for secondary content */
+details.home-advanced {
+  margin: 20px 0;
+  border: 1px solid var(--border);
+  border-radius: var(--radius-lg);
+  background: var(--bg-surface);
+  transition: border-color 0.2s ease;
+}
+details.home-advanced[open] {
+  padding-bottom: 18px;
+}
+details.home-advanced > summary {
+  cursor: pointer;
+  list-style: none;
+  user-select: none;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 15px 18px;
+  font-size: 13.5px;
+  font-weight: 600;
+  color: var(--text-muted);
+}
+details.home-advanced > summary::-webkit-details-marker { display: none; }
+details.home-advanced > summary::before {
+  content: "›";
+  font-size: 20px;
+  line-height: 1;
+  color: var(--text-dim);
+  transition: transform 0.2s ease;
+}
+details.home-advanced[open] > summary::before { transform: rotate(90deg); }
+details.home-advanced > summary:hover { color: var(--text); }
+details.home-advanced:hover { border-color: var(--border-light); }
+/* Inset the disclosed content */
+details.home-advanced > :not(summary) { margin-inline: 18px; }

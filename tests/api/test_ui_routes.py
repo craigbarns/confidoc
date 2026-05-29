@@ -116,3 +116,21 @@ async def test_console_uses_premium_fonts_and_dark_default(client):
     assert js.status_code == 200
     # Dark is the default; OS light preference no longer auto-forces the light theme.
     assert "prefers-color-scheme: light" not in js.text
+
+
+@pytest.mark.anyio
+async def test_home_secondary_content_is_progressively_disclosed(client):
+    """Accueil: dense secondary blocks are collapsed behind <details> (less noise)."""
+    resp = await client.get("/ui")
+    assert resp.status_code == 200
+    # Two collapsible sections (standard "Accès rapides" + expert detailed dashboard).
+    assert resp.text.count('class="home-advanced"') == 2
+    assert "Accès rapides" in resp.text
+    assert "Tableau de bord détaillé" in resp.text
+    assert "/static/css/workspace.css" in resp.text
+    # Jargon removed.
+    assert "Cockpit cabinet" not in resp.text
+    assert "Dossier 360" not in resp.text
+    # Functionality preserved: the upload zone + JS-driven ids still present.
+    assert 'id="std-upload-zone"' in resp.text
+    assert 'id="dash-activity-chart"' in resp.text
