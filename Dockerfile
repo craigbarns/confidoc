@@ -36,7 +36,9 @@ ENV TORCH_HOME=/tmp/torch_cache
 
 WORKDIR /app
 
-RUN apt-get update && apt-get install -y --no-install-recommends \
+# apt-get upgrade applique les correctifs de sécurité OS (gnutls/krb5, etc.)
+# présents dans l'image de base au moment du build.
+RUN apt-get update && apt-get upgrade -y && apt-get install -y --no-install-recommends \
     libmagic1 \
     poppler-utils \
     tesseract-ocr \
@@ -46,7 +48,8 @@ RUN apt-get update && apt-get install -y --no-install-recommends \
     && rm -rf /var/lib/apt/lists/*
 
 COPY --from=builder /build/wheels /wheels
-RUN pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
+RUN pip install --no-cache-dir --upgrade pip "wheel>=0.46.2" && \
+    pip install --no-cache-dir torch torchvision --index-url https://download.pytorch.org/whl/cpu && \
     pip install --no-cache-dir /wheels/* && rm -rf /wheels
 
 COPY . .
