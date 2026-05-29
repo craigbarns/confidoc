@@ -1,0 +1,291 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>{{PAGE_TITLE}}</title>
+  <meta name="description" content="{{META_DESCRIPTION}}" />
+  <link rel="icon" type="image/svg+xml" href="/static/confidoc-mark.svg?v={{ASSET_VERSION}}" />
+  <style>
+    :root {
+      --bg: #070b16; --bg2: #0b1222; --panel: rgba(255,255,255,.04);
+      --panel-brd: rgba(255,255,255,.09); --ink: #eaf0ff; --muted: #93a0c0;
+      --teal: #2fe0c0; --teal-soft: rgba(47,224,192,.14);
+      --amber: #ffb547; --amber-soft: rgba(255,181,71,.14);
+      --red: #ff5d6c; --red-soft: rgba(255,93,108,.14);
+      --blue: #6aa8ff; --radius: 16px;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0; color: var(--ink); font-family: -apple-system, BlinkMacSystemFont,
+      "Segoe UI", Roboto, Inter, system-ui, sans-serif; line-height: 1.45;
+      background:
+        radial-gradient(1100px 600px at 12% -8%, rgba(47,224,192,.10), transparent 60%),
+        radial-gradient(900px 500px at 100% 0%, rgba(106,168,255,.10), transparent 55%),
+        linear-gradient(180deg, var(--bg), var(--bg2));
+      min-height: 100vh; -webkit-font-smoothing: antialiased;
+    }
+    a { color: inherit; text-decoration: none; }
+    .wrap { max-width: 1180px; margin: 0 auto; padding: 0 22px; }
+
+    header.topbar {
+      position: sticky; top: 0; z-index: 20; backdrop-filter: blur(10px);
+      background: rgba(7,11,22,.72); border-bottom: 1px solid var(--panel-brd);
+    }
+    .topbar .row { display: flex; align-items: center; justify-content: space-between; height: 60px; }
+    .brand { display: flex; align-items: center; gap: 10px; font-weight: 700; letter-spacing: .2px; }
+    .brand img { width: 26px; height: 26px; }
+    .brand small { color: var(--muted); font-weight: 600; }
+    .nav { display: flex; gap: 18px; font-size: 14px; color: var(--muted); }
+    .nav a:hover { color: var(--ink); }
+
+    .hero { display: grid; grid-template-columns: 1.25fr .9fr; gap: 28px; padding: 48px 0 26px; }
+    @media (max-width: 880px){ .hero { grid-template-columns: 1fr; } }
+    .eyebrow { color: var(--teal); font-weight: 700; font-size: 12px; letter-spacing: 2px; text-transform: uppercase; }
+    h1 { font-size: 54px; line-height: 1.02; margin: 12px 0 14px; letter-spacing: -1.5px; }
+    h1 .grad { background: linear-gradient(92deg, var(--teal), var(--blue)); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    .lede { color: var(--muted); font-size: 18px; max-width: 540px; }
+    .cta-row { margin-top: 26px; display: flex; gap: 12px; flex-wrap: wrap; }
+    .btn {
+      border: 0; cursor: pointer; font-weight: 700; font-size: 15px; border-radius: 12px;
+      padding: 13px 20px; color: #04201b; background: linear-gradient(92deg, var(--teal), #7ef0db);
+      box-shadow: 0 10px 30px rgba(47,224,192,.28); transition: transform .15s ease, box-shadow .15s ease;
+    }
+    .btn:hover { transform: translateY(-1px); box-shadow: 0 14px 36px rgba(47,224,192,.40); }
+    .btn:disabled { opacity: .6; cursor: progress; transform: none; }
+    .btn.ghost { background: transparent; color: var(--ink); border: 1px solid var(--panel-brd); box-shadow: none; }
+
+    .card { background: var(--panel); border: 1px solid var(--panel-brd); border-radius: var(--radius); }
+    .status-card { padding: 22px; }
+    .status-head { display: flex; align-items: center; justify-content: space-between; }
+    .status-title { font-size: 13px; letter-spacing: 1.5px; text-transform: uppercase; color: var(--muted); }
+    .pill { display: inline-flex; align-items: center; gap: 8px; font-weight: 700; font-size: 13px; padding: 7px 12px; border-radius: 999px; }
+    .pill.on { color: var(--teal); background: var(--teal-soft); }
+    .dot { width: 9px; height: 9px; border-radius: 50%; background: var(--teal); box-shadow: 0 0 0 0 rgba(47,224,192,.6); animation: pulse 1.8s infinite; }
+    @keyframes pulse { 0%{box-shadow:0 0 0 0 rgba(47,224,192,.55);} 70%{box-shadow:0 0 0 12px rgba(47,224,192,0);} 100%{box-shadow:0 0 0 0 rgba(47,224,192,0);} }
+    .status-grid { margin-top: 18px; display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+    .chipline { display: flex; align-items: center; justify-content: space-between; padding: 11px 13px; border-radius: 11px; background: rgba(255,255,255,.03); border: 1px solid var(--panel-brd); }
+    .chipline span { color: var(--muted); font-size: 13px; }
+    .chipline b { font-size: 13px; }
+    .ok { color: var(--teal); } .warn { color: var(--amber); } .bad { color: var(--red); }
+
+    .tiles { display: grid; grid-template-columns: repeat(5,1fr); gap: 14px; margin: 8px 0 30px; }
+    @media (max-width: 880px){ .tiles { grid-template-columns: repeat(2,1fr); } }
+    .tile { padding: 18px; }
+    .tile .k { color: var(--muted); font-size: 12.5px; font-weight: 600; letter-spacing: .3px; }
+    .tile .v { font-size: 38px; font-weight: 800; margin-top: 8px; letter-spacing: -1px; font-variant-numeric: tabular-nums; }
+    .tile.red .v { color: var(--red); } .tile.amber .v { color: var(--amber); } .tile.teal .v { color: var(--teal); }
+
+    .section-h { display: flex; align-items: baseline; justify-content: space-between; margin: 30px 0 14px; }
+    .section-h h2 { font-size: 20px; margin: 0; letter-spacing: -.3px; }
+    .section-h p { color: var(--muted); font-size: 13px; margin: 0; }
+
+    /* Parcours stepper */
+    .steps { display: flex; gap: 8px; flex-wrap: wrap; }
+    .step { flex: 1 1 150px; padding: 14px; border-radius: 12px; background: rgba(255,255,255,.03); border: 1px solid var(--panel-brd); position: relative; }
+    .step .n { font-size: 11px; color: var(--muted); letter-spacing: 1px; }
+    .step .t { font-weight: 700; margin-top: 4px; font-size: 14px; }
+    .step.key { border-color: rgba(255,93,108,.5); background: var(--red-soft); }
+    .step.key .t { color: var(--red); }
+
+    /* Demo sequence */
+    #demo-seq { display: grid; gap: 12px; }
+    .seq { padding: 16px 18px; opacity: 0; transform: translateY(8px); transition: opacity .4s ease, transform .4s ease; }
+    .seq.show { opacity: 1; transform: none; }
+    .seq .lbl { font-weight: 700; font-size: 14px; display: flex; align-items: center; justify-content: space-between; }
+    .verdict { font-size: 12px; font-weight: 800; padding: 4px 10px; border-radius: 999px; letter-spacing: .4px; }
+    .verdict.allow { color: var(--teal); background: var(--teal-soft); }
+    .verdict.redact { color: var(--amber); background: var(--amber-soft); }
+    .verdict.block { color: var(--red); background: var(--red-soft); }
+    .io { margin-top: 10px; display: grid; grid-template-columns: 1fr; gap: 8px; font-size: 13px; }
+    .io code { display: block; padding: 9px 11px; border-radius: 9px; background: rgba(0,0,0,.30); border: 1px solid var(--panel-brd); color: #cdd8f5; word-break: break-word; font-family: ui-monospace, SFMono-Regular, Menlo, monospace; font-size: 12.5px; }
+    .io .arrow { color: var(--muted); font-size: 12px; }
+
+    /* Events */
+    .events { padding: 6px 0; }
+    .ev { display: grid; grid-template-columns: 96px 92px 1fr auto; gap: 12px; align-items: center; padding: 11px 16px; border-top: 1px solid var(--panel-brd); font-size: 13px; }
+    .ev:first-child { border-top: 0; }
+    .ev .time { color: var(--muted); font-variant-numeric: tabular-nums; }
+    .ev .dir { color: var(--muted); text-transform: capitalize; }
+    .ev .find { color: #c7d2ee; }
+    .empty { padding: 22px 16px; color: var(--muted); font-size: 14px; }
+
+    footer { color: var(--muted); font-size: 12.5px; padding: 30px 0 50px; display: flex; justify-content: space-between; gap: 12px; flex-wrap: wrap; border-top: 1px solid var(--panel-brd); margin-top: 26px; }
+  </style>
+</head>
+<body>
+  <header class="topbar">
+    <div class="wrap row">
+      <a class="brand" href="/">
+        <img src="/static/confidoc-mark.svg?v={{ASSET_VERSION}}" alt="ConfiDoc" />
+        ConfiDoc <small>· AI Firewall</small>
+      </a>
+      <nav class="nav">
+        <a href="/ui">Console</a>
+        <a href="/trust">Trust Center</a>
+        <a href="/architecture">Architecture</a>
+      </nav>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <section class="hero">
+      <div>
+        <div class="eyebrow">Gouvernance IA · DPO / RSSI</div>
+        <h1>AI <span class="grad">Firewall</span></h1>
+        <p class="lede">Tous les échanges IA sont inspectés en temps réel —
+          <b>avant, pendant et après</b> l'utilisation de l'IA. Aucune donnée
+          identifiante ne sort sans contrôle.</p>
+        <div class="cta-row">
+          <button class="btn" id="demo-btn" type="button">▶ Charger une démo</button>
+          <a class="btn ghost" href="/trust">Voir le Trust Center</a>
+        </div>
+      </div>
+
+      <div class="card status-card">
+        <div class="status-head">
+          <div class="status-title">AI Firewall</div>
+          <span class="pill on" id="fw-pill"><span class="dot"></span><span id="fw-state">ACTIF</span></span>
+        </div>
+        <div class="status-grid">
+          <div class="chipline"><span>Mode</span><b id="fw-mode">—</b></div>
+          <div class="chipline"><span>API</span><b id="h-health">—</b></div>
+          <div class="chipline"><span>Base de données</span><b id="h-db">—</b></div>
+          <div class="chipline"><span>Cache / Redis</span><b id="h-redis">—</b></div>
+        </div>
+      </div>
+    </section>
+
+    <div class="tiles">
+      <div class="card tile teal"><div class="k">Prompts scannés</div><div class="v" id="c-prompts">0</div></div>
+      <div class="card tile teal"><div class="k">Réponses scannées</div><div class="v" id="c-responses">0</div></div>
+      <div class="card tile amber"><div class="k">Redactions</div><div class="v" id="c-redactions">0</div></div>
+      <div class="card tile red"><div class="k">Blocks</div><div class="v" id="c-blocks">0</div></div>
+      <div class="card tile red"><div class="k">Risques critiques</div><div class="v" id="c-critical">0</div></div>
+    </div>
+
+    <div class="section-h">
+      <h2>Parcours sécurisé</h2>
+      <p>Upload → anonymisation → score → IA → interception → audit</p>
+    </div>
+    <div class="steps">
+      <div class="step"><div class="n">01</div><div class="t">Upload</div></div>
+      <div class="step"><div class="n">02</div><div class="t">Anonymisation</div></div>
+      <div class="step"><div class="n">03</div><div class="t">Score RGPD</div></div>
+      <div class="step"><div class="n">04</div><div class="t">Copilot / IA</div></div>
+      <div class="step key"><div class="n">05</div><div class="t">Fuite interceptée</div></div>
+      <div class="step"><div class="n">06</div><div class="t">Audit</div></div>
+    </div>
+
+    <div class="section-h">
+      <h2>Démonstration live</h2>
+      <p>Cliquez « Charger une démo » pour voir l'interception en direct</p>
+    </div>
+    <div id="demo-seq">
+      <div class="card empty" id="demo-empty">Aucune démo lancée. Le firewall inspecte un prompt propre,
+        masque un email résiduel, puis bloque une fuite de RIB (IBAN).</div>
+    </div>
+
+    <div class="section-h">
+      <h2>Derniers événements firewall</h2>
+      <p>Types d'entités et compteurs uniquement — jamais de donnée brute</p>
+    </div>
+    <div class="card events" id="events">
+      <div class="empty">Chargement…</div>
+    </div>
+
+    <footer>
+      <span>ConfiDoc · {{UI_VERSION_LABEL}}</span>
+      <span>« Utilisez l'IA sur vos données confidentielles sans risque de fuite RGPD. »</span>
+    </footer>
+  </main>
+
+  <script nonce="{{CSP_NONCE}}">
+    (function () {
+      var $ = function (id) { return document.getElementById(id); };
+      function esc(s) { return String(s == null ? "" : s).replace(/[&<>"]/g, function (c) {
+        return ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" })[c]; }); }
+      function setTxt(id, v, cls) { var el = $(id); if (!el) return; el.textContent = v;
+        el.className = (el.id.indexOf("h-") === 0 ? "" : el.className.replace(/\b(ok|warn|bad)\b/g, "")) + (cls ? " " + cls : ""); }
+
+      function applyStats(d) {
+        var c = (d && d.counters) || {};
+        setTxt("c-prompts", c.prompts_scanned || 0);
+        setTxt("c-responses", c.responses_scanned || 0);
+        setTxt("c-redactions", c.redactions || 0);
+        setTxt("c-blocks", c.blocks || 0);
+        setTxt("c-critical", c.critical_risks || 0);
+        var fw = (d && d.firewall) || {};
+        $("fw-state").textContent = fw.enabled === false ? "DÉSACTIVÉ" : "ACTIF";
+        $("fw-mode").textContent = fw.mode === "strict" ? "Client sensible (strict)" : "Normal (redact + log)";
+        renderEvents((d && d.recent_events) || []);
+      }
+
+      function verdictClass(v) { return v === "block" ? "block" : v === "redact" ? "redact" : "allow"; }
+      function verdictLabel(v) { return v === "block" ? "BLOQUÉ" : v === "redact" ? "MASQUÉ" : "AUTORISÉ"; }
+
+      function renderEvents(evts) {
+        var box = $("events");
+        if (!evts.length) { box.innerHTML = '<div class="empty">Aucun événement pour le moment. Lancez la démo.</div>'; return; }
+        box.innerHTML = evts.map(function (e) {
+          var t = (e.ts || "").substring(11, 19) || "—";
+          var fnd = (e.findings || []).map(function (f) { return f.entity_type + "×" + f.count; }).join(", ") || "aucune entité";
+          return '<div class="ev"><span class="time">' + esc(t) + '</span>' +
+            '<span class="dir">' + esc(e.direction === "prompt" ? "Prompt" : "Réponse") + '</span>' +
+            '<span class="find">' + esc(fnd) + '</span>' +
+            '<span class="verdict ' + verdictClass(e.verdict) + '">' + verdictLabel(e.verdict) + '</span></div>';
+        }).join("");
+      }
+
+      function applyHealth(health, ready) {
+        var hOk = health && (health.status === "healthy");
+        setTxt("h-health", hOk ? "En ligne" : "Hors ligne", hOk ? "ok" : "bad");
+        var checks = (ready && ready.checks) || {};
+        var db = checks.database && checks.database.status;
+        var rd = checks.redis && checks.redis.status;
+        setTxt("h-db", db === "ok" ? "OK" : (db || "—"), db === "ok" ? "ok" : "warn");
+        setTxt("h-redis", rd === "ok" ? "OK" : (rd || "—"), rd === "ok" ? "ok" : "warn");
+      }
+
+      function getJSON(url, opts) { return fetch(url, opts || {}).then(function (r) { return r.ok ? r.json() : Promise.reject(r.status); }); }
+
+      function loadStatus() {
+        getJSON("/api/v1/firewall/stats").then(applyStats).catch(function () {});
+        Promise.all([
+          getJSON("/health").catch(function () { return null; }),
+          getJSON("/readiness").catch(function () { return null; })
+        ]).then(function (r) { applyHealth(r[0], r[1]); });
+      }
+
+      function renderDemo(steps) {
+        var box = $("demo-seq");
+        box.innerHTML = "";
+        steps.forEach(function (s, i) {
+          var v = (s.firewall && s.firewall.verdict) || "allow";
+          var el = document.createElement("div");
+          el.className = "card seq";
+          el.innerHTML = '<div class="lbl">' + esc(s.label) +
+            '<span class="verdict ' + verdictClass(v) + '">' + verdictLabel(v) + '</span></div>' +
+            '<div class="io"><code>' + esc(s.input) + '</code>' +
+            '<span class="arrow">↓ AI Firewall</span><code>' + esc(s.output) + '</code></div>';
+          box.appendChild(el);
+          setTimeout(function () { el.classList.add("show"); }, 120 + i * 480);
+        });
+      }
+
+      $("demo-btn").addEventListener("click", function () {
+        var btn = this; btn.disabled = true; btn.textContent = "Inspection en cours…";
+        getJSON("/api/v1/firewall/demo", { method: "POST" }).then(function (d) {
+          renderDemo(d.steps || []);
+          applyStats(d);
+        }).catch(function () {}).then(function () {
+          setTimeout(function () { btn.disabled = false; btn.textContent = "▶ Relancer la démo"; loadStatus(); }, 1800);
+        });
+      });
+
+      loadStatus();
+      setInterval(loadStatus, 8000);
+    })();
+  </script>
+</body>
+</html>

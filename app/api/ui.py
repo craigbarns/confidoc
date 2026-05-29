@@ -237,6 +237,33 @@ async def trust_center_page(request: Request) -> HTMLResponse:
     return await security_page(request)
 
 
+_FIREWALL_TEMPLATE = _TEMPLATE_DIR / "firewall.html"
+
+
+@router.get("/firewall", response_class=HTMLResponse, include_in_schema=False)
+async def firewall_dashboard_page(request: Request) -> HTMLResponse:
+    """Tableau de bord DPO/RSSI de l'AI Firewall (public, sans login pour la démo)."""
+    nonce = getattr(request.state, "csp_nonce", "")
+    context = _build_meta_context(
+        request,
+        title="ConfiDoc | AI Firewall — Tableau de bord DPO/RSSI",
+        description=(
+            "Tous les échanges IA sont inspectés en temps réel par l'AI Firewall : "
+            "prompts, réponses, redactions, blocages et risques critiques en direct."
+        ),
+        path="/firewall",
+    )
+    context.update(_ui_version_context())
+    html_content = _render_template(_FIREWALL_TEMPLATE, request, nonce, context)
+    return HTMLResponse(
+        content=html_content,
+        headers={
+            "Cache-Control": "no-store, no-cache, must-revalidate, max-age=0",
+            "Pragma": "no-cache",
+        },
+    )
+
+
 _ARCHITECTURE_TEMPLATE = _TEMPLATE_DIR / "architecture.html"
 
 @router.get("/architecture", response_class=HTMLResponse, include_in_schema=False)
