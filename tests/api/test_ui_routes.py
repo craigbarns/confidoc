@@ -88,3 +88,16 @@ async def test_firewall_dashboard_renders(client):
     assert "/static/js/firewall.js" in resp.text
     assert "fonts.googleapis.com" in resp.text
     assert "onclick=" not in resp.text
+
+
+@pytest.mark.anyio
+async def test_service_worker_is_network_first_for_navigations(client):
+    """The SW must not serve stale HTML after a deploy (no cached dashboards)."""
+    resp = await client.get("/static/sw.js")
+
+    assert resp.status_code == 200
+    # Cache bumped so old stale-while-revalidate caches are purged on activate.
+    assert "confidoc-v5" in resp.text
+    # Navigations go to the network first.
+    assert "isNavigation" in resp.text
+    assert "fetch(req).catch(() => caches.match(req))" in resp.text
