@@ -13,7 +13,7 @@ import hmac
 from typing import Any
 
 from fpdf import FPDF
-from app.config import get_settings
+from app.config import INSECURE_SECRET_PLACEHOLDER, get_settings
 
 _PURPLE = (124, 116, 255)
 _DARK = (15, 17, 23)
@@ -90,7 +90,7 @@ def generate_compliance_certificate(
     )
 
     # Calculate HMAC signature using settings.SECRET_KEY
-    sig_key = settings.SECRET_KEY or "CHANGE-ME"
+    sig_key = settings.SECRET_KEY or INSECURE_SECRET_PLACEHOLDER
     signature = hmac.new(
         key=sig_key.encode(),
         msg=payload.encode(),

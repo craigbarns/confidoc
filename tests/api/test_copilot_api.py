@@ -116,6 +116,12 @@ def _copilot_setup(monkeypatch):
         return {"validated": {"resume_executif": "Réponse du Copilot.", "points_cles": ["Point 1"]}}
     monkeypatch.setattr(copilot_svc, "generate_summary_with_mistral", _mock_summary)
 
+    # These tests exercise the DPO Privacy Gate for EXTERNAL AI use. Force the
+    # external action so the gate's decision is deterministic regardless of whether
+    # Mistral is configured in the environment (CI has no Mistral key).
+    import app.api.v1.copilot as copilot_api
+    monkeypatch.setattr(copilot_api, "_copilot_privacy_action", lambda: "external_ai")
+
     yield app, fake_db, doc, version, mapping
 
     app.dependency_overrides.pop(get_db, None)
