@@ -247,7 +247,7 @@ async def ai_summary(
     )
 
     # ── AI Firewall (outbound): inspect the actual prompt for residual PII ──
-    guarded_text, fw_prompt = guard_outbound_prompt(ai_payload["anonymized_text"])
+    guarded_text, fw_prompt = await guard_outbound_prompt(ai_payload["anonymized_text"])
     ai_payload["anonymized_text"] = guarded_text
 
     try:
@@ -264,7 +264,7 @@ async def ai_summary(
     summary_text = json.dumps(parsed, ensure_ascii=False) if parsed else llm.get("raw_text", "")
 
     # ── AI Firewall (inbound): inspect the response before restitution ──
-    summary_text, fw_response = guard_inbound_response(summary_text)
+    summary_text, fw_response = await guard_inbound_response(summary_text)
 
     return JSONResponse({
         "document_id": str(document.id),
@@ -320,6 +320,9 @@ async def ai_stream(
             "external_ai",
             anonymized_text=anonymized_text,
         )
+        # ── AI Firewall (outbound): inspect the prompt before streaming ──
+        # Raises HTTP 400 on a block verdict; redacts residual PII otherwise.
+        user_content, _ = await guard_outbound_prompt(user_content)
 
     async def _event_stream():
         try:
@@ -355,9 +358,15 @@ async def ai_stream(
                 yield f"data: {payload}\n\n"
                 yield "data: [DONE]\n\n"
                 return
+            collected: list[str] = []
             async for chunk in gen:
+                collected.append(chunk)
                 payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
                 yield f"data: {payload}\n\n"
+            # ── AI Firewall (inbound): inspect the full streamed response ──
+            _, fw_response = await guard_inbound_response("".join(collected))
+            if fw_response:
+                yield "data: " + json.dumps({"firewall": fw_response}, ensure_ascii=False) + "\n\n"
             yield "data: [DONE]\n\n"
         except Exception as exc:
             err = json.dumps({"error": str(exc)}, ensure_ascii=False)
@@ -409,14 +418,20 @@ async def ai_extract(
             "source": "disabled:sensitive_client_mode",
             "business_rules": {},
         }
-    else:
+    fw_prompt = None
+    fw_response = None
+    if selected_provider != "disabled":
         privacy_gate = await require_privacy_gate(
             db,
             document,
             _privacy_action_for_provider(selected_provider),
             anonymized_text=anonymized_text,
         )
-        extraction = await extract_with_llm(anonymized_text)
+        # ── AI Firewall (outbound): inspect the prompt before extraction ──
+        guarded_text, fw_prompt = await guard_outbound_prompt(anonymized_text)
+        extraction = await extract_with_llm(guarded_text)
+        # ── AI Firewall (inbound): inspect the structured extraction ──
+        _, fw_response = await guard_inbound_response(json.dumps(extraction, ensure_ascii=False))
 
     payload_policy = {
         "method": extraction.get("source", "llm:mistral-large"),
@@ -425,6 +440,7 @@ async def ai_extract(
     }
     if selected_provider != "disabled":
         payload_policy["privacy_gate"] = privacy_gate_public_summary(privacy_gate)
+        payload_policy["firewall"] = {"prompt": fw_prompt, "response": fw_response}
 
     return JSONResponse({
         "document_id": str(document.id),
@@ -485,6 +501,11 @@ async def ai_review(
         _privacy_action_for_review_agent(),
         anonymized_text=anonymized_text,
     )
+
+    # ── AI Firewall (outbound): inspect the prompt before the review agent ──
+    # Raises HTTP 400 on block; redacts residual PII so nothing un-inspected
+    # reaches the LLM-backed review pipeline.
+    anonymized_text, _ = await guard_outbound_prompt(anonymized_text)
 
     # Get entity summary for richer analysis
     from app.models.entity_detection import EntityDetection
@@ -564,6 +585,9 @@ async def ai_review_sync(
         anonymized_text=anonymized_text,
     )
 
+    # ── AI Firewall (outbound): inspect the prompt before the review agent ──
+    anonymized_text, fw_prompt = await guard_outbound_prompt(anonymized_text)
+
     from app.models.entity_detection import EntityDetection
     entity_summary: dict[str, int] = {}
     try:
@@ -592,10 +616,16 @@ async def ai_review_sync(
     # Remove raw text from response
     result.pop("anonymized_text", None)
 
+    # ── AI Firewall (inbound): inspect the synthesized review note ──
+    _, fw_response = await guard_inbound_response(
+        json.dumps(result, ensure_ascii=False, default=str)
+    )
+
     return JSONResponse({
         "document_id": str(document.id),
         "privacy_gate": privacy_gate_public_summary(privacy_gate),
         "review": result,
+        "firewall": {"prompt": fw_prompt, "response": fw_response},
     })
 
 

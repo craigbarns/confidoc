@@ -11,6 +11,7 @@ from app.api.v1 import (
     demo,
     documents,
     dossiers,
+    firewall,
     integrations,
     leads,
     quality,
@@ -30,6 +31,7 @@ router.include_router(uploads.router, prefix="/uploads", tags=["uploads"])
 router.include_router(documents.router, prefix="/documents", tags=["documents"])
 router.include_router(stats_router, prefix="/stats", tags=["stats"])
 router.include_router(ai.router, prefix="/ai", tags=["ai"])
+router.include_router(firewall.router, prefix="/firewall", tags=["firewall"])
 router.include_router(copilot.router, prefix="/copilot", tags=["copilot"])
 router.include_router(integrations.router, prefix="/integrations", tags=["integrations"])
 router.include_router(demo.router, prefix="/demo", tags=["demo"])

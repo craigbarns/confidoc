@@ -110,7 +110,7 @@ async def copilot_ask(
         warnings.append("Réponse à valider humainement avant décision.")
 
     # ── AI Firewall (inbound): no residual identifier reaches the user ──
-    answer, fw_response = guard_inbound_response(answer)
+    answer, fw_response = await guard_inbound_response(answer)
     if fw_response and fw_response.get("verdict") == "block":
         warnings.append("AI Firewall : réponse bloquée — données identifiantes détectées.")
     elif fw_response and fw_response.get("verdict") == "redact":
@@ -185,6 +185,13 @@ async def copilot_compare(
             "Les tags client diffèrent entre les deux documents — vérifiez qu'il s'agit "
             "bien du même dossier."
         )
+
+    # ── AI Firewall (inbound): no residual identifier reaches the user ──
+    answer, fw_response = await guard_inbound_response(answer)
+    if fw_response and fw_response.get("verdict") == "block":
+        warnings.append("AI Firewall : réponse bloquée — données identifiantes détectées.")
+    elif fw_response and fw_response.get("verdict") == "redact":
+        warnings.append("AI Firewall : données identifiantes masquées dans la réponse.")
 
     latency_ms = int((time.perf_counter() - t0) * 1000)
     return CopilotAskResponse(
