@@ -9,6 +9,7 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.api.v1._firewall import guard_inbound_response
 from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
 from app.config import get_settings
 from app.core.exceptions import http_400, http_404
@@ -107,6 +108,14 @@ async def copilot_ask(
     ]
     if confidence != "high":
         warnings.append("Réponse à valider humainement avant décision.")
+
+    # ── AI Firewall (inbound): no residual identifier reaches the user ──
+    answer, fw_response = guard_inbound_response(answer)
+    if fw_response and fw_response.get("verdict") == "block":
+        warnings.append("AI Firewall : réponse bloquée — données identifiantes détectées.")
+    elif fw_response and fw_response.get("verdict") == "redact":
+        warnings.append("AI Firewall : données identifiantes masquées dans la réponse.")
+
     latency_ms = int((time.perf_counter() - t0) * 1000)
     return CopilotAskResponse(
         answer=answer,

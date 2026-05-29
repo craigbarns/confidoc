@@ -10,6 +10,7 @@ from fastapi.responses import JSONResponse, StreamingResponse
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
+from app.api.v1._firewall import guard_inbound_response, guard_outbound_prompt
 from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
 from app.config import get_settings
 from app.core.exceptions import http_400, http_404
@@ -245,6 +246,10 @@ async def ai_summary(
         anonymized_text=anonymized_text,
     )
 
+    # ── AI Firewall (outbound): inspect the actual prompt for residual PII ──
+    guarded_text, fw_prompt = guard_outbound_prompt(ai_payload["anonymized_text"])
+    ai_payload["anonymized_text"] = guarded_text
+
     try:
         if selected_provider == "mistral":
             llm = await generate_summary_with_mistral(ai_payload, prudent_mode=False, mode=mode)
@@ -258,6 +263,9 @@ async def ai_summary(
     parsed = llm.get("validated") or {}
     summary_text = json.dumps(parsed, ensure_ascii=False) if parsed else llm.get("raw_text", "")
 
+    # ── AI Firewall (inbound): inspect the response before restitution ──
+    summary_text, fw_response = guard_inbound_response(summary_text)
+
     return JSONResponse({
         "document_id": str(document.id),
         "provider": provider_name,
@@ -268,6 +276,7 @@ async def ai_summary(
             "raw_text_sent": False,
             "anonymized_only": True,
             "privacy_gate": privacy_gate_public_summary(privacy_gate),
+            "firewall": {"prompt": fw_prompt, "response": fw_response},
         },
     })
 
