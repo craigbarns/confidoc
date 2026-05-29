@@ -139,6 +139,15 @@ class Settings(BaseSettings):
 
     # Contraintes RGPD / minimisation
     SENSITIVE_CLIENT_MODE: bool = False
+
+    # ---- AI Firewall (inspection prompt sortant + réponse entrante) ----
+    # Défense en profondeur sur le texte réellement échangé avec les LLM.
+    # Comportement contextuel :
+    #   - mode normal / démo        -> redact + log de la PII résiduelle
+    #   - SENSITIVE_CLIENT_MODE     -> block strict
+    #   - risque critique           -> block dans tous les modes
+    AI_FIREWALL_ENABLED: bool = True
+
     LLM_MIN_DETECTIONS: int = 2
     LLM_CONFIDENCE_THRESHOLD: float = 0.75
     LLM_MAX_SNIPPETS: int = 3
