@@ -71,19 +71,20 @@ async def test_firewall_dashboard_renders(client):
     assert resp.status_code == 200
     # Headline positioning
     assert "Tous les échanges IA sont inspectés en temps réel" in resp.text
-    assert "AI" in resp.text and "Firewall" in resp.text
-    # Counter tiles
-    assert 'id="c-prompts"' in resp.text
-    assert 'id="c-responses"' in resp.text
-    assert 'id="c-redactions"' in resp.text
-    assert 'id="c-blocks"' in resp.text
-    assert 'id="c-critical"' in resp.text
-    # Demo CTA + journey + events
-    assert 'id="demo-btn"' in resp.text
-    assert "Charger une démo" in resp.text
-    assert "Fuite interceptée" in resp.text
+    assert "AI Security" in resp.text and "Control Tower" in resp.text
+    # Metric tiles
+    for tile in ("c-prompts", "c-responses", "c-redactions", "c-blocks", "c-critical"):
+        assert f'id="{tile}"' in resp.text
+    # Control-tower modules: AI flow, risk ring, event stream, audit timeline
+    assert 'id="n-fwout"' in resp.text  # firewall response node in the AI flow
+    assert 'id="ring-prog"' in resp.text  # risk posture ring
     assert 'id="events"' in resp.text
-    # Uses the public stats + demo endpoints, no inline event handlers
-    assert "/api/v1/firewall/stats" in resp.text
-    assert "/api/v1/firewall/demo" in resp.text
+    assert 'id="timeline"' in resp.text
+    # Demo orchestration
+    assert 'id="demo-btn"' in resp.text
+    assert "Lancer la démonstration" in resp.text
+    # Premium assets are externalised (CSP-friendly, no inline handlers)
+    assert "/static/css/firewall.css" in resp.text
+    assert "/static/js/firewall.js" in resp.text
+    assert "fonts.googleapis.com" in resp.text
     assert "onclick=" not in resp.text
