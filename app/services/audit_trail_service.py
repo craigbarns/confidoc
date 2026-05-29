@@ -15,7 +15,7 @@ from typing import Any
 
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.config import get_settings
+from app.config import INSECURE_SECRET_PLACEHOLDER, get_settings
 from app.models.audit_log import AuditLog
 
 _SENSITIVE_DETAIL_KEY_PARTS = (
@@ -118,7 +118,9 @@ def build_audit_event_hash(
 ) -> str:
     """Build a stable HMAC over the non-sensitive event payload."""
     settings = get_settings()
-    secret = (settings.SECRET_KEY or settings.JWT_SECRET_KEY or "CHANGE-ME").encode("utf-8")
+    secret = (
+        settings.SECRET_KEY or settings.JWT_SECRET_KEY or INSECURE_SECRET_PLACEHOLDER
+    ).encode("utf-8")
     payload = {
         "action": action,
         "resource_type": resource_type,

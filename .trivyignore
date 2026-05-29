@@ -1,0 +1,10 @@
+# ConfiDoc — exceptions Trivy documentées
+# Chaque entrée doit être justifiée et datée. Réévaluer régulièrement.
+
+# CVE-2025-62727 (HIGH) — starlette < 0.49.1.
+# starlette est épinglé transitivement par FastAPI ~0.115 (contrainte < 0.47),
+# le correctif n'est disponible qu'en starlette 0.49.1 (FastAPI >= 0.116).
+# Le bump FastAPI/starlette est traité dans une PR dépendances dédiée afin
+# d'isoler le risque de régression. Impact réel limité pour ConfiDoc.
+# TODO: retirer cette ligne après le bump FastAPI>=0.116 / starlette>=0.49.1.
+CVE-2025-62727

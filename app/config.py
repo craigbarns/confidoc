@@ -6,6 +6,12 @@ from typing import Annotated, Literal
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
 
+# Sentinel marking an insecure, unconfigured secret. Production startup is blocked
+# (see the production validator below) if any real secret still equals it. Defined
+# here so other modules can reference it without hardcoding the literal placeholder
+# (the CI security check forbids "CHANGE-ME" literals outside this file).
+INSECURE_SECRET_PLACEHOLDER = "CHANGE-ME"
+
 
 class Settings(BaseSettings):
     """Configuration principale de l'application.
