@@ -101,3 +101,18 @@ async def test_service_worker_is_network_first_for_navigations(client):
     # Navigations go to the network first.
     assert "isNavigation" in resp.text
     assert "fetch(req).catch(() => caches.match(req))" in resp.text
+
+
+@pytest.mark.anyio
+async def test_console_uses_premium_fonts_and_dark_default(client):
+    """The console is aligned with the Control Tower: premium fonts + dark default."""
+    page = await client.get("/ui")
+    assert page.status_code == 200
+    assert "Hanken+Grotesk" in page.text
+    assert "Fraunces" in page.text
+    assert "7c74ff" not in page.text  # legacy purple favicon removed
+
+    js = await client.get("/static/js/app.js")
+    assert js.status_code == 200
+    # Dark is the default; OS light preference no longer auto-forces the light theme.
+    assert "prefers-color-scheme: light" not in js.text

@@ -158,11 +158,11 @@ function restoreFilterState() {
 
 function initTheme() {
   const saved = localStorage.getItem("confidoc_theme");
+  // Dark premium by default (aligned with the AI Security Control Tower).
+  // Only an explicit user choice switches to light; OS preference no longer
+  // auto-forces the light theme.
   if (saved === "light") document.documentElement.classList.add("theme-light");
-  else if (saved === "dark") document.documentElement.classList.remove("theme-light");
-  else if (window.matchMedia("(prefers-color-scheme: light)").matches) {
-    document.documentElement.classList.add("theme-light");
-  }
+  else document.documentElement.classList.remove("theme-light");
   updateThemeBtn();
 }
 
