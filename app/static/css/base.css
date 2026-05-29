@@ -7,7 +7,7 @@ html, body {
   padding: 0;
   background: var(--surface);
   color: var(--ink);
-  font-family: 'Inter', system-ui, -apple-system, sans-serif;
+  font-family: 'Hanken Grotesk', 'Inter', system-ui, -apple-system, sans-serif;
   font-size: 14px;
   line-height: 1.5;
   -webkit-font-smoothing: antialiased;
@@ -16,7 +16,7 @@ html, body {
 
 .literary,
 em.literary {
-  font-family: 'Iowan Old Style', 'Palatino Linotype', 'Times New Roman', Georgia, serif;
+  font-family: 'Fraunces', 'Iowan Old Style', 'Palatino Linotype', Georgia, serif;
   font-style: italic;
   font-weight: 500;
   color: var(--accent);
