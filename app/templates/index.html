@@ -8,6 +8,7 @@
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
   <link rel="stylesheet" href="/static/css/style.css?v={{ASSET_VERSION}}" />
+  <link rel="stylesheet" href="/static/css/workspace.css?v={{ASSET_VERSION}}" />
   <style>
     .review-station {
       margin-top: 20px;
@@ -578,7 +579,9 @@
 
           </div>
 
-          <!-- 2. Section des actions & cartes raccourcis -->
+          <!-- 2. Accès rapides — repliés par défaut pour réduire la charge visuelle -->
+          <details class="home-advanced">
+            <summary>Accès rapides</summary>
           <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); gap:20px; margin-bottom:28px;">
             <!-- Carte : Documents en attente de validation -->
             <div class="card shortcut-card animate-fade-in" style="padding:20px; cursor:pointer;" data-action="std-filter-uploaded">
@@ -610,6 +613,7 @@
               <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les pièces organisées par client et exercice.</p>
             </div>
           </div>
+          </details>
 
           <!-- 3. Liste simplifiée "Mes actions recommandées" -->
           <div class="card animate-fade-in" style="padding:24px;">
@@ -742,13 +746,15 @@
               <button id="btn-work-demo" class="workspace-action investor" type="button" data-action="demo-investor">
                 <span class="workspace-action-index">4</span>
                 <span>
-                  <strong>Demo Investor</strong>
-                  <small>Document synthétique, scores, audit, export</small>
+                  <strong>Démo guidée</strong>
+                  <small>Exemple complet : score, analyse, audit</small>
                 </span>
               </button>
             </div>
           </section>
 
+          <details class="home-advanced">
+            <summary>Tableau de bord détaillé</summary>
           <div class="dash-kpi-grid">
             <div class="dash-kpi-card">
               <div class="dash-kpi-icon kpi-violet">
@@ -815,7 +821,7 @@
           <div class="dash-mission-control" id="dash-mission-control">
             <div class="dash-mission-hero">
               <div>
-                <span class="dash-mission-eyebrow">Cockpit cabinet</span>
+                <span class="dash-mission-eyebrow">Priorités</span>
                 <h3 id="dash-mission-headline">Dossiers à qualifier</h3>
                 <p id="dash-mission-summary">Priorités expert-comptable, audit et conformité en attente.</p>
               </div>
@@ -836,7 +842,7 @@
           <div class="dash-dossier360" id="dash-dossier360">
             <div class="dash-section-head">
               <div>
-                <h3>Dossier 360</h3>
+                <h3>Synthèse client</h3>
                 <p>Priorités client, pièces manquantes et préparation cabinet</p>
               </div>
               <div class="dash-section-actions">
@@ -870,6 +876,7 @@
             <h3>Activité récente</h3>
             <div id="dash-activity-chart" class="dash-activity-bars"></div>
           </div>
+          </details>
         </div>
       </div>
 
