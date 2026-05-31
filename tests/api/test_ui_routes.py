@@ -149,3 +149,18 @@ async def test_document_analysis_advanced_blocks_are_collapsed(client):
     assert 'id="chat-messages"' in resp.text
     assert 'id="cabinet-doc-type"' in resp.text
     assert 'id="kpi-next-action"' in resp.text
+
+
+@pytest.mark.anyio
+async def test_ui_is_de_jargonised(client):
+    """Technical jargon is replaced by plain, reassuring wording across /ui."""
+    resp = await client.get("/ui")
+    assert resp.status_code == 200
+    for jargon in ("Data Flywheel", "Pilotage Qualité", "Distribution des Ajustements",
+                   "pipeline de production", "Trust score", "Golden sets", "Audit-Ready"):
+        assert jargon not in resp.text, jargon
+    for plain in ("Apprentissage continu", "Indice de confiance",
+                  "Journal d'audit & preuve", "Répartition des risques"):
+        assert plain in resp.text, plain
+    # "Grand livre" survives only as the accounting document type, never as a UI title.
+    assert "Grand livre d'audit" not in resp.text
