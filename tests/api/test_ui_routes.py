@@ -178,3 +178,19 @@ async def test_quality_and_compliance_analytics_are_collapsed(client):
     assert 'id="dash-risk-chart"' in resp.text
     assert 'id="audit-ledger-tbody"' in resp.text
     assert 'id="quality-status-summary-grid"' in resp.text
+
+
+@pytest.mark.anyio
+async def test_platform_navigation_links_ui_and_firewall(client):
+    """One platform: /ui links to the AI Firewall, /firewall links back to the workspace."""
+    ui = await client.get("/ui")
+    assert ui.status_code == 200
+    assert 'class="topbar__firewall-link"' in ui.text
+    assert 'href="/firewall"' in ui.text
+    assert "fw-badge" in ui.text  # the Active badge
+
+    fw = await client.get("/firewall")
+    assert fw.status_code == 200
+    assert 'class="nav-back"' in fw.text
+    assert 'href="/ui"' in fw.text
+    assert "← Workspace" in fw.text
