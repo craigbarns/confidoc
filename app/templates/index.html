@@ -1061,7 +1061,7 @@
 
             <aside class="rail">
               <section class="rail-section" id="rail-trust">
-                <h2 class="rail-h">Trust score</h2>
+                <h2 class="rail-h">Indice de confiance</h2>
                 <trust-gauge id="detail-trust-gauge" data-size="140" data-pii="0" data-quasi="0" data-coherence="0" data-reversibility="0"></trust-gauge>
                 <ul class="rail-trust__legend" id="detail-trust-legend"></ul>
               </section>
@@ -1593,15 +1593,15 @@
             </div>
           </header>
           <div class="segment" id="quality-redesign-tabs" role="tablist">
-            <button role="tab" data-segment="tab-scores" aria-pressed="true">Trust scores</button>
+            <button role="tab" data-segment="tab-scores" aria-pressed="true">Indice de confiance</button>
             <button role="tab" data-segment="tab-rgpd" aria-pressed="false">Conformité RGPD</button>
-            <button role="tab" data-segment="tab-golden" aria-pressed="false">Golden sets</button>
+            <button role="tab" data-segment="tab-golden" aria-pressed="false">Jeux de test qualité</button>
           </div>
           <div id="quality-redesign-tab-content"></div>
         </section>
 
         <div class="panel-header">
-          <h2>Pilotage Qualité & Data Flywheel</h2>
+          <h2>Qualité & apprentissage continu</h2>
           <div class="panel-actions">
             <span id="quality-as-of" class="quality-as-of-badge">Calcul en cours...</span>
             <button id="btn-quality-refresh" class="btn btn-ghost btn-sm" type="button">
@@ -1694,18 +1694,18 @@
 
           </div>
 
-          <!-- Data Flywheel (Curation des corrections & Apprentissage continu) -->
+          <!-- Apprentissage continu (curation des corrections) -->
           <div class="quality-flywheel-layout">
             
             <!-- Left panel: Learning Pipeline & Drafts Curation -->
             <div class="quality-inner-card">
-              <h3>Boucle d'Apprentissage (Data Flywheel)</h3>
-              <p class="quality-section-desc">Les corrections humaines génèrent des "Golden Case Drafts" pour améliorer l'IA locale.</p>
+              <h3>Apprentissage continu</h3>
+              <p class="quality-section-desc">Chaque correction humaine entraîne l'IA locale pour la rendre plus fiable.</p>
               
               <div class="quality-funnel-container">
                 <div class="quality-funnel-row">
                   <div class="quality-funnel-label-row">
-                    <span>Corrections DPO enregistrées (Drafts)</span>
+                    <span>Corrections enregistrées</span>
                     <strong id="quality-drafts-total">0</strong>
                   </div>
                   <div class="progress-bar" style="height: 6px;"><div id="quality-drafts-total-bar" class="progress-fill" style="width: 0%; background: var(--accent);"></div></div>
@@ -1740,7 +1740,7 @@
             <!-- Right panel: Grouped Corrections (Field & Error distributions) -->
             <div class="quality-inner-card flex-column">
               <div>
-                <h3>Distribution des Ajustements</h3>
+                <h3>Où l'IA est corrigée</h3>
                 <p class="quality-section-desc">Analyse des zones de friction de l'IA par champ et par type d'erreur.</p>
               </div>
 
@@ -1764,7 +1764,7 @@
 
           <!-- Production Diagnostics -->
           <div class="quality-inner-card">
-            <h3>Statut du pipeline de production (Aperçu)</h3>
+            <h3>État du traitement (aperçu)</h3>
             <div id="quality-status-summary-grid" class="quality-status-summary-grid">
               <!-- Dynamic status pills filled by app.js -->
             </div>
@@ -1815,24 +1815,24 @@
 
           <div class="dash-charts-row">
             <div class="dash-chart-card">
-              <h3>Distribution du risque</h3>
+              <h3>Répartition des risques</h3>
               <div id="dash-risk-chart" class="dash-risk-bars"></div>
             </div>
             <div class="dash-chart-card">
-              <h3>Entités par type</h3>
+              <h3>Données détectées par type</h3>
               <div id="dash-entity-chart" class="dash-entity-list"></div>
             </div>
           </div>
 
-          <!-- Grand livre d'audit DPO -->
+          <!-- Journal d'audit -->
           <div class="dash-chart-card audit-ledger-card" style="margin-top: 20px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-              <h3 style="margin: 0;">Grand livre d'audit DPO & Traçabilité Cryptographique</h3>
+              <h3 style="margin: 0;">Journal d'audit & preuve d'intégrité</h3>
               <span class="audit-ledger-badge" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2);">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
                 </svg>
-                Audit-Ready / Security Controls
+                Conforme & traçable
               </span>
             </div>
             <p style="color: var(--text-dim); font-size: 12.5px; margin-bottom: 16px; line-height: 1.5;">

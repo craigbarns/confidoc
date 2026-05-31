@@ -55,3 +55,20 @@ details.home-advanced > summary:hover { color: var(--text); }
 details.home-advanced:hover { border-color: var(--border-light); }
 /* Inset the disclosed content */
 details.home-advanced > :not(summary) { margin-inline: 18px; }
+
+/* ── Breathing room on the secondary screens (Qualité / Conformité / Audit) ── */
+#panel-quality,
+#panel-compliance,
+#panel-audit {
+  max-width: 1180px;
+  margin-inline: auto;
+}
+#panel-quality .quality-inner-card,
+#panel-compliance .dash-chart-card,
+#panel-audit .dash-chart-card {
+  padding: 22px;
+}
+#panel-quality .quality-inner-card + .quality-inner-card,
+#panel-audit .dash-charts-row + .dash-chart-card {
+  margin-top: 18px;
+}
