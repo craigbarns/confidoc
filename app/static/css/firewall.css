@@ -281,3 +281,13 @@ h1 em { font-style: italic; color: var(--ok); }
 
 footer { color: var(--ink-3); font-size: 12.5px; padding: 40px 0 64px; margin-top: 44px; border-top: 1px solid var(--line-2); display: flex; justify-content: space-between; gap: 16px; flex-wrap: wrap; }
 footer .mono { font-family: var(--mono); }
+
+/* Back-link to the workspace (platform bridge) */
+.nav .nav-back {
+  display: inline-flex; align-items: center;
+  padding: 6px 13px; border-radius: 999px;
+  border: 1px solid var(--line-strong);
+  color: var(--ink); font-weight: 600;
+  transition: border-color .18s ease, background .18s ease;
+}
+.nav .nav-back:hover { border-color: rgba(62,224,166,.4); background: rgba(62,224,166,.08); }
