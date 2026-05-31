@@ -164,3 +164,17 @@ async def test_ui_is_de_jargonised(client):
         assert plain in resp.text, plain
     # "Grand livre" survives only as the accounting document type, never as a UI title.
     assert "Grand livre d'audit" not in resp.text
+
+
+@pytest.mark.anyio
+async def test_quality_and_compliance_analytics_are_collapsed(client):
+    """Qualité/Conformité: dense analytics collapse, keeping the score primary."""
+    resp = await client.get("/ui")
+    assert resp.status_code == 200
+    assert resp.text.count('class="home-advanced"') >= 6
+    assert "Détails : apprentissage & traitement" in resp.text
+    assert "Détails de conformité" in resp.text
+    # JS-driven analytics still in the DOM.
+    assert 'id="dash-risk-chart"' in resp.text
+    assert 'id="audit-ledger-tbody"' in resp.text
+    assert 'id="quality-status-summary-grid"' in resp.text
