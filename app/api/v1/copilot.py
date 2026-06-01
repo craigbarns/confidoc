@@ -9,7 +9,7 @@ from fastapi import APIRouter, status
 from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
-from app.api.v1._firewall import guard_inbound_response
+from app.api.v1._firewall import guard_inbound_response, guard_outbound_prompt
 from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
 from app.config import get_settings
 from app.core.exceptions import http_400, http_404
@@ -101,7 +101,9 @@ async def copilot_ask(
     )
     top_k = 3 if body.mode != "quick" else 2
     citations = retrieve_citations(body.question, anonymized_text, top_k=top_k)
-    answer = await generate_copilot_answer(body.question, citations)
+    # ── AI Firewall (outbound): inspect the user question before it reaches the LLM ──
+    guarded_question, _ = await guard_outbound_prompt(body.question)
+    answer = await generate_copilot_answer(guarded_question, citations)
     confidence = confidence_bucket(citations)
     warnings: list[str] = [
         *privacy_gate_public_summary(privacy_gate).get("warnings", []),
@@ -168,7 +170,9 @@ async def copilot_compare(
     question = (body.question or "").strip() or DEFAULT_COMPARE_QUESTION
     combined = build_dual_corpus(text_a, text_b)
     citations = retrieve_citations(question, combined, top_k=4)
-    answer = await generate_copilot_answer(question, citations)
+    # ── AI Firewall (outbound): inspect the question before it reaches the LLM ──
+    guarded_question, _ = await guard_outbound_prompt(question)
+    answer = await generate_copilot_answer(guarded_question, citations)
     confidence = confidence_bucket(citations)
     warnings: list[str] = [
         *privacy_gate_public_summary(privacy_gate_a).get("warnings", []),

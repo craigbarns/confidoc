@@ -164,7 +164,11 @@ def create_app() -> FastAPI:
             "X-Request-ID",
         ],
     )
-    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts="*")
+    _trusted = settings.TRUSTED_PROXY_HOSTS.strip()
+    _trusted_hosts: str | list[str] = (
+        "*" if _trusted == "*" else [h.strip() for h in _trusted.split(",") if h.strip()]
+    )
+    app.add_middleware(ProxyHeadersMiddleware, trusted_hosts=_trusted_hosts)
 
     # ---- Routers ----
     app.include_router(ui_router)

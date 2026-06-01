@@ -42,6 +42,11 @@ class Settings(BaseSettings):
         list[str], NoDecode
     ] = ["http://localhost:3000", "http://localhost:5173"]
 
+    # Hosts autorisés à fournir des en-têtes proxy (X-Forwarded-*). "*" convient
+    # derrière un proxy maîtrisé (Railway). Restreindre (ex: "10.0.0.0/8" ou des
+    # IP/hosts séparés par des virgules) si l'app peut être exposée autrement.
+    TRUSTED_PROXY_HOSTS: str = "*"
+
     # ---- Database ----
     DATABASE_URL: str = (
         "postgresql+asyncpg://confidoc:confidoc_dev_password@localhost:5432/confidoc"
