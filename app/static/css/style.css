@@ -5380,7 +5380,7 @@ body {
   border-spacing: 0 !important;
 }
 .table-container th {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.05em;
@@ -5476,7 +5476,7 @@ body {
   flex-direction: column;
 }
 .quality-ring-text strong {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-size: 20px;
   font-weight: 700;
   color: var(--text);
@@ -5493,7 +5493,7 @@ body {
   border: 1px solid rgba(99, 102, 241, 0.2);
 }
 .quality-card-title {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-size: 14px;
   font-weight: 600;
   margin: 0 0 4px 0;
@@ -5532,13 +5532,13 @@ body {
   background: var(--warning-dim);
 }
 .quality-card.text-kpi strong {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-size: 24px;
   font-weight: 700;
   color: var(--text);
 }
 .quality-card-title-sm {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-size: 13px;
   font-weight: 600;
   margin: 0 0 2px 0;
@@ -5573,7 +5573,7 @@ body {
   gap: 16px;
 }
 .quality-inner-card h3 {
-  font-family: 'Outfit', sans-serif;
+  font-family: 'Hanken Grotesk', sans-serif;
   font-size: 15px;
   font-weight: 700;
   margin: 0 0 4px 0;

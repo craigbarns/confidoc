@@ -194,3 +194,18 @@ async def test_platform_navigation_links_ui_and_firewall(client):
     assert 'class="nav-back"' in fw.text
     assert 'href="/ui"' in fw.text
     assert "← Workspace" in fw.text
+
+
+@pytest.mark.anyio
+async def test_home_uses_loaded_fonts_and_emerald_accent(client):
+    """Accueil polish: loaded fonts only, emerald hero, clean greeting/label."""
+    resp = await client.get("/ui")
+    assert resp.status_code == 200
+    # The unloaded 'Outfit' font is gone everywhere (it always fell back to system).
+    assert "'Outfit'" not in resp.text
+    # Hero upload is emerald, not the legacy indigo/purple.
+    assert "124, 116, 255" not in resp.text and "124,116,255" not in resp.text
+    # Clean greeting (no permanent "Collaborateur" placeholder) + softer label.
+    assert ">Collaborateur<" not in resp.text
+    assert "Nom du client" in resp.text
+    assert "(Obligatoire)" not in resp.text
