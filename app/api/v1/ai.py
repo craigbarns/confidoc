@@ -26,6 +26,33 @@ router = APIRouter()
 logger = get_logger(__name__)
 
 
+def _apply_inbound_verdict(payload: dict, safe_text: str, fw_summary: dict | None) -> dict:
+    """Enforce the inbound firewall verdict on a structured response.
+
+    - block  → withhold the leaking payload (return a safe notice)
+    - redact → return the PII-masked structure (tokens replace identifiers)
+    - allow / firewall disabled → return the payload unchanged
+    """
+    verdict = (fw_summary or {}).get("verdict")
+    if verdict == "block":
+        return {
+            "firewall_blocked": True,
+            "message": (
+                "Résultat retenu par l'AI Firewall : des données identifiantes ont été "
+                "détectées dans la réponse. Renforcez l'anonymisation puis relancez."
+            ),
+        }
+    if verdict == "redact":
+        try:
+            return json.loads(safe_text)
+        except (ValueError, TypeError):
+            return {
+                "firewall_blocked": True,
+                "message": "Réponse masquée par l'AI Firewall (données identifiantes).",
+            }
+    return payload
+
+
 def _select_llm_provider(requested: str) -> str:
     """Sélectionne le meilleur provider disponible. Priorité: Mistral → Ollama."""
     s = get_settings()
@@ -358,13 +385,13 @@ async def ai_stream(
                 yield f"data: {payload}\n\n"
                 yield "data: [DONE]\n\n"
                 return
+            # Buffer the model output server-side and inspect it BEFORE anything
+            # reaches the client — nothing is restituted until the firewall clears it.
             collected: list[str] = []
             async for chunk in gen:
                 collected.append(chunk)
-                payload = json.dumps({"chunk": chunk}, ensure_ascii=False)
-                yield f"data: {payload}\n\n"
-            # ── AI Firewall (inbound): inspect the full streamed response ──
-            _, fw_response = await guard_inbound_response("".join(collected))
+            safe_text, fw_response = await guard_inbound_response("".join(collected))
+            yield "data: " + json.dumps({"chunk": safe_text}, ensure_ascii=False) + "\n\n"
             if fw_response:
                 yield "data: " + json.dumps({"firewall": fw_response}, ensure_ascii=False) + "\n\n"
             yield "data: [DONE]\n\n"
@@ -430,8 +457,11 @@ async def ai_extract(
         # ── AI Firewall (outbound): inspect the prompt before extraction ──
         guarded_text, fw_prompt = await guard_outbound_prompt(anonymized_text)
         extraction = await extract_with_llm(guarded_text)
-        # ── AI Firewall (inbound): inspect the structured extraction ──
-        _, fw_response = await guard_inbound_response(json.dumps(extraction, ensure_ascii=False))
+        # ── AI Firewall (inbound): never return leaking structured data ──
+        safe_text, fw_response = await guard_inbound_response(
+            json.dumps(extraction, ensure_ascii=False)
+        )
+        extraction = _apply_inbound_verdict(extraction, safe_text, fw_response)
 
     payload_policy = {
         "method": extraction.get("source", "llm:mistral-large"),
@@ -616,10 +646,11 @@ async def ai_review_sync(
     # Remove raw text from response
     result.pop("anonymized_text", None)
 
-    # ── AI Firewall (inbound): inspect the synthesized review note ──
-    _, fw_response = await guard_inbound_response(
+    # ── AI Firewall (inbound): never return a leaking review note ──
+    safe_text, fw_response = await guard_inbound_response(
         json.dumps(result, ensure_ascii=False, default=str)
     )
+    result = _apply_inbound_verdict(result, safe_text, fw_response)
 
     return JSONResponse({
         "document_id": str(document.id),

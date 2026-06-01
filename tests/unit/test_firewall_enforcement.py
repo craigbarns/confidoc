@@ -87,3 +87,29 @@ async def test_record_scan_is_invoked_for_every_scan(monkeypatch):
     await _firewall.guard_outbound_prompt("Résume le document [SOCIETE].")
     assert len(recorded) == 1
     assert recorded[0].direction == "prompt"
+
+
+def test_apply_inbound_verdict_blocks_leaking_payload():
+    from app.api.v1.ai import _apply_inbound_verdict
+
+    payload = {"contact": "marie.martin@cabinet.fr", "total": 1000}
+    out = _apply_inbound_verdict(payload, "…", {"verdict": "block"})
+    assert out.get("firewall_blocked") is True
+    assert "marie.martin@cabinet.fr" not in str(out)
+
+
+def test_apply_inbound_verdict_returns_redacted_structure():
+    from app.api.v1.ai import _apply_inbound_verdict
+
+    payload = {"contact": "marie.martin@cabinet.fr"}
+    safe = '{"contact": "[EMAIL]"}'
+    out = _apply_inbound_verdict(payload, safe, {"verdict": "redact"})
+    assert out == {"contact": "[EMAIL]"}
+
+
+def test_apply_inbound_verdict_passes_through_on_allow_or_disabled():
+    from app.api.v1.ai import _apply_inbound_verdict
+
+    payload = {"total": 1000}
+    assert _apply_inbound_verdict(payload, "{}", {"verdict": "allow"}) == payload
+    assert _apply_inbound_verdict(payload, "{}", None) == payload
