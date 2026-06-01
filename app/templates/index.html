@@ -506,10 +506,10 @@
 
           <!-- Sub-tabs for Documents vs Multi-Year Evolution -->
           <div class="dossier-tabs" style="display: flex; gap: 8px; margin: 12px 0 20px 0; border-bottom: 1px solid var(--border); padding-bottom: 0;">
-            <button class="dossier-tab active" data-tab="documents" style="background: none; border: none; color: var(--text); border-bottom: 2px solid var(--accent); padding: 10px 16px; cursor: pointer; font-weight: 600; font-family: 'Outfit', sans-serif; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+            <button class="dossier-tab active" data-tab="documents" style="background: none; border: none; color: var(--text); border-bottom: 2px solid var(--accent); padding: 10px 16px; cursor: pointer; font-weight: 600; font-family: 'Hanken Grotesk', sans-serif; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
               📂 Documents
             </button>
-            <button class="dossier-tab" data-tab="comparison" style="background: none; border: none; color: var(--text-muted); padding: 10px 16px; cursor: pointer; font-weight: 500; font-family: 'Outfit', sans-serif; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
+            <button class="dossier-tab" data-tab="comparison" style="background: none; border: none; color: var(--text-muted); padding: 10px 16px; cursor: pointer; font-weight: 500; font-family: 'Hanken Grotesk', sans-serif; font-size: 13px; display: flex; align-items: center; gap: 6px; transition: all 0.2s;">
               📈 Évolution Pluriannuelle
             </button>
           </div>
@@ -551,26 +551,26 @@
         <div class="standard-only standard-dashboard animate-fade-in" style="padding: 24px;">
           <header class="panel-head" style="margin-bottom:24px;">
             <div>
-              <h1 class="page-title" style="font-family:'Outfit',sans-serif; font-size:28px; font-weight:800; background:linear-gradient(135deg, #fff 0%, var(--text-muted) 100%); -webkit-background-clip:text; -webkit-text-fill-color:transparent;">Bonjour, <span class="collaborator-user-name">Collaborateur</span> 👋</h1>
+              <h1 class="page-title" style="font-family:'Fraunces',serif; font-size:34px; font-weight:600; letter-spacing:-0.5px; color:var(--text);">Bonjour <span class="collaborator-user-name"></span>👋</h1>
               <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">Sécurisez et anonymisez vos documents en quelques secondes.</p>
             </div>
           </header>
 
           <!-- 1. Grande zone d'upload simplifiée -->
-          <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(124, 116, 255, 0.08) 0%, rgba(168, 85, 247, 0.03) 100%); border: 1px solid rgba(124, 116, 255, 0.15); border-radius:var(--radius-lg); padding:32px 24px; margin-bottom:28px; transition:all 0.2s;">
+          <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%); border: 1px solid rgba(16,185,129,0.18); border-radius:var(--radius-lg); padding:32px 24px; margin-bottom:28px; transition:all 0.2s;">
             
             <div style="max-width: 480px; margin: 0 auto; text-align: left; margin-bottom: 20px;">
-              <label for="std-upload-client-name" style="display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Nom du Client (Obligatoire)</label>
-              <input id="std-upload-client-name" list="clients-suggestions" class="input-md" type="text" placeholder="ex: SCI Les Pins, Monsieur Martin..." style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; color:#fff; font-size:14px; font-family:'Outfit',sans-serif;" />
+              <label for="std-upload-client-name" style="display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Nom du client</label>
+              <input id="std-upload-client-name" list="clients-suggestions" class="input-md" type="text" placeholder="ex: SCI Les Pins, Monsieur Martin..." style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; color:#fff; font-size:14px; font-family:'Hanken Grotesk',sans-serif;" />
             </div>
 
-            <div class="upload-zone" id="std-upload-zone" style="border: 2px dashed rgba(124, 116, 255, 0.3); border-radius:var(--radius-md); padding:32px 20px; text-align:center; cursor:pointer; background:rgba(255,255,255,0.01); transition:all 0.2s;">
-              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px; opacity:0.85; filter:drop-shadow(0 0 8px rgba(124,116,255,0.4));">
+            <div class="upload-zone" id="std-upload-zone" style="border: 2px dashed rgba(16,185,129,0.3); border-radius:var(--radius-md); padding:32px 20px; text-align:center; cursor:pointer; background:rgba(255,255,255,0.01); transition:all 0.2s;">
+              <svg width="40" height="40" viewBox="0 0 24 24" fill="none" stroke="var(--accent)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin:0 auto 12px; opacity:0.85; filter:drop-shadow(0 0 8px rgba(16,185,129,0.4));">
                 <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
-              <h4 style="font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-bottom:6px;">Glissez-déposez votre document ici</h4>
+              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-bottom:6px;">Glissez-déposez votre document ici</h4>
               <p style="color:var(--text-muted); font-size:11px; margin:0 0 16px;">PDF, PNG, JPG, TIFF (Max. 50 Mo)</p>
               <label class="btn btn-primary btn-sm" for="std-file-input" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
                 <span>+</span> Choisir un fichier
@@ -596,7 +596,7 @@
                 <span style="font-size:24px;">⏳</span>
                 <span class="badge badge-warning" id="std-kpi-pending-count" style="font-size:12px; font-weight:700;">0</span>
               </div>
-              <h4 style="font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">À vérifier</h4>
+              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">À vérifier</h4>
               <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Documents analysés nécessitant un contrôle ou une validation humaine.</p>
             </div>
 
@@ -606,7 +606,7 @@
                 <span style="font-size:24px;">✨</span>
                 <span class="badge badge-success" id="std-kpi-ready-count" style="font-size:12px; font-weight:700;">0</span>
               </div>
-              <h4 style="font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Prêts à télécharger</h4>
+              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Prêts à télécharger</h4>
               <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Pièces entièrement anonymisées et validées pour vos IA ou exports.</p>
             </div>
 
@@ -616,7 +616,7 @@
                 <span style="font-size:24px;">🏢</span>
                 <span style="font-size:11px; color:var(--text-muted); font-weight:600;">Accès rapide</span>
               </div>
-              <h4 style="font-family:'Outfit',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Mes dossiers clients</h4>
+              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Mes dossiers clients</h4>
               <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les pièces organisées par client et exercice.</p>
             </div>
           </div>
@@ -624,7 +624,7 @@
 
           <!-- 3. Liste simplifiée "Mes actions recommandées" -->
           <div class="card animate-fade-in" style="padding:24px;">
-            <h3 style="font-family:'Outfit',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-top:0; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
+            <h3 style="font-family:'Hanken Grotesk',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-top:0; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
               📋 Vos tâches en attente
             </h3>
             <div id="std-pending-actions-list" style="display:flex; flex-direction:column; gap:12px;">
@@ -693,30 +693,30 @@
             <div style="display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 16px;">
               <div>
                 <span class="auto-badge" style="background: var(--accent); color: #fff; margin-bottom: 8px; font-weight: 700; display: inline-block;">🚀 NOUVEAU</span>
-                <h3 style="font-family: 'Outfit', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); margin: 0;">Guide de Démarrage Rapide</h3>
+                <h3 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); margin: 0;">Guide de Démarrage Rapide</h3>
                 <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Comprendre ConfiDoc et sécuriser vos premiers dossiers clients en 4 étapes simples.</p>
               </div>
               <button id="btn-hide-onboarding" class="btn btn-ghost btn-sm" style="padding: 4px 8px; font-size: 12px; color: var(--text-muted); cursor: pointer;" title="Masquer définitivement">Masquer</button>
             </div>
             <div class="onboarding-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">1</div>
-                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📂 Groupe Client & Dossier</h4>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">1</div>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📂 Groupe Client & Dossier</h4>
                 <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Créez ou sélectionnez un client (ex: <em>SCI Les Pins</em>) pour y rattacher vos documents par année d'exercice.</p>
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">2</div>
-                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📤 Import Multi-Fichiers</h4>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">2</div>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📤 Import Multi-Fichiers</h4>
                 <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Glissez-déposez un ou plusieurs fichiers (PDF, images) d'un coup. Ils se téléversent en lot de façon fluide.</p>
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">3</div>
-                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">🛡️ Masquage IA & DPO</h4>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">3</div>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">🛡️ Masquage IA & DPO</h4>
                 <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">L'IA détecte et caviarde automatiquement les données personnelles (noms, RIB) pour créer un double anonyme.</p>
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
-                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Outfit', sans-serif; margin-bottom: 12px; font-size: 14px;">4</div>
-                <h4 style="font-family: 'Outfit', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📈 Évolutions Pluriannuelles</h4>
+                <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">4</div>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📈 Évolutions Pluriannuelles</h4>
                 <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Consultez les dossiers clients pour comparer l'année N avec N-1 et repérer les variations comptables.</p>
               </div>
             </div>
@@ -1636,7 +1636,7 @@
           <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px; opacity:0.6;">
             <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
           </svg>
-          <h3 style="font-family: 'Outfit', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 6px;">Aucune donnée disponible</h3>
+          <h3 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 16px; font-weight: 600; margin-bottom: 6px;">Aucune donnée disponible</h3>
           <p style="color: var(--text-muted); font-size: 13px; max-width: 320px; margin: 0 auto;">Déposez vos premiers documents pour activer le pilotage qualité.</p>
         </div>
 
