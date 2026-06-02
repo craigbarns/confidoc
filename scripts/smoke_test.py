@@ -104,8 +104,7 @@ def multipart_upload_body(
     chunks = [
         f"--{boundary}\r\n".encode(),
         (
-            f'Content-Disposition: form-data; name="{field_name}"; '
-            f'filename="{filename}"\r\n'
+            f'Content-Disposition: form-data; name="{field_name}"; filename="{filename}"\r\n'
         ).encode(),
         f"Content-Type: {content_type}\r\n\r\n".encode(),
         content,
@@ -216,6 +215,7 @@ def trigger_demo(base_url: str, token: str) -> tuple[CheckResult, str | None]:
         str(doc_id) if doc_id else None,
     )
 
+
 def trigger_public_investor_demo(base_url: str) -> tuple[CheckResult, dict[str, Any]]:
     status, payload = request_json(
         base_url,
@@ -234,6 +234,7 @@ def trigger_public_investor_demo(base_url: str) -> tuple[CheckResult, dict[str, 
         payload if isinstance(payload, dict) else {},
     )
 
+
 def fetch_raw_path(
     base_url: str,
     path: str,
@@ -242,6 +243,7 @@ def fetch_raw_path(
     label: str = "raw endpoint",
 ) -> CheckResult:
     import urllib.request
+
     headers = {"User-Agent": "confidoc-smoke-test/1.0"}
     if token:
         headers["Authorization"] = f"Bearer {token}"
@@ -283,9 +285,12 @@ def fetch_raw(base_url: str, token: str, document_id: str) -> CheckResult:
         label="raw endpoint",
     )
 
+
 def main() -> int:
     parser = argparse.ArgumentParser(description="ConfiDoc Railway smoke test")
-    parser.add_argument("--base-url", default=os.getenv("CONFIDOC_BASE_URL", "http://localhost:8000"))
+    parser.add_argument(
+        "--base-url", default=os.getenv("CONFIDOC_BASE_URL", "http://localhost:8000")
+    )
     parser.add_argument("--email", default=os.getenv("CONFIDOC_DEMO_EMAIL", ""))
     parser.add_argument("--password", default=os.getenv("CONFIDOC_DEMO_PASSWORD", ""))
     parser.add_argument("--no-upload", action="store_true", help="Skip authenticated upload")
@@ -303,7 +308,6 @@ def main() -> int:
         check_endpoint(args.base_url, "/static/js/app.js", {200}),
         check_endpoint(args.base_url, "/static/css/style.css", {200}),
         check_endpoint(args.base_url, "/api/v1/demo/public", {200, 202}),
-
         check_endpoint(
             args.base_url,
             "/readiness",

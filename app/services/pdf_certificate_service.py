@@ -7,12 +7,13 @@ before reaching any third-party or external AI system.
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
 import hashlib
 import hmac
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 from fpdf import FPDF
+
 from app.config import INSECURE_SECRET_PLACEHOLDER, get_settings
 
 _PURPLE = (124, 116, 255)
@@ -27,7 +28,7 @@ _GOLD = (212, 175, 55)
 def _fmt_date(raw: str | None) -> str:
     """Format ISO date to standard French display."""
     if not raw or raw == "--":
-        return datetime.now(timezone.utc).strftime("%d/%m/%Y a %H:%M UTC")
+        return datetime.now(UTC).strftime("%d/%m/%Y a %H:%M UTC")
     try:
         dt = datetime.fromisoformat(str(raw).replace("Z", "+00:00"))
         return dt.strftime("%d/%m/%Y a %H:%M UTC")
@@ -92,9 +93,7 @@ def generate_compliance_certificate(
     # Calculate HMAC signature using settings.SECRET_KEY
     sig_key = settings.SECRET_KEY or INSECURE_SECRET_PLACEHOLDER
     signature = hmac.new(
-        key=sig_key.encode(),
-        msg=payload.encode(),
-        digestmod=hashlib.sha256
+        key=sig_key.encode(), msg=payload.encode(), digestmod=hashlib.sha256
     ).hexdigest()
 
     # Create FPDF canvas

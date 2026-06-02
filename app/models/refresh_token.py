@@ -1,7 +1,7 @@
 """ConfiDoc Backend — RefreshToken model."""
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
 from sqlalchemy import Boolean, DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID

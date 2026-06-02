@@ -1,7 +1,7 @@
 """ConfiDoc Backend — Document Repository."""
 
+from collections.abc import Sequence
 from uuid import UUID
-from typing import Sequence
 
 from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -46,9 +46,7 @@ class DocumentRepository(BaseRepository[Document]):
         )
         return result.scalars().all()
 
-    async def get_by_id_and_user(
-        self, id: UUID | str, user_id: UUID | str
-    ) -> Document | None:
+    async def get_by_id_and_user(self, id: UUID | str, user_id: UUID | str) -> Document | None:
         """Get a specific document if it belongs to a specific user."""
         if isinstance(id, str):
             id = UUID(id)

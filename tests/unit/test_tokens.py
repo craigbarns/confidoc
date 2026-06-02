@@ -15,7 +15,6 @@ import pytest
 
 from app.core import tokens as T
 
-
 # ── Constants format ──────────────────────────────────────────────────
 
 EXPECTED_TOKENS = [
@@ -47,9 +46,7 @@ TOKEN_PATTERN = re.compile(r"^\[[A-Z_]+\]$")
 class TestTokenFormat:
     @pytest.mark.parametrize("name,value", EXPECTED_TOKENS)
     def test_token_is_bracketed_uppercase(self, name: str, value: str):
-        assert TOKEN_PATTERN.match(value), (
-            f"{name} = {value!r} doit être au format [MAJUSCULES]"
-        )
+        assert TOKEN_PATTERN.match(value), f"{name} = {value!r} doit être au format [MAJUSCULES]"
 
     @pytest.mark.parametrize("name,value", EXPECTED_TOKENS)
     def test_token_is_non_empty(self, name: str, value: str):

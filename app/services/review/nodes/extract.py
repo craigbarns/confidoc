@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Review Agent Node: Extract."""
 
 import json
+
 from app.services.review import llm
 from app.services.review.state import ReviewState, build_docling_context
 

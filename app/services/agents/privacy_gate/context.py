@@ -54,9 +54,7 @@ async def load_document_privacy_gate_context(
     detections_count = sum(int(row[1] or 0) for row in entity_rows)
 
     audit_count_result = await db.execute(
-        select(func.count()).select_from(AuditLog).where(
-            AuditLog.resource_id == str(document.id)
-        )
+        select(func.count()).select_from(AuditLog).where(AuditLog.resource_id == str(document.id))
     )
     audit_events_count = int(audit_count_result.scalar() or 0)
 

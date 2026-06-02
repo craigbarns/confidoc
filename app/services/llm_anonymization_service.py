@@ -43,6 +43,7 @@ def _response_fingerprint(raw: str | None) -> dict[str, object]:
         "response_chars": len(payload),
     }
 
+
 ANONYMIZATION_PROMPT = f"""Tu es un système d'anonymisation de documents confidentiels.
 
 MISSION: Identifie TOUTES les informations personnelles/sensibles et remplace-les par des tokens.
@@ -100,10 +101,13 @@ def _fallback_anonymize(text: str) -> str:
         logger.warning("llm_anonymization_dictionary_fallback_failed", error=str(exc))
 
     patterns = [
-        (r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', TOKEN_EMAIL),
-        (r'\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b', TOKEN_TELEPHONE),
-        (r'\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b', TOKEN_IBAN),
-        (r'\b\d{3}[\s.-]?\d{3}[\s.-]?\d{3}[\s.-]?\d{5}\b', TOKEN_SIRET),
+        (r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", TOKEN_EMAIL),
+        (r"\b(?:\+33|0)\s?[1-9](?:[\s.-]?\d{2}){4}\b", TOKEN_TELEPHONE),
+        (
+            r"\b[A-Z]{2}\d{2}[\s]?[A-Z0-9]{4}[\s]?(?:[A-Z0-9]{4}[\s]?){2,7}[A-Z0-9]{1,4}\b",
+            TOKEN_IBAN,
+        ),
+        (r"\b\d{3}[\s.-]?\d{3}[\s.-]?\d{3}[\s.-]?\d{5}\b", TOKEN_SIRET),
     ]
 
     result = text
@@ -135,7 +139,7 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "entities": [],
             "confidence": "low",
             "count": 0,
-            "method": "fallback:regex_sensitive_client_mode"
+            "method": "fallback:regex_sensitive_client_mode",
         }
 
     if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:
@@ -146,7 +150,7 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "entities": [],
             "confidence": "low",
             "count": 0,
-            "method": "fallback:regex"
+            "method": "fallback:regex",
         }
 
     # Limite la taille (coût + contexte)
@@ -168,7 +172,7 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "entities": [],
             "confidence": "low",
             "count": 0,
-            "method": "fallback:regex_after_error"
+            "method": "fallback:regex_after_error",
         }
 
     parsed = _clean_json_response(raw_response)
@@ -179,7 +183,7 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "entities": [],
             "confidence": "low",
             "count": 0,
-            "method": "fallback:regex_after_parse_error"
+            "method": "fallback:regex_after_parse_error",
         }
 
     # Extrait le texte anonymisé
@@ -189,20 +193,22 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
     entities = []
     for e in parsed.get("entites_detectees", []):
         if isinstance(e, dict):
-            entities.append({
-                "entity_type": e.get("type", "UNKNOWN"),
-                "start_index": e.get("position_debut", 0),
-                "end_index": e.get("position_fin", 0),
-                "value_excerpt": e.get("valeur_originale", "")[:100],
-                "replacement": e.get("token", "[REDACTED]"),
-                "confidence": 0.9 if parsed.get("confiance") == "high" else 0.7
-            })
+            entities.append(
+                {
+                    "entity_type": e.get("type", "UNKNOWN"),
+                    "start_index": e.get("position_debut", 0),
+                    "end_index": e.get("position_fin", 0),
+                    "value_excerpt": e.get("valeur_originale", "")[:100],
+                    "replacement": e.get("token", "[REDACTED]"),
+                    "confidence": 0.9 if parsed.get("confiance") == "high" else 0.7,
+                }
+            )
 
     logger.info(
         "llm_anonymization_complete",
         nb_entites=len(entities),
         confiance=parsed.get("confiance", "unknown"),
-        tronque=is_truncated
+        tronque=is_truncated,
     )
 
     return {
@@ -210,7 +216,7 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
         "entities": entities,
         "confidence": parsed.get("confiance", "medium"),
         "count": len(entities),
-        "method": "llm:mistral-large"
+        "method": "llm:mistral-large",
     }
 
 

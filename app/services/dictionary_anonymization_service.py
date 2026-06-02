@@ -9,10 +9,10 @@ from __future__ import annotations
 from typing import Any
 
 from app.core.logging import get_logger
-from app.services.entity_registry import EntityRegistry
+from app.services.anonymization.cleanup import clean_ocr_artifacts
 from app.services.anonymization.detector import detect_entities
 from app.services.anonymization.pseudonymizer import apply_business_pseudonyms
-from app.services.anonymization.cleanup import clean_ocr_artifacts
+from app.services.entity_registry import EntityRegistry
 
 logger = get_logger(__name__)
 
@@ -43,22 +43,20 @@ def anonymize_with_dictionary(
         }
 
     registry = EntityRegistry()
-    
+
     # 1. Détection des entités via patterns regex
     detections = detect_entities(text, profile=profile, document_type=document_type)
-    
+
     # 2. Application des pseudonymes stables
     # En mode dictionnaire, on applique toujours les pseudonymes stables
     detections = apply_business_pseudonyms(text, detections, registry)
-    
+
     # 3. Remplacement dans le texte
     result = text
     # On trie à l'envers pour ne pas décaler les index
     for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):
         result = (
-            result[: match["start_index"]]
-            + match["replacement"]
-            + result[match["end_index"] :]
+            result[: match["start_index"]] + match["replacement"] + result[match["end_index"] :]
         )
 
     # 4. Nettoyage final

@@ -53,9 +53,7 @@ def _empty(org_id: uuid.UUID | None) -> QualityMetrics:
     return QualityMetrics(org_id=org_id, as_of=datetime.now(UTC))
 
 
-async def _count_documents(
-    db: AsyncSession, org_id: uuid.UUID
-) -> tuple[int, dict[str, int]]:
+async def _count_documents(db: AsyncSession, org_id: uuid.UUID) -> tuple[int, dict[str, int]]:
     """Return (total_documents, documents_by_status)."""
     result = await db.execute(
         select(Document.status, func.count())
@@ -73,9 +71,7 @@ async def _count_documents(
     return total, by_status
 
 
-async def _count_processed_and_validated(
-    db: AsyncSession, org_id: uuid.UUID
-) -> tuple[int, int]:
+async def _count_processed_and_validated(db: AsyncSession, org_id: uuid.UUID) -> tuple[int, int]:
     """Count distinct documents that reached preview / final anonymization."""
     stmt = (
         select(
@@ -83,8 +79,7 @@ async def _count_processed_and_validated(
                 distinct(
                     case(
                         (
-                            DocumentVersion.version_type
-                            == DocumentVersionType.PREVIEW_ANONYMIZED,
+                            DocumentVersion.version_type == DocumentVersionType.PREVIEW_ANONYMIZED,
                             DocumentVersion.document_id,
                         ),
                         else_=None,
@@ -95,8 +90,7 @@ async def _count_processed_and_validated(
                 distinct(
                     case(
                         (
-                            DocumentVersion.version_type
-                            == DocumentVersionType.FINAL_ANONYMIZED,
+                            DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
                             DocumentVersion.document_id,
                         ),
                         else_=None,
@@ -155,9 +149,7 @@ async def _draft_aggregates(
 ) -> tuple[int, int, dict[str, int], dict[str, int]]:
     """Return (total, accepted, by_field, by_error_type) for golden drafts."""
     total_stmt = (
-        select(func.count())
-        .select_from(GoldenCaseDraft)
-        .where(GoldenCaseDraft.org_id == org_id)
+        select(func.count()).select_from(GoldenCaseDraft).where(GoldenCaseDraft.org_id == org_id)
     )
     accepted_stmt = (
         select(func.count())
@@ -189,9 +181,7 @@ async def _draft_aggregates(
     return total, accepted, by_field, by_err
 
 
-async def _count_validated_documents_with_drafts(
-    db: AsyncSession, org_id: uuid.UUID
-) -> int:
+async def _count_validated_documents_with_drafts(db: AsyncSession, org_id: uuid.UUID) -> int:
     """Number of distinct validated documents that received at least one draft."""
     stmt = (
         select(func.count(distinct(GoldenCaseDraft.document_id)))
@@ -205,17 +195,14 @@ async def _count_validated_documents_with_drafts(
             GoldenCaseDraft.org_id == org_id,
             Document.org_id == org_id,
             Document.is_deleted.is_(False),
-            DocumentVersion.version_type
-            == DocumentVersionType.FINAL_ANONYMIZED,
+            DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
         )
     )
     result = await db.execute(stmt)
     return int(result.scalar() or 0)
 
 
-async def compute_quality_metrics(
-    db: AsyncSession, org_id: uuid.UUID | None
-) -> QualityMetrics:
+async def compute_quality_metrics(db: AsyncSession, org_id: uuid.UUID | None) -> QualityMetrics:
     """Compute the org-scoped quality dashboard.
 
     When ``org_id`` is None (e.g. a platform admin without an active
@@ -229,26 +216,18 @@ async def compute_quality_metrics(
     avg_processing = await _avg_durations_seconds(
         db, org_id, DocumentVersionType.PREVIEW_ANONYMIZED
     )
-    avg_validation = await _avg_durations_seconds(
-        db, org_id, DocumentVersionType.FINAL_ANONYMIZED
-    )
-    total_drafts, accepted_drafts, by_field, by_err = await _draft_aggregates(
-        db, org_id
-    )
+    avg_validation = await _avg_durations_seconds(db, org_id, DocumentVersionType.FINAL_ANONYMIZED)
+    total_drafts, accepted_drafts, by_field, by_err = await _draft_aggregates(db, org_id)
     validated_with_drafts = (
         await _count_validated_documents_with_drafts(db, org_id)
         if validated and total_drafts
         else 0
     )
 
-    avg_overrides = (
-        round(total_drafts / validated, 3) if validated > 0 else None
-    )
+    avg_overrides = round(total_drafts / validated, 3) if validated > 0 else None
     one_shot_rate: float | None
     if validated > 0:
-        one_shot_rate = round(
-            max(0, (validated - validated_with_drafts)) / validated, 4
-        )
+        one_shot_rate = round(max(0, (validated - validated_with_drafts)) / validated, 4)
     else:
         one_shot_rate = None
 

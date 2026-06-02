@@ -38,9 +38,10 @@ class Settings(BaseSettings):
 
     # ---- API ----
     API_V1_PREFIX: str = "/api/v1"
-    ALLOWED_ORIGINS: Annotated[
-        list[str], NoDecode
-    ] = ["http://localhost:3000", "http://localhost:5173"]
+    ALLOWED_ORIGINS: Annotated[list[str], NoDecode] = [
+        "http://localhost:3000",
+        "http://localhost:5173",
+    ]
 
     # Hosts autorisés à fournir des en-têtes proxy (X-Forwarded-*). "*" convient
     # derrière un proxy maîtrisé (Railway). Restreindre (ex: "10.0.0.0/8" ou des
@@ -302,6 +303,7 @@ class Settings(BaseSettings):
                 insecure.append("JWT_PRIVATE_KEY/JWT_PUBLIC_KEY")
             if insecure:
                 from app.core.logging import get_logger
+
                 get_logger("config").error("production_blocked_insecure_config", missing=insecure)
                 raise ValueError(
                     f"Production blocked: insecure default values found for: "

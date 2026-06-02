@@ -9,7 +9,7 @@ se propage automatiquement aux deux moteurs.
 TOKEN_PERSONNE = "[PERSONNE]"
 TOKEN_EMAIL = "[EMAIL]"
 TOKEN_TELEPHONE = "[TELEPHONE]"
-TOKEN_NSS = "[NSS]"          # Numéro de sécurité sociale
+TOKEN_NSS = "[NSS]"  # Numéro de sécurité sociale
 TOKEN_DATE = "[DATE]"
 TOKEN_DATE_NAISSANCE = "[DATE_NAISSANCE]"
 
@@ -29,7 +29,7 @@ TOKEN_VILLE = "[VILLE]"
 # ── Références spécialisées (quasi-identifiants) ───────────────────────
 TOKEN_EMPRUNT = "[EMPRUNT]"
 TOKEN_CADASTRE = "[CADASTRE]"
-TOKEN_NAISSANCE = "[NAISSANCE]"     # Lieu ou info naissance (hors date)
+TOKEN_NAISSANCE = "[NAISSANCE]"  # Lieu ou info naissance (hors date)
 
 # ── Divers ─────────────────────────────────────────────────────────────
 TOKEN_ID = "[ID]"

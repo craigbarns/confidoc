@@ -29,8 +29,8 @@ def _extract_with_pymupdf(file_content: bytes) -> tuple[str, int]:
 
 def _extract_with_ocr(file_content: bytes) -> tuple[str, int]:
     """OCR fallback for scanned PDFs using pdf2image + pytesseract."""
-    from pdf2image import convert_from_path
     import pytesseract
+    from pdf2image import convert_from_path
 
     suffix = ".pdf"
     with tempfile.NamedTemporaryFile(suffix=suffix, delete=False) as tmp:
@@ -59,9 +59,10 @@ def extract_text_sync(file_content: bytes, extension: str = "pdf") -> dict[str, 
     if extension.lower() != "pdf":
         # For images, use OCR directly
         try:
+            import io
+
             import pytesseract
             from PIL import Image
-            import io
 
             img = Image.open(io.BytesIO(file_content))
             text = pytesseract.image_to_string(img, lang="fra+eng")

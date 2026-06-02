@@ -48,9 +48,7 @@ async def test_llm_extraction_uses_sensitive_mode_fallback(monkeypatch):
     )
     monkeypatch.setattr(llm_extraction_service, "get_settings", lambda: settings)
 
-    result = await llm_extraction_service.extract_with_llm(
-        "Client [PERSONNE_1] - total actif 1000"
-    )
+    result = await llm_extraction_service.extract_with_llm("Client [PERSONNE_1] - total actif 1000")
 
     assert result["source"] == "disabled:sensitive_client_mode"
     assert result["montants_cles"] == []

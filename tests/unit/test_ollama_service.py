@@ -31,7 +31,7 @@ class TestExtractJsonObject:
         assert result["outer"]["inner"] == 42
 
     def test_json_with_markdown_fence(self):
-        raw = "```json\n{\"k\": \"v\"}\n```"
+        raw = '```json\n{"k": "v"}\n```'
         result = extract_json_object_from_llm(raw)
         assert result == {"k": "v"}
 

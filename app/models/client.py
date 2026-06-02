@@ -2,10 +2,10 @@
 
 from typing import TYPE_CHECKING
 
-from sqlalchemy import String, Text, ForeignKey
+from sqlalchemy import ForeignKey, String, Text
 from sqlalchemy.orm import Mapped, mapped_column, relationship
 
-from app.models.base import TenantModel, SoftDeleteMixin
+from app.models.base import SoftDeleteMixin, TenantModel
 
 if TYPE_CHECKING:
     from app.models.document import Document

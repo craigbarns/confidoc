@@ -46,18 +46,19 @@ async_session_factory = async_sessionmaker(
 async def init_database() -> None:
     """Initialise le schéma minimal si les tables n'existent pas."""
     from sqlalchemy import text
+
     async with engine.begin() as conn:
         try:
             # 1. Création des tables manquantes hors PGvector optionnel.
             core_tables = [
-                table
-                for name, table in Base.metadata.tables.items()
-                if name != "document_chunks"
+                table for name, table in Base.metadata.tables.items() if name != "document_chunks"
             ]
-            await conn.run_sync(lambda sync_conn: Base.metadata.create_all(
-                sync_conn,
-                tables=core_tables,
-            ))
+            await conn.run_sync(
+                lambda sync_conn: Base.metadata.create_all(
+                    sync_conn,
+                    tables=core_tables,
+                )
+            )
             logger.info("db_metadata_create_all_success")
         except Exception as e:
             logger.warning("db_metadata_create_all_failed_continuing", error=str(e))
@@ -66,10 +67,12 @@ async def init_database() -> None:
             await conn.execute(text("CREATE EXTENSION IF NOT EXISTS vector;"))
             document_chunks = Base.metadata.tables.get("document_chunks")
             if document_chunks is not None:
-                await conn.run_sync(lambda sync_conn: document_chunks.create(
-                    sync_conn,
-                    checkfirst=True,
-                ))
+                await conn.run_sync(
+                    lambda sync_conn: document_chunks.create(
+                        sync_conn,
+                        checkfirst=True,
+                    )
+                )
                 logger.info("db_document_chunks_ready")
         except Exception as e:
             logger.warning("db_document_chunks_skipped", error=str(e))

@@ -76,6 +76,5 @@ def test_dataset_accounting_pseudo_keeps_business_amounts_but_masks_identities()
     replacements = {item["replacement"] for item in detections}
     assert any(rep.startswith("[SOCIETE") for rep in replacements) or TOKEN_SOCIETE in replacements
     assert (
-        any(rep.startswith("[PERSONNE") for rep in replacements)
-        or TOKEN_PERSONNE in replacements
+        any(rep.startswith("[PERSONNE") for rep in replacements) or TOKEN_PERSONNE in replacements
     )

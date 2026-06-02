@@ -1,8 +1,8 @@
 """ConfiDoc Backend — Document model."""
 
+import uuid
 from enum import Enum as PyEnum
 from typing import TYPE_CHECKING
-import uuid
 
 from sqlalchemy import Enum, ForeignKey, Index, LargeBinary, String, Text
 from sqlalchemy.dialects.postgresql import ARRAY, UUID
@@ -67,23 +67,34 @@ class Document(SoftDeleteMixin, BaseModel):
 
     # Tags for categorization (e.g. ["facture", "2026", "client-dupont"])
     tags: Mapped[list[str] | None] = mapped_column(
-        ARRAY(String(100)), nullable=True, default=None,
+        ARRAY(String(100)),
+        nullable=True,
+        default=None,
     )
 
     # Auto-detected document type from classification
     doc_type: Mapped[str | None] = mapped_column(
-        String(40), nullable=True, default=None, index=True,
+        String(40),
+        nullable=True,
+        default=None,
+        index=True,
     )
 
     # Dossier metadata (auto-detected or user-provided at upload)
     client_name: Mapped[str | None] = mapped_column(
-        String(120), nullable=True, default=None,
+        String(120),
+        nullable=True,
+        default=None,
     )
     exercice: Mapped[str | None] = mapped_column(
-        String(9), nullable=True, default=None,
+        String(9),
+        nullable=True,
+        default=None,
     )
     doc_category: Mapped[str | None] = mapped_column(
-        String(30), nullable=True, default=None,
+        String(30),
+        nullable=True,
+        default=None,
     )
 
     # Raw file bytes — stored in DB as fallback when external storage is ephemeral

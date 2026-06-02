@@ -114,6 +114,7 @@ class ManualCorrectionRequest(BaseModel):
 
 class EntityMappingItem(BaseModel):
     """A single entity placeholder → original values mapping."""
+
     placeholder: str = Field(description="Le token anonymisé, ex: [PERSONNE_1]")
     entity_type: str = Field(description="Type sémantique: PERSON, COMPANY, ADDRESS...")
     occurrences: int = Field(ge=0, description="Nombre d'occurrences dans le document")
@@ -129,6 +130,7 @@ class KeyAmountItem(BaseModel):
 
 class StructuredDocumentResponse(BaseModel):
     """Sortie structurée pour exploitation IA/RAG."""
+
     document_id: uuid.UUID
     doc_type: str | None = Field(
         default=None,

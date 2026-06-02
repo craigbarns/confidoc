@@ -67,6 +67,7 @@ def test_settings_async_database_url():
 def test_production_blocks_on_default_secrets():
     """Production mode raises ValidationError if secrets are not changed."""
     from pydantic import ValidationError
+
     with pytest.raises(ValidationError, match="Production blocked"):
         Settings(
             APP_ENV="production",
@@ -75,9 +76,11 @@ def test_production_blocks_on_default_secrets():
             PSEUDO_MAPPING_KEY="real-pseudo-32-chars-long-enough!",
         )
 
+
 def test_production_blocks_if_any_secret_missing():
     """All three secrets must be non-default in production."""
     from pydantic import ValidationError
+
     # Even with good SECRET_KEY, ENCRYPTION_MASTER_KEY default blocks it
     with pytest.raises(ValidationError, match="Production blocked"):
         Settings(

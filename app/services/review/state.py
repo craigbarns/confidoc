@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Review Agent State Definition."""
 
 from typing import Any, TypedDict
+
 from app.services.review.constants import STEPS_ORDER
 
 
@@ -106,13 +107,15 @@ def fallback_review_state(
         **state,
         "doc_type": state.get("doc_type") or "analyse_limitee",
         "doc_type_confidence": float(state.get("doc_type_confidence") or 0.0),
-        "extracted_data": state.get("extracted_data") or {
+        "extracted_data": state.get("extracted_data")
+        or {
             "objet": "Analyse IA limitee par indisponibilite temporaire",
             "references": [],
             "montants_cles": {},
             "entites_detectees": entity_summary,
         },
-        "analysis": state.get("analysis") or {
+        "analysis": state.get("analysis")
+        or {
             "completude": {
                 "score": 0.0,
                 "elements_manquants": ["Revue IA complete non executee"],
@@ -130,12 +133,14 @@ def fallback_review_state(
             "comme une synthese de secours. Relancez l'analyse avant toute conclusion definitive."
         ),
         "demandes_formelles": state.get("demandes_formelles") or [],
-        "pieces_a_verifier": state.get("pieces_a_verifier") or [
+        "pieces_a_verifier": state.get("pieces_a_verifier")
+        or [
             "Document anonymise source",
             "Pieces justificatives mentionnees dans le document",
             "Donnees cles a valider manuellement",
         ],
-        "review_complement": state.get("review_complement") or {
+        "review_complement": state.get("review_complement")
+        or {
             "identification": (
                 f"Document anonymise disponible ({text_len} caracteres, "
                 f"{entity_count} entites detectees)."
@@ -146,7 +151,8 @@ def fallback_review_state(
         },
         "confidence": min(float(state.get("confidence") or 0.2), 0.35),
         "verdict": state.get("verdict") or "reserve",
-        "prochaines_actions": state.get("prochaines_actions") or [
+        "prochaines_actions": state.get("prochaines_actions")
+        or [
             "Relancer l'analyse IA dans quelques minutes.",
             "Effectuer une revue manuelle des montants, dates et parties avant decision.",
             "Verifier la configuration et le quota Mistral si l'erreur persiste.",

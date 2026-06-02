@@ -122,9 +122,7 @@ async def create_drafts_from_corrections(
             continue
         # Stringify scalars so encrypted-string columns stay simple.
         corrected_str = (
-            corrected_value
-            if isinstance(corrected_value, str)
-            else str(corrected_value)
+            corrected_value if isinstance(corrected_value, str) else str(corrected_value)
         )
         predicted_value = predicted_data.get(field_name)
         predicted_str: str | None

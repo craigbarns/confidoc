@@ -144,26 +144,28 @@ async def ai_providers(current_user: CurrentUser) -> JSONResponse:
     s = get_settings()
     selected = _select_llm_provider("auto")
     sensitive_mode = bool(getattr(s, "SENSITIVE_CLIENT_MODE", False))
-    return JSONResponse({
-        "selected_provider": selected,
-        "sensitive_client_mode": sensitive_mode,
-        "external_ai_enabled": bool(
-            not sensitive_mode
-            and getattr(s, "MISTRAL_ENABLED", False)
-            and getattr(s, "MISTRAL_API_KEY", "")
-        ),
-        "policy_message": (
-            "Mode client sensible actif : les appels IA externes sont désactivés."
-            if sensitive_mode
-            else "Analyse IA sur texte anonymisé uniquement."
-        ),
-        "mistral": {
-            "enabled": bool(not sensitive_mode and getattr(s, "MISTRAL_ENABLED", False)),
-            "key_set": bool(getattr(s, "MISTRAL_API_KEY", "")),
-            "model": getattr(s, "MISTRAL_MODEL", ""),
-        },
-        "ollama": {"enabled": bool(getattr(s, "OLLAMA_ENABLED", True))},
-    })
+    return JSONResponse(
+        {
+            "selected_provider": selected,
+            "sensitive_client_mode": sensitive_mode,
+            "external_ai_enabled": bool(
+                not sensitive_mode
+                and getattr(s, "MISTRAL_ENABLED", False)
+                and getattr(s, "MISTRAL_API_KEY", "")
+            ),
+            "policy_message": (
+                "Mode client sensible actif : les appels IA externes sont désactivés."
+                if sensitive_mode
+                else "Analyse IA sur texte anonymisé uniquement."
+            ),
+            "mistral": {
+                "enabled": bool(not sensitive_mode and getattr(s, "MISTRAL_ENABLED", False)),
+                "key_set": bool(getattr(s, "MISTRAL_API_KEY", "")),
+                "model": getattr(s, "MISTRAL_MODEL", ""),
+            },
+            "ollama": {"enabled": bool(getattr(s, "OLLAMA_ENABLED", True))},
+        }
+    )
 
 
 @router.get(
@@ -225,6 +227,7 @@ async def ai_summary(
     if mode == "question" and question.strip():
         try:
             from app.services.rag_service import build_rag_context
+
             rag_context = await build_rag_context(db, question, document.id, top_k=5)
         except Exception:
             pass
@@ -250,21 +253,23 @@ async def ai_summary(
             document_id=str(document.id),
             mode=mode,
         )
-        return JSONResponse({
-            "document_id": str(document.id),
-            "provider": "disabled",
-            "model": None,
-            "mode": mode,
-            "summary": (
-                "Mode client sensible actif : l'analyse IA externe est désactivée. "
-                "Le document anonymisé reste disponible pour revue humaine et export sécurisé."
-            ),
-            "payload_policy": {
-                "raw_text_sent": False,
-                "anonymized_only": True,
-                "external_ai_disabled": True,
-            },
-        })
+        return JSONResponse(
+            {
+                "document_id": str(document.id),
+                "provider": "disabled",
+                "model": None,
+                "mode": mode,
+                "summary": (
+                    "Mode client sensible actif : l'analyse IA externe est désactivée. "
+                    "Le document anonymisé reste disponible pour revue humaine et export sécurisé."
+                ),
+                "payload_policy": {
+                    "raw_text_sent": False,
+                    "anonymized_only": True,
+                    "external_ai_disabled": True,
+                },
+            }
+        )
 
     privacy_gate = await require_privacy_gate(
         db,
@@ -293,19 +298,21 @@ async def ai_summary(
     # ── AI Firewall (inbound): inspect the response before restitution ──
     summary_text, fw_response = await guard_inbound_response(summary_text)
 
-    return JSONResponse({
-        "document_id": str(document.id),
-        "provider": provider_name,
-        "model": llm.get("model"),
-        "mode": mode,
-        "summary": summary_text,
-        "payload_policy": {
-            "raw_text_sent": False,
-            "anonymized_only": True,
-            "privacy_gate": privacy_gate_public_summary(privacy_gate),
-            "firewall": {"prompt": fw_prompt, "response": fw_response},
-        },
-    })
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "provider": provider_name,
+            "model": llm.get("model"),
+            "mode": mode,
+            "summary": summary_text,
+            "payload_policy": {
+                "raw_text_sent": False,
+                "anonymized_only": True,
+                "privacy_gate": privacy_gate_public_summary(privacy_gate),
+                "firewall": {"prompt": fw_prompt, "response": fw_response},
+            },
+        }
+    )
 
 
 @router.post(
@@ -324,10 +331,9 @@ async def ai_stream(
     anonymized_text = await _get_anonymized_text(db, document)
 
     if not anonymized_text:
+
         async def _blocked():
-            err = json.dumps(
-                {"error": "Aucun texte anonymisé. Lancez d'abord l'anonymisation."}
-            )
+            err = json.dumps({"error": "Aucun texte anonymisé. Lancez d'abord l'anonymisation."})
             yield f"data: {err}\n\n"
 
         return StreamingResponse(_blocked(), media_type="text/event-stream")
@@ -359,11 +365,7 @@ async def ai_stream(
                     document_id=str(document.id),
                 )
                 payload = json.dumps(
-                    {
-                        "error": (
-                            "Mode client sensible actif : streaming IA externe désactivé."
-                        )
-                    },
+                    {"error": ("Mode client sensible actif : streaming IA externe désactivé.")},
                     ensure_ascii=False,
                 )
                 yield f"data: {payload}\n\n"
@@ -472,12 +474,13 @@ async def ai_extract(
         payload_policy["privacy_gate"] = privacy_gate_public_summary(privacy_gate)
         payload_policy["firewall"] = {"prompt": fw_prompt, "response": fw_response}
 
-    return JSONResponse({
-        "document_id": str(document.id),
-        "extraction": extraction,
-        "payload_policy": payload_policy,
-    })
-
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "extraction": extraction,
+            "payload_policy": payload_policy,
+        }
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
@@ -513,6 +516,7 @@ async def ai_review(
     anonymized_text = await _get_anonymized_text(db, document)
 
     if not anonymized_text:
+
         async def _blocked():
             payload = {
                 "step": "error",
@@ -539,12 +543,11 @@ async def ai_review(
 
     # Get entity summary for richer analysis
     from app.models.entity_detection import EntityDetection
+
     entity_summary: dict[str, int] = {}
     try:
         det_result = await db.execute(
-            select(EntityDetection).where(
-                EntityDetection.document_id == document.id
-            )
+            select(EntityDetection).where(EntityDetection.document_id == document.id)
         )
         for det in det_result.scalars().all():
             etype = det.entity_type or "unknown"
@@ -558,12 +561,19 @@ async def ai_review(
 
     async def _event_stream():
         # Signal start
-        yield "data: " + json.dumps({
-            "step": "classify",
-            "label": "Classification du document",
-            "status": "running",
-            "data": {"privacy_gate": privacy_gate_public_summary(privacy_gate)},
-        }, ensure_ascii=False) + "\n\n"
+        yield (
+            "data: "
+            + json.dumps(
+                {
+                    "step": "classify",
+                    "label": "Classification du document",
+                    "status": "running",
+                    "data": {"privacy_gate": privacy_gate_public_summary(privacy_gate)},
+                },
+                ensure_ascii=False,
+            )
+            + "\n\n"
+        )
 
         try:
             async for event in run_review_streaming(
@@ -574,12 +584,18 @@ async def ai_review(
             ):
                 yield "data: " + json.dumps(event, ensure_ascii=False, default=str) + "\n\n"
         except Exception as exc:
-            yield "data: " + json.dumps({
-                "step": "error",
-                "label": "Erreur",
-                "status": "error",
-                "data": {"error": str(exc)[:300]},
-            }) + "\n\n"
+            yield (
+                "data: "
+                + json.dumps(
+                    {
+                        "step": "error",
+                        "label": "Erreur",
+                        "status": "error",
+                        "data": {"error": str(exc)[:300]},
+                    }
+                )
+                + "\n\n"
+            )
 
         yield "data: [DONE]\n\n"
 
@@ -619,12 +635,11 @@ async def ai_review_sync(
     anonymized_text, fw_prompt = await guard_outbound_prompt(anonymized_text)
 
     from app.models.entity_detection import EntityDetection
+
     entity_summary: dict[str, int] = {}
     try:
         det_result = await db.execute(
-            select(EntityDetection).where(
-                EntityDetection.document_id == document.id
-            )
+            select(EntityDetection).where(EntityDetection.document_id == document.id)
         )
         for det in det_result.scalars().all():
             etype = det.entity_type or "unknown"
@@ -652,17 +667,20 @@ async def ai_review_sync(
     )
     result = _apply_inbound_verdict(result, safe_text, fw_response)
 
-    return JSONResponse({
-        "document_id": str(document.id),
-        "privacy_gate": privacy_gate_public_summary(privacy_gate),
-        "review": result,
-        "firewall": {"prompt": fw_prompt, "response": fw_response},
-    })
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "privacy_gate": privacy_gate_public_summary(privacy_gate),
+            "review": result,
+            "firewall": {"prompt": fw_prompt, "response": fw_response},
+        }
+    )
 
 
 # ──────────────────────────────────────────────────────────────────────
 # RAG SEMANTIC SEARCH
 # ──────────────────────────────────────────────────────────────────────
+
 
 @router.get(
     "/rag-search/{document_id}",
@@ -687,16 +705,18 @@ async def rag_search(
 
     chunks = await search_similar(db, q, top_k=top_k, document_filter=document.id)
 
-    return JSONResponse({
-        "document_id": str(document.id),
-        "query": q,
-        "results": [
-            {
-                "chunk_index": c.chunk_index,
-                "text": c.chunk_text,
-                "source_section": c.source_section,
-            }
-            for c in chunks
-        ],
-        "total": len(chunks),
-    })
+    return JSONResponse(
+        {
+            "document_id": str(document.id),
+            "query": q,
+            "results": [
+                {
+                    "chunk_index": c.chunk_index,
+                    "text": c.chunk_text,
+                    "source_section": c.source_section,
+                }
+                for c in chunks
+            ],
+            "total": len(chunks),
+        }
+    )

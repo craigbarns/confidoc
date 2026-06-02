@@ -2,7 +2,7 @@
 
 import hashlib
 import secrets
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from functools import lru_cache
 from typing import Any
 
@@ -60,17 +60,15 @@ def create_access_token(
 ) -> str:
     """Crée un JWT access token (RS256 preferred, HS256 fallback)."""
     if expires_delta:
-        expire = datetime.now(timezone.utc) + expires_delta
+        expire = datetime.now(UTC) + expires_delta
     else:
-        expire = datetime.now(timezone.utc) + timedelta(
-            minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES
-        )
+        expire = datetime.now(UTC) + timedelta(minutes=settings.JWT_ACCESS_TOKEN_EXPIRE_MINUTES)
 
     # SEC-016: Add jti (JWT ID) for individual revocation support
     to_encode = {
         "exp": expire,
         "sub": str(subject),
-        "iat": datetime.now(timezone.utc),
+        "iat": datetime.now(UTC),
         "jti": secrets.token_hex(16),
     }
     if claims:
@@ -79,13 +77,9 @@ def create_access_token(
     if settings.JWT_ALGORITHM.startswith("RS"):
         private_key, _ = get_rsa_keys()
         headers = {"kid": settings.JWT_KID}
-        return jwt.encode(
-            to_encode, private_key, algorithm=settings.JWT_ALGORITHM, headers=headers
-        )
+        return jwt.encode(to_encode, private_key, algorithm=settings.JWT_ALGORITHM, headers=headers)
 
-    return jwt.encode(
-        to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM
-    )
+    return jwt.encode(to_encode, settings.JWT_SECRET_KEY, algorithm=settings.JWT_ALGORITHM)
 
 
 def decode_access_token(token: str) -> dict[str, Any] | None:
@@ -98,7 +92,7 @@ def decode_access_token(token: str) -> dict[str, Any] | None:
                 public_key,
                 algorithms=[settings.JWT_ALGORITHM],
             )
-        
+
         return jwt.decode(
             token,
             settings.JWT_SECRET_KEY,

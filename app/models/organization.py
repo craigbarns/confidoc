@@ -40,5 +40,7 @@ class Organization(BaseModel):
     settings: Mapped[dict[str, Any] | None] = mapped_column(JSONB, nullable=True)
 
     # Relationships
-    memberships = relationship("Membership", back_populates="organization", cascade="all, delete-orphan")
+    memberships = relationship(
+        "Membership", back_populates="organization", cascade="all, delete-orphan"
+    )
     roles = relationship("Role", back_populates="organization", cascade="all, delete-orphan")

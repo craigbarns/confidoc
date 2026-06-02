@@ -106,23 +106,27 @@ async def get_dossiers(
                 )
                 for d in ex_docs
             ]
-            exercices.append(DossierExercice(
-                exercice=ex,
-                doc_count=len(ex_docs),
-                ready_count=ready,
-                processing_count=processing,
-                doc_categories=cats,
-                documents=dossier_docs,
-            ))
+            exercices.append(
+                DossierExercice(
+                    exercice=ex,
+                    doc_count=len(ex_docs),
+                    ready_count=ready,
+                    processing_count=processing,
+                    doc_categories=cats,
+                    documents=dossier_docs,
+                )
+            )
             total += len(ex_docs)
             all_dates.extend(d.created_at for d in ex_docs if d.created_at)
 
-        out.append(DossierClient(
-            client_name=cname,
-            exercices=exercices,
-            total_docs=total,
-            last_activity=max(all_dates) if all_dates else None,
-        ))
+        out.append(
+            DossierClient(
+                client_name=cname,
+                exercices=exercices,
+                total_docs=total,
+                last_activity=max(all_dates) if all_dates else None,
+            )
+        )
 
     return sorted(out, key=lambda c: c.client_name.lower())
 

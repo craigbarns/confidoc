@@ -12,22 +12,33 @@ from __future__ import annotations
 import pytest
 
 from app.api.v1._doc_shared import (
+    _detection_item_to_response,
+    _infer_semantic_type,
     _normalize_client_name,
     _sha256_text,
-    _infer_semantic_type,
-    _detection_item_to_response,
 )
 from app.core.tokens import (
-    TOKEN_PERSONNE, TOKEN_EMAIL, TOKEN_TELEPHONE, TOKEN_ADRESSE,
-    TOKEN_IBAN, TOKEN_SIRET, TOKEN_SIREN, TOKEN_TVA, TOKEN_NSS,
-    TOKEN_MONTANT, TOKEN_REF_FACTURE, TOKEN_SOCIETE, TOKEN_EMPRUNT,
-    TOKEN_CADASTRE, TOKEN_VILLE,
+    TOKEN_ADRESSE,
+    TOKEN_CADASTRE,
+    TOKEN_EMAIL,
+    TOKEN_EMPRUNT,
+    TOKEN_IBAN,
+    TOKEN_MONTANT,
+    TOKEN_NSS,
+    TOKEN_PERSONNE,
+    TOKEN_REF_FACTURE,
+    TOKEN_SIREN,
+    TOKEN_SIRET,
+    TOKEN_SOCIETE,
+    TOKEN_TELEPHONE,
+    TOKEN_TVA,
+    TOKEN_VILLE,
 )
-
 
 # ══════════════════════════════════════════════════════════════════════
 # _normalize_client_name
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestNormalizeClientName:
     def test_lowercases(self):
@@ -59,6 +70,7 @@ class TestNormalizeClientName:
 # _sha256_text
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestSha256Text:
     def test_deterministic(self):
         assert _sha256_text("hello") == _sha256_text("hello")
@@ -83,24 +95,28 @@ class TestSha256Text:
 # _infer_semantic_type
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestInferSemanticType:
-    @pytest.mark.parametrize("token,expected", [
-        (TOKEN_PERSONNE, "PERSON"),
-        (TOKEN_EMAIL, "EMAIL"),
-        (TOKEN_TELEPHONE, "PHONE"),
-        (TOKEN_ADRESSE, "ADDRESS"),
-        (TOKEN_IBAN, "BANK"),
-        (TOKEN_SIRET, "COMPANY_ID"),
-        (TOKEN_SIREN, "COMPANY_ID"),
-        (TOKEN_TVA, "COMPANY_ID"),
-        (TOKEN_NSS, "SOCIAL_SECURITY"),
-        (TOKEN_MONTANT, "AMOUNT"),
-        (TOKEN_REF_FACTURE, "INVOICE_REF"),
-        (TOKEN_SOCIETE, "COMPANY"),
-        (TOKEN_EMPRUNT, "LOAN_REF"),
-        (TOKEN_CADASTRE, "PROPERTY_REF"),
-        (TOKEN_VILLE, "ADDRESS"),
-    ])
+    @pytest.mark.parametrize(
+        "token,expected",
+        [
+            (TOKEN_PERSONNE, "PERSON"),
+            (TOKEN_EMAIL, "EMAIL"),
+            (TOKEN_TELEPHONE, "PHONE"),
+            (TOKEN_ADRESSE, "ADDRESS"),
+            (TOKEN_IBAN, "BANK"),
+            (TOKEN_SIRET, "COMPANY_ID"),
+            (TOKEN_SIREN, "COMPANY_ID"),
+            (TOKEN_TVA, "COMPANY_ID"),
+            (TOKEN_NSS, "SOCIAL_SECURITY"),
+            (TOKEN_MONTANT, "AMOUNT"),
+            (TOKEN_REF_FACTURE, "INVOICE_REF"),
+            (TOKEN_SOCIETE, "COMPANY"),
+            (TOKEN_EMPRUNT, "LOAN_REF"),
+            (TOKEN_CADASTRE, "PROPERTY_REF"),
+            (TOKEN_VILLE, "ADDRESS"),
+        ],
+    )
     def test_known_token_maps_correctly(self, token: str, expected: str):
         result = _infer_semantic_type(token)
         assert result == expected, f"{token} → expected {expected}, got {result}"
@@ -136,6 +152,7 @@ class TestInferSemanticType:
 # ══════════════════════════════════════════════════════════════════════
 # _detection_item_to_response
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestDetectionItemToResponse:
     def test_full_item(self):

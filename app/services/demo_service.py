@@ -77,9 +77,7 @@ def _build_demo_proof(result: dict[str, Any]) -> dict[str, Any]:
     policy = _export_policy_for_risk(str(risk.get("level") or "low"))
     signals = risk.get("signals") if isinstance(risk.get("signals"), list) else []
     signal_count = sum(
-        int(item.get("occurrences", 1))
-        for item in signals
-        if isinstance(item, dict)
+        int(item.get("occurrences", 1)) for item in signals if isinstance(item, dict)
     )
 
     return {
@@ -353,8 +351,7 @@ def build_demo_audit_pdf(result: dict[str, Any]) -> bytes:
         "score": float(risk_info.get("score") or 0.0),
         "level": str(risk_info.get("level") or "low"),
         "recommendation": str(
-            risk_info.get("recommendation")
-            or proof.get("export_policy", {}).get("message", "")
+            risk_info.get("recommendation") or proof.get("export_policy", {}).get("message", "")
         ),
         "human_validated": False,
     }

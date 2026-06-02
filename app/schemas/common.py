@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Schemas communs (Pagination)."""
 
 from typing import Generic, TypeVar
+
 from pydantic import BaseModel, Field
 
 T = TypeVar("T")
@@ -18,5 +19,6 @@ class PaginatedResponse(BaseModel, Generic[T]):
 
 class GenericResponse(BaseModel):
     """Format de réponse standard simple (success/message)."""
+
     success: bool = True
     message: str | None = None

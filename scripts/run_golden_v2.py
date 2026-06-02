@@ -32,26 +32,26 @@ def _discover_case_dirs(cases_root: Path) -> list[Path]:
 
 def _map_llm_to_golden(llm_out: dict[str, Any], original_filename: str) -> dict[str, Any]:
     """Mappe la sortie du LLM (v2) vers le format attendu par le comparateur Golden (v1/v2)."""
-    
+
     # Mapping des champs comptables vers le format plat "fields"
     fields: dict[str, dict[str, Any]] = {}
-    
+
     # Totaux
     totaux = llm_out.get("totaux", {})
     if isinstance(totaux, dict):
         for k, v in totaux.items():
             if v is not None:
                 fields[k] = {"value": v}
-                
+
     # Société & Exercice
     societe = llm_out.get("societe", {})
     if isinstance(societe, dict) and societe.get("denomination"):
         fields["societe"] = {"value": societe["denomination"]}
-        
+
     exercice = llm_out.get("exercice", {})
     if isinstance(exercice, dict) and exercice.get("date_fin"):
         fields["exercice"] = {"value": exercice["date_fin"]}
-        
+
     # Cas particulier: le golden attend souvent 'resultat_exercice' pour le bilan
     if "resultat_net" in totaux and "resultat_exercice" not in fields:
         fields["resultat_exercice"] = {"value": totaux["resultat_net"]}
@@ -59,12 +59,12 @@ def _map_llm_to_golden(llm_out: dict[str, Any], original_filename: str) -> dict[
     # Construction du bloc qualité minimal pour satisfaire le comparateur
     confiance = llm_out.get("confiance", "low")
     ready = confiance == "high"
-    
+
     # Quality flags
     flags = []
     if not ready:
         flags.append("manual_review_recommended")
-    
+
     return {
         "doc_type": llm_out.get("type_document"),
         "provenance": {
@@ -77,8 +77,8 @@ def _map_llm_to_golden(llm_out: dict[str, Any], original_filename: str) -> dict[
             "quality_flags": flags,
             "needs_review": not ready,
             "ready_for_ai": ready,
-            "ready_for_ai_core": ready or (confiance == "medium"), # Plus permissif pour 'core'
-        }
+            "ready_for_ai_core": ready or (confiance == "medium"),  # Plus permissif pour 'core'
+        },
     }
 
 
@@ -103,7 +103,7 @@ async def _run_case(case_dir: Path) -> tuple[str, bool, list[str]]:
         # On utilise l'extracteur LLM actuel
         llm_out = await extract_with_llm(text)
         actual = _map_llm_to_golden(llm_out, source_filename)
-        
+
         diffs = compare_minimal_expected(expected, actual)
         return case_dir.name, len(diffs) == 0, diffs
     except Exception as exc:
@@ -167,16 +167,12 @@ async def async_main() -> int:
     results = []
 
     print(f"Running {total} golden cases (skipping {skipped} inactive)...")
-    
+
     # Exécution séquentielle pour éviter de saturer le rate limit LLM
     for case_dir in case_dirs:
         cid, ok, diffs = await _run_case(case_dir)
-        results.append({
-            "case_id": cid,
-            "pass": ok,
-            "diffs": diffs
-        })
-        
+        results.append({"case_id": cid, "pass": ok, "diffs": diffs})
+
         if ok:
             print(f"PASS {cid}")
         else:
@@ -186,17 +182,19 @@ async def async_main() -> int:
                 print(f"  - {d}")
 
     pass_rate = ((total - failed) / total * 100) if total > 0 else 0
-    print(f"\nSummary: {total - failed}/{total} pass ({pass_rate:.1f}%), {failed} fail, {skipped} skipped")
+    print(
+        f"\nSummary: {total - failed}/{total} pass ({pass_rate:.1f}%), {failed} fail, {skipped} skipped"
+    )
 
     if args.json_report:
         report_path = ROOT / "golden" / "latest_quality_report.json"
         report = {
-            "timestamp": Path(ROOT).stat().st_mtime, # Simplifié
+            "timestamp": Path(ROOT).stat().st_mtime,  # Simplifié
             "total": total,
             "passed": total - failed,
             "failed": failed,
             "pass_rate": pass_rate,
-            "results": results
+            "results": results,
         }
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
         print(f"Report saved to {report_path}")

@@ -17,10 +17,10 @@ import pytest
 from app.core.security import generate_opaque_token, hash_token
 from app.models.password_reset_token import PasswordResetToken
 
-
 # ══════════════════════════════════════════════════════════════════════
 # Modèle PasswordResetToken
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestPasswordResetTokenModel:
     def test_table_name(self):
@@ -70,6 +70,7 @@ class TestPasswordResetTokenModel:
 # Primitives sécurité : hash_token, generate_opaque_token
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestHashToken:
     def test_returns_sha256_hex(self):
         token = "some-random-token"
@@ -107,6 +108,7 @@ class TestGenerateOpaqueToken:
 
     def test_url_safe_chars_only(self):
         import re
+
         t = generate_opaque_token()
         assert re.match(r"^[A-Za-z0-9_\-]+$", t), f"Token non URL-safe : {t}"
 
@@ -114,6 +116,7 @@ class TestGenerateOpaqueToken:
 # ══════════════════════════════════════════════════════════════════════
 # auth_service : anti-enumération forgot-password
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestForgotPasswordAntiEnumeration:
     """request_password_reset ne doit jamais lever d'exception."""
@@ -128,13 +131,14 @@ class TestForgotPasswordAntiEnumeration:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         from app.services.auth_service import request_password_reset
+
         # Should complete silently
         await request_password_reset(mock_db, "nonexistent@example.com")
 
     @pytest.mark.asyncio
     async def test_known_email_does_not_raise(self):
-        from unittest.mock import AsyncMock, MagicMock, patch
         import uuid
+        from unittest.mock import AsyncMock, MagicMock, patch
 
         mock_user = MagicMock()
         mock_user.id = uuid.uuid4()
@@ -149,8 +153,13 @@ class TestForgotPasswordAntiEnumeration:
         mock_db.flush = AsyncMock()
         mock_db.commit = AsyncMock()
 
-        with patch("app.services.email_service.send_password_reset_email", new_callable=AsyncMock, return_value=True):
+        with patch(
+            "app.services.email_service.send_password_reset_email",
+            new_callable=AsyncMock,
+            return_value=True,
+        ):
             from app.services.auth_service import request_password_reset
+
             await request_password_reset(mock_db, "known@example.com")
 
 
@@ -158,10 +167,12 @@ class TestForgotPasswordAntiEnumeration:
 # auth_service : reset_password avec token invalide
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestResetPasswordInvalidToken:
     @pytest.mark.asyncio
     async def test_invalid_token_raises_400(self):
         from unittest.mock import AsyncMock, MagicMock
+
         from fastapi import HTTPException
 
         mock_db = AsyncMock()
@@ -170,6 +181,7 @@ class TestResetPasswordInvalidToken:
         mock_db.execute = AsyncMock(return_value=mock_result)
 
         from app.services.auth_service import reset_password
+
         with pytest.raises(HTTPException) as exc_info:
             await reset_password(mock_db, "invalid-token", "NewPass1!")
         assert exc_info.value.status_code in (400, 401)

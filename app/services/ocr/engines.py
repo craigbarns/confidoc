@@ -13,6 +13,7 @@ try:
     import pytesseract
     from pdf2image import convert_from_bytes
     from PIL import Image
+
     HAS_OCR = True
 except ImportError:
     HAS_OCR = False
@@ -20,6 +21,7 @@ except ImportError:
 try:
     from doctr.io import DocumentFile as DoctrDocumentFile
     from doctr.models import ocr_predictor as doctr_ocr_predictor
+
     HAS_DOCTR = True
 except ImportError:
     HAS_DOCTR = False
@@ -88,8 +90,8 @@ def score_ocr_text_candidate(text: str) -> int:
 def extract_pdf_text_via_ocr_engines(
     content: bytes, *, dpi: int, lang: str, page_markers: bool, engine: str
 ) -> tuple[str, str]:
-    """Extract OCR text with selected strategy. 
-    
+    """Extract OCR text with selected strategy.
+
     Optimized: In 'auto' mode, tries Tesseract first and only falls back to docTR if results are poor.
     """
     # 1. Try Tesseract first (Fast & Low Resource)
@@ -100,13 +102,18 @@ def extract_pdf_text_via_ocr_engines(
             for i, img in enumerate(images):
                 chunk = ocr_image(img, lang=lang)
                 chunks.append(f"---PAGE {i + 1}---\n{chunk}" if page_markers else chunk)
-            
+
             tesseract_text = "\n".join(chunks).strip()
             # If auto-mode and we got decent text, don't bother with docTR
             if engine == "auto" and score_ocr_text_candidate(tesseract_text) > 50:
-                logger.info("document_extraction", method="ocr_tesseract_pdf", extension="pdf", reason="fast_path")
+                logger.info(
+                    "document_extraction",
+                    method="ocr_tesseract_pdf",
+                    extension="pdf",
+                    reason="fast_path",
+                )
                 return tesseract_text, "tesseract"
-                
+
             if engine == "tesseract":
                 return tesseract_text, "tesseract"
         except Exception as exc:

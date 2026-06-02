@@ -56,9 +56,7 @@ async def require_privacy_gate(
             requested_action=requested_action,
             error=str(exc),
         )
-        raise http_400(
-            "Privacy Gate DPO indisponible : action bloquée par sécurité."
-        ) from exc
+        raise http_400("Privacy Gate DPO indisponible : action bloquée par sécurité.") from exc
 
     if result.get("decision") != "allow":
         logger.warning(

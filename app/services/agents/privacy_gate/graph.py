@@ -39,4 +39,3 @@ def get_privacy_gate_graph():
 def reset_graph() -> None:
     global _compiled_graph
     _compiled_graph = None
-

@@ -10,12 +10,13 @@ from dataclasses import asdict, dataclass
 from pathlib import Path
 from typing import Any
 
+from app.services.structured_dataset_service import build_structured_dataset
+
 from app.services.anonymization_service import (
     _ocr_image,
     convert_from_bytes,
     extract_text_from_file,
 )
-from app.services.structured_dataset_service import build_structured_dataset
 
 
 @dataclass
@@ -74,6 +75,7 @@ def _extract_tesseract_forced(content: bytes, dpi: int, lang: str) -> str:
 
 def _extract_pdfplumber(content: bytes) -> str:
     import io
+
     import pdfplumber
 
     out: list[str] = []
@@ -106,6 +108,7 @@ def _extract_doctr(content: bytes) -> str:
 
 def _extract_paddle(content: bytes, lang: str) -> str:
     import tempfile
+
     from paddleocr import PaddleOCR
 
     ocr = PaddleOCR(use_angle_cls=True, lang="fr" if "fra" in lang else "en")
@@ -200,7 +203,9 @@ def _write_reports(results: list[BenchResult], output_json: Path, output_md: Pat
     lines: list[str] = []
     lines.append("# OCR Benchmark Report")
     lines.append("")
-    lines.append("| Case | DocType | Engine | OK | ms | Words | Coverage | MissingCritical | CoreReady | ReadyAI |")
+    lines.append(
+        "| Case | DocType | Engine | OK | ms | Words | Coverage | MissingCritical | CoreReady | ReadyAI |"
+    )
     lines.append("|---|---|---|---:|---:|---:|---:|---:|---:|---:|")
     for r in results:
         lines.append(
@@ -221,7 +226,7 @@ def main() -> int:
     parser.add_argument(
         "--manifest",
         default="golden/ocr_benchmark_manifest.json",
-        help="Manifest JSON list: [{\"path\": \"...pdf\", \"doc_type\": \"bilan\"}]",
+        help='Manifest JSON list: [{"path": "...pdf", "doc_type": "bilan"}]',
     )
     parser.add_argument(
         "--engines",

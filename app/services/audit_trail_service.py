@@ -79,10 +79,7 @@ def _sanitize_value(key: str, value: object, *, depth: int) -> object:
         return value
 
     if isinstance(value, dict):
-        return {
-            str(k)[:80]: _sanitize_value(str(k), v, depth=depth + 1)
-            for k, v in value.items()
-        }
+        return {str(k)[:80]: _sanitize_value(str(k), v, depth=depth + 1) for k, v in value.items()}
 
     if isinstance(value, list | tuple | set):
         return [
@@ -98,8 +95,7 @@ def sanitize_audit_details(details: dict[str, Any] | None) -> dict[str, Any] | N
     if not details:
         return None
     sanitized = {
-        str(key)[:80]: _sanitize_value(str(key), value, depth=0)
-        for key, value in details.items()
+        str(key)[:80]: _sanitize_value(str(key), value, depth=0) for key, value in details.items()
     }
     return sanitized or None
 
@@ -118,9 +114,9 @@ def build_audit_event_hash(
 ) -> str:
     """Build a stable HMAC over the non-sensitive event payload."""
     settings = get_settings()
-    secret = (
-        settings.SECRET_KEY or settings.JWT_SECRET_KEY or INSECURE_SECRET_PLACEHOLDER
-    ).encode("utf-8")
+    secret = (settings.SECRET_KEY or settings.JWT_SECRET_KEY or INSECURE_SECRET_PLACEHOLDER).encode(
+        "utf-8"
+    )
     payload = {
         "action": action,
         "resource_type": resource_type,

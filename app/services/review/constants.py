@@ -43,12 +43,26 @@ STEP_LABELS = {
 }
 
 ALARMIST_KEYWORDS = [
-    "immediatement", "urgence", "sanctions", "fraude", "dissimulation",
-    "prix de transfert", "conflit d'interets", "non-conformite",
-    "irregularite", "violation", "illegale", "penalite",
+    "immediatement",
+    "urgence",
+    "sanctions",
+    "fraude",
+    "dissimulation",
+    "prix de transfert",
+    "conflit d'interets",
+    "non-conformite",
+    "irregularite",
+    "violation",
+    "illegale",
+    "penalite",
 ]
 
 DOWNGRADE_TRIGGERS = [
-    "devrait avoir", "generalement", "habituellement", "normalement",
-    "on s'attendrait", "il est courant", "en principe",
+    "devrait avoir",
+    "generalement",
+    "habituellement",
+    "normalement",
+    "on s'attendrait",
+    "il est courant",
+    "en principe",
 ]

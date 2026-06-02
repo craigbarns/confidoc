@@ -1,8 +1,8 @@
 """ConfiDoc Backend — Extraction Service with Mistral OCR Priority."""
 
+import asyncio
 import os
 import tempfile
-import asyncio
 from io import BytesIO
 from typing import Any
 
@@ -10,19 +10,21 @@ import fitz
 
 from app.core.logging import get_logger
 from app.core.text_sanitize import postgres_safe_text
-from app.services.ocr.engines import extract_pdf_text_via_ocr_engines, ocr_image
 from app.services.mistral_ocr_service import extract_text_from_file as extract_with_mistral
+from app.services.ocr.engines import extract_pdf_text_via_ocr_engines, ocr_image
 
 logger = get_logger(__name__)
 
 try:
     from PIL import Image
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
 
 try:
     import pymupdf4llm
+
     HAS_MD_EXTRACTOR = True
 except ImportError:
     HAS_MD_EXTRACTOR = False
@@ -34,7 +36,9 @@ async def extract_text_from_file(content: bytes, extension: str) -> str:
     return text
 
 
-async def extract_text_from_file_with_meta(content: bytes, extension: str) -> tuple[str, dict[str, Any]]:
+async def extract_text_from_file_with_meta(
+    content: bytes, extension: str
+) -> tuple[str, dict[str, Any]]:
     """Extract text + debug metadata."""
     extraction_meta: dict[str, Any] = {
         "extension": extension.lower().strip("."),
@@ -50,11 +54,12 @@ async def _extract_text_from_file_raw(
     content: bytes, extension: str, extraction_meta: dict[str, Any]
 ) -> str:
     extension = extension.lower().strip(".")
-    
+
     # ── MISTRAL OCR (Priority 1) ──
     from app.config import get_settings
+
     settings = get_settings()
-    
+
     if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True:
         logger.info("mistral_ocr_skipped_sensitive_client_mode", extension=extension)
     elif settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY:
@@ -79,15 +84,17 @@ async def _extract_text_from_file_raw(
 
 async def _extract_pdf_text(content: bytes, meta: dict[str, Any]) -> str:
     from app.config import get_settings
+
     settings = get_settings()
     page_markers = bool(settings.PDF_PAGE_MARKERS)
-    
+
     ext_text = ""
-    
+
     # 1. Structured extraction (Markdown)
     if HAS_MD_EXTRACTOR:
         # Run in thread executor because it's blocking I/O
         loop = asyncio.get_running_loop()
+
         def _run_pymupdf():
             with tempfile.NamedTemporaryFile(suffix=".pdf", delete=False) as tmp:
                 tmp.write(content)
@@ -100,7 +107,7 @@ async def _extract_pdf_text(content: bytes, meta: dict[str, Any]) -> str:
             finally:
                 if os.path.exists(tmp_path):
                     os.unlink(tmp_path)
-        
+
         ext_text = await loop.run_in_executor(None, _run_pymupdf)
 
     # 2. Native text fallback
@@ -135,19 +142,19 @@ async def _extract_pdf_text(content: bytes, meta: dict[str, Any]) -> str:
         try:
             ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
             ocr_engine = getattr(settings, "OCR_ENGINE", "auto")
-            
+
             # extract_pdf_text_via_ocr_engines is sync, run in executor
             loop = asyncio.get_running_loop()
             ocr_text, selected_engine = await loop.run_in_executor(
-                None, 
+                None,
                 extract_pdf_text_via_ocr_engines,
                 content,
-                300, # dpi
+                300,  # dpi
                 ocr_lang,
                 page_markers,
-                str(ocr_engine)
+                str(ocr_engine),
             )
-            
+
             if ocr_text:
                 meta["method"] = "ocr_pdf_fallback"
                 meta["ocr_strategy"] = str(ocr_engine)
@@ -163,14 +170,15 @@ async def _extract_pdf_text(content: bytes, meta: dict[str, Any]) -> str:
 async def _extract_image_text(content: bytes, extension: str, meta: dict[str, Any]) -> str:
     if not HAS_PIL:
         return ""
-        
+
     try:
         from app.config import get_settings
+
         settings = get_settings()
         ocr_lang = getattr(settings, "OCR_LANG", "fra+eng")
-        
+
         loop = asyncio.get_running_loop()
-        
+
         def _run_image_ocr():
             img = Image.open(BytesIO(content))
             if extension in ["tiff", "tif"]:

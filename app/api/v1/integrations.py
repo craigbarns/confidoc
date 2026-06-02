@@ -41,9 +41,7 @@ async def _current_org_id(request: Request, current_user: CurrentUser, db: DbSes
     if not current_user.is_platform_admin:
         raise http_400("Organisation introuvable pour cet utilisateur")
 
-    result = await db.execute(
-        select(Organization).where(Organization.slug == "confidoc-admin")
-    )
+    result = await db.execute(select(Organization).where(Organization.slug == "confidoc-admin"))
     organization = result.scalar_one_or_none()
     if not organization:
         organization = Organization(
@@ -179,9 +177,7 @@ async def list_api_keys(
     _require_human_session(request)
     org_id = await _current_org_id(request, current_user, db)
     result = await db.execute(
-        select(ApiKey)
-        .where(ApiKey.org_id == org_id)
-        .order_by(ApiKey.created_at.desc())
+        select(ApiKey).where(ApiKey.org_id == org_id).order_by(ApiKey.created_at.desc())
     )
     return [_api_key_response(api_key) for api_key in result.scalars().all()]
 

@@ -17,6 +17,7 @@ settings = get_settings()
 def _get_minio_client() -> Any:
     """Create a MinIO client instance."""
     from minio import Minio
+
     return Minio(
         settings.MINIO_ENDPOINT,
         access_key=settings.MINIO_ACCESS_KEY,
@@ -47,6 +48,7 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
 
     if settings.STORAGE_BACKEND == "database":
         from hashlib import sha256
+
         db_key = f"db://{sha256(content).hexdigest()}.{uuid4().hex}.{extension}"
         logger.info("file_stored_database_marker", key=db_key, size=len(content))
         return ("database", db_key)
@@ -62,13 +64,13 @@ def store_bytes(content: bytes, extension: str) -> tuple[str, str]:
 
 def store_file(file_path: str | Path, extension: str) -> tuple[str, str]:
     """Store file from local path and return (storage_backend, storage_key).
-    
+
     Used for streaming large files without keeping them in memory.
     """
     path = Path(file_path)
     if not path.exists():
         raise FileNotFoundError(f"File to store not found: {file_path}")
-    
+
     file_size = path.stat().st_size
     extension = extension.lower().strip(".")
     object_key = f"raw/{datetime.now(UTC).strftime('%Y/%m/%d')}/{uuid4()}.{extension}"
@@ -95,10 +97,11 @@ def store_file(file_path: str | Path, extension: str) -> tuple[str, str]:
     local_dir = Path(settings.LOCAL_UPLOAD_DIR)
     local_dir.mkdir(parents=True, exist_ok=True)
     target = local_dir / f"{uuid4()}.{extension}"
-    
+
     import shutil
+
     shutil.copy2(path, target)
-    
+
     logger.info("file_stored_local_stream", path=str(target), size=file_size)
     return ("local", str(target))
 

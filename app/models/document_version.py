@@ -1,7 +1,7 @@
 """ConfiDoc Backend — Document version model."""
 
-from enum import Enum as PyEnum
 import uuid
+from enum import Enum as PyEnum
 
 from sqlalchemy import Enum, ForeignKey, Text
 from sqlalchemy.dialects.postgresql import UUID

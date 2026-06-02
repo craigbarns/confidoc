@@ -5,6 +5,7 @@ from __future__ import annotations
 import uuid
 from types import SimpleNamespace
 from typing import Any
+
 import pytest
 
 from app.models.document import DocumentStatus
@@ -28,7 +29,9 @@ class _ResultList:
 
 
 class _CertificateFakeSession:
-    def __init__(self, document: Any, mapping: Any = None, detections: list[Any] | None = None) -> None:
+    def __init__(
+        self, document: Any, mapping: Any = None, detections: list[Any] | None = None
+    ) -> None:
         self.document = document
         self.mapping = mapping
         self.detections = detections or []
@@ -48,7 +51,7 @@ class _CertificateFakeSession:
             if "count" in stmt_str:
                 return _ResultList([0])
             return _ResultList([])
-        
+
         # Default fallback for Document query
         if "documents" in stmt_str or "document" in stmt_str:
             return _ResultList([self.document])
@@ -151,21 +154,25 @@ async def test_get_compliance_certificate_success(client, cert_auth_overrides, m
 
     # Mock settings.SECRET_KEY to ensure consistent test signature
     from app.config import get_settings
+
     settings = get_settings()
     monkeypatch.setattr(settings, "SECRET_KEY", "qa-test-secret-key-12345")
 
     # Mock storage read if the handler tries to check or load original bytes
     import app.api.v1._doc_shared as doc_shared
+
     monkeypatch.setattr(doc_shared, "_read_file_or_404", lambda doc: b"%PDF-1.4 mock content")
 
     # Mock the export gate checks to allow export
     async def _allow_export(*args, **kwargs):
         return None
+
     monkeypatch.setattr(doc_shared, "_check_export_gate", _allow_export)
 
     # Mock anonymized text preview
     async def _mock_anon_text(*args, **kwargs):
         return "This is a bank statement for ACME [IBAN_1] done."
+
     monkeypatch.setattr(doc_shared, "_get_anonymized_text", _mock_anon_text)
 
     # Make request
@@ -178,7 +185,7 @@ async def test_get_compliance_certificate_success(client, cert_auth_overrides, m
     assert resp.status_code == 200
     assert resp.headers["content-type"] == "application/pdf"
     assert resp.content.startswith(b"%PDF")
-    
+
     # Assert audit log entry is added to db
     audit_logs = [obj for obj in db.added if obj.__class__.__name__ == "AuditLog"]
     assert len(audit_logs) == 1

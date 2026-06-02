@@ -1,9 +1,10 @@
 """Tests for auth endpoints."""
 
-import pytest
 from unittest.mock import AsyncMock, patch
 
-from app.api.v1.auth import _login_attempts_fallback, _RATE_MAX, _RATE_WINDOW
+import pytest
+
+from app.api.v1.auth import _RATE_MAX, _RATE_WINDOW, _login_attempts_fallback
 
 
 class TestRateLimitFallback:
@@ -16,6 +17,7 @@ class TestRateLimitFallback:
     async def test_allows_under_limit(self):
         """Under the limit, no exception raised (Redis unavailable → fallback)."""
         from app.api.v1.auth import _check_rate_limit
+
         with patch("redis.asyncio.from_url", side_effect=Exception("no redis")):
             for _ in range(_RATE_MAX - 1):
                 await _check_rate_limit("test:127.0.0.1")
@@ -24,7 +26,9 @@ class TestRateLimitFallback:
     async def test_blocks_over_limit_fallback(self):
         """Fallback rate limiter blocks after _RATE_MAX attempts."""
         from fastapi import HTTPException
+
         from app.api.v1.auth import _check_rate_limit
+
         with patch("redis.asyncio.from_url", side_effect=Exception("no redis")):
             for _ in range(_RATE_MAX):
                 await _check_rate_limit("test:127.0.0.2")
@@ -36,6 +40,7 @@ class TestRateLimitFallback:
     async def test_separate_keys_independent_fallback(self):
         """Different IP keys are tracked independently in the fallback."""
         from app.api.v1.auth import _check_rate_limit
+
         with patch("redis.asyncio.from_url", side_effect=Exception("no redis")):
             for _ in range(_RATE_MAX):
                 await _check_rate_limit("test:10.0.0.1")
@@ -57,8 +62,9 @@ class TestRecoveryResetRequest:
         assert req.new_password == "SecurePass1"
 
     def test_short_password_rejected(self):
-        from app.api.v1.auth import RecoveryResetRequest
         from pydantic import ValidationError
+
+        from app.api.v1.auth import RecoveryResetRequest
 
         with pytest.raises(ValidationError):
             RecoveryResetRequest(
@@ -68,8 +74,9 @@ class TestRecoveryResetRequest:
             )
 
     def test_no_uppercase_rejected(self):
-        from app.api.v1.auth import RecoveryResetRequest
         from pydantic import ValidationError
+
+        from app.api.v1.auth import RecoveryResetRequest
 
         with pytest.raises(ValidationError):
             RecoveryResetRequest(
@@ -79,8 +86,9 @@ class TestRecoveryResetRequest:
             )
 
     def test_no_digit_rejected(self):
-        from app.api.v1.auth import RecoveryResetRequest
         from pydantic import ValidationError
+
+        from app.api.v1.auth import RecoveryResetRequest
 
         with pytest.raises(ValidationError):
             RecoveryResetRequest(

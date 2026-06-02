@@ -11,8 +11,10 @@ from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 
+
 class ReviewAgentTransientError(RuntimeError):
     """Provider-side issue that should not expose raw HTTP details to users."""
+
     def __init__(
         self,
         message: str,
@@ -72,16 +74,13 @@ _mistral_breaker = CircuitBreaker()
 
 async def llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) -> str:
     settings = get_settings()
-    if (
-        getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True
-        and not settings.OLLAMA_ENABLED
-    ):
+    if getattr(settings, "SENSITIVE_CLIENT_MODE", False) is True and not settings.OLLAMA_ENABLED:
         logger.info("review_llm_skipped_sensitive_client_mode")
         raise ReviewAgentTransientError(
             "Mode client sensible actif : IA externe désactivée.",
             code="external_ai_disabled",
         )
-    
+
     # 1. Check Cache
     cache_key = _get_cache_key(prompt, system, settings.MISTRAL_MODEL)
     cached = _llm_cache.get(cache_key)
@@ -98,7 +97,7 @@ async def llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) -
         try:
             content = await _call_mistral(prompt, system, temperature)
             _mistral_breaker.record_success()
-            
+
             # Save to cache
             _llm_cache[cache_key] = {"content": content, "timestamp": time.time()}
             return content
@@ -121,7 +120,7 @@ async def llm_call(prompt: str, *, system: str = "", temperature: float = 0.1) -
 
     raise ReviewAgentTransientError(
         "Tous les moteurs d'analyse sont indisponibles. Réessayez plus tard.",
-        code="all_llms_unavailable"
+        code="all_llms_unavailable",
     )
 
 

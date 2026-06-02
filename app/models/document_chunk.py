@@ -38,6 +38,4 @@ class DocumentChunk(BaseModel):
     chunk_index: Mapped[int] = mapped_column(Integer, nullable=False)
     # BGE-M3 produces 1024-dimensional embeddings
     embedding: Mapped[list[float]] = mapped_column(Vector(1024), nullable=False)
-    source_section: Mapped[str | None] = mapped_column(
-        String(100), nullable=True, default=None
-    )
+    source_section: Mapped[str | None] = mapped_column(String(100), nullable=True, default=None)

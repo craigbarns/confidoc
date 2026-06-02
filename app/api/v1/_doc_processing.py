@@ -41,9 +41,7 @@ logger = get_logger(__name__)
     status_code=status.HTTP_200_OK,
     summary="Vérifier le statut OCR + Anonymisation",
 )
-async def document_status(
-    document_id: str, current_user: CurrentUser, db: DbSession
-) -> dict:
+async def document_status(document_id: str, current_user: CurrentUser, db: DbSession) -> dict:
     document = await _get_user_document_or_404(
         db,
         document_id,
@@ -68,9 +66,9 @@ async def document_status(
     preview = result.scalar_one_or_none()
 
     count_result = await db.execute(
-        select(func.count()).select_from(EntityDetection).where(
-            EntityDetection.document_id == document.id
-        )
+        select(func.count())
+        .select_from(EntityDetection)
+        .where(EntityDetection.document_id == document.id)
     )
     detections_count = count_result.scalar() or 0
 
@@ -89,9 +87,9 @@ async def document_status(
             "preview_length": len(preview.content_text) if preview and preview.content_text else 0,
             "detections_count": detections_count,
         },
-        "next_steps": [] if (preview and preview.content_text) else (
-            ["anonymize"] if (original and original.content_text) else ["extract", "anonymize"]
-        ),
+        "next_steps": []
+        if (preview and preview.content_text)
+        else (["anonymize"] if (original and original.content_text) else ["extract", "anonymize"]),
     }
 
 
@@ -570,18 +568,21 @@ async def validate_document(
             DocumentVersion.version_type == DocumentVersionType.FINAL_ANONYMIZED,
         )
     )
-    db.add(DocumentVersion(
-        document_id=document.id,
-        version_type=DocumentVersionType.FINAL_ANONYMIZED,
-        content_text=final_text,
-    ))
+    db.add(
+        DocumentVersion(
+            document_id=document.id,
+            version_type=DocumentVersionType.FINAL_ANONYMIZED,
+            content_text=final_text,
+        )
+    )
 
     # Zero Friction UX: Once a document is validated (either manually or via the Autopilot),
     # its status becomes READY, and the DPO Privacy Gate must allow downstream IA/exports.
     document.status = DocumentStatus.READY
     try:
-        from app.models.pseudonym_mapping import PseudonymMapping
         from datetime import UTC, datetime
+
+        from app.models.pseudonym_mapping import PseudonymMapping
 
         result_mapping = await db.execute(
             select(PseudonymMapping)
@@ -595,7 +596,9 @@ async def validate_document(
                 mapping.human_validated = False
                 mapping.validated_by_user_id = None
                 mapping.validated_at = None
-                logger.info("pseudonym_mapping_validated_via_autopilot", document_id=str(document.id))
+                logger.info(
+                    "pseudonym_mapping_validated_via_autopilot", document_id=str(document.id)
+                )
             else:
                 mapping.human_validated = True
                 mapping.autopilot_validated = False
@@ -632,11 +635,7 @@ async def validate_document(
 
             root_dir = Path(os.getcwd())
             draft_dir = (
-                root_dir
-                / "golden"
-                / "cases"
-                / "draft"
-                / f"{args.doc_type}_auto_{document.id}"
+                root_dir / "golden" / "cases" / "draft" / f"{args.doc_type}_auto_{document.id}"
             )
             draft_dir.mkdir(parents=True, exist_ok=True)
 
@@ -653,8 +652,8 @@ async def validate_document(
                     "quality_flags_must_include": [],
                     "quality_flags_must_exclude": ["critical_fields_missing"],
                     "needs_review": False,
-                    "ready_for_ai": True
-                }
+                    "ready_for_ai": True,
+                },
             }
             (draft_dir / "expected.min.json").write_text(
                 json.dumps(expected_data, indent=2),
@@ -668,7 +667,7 @@ async def validate_document(
                 "source_filename": document.original_filename,
                 "requested_doc_type": args.doc_type,
                 "created_at": datetime.now(UTC).isoformat(),
-                "created_by": str(current_user.id)
+                "created_by": str(current_user.id),
             }
             (draft_dir / "meta.json").write_text(
                 json.dumps(meta_data, indent=2),
@@ -720,6 +719,7 @@ async def validate_document(
 
     from app.config import get_settings
     from app.services.webhook_notify import notify_document_validated
+
     settings = get_settings()
     wh_url = (settings.WEBHOOK_ON_VALIDATE_URL or "").strip()
     if wh_url:
@@ -758,6 +758,7 @@ async def approve_export(
 
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
+
         result = await db.execute(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)

@@ -247,7 +247,13 @@ RULES: Final[tuple[PcgRule, ...]] = (
     # --- Sous-traitance ------------------------------------------------------
     PcgRule(
         category="sous_traitance",
-        keywords=("sous-traitance", "sous traitance", "sous-traitant", "freelance", "prestataire externe"),
+        keywords=(
+            "sous-traitance",
+            "sous traitance",
+            "sous-traitant",
+            "freelance",
+            "prestataire externe",
+        ),
         account=PcgAccount("611000", "Sous-traitance générale"),
         base_confidence=0.88,
         reason="Sous-traitance / freelance externe → 611000.",
@@ -338,6 +344,4 @@ FALLBACK_BY_NATURE: Final[dict[str, PcgAccount]] = {
     "produit": PcgAccount("706000", "Prestations de services"),
 }
 
-UNKNOWN_ACCOUNT: Final[PcgAccount] = PcgAccount(
-    "471000", "Compte d'attente (à classer)"
-)
+UNKNOWN_ACCOUNT: Final[PcgAccount] = PcgAccount("471000", "Compte d'attente (à classer)")

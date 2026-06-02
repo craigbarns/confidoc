@@ -8,8 +8,15 @@ from typing import Any
 
 from app.core.logging import get_logger
 from app.services.review.constants import STEP_LABELS, STEPS_ORDER
-from app.services.review.graph import get_review_graph, reset_graph as _reset_graph
-from app.services.review.llm import ReviewAgentTransientError, _raise_for_llm_status, llm_call as _llm_call
+from app.services.review.graph import get_review_graph
+from app.services.review.graph import reset_graph as _reset_graph
+from app.services.review.llm import (
+    ReviewAgentTransientError,
+    _raise_for_llm_status,
+)
+from app.services.review.llm import (
+    llm_call as _llm_call,
+)
 from app.services.review.state import (
     ReviewState,
     fallback_review_state,
@@ -96,11 +103,7 @@ async def run_review_streaming(
                     "step": node_name,
                     "label": STEP_LABELS.get(node_name, node_name),
                     "status": "done",
-                    "data": {
-                        k: v
-                        for k, v in node_output.items()
-                        if k not in ("anonymized_text",)
-                    },
+                    "data": {k: v for k, v in node_output.items() if k not in ("anonymized_text",)},
                 }
 
                 idx = STEPS_ORDER.index(node_name)

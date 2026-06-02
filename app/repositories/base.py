@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Base Repository (Generic CRUD)."""
 
-from typing import Any, Generic, TypeVar, Sequence
+from collections.abc import Sequence
+from typing import Any, Generic, TypeVar
 from uuid import UUID
 
 from sqlalchemy import delete, select, update
@@ -22,18 +23,12 @@ class BaseRepository(Generic[ModelType]):
         """Get a single record by its ID."""
         if isinstance(id, str):
             id = UUID(id)
-        result = await self.session.execute(
-            select(self.model).where(self.model.id == id)
-        )
+        result = await self.session.execute(select(self.model).where(self.model.id == id))
         return result.scalar_one_or_none()
 
-    async def get_multi(
-        self, *, skip: int = 0, limit: int = 100
-    ) -> Sequence[ModelType]:
+    async def get_multi(self, *, skip: int = 0, limit: int = 100) -> Sequence[ModelType]:
         """Get multiple records with pagination."""
-        result = await self.session.execute(
-            select(self.model).offset(skip).limit(limit)
-        )
+        result = await self.session.execute(select(self.model).offset(skip).limit(limit))
         return result.scalars().all()
 
     async def create(self, *, obj_in: dict[str, Any]) -> ModelType:
@@ -43,9 +38,7 @@ class BaseRepository(Generic[ModelType]):
         await self.session.flush()
         return db_obj
 
-    async def update(
-        self, *, db_obj: ModelType, obj_in: dict[str, Any]
-    ) -> ModelType:
+    async def update(self, *, db_obj: ModelType, obj_in: dict[str, Any]) -> ModelType:
         """Update an existing record."""
         for field, value in obj_in.items():
             setattr(db_obj, field, value)
@@ -67,7 +60,5 @@ class BaseRepository(Generic[ModelType]):
         """Delete a record by ID without loading it first."""
         if isinstance(id, str):
             id = UUID(id)
-        result = await self.session.execute(
-            delete(self.model).where(self.model.id == id)
-        )
+        result = await self.session.execute(delete(self.model).where(self.model.id == id))
         return result.rowcount > 0

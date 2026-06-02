@@ -11,10 +11,9 @@ import argparse
 import json
 from collections import defaultdict
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 CASES_ROOT = ROOT / "golden" / "cases"
@@ -187,7 +186,7 @@ def _curate(
     selected = sorted(selected, key=lambda x: x.score, reverse=True)[:max_total]
 
     if promote:
-        now = datetime.now(timezone.utc).isoformat()
+        now = datetime.now(UTC).isoformat()
         for c in selected:
             meta_path = c.case_dir / "meta.json"
             expected_path = c.case_dir / "expected.min.json"
@@ -211,7 +210,7 @@ def _build_report(
     lines = [
         "# OCR Stress Curation Report",
         "",
-        f"- Generated at: {datetime.now(timezone.utc).isoformat()}",
+        f"- Generated at: {datetime.now(UTC).isoformat()}",
         f"- Mode: {'PROMOTE' if promote else 'ANALYZE'}",
         f"- Selection target: max_total={max_total}, max_per_source={max_per_source}",
         f"- Selected cases: {len(selected)}",
@@ -299,4 +298,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

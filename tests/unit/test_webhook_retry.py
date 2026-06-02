@@ -1,12 +1,13 @@
 """Tests for webhook retry with exponential backoff."""
 
+from unittest.mock import AsyncMock, MagicMock, patch
+
 import pytest
-from unittest.mock import AsyncMock, patch, MagicMock
 
 from app.services.webhook_notify import (
-    notify_document_validated,
-    MAX_RETRIES,
     BACKOFF_BASE_SECONDS,
+    MAX_RETRIES,
+    notify_document_validated,
 )
 
 
@@ -35,8 +36,10 @@ async def test_webhook_retries_on_500():
     """Webhook should retry on 5xx errors with backoff."""
     call_count = 0
 
-    with patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls, \
-         patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls,
+        patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         mock_response_500 = MagicMock()
         mock_response_500.status_code = 500
         mock_response_500.text = "Internal Server Error"
@@ -63,8 +66,10 @@ async def test_webhook_retries_on_500():
 @pytest.mark.asyncio
 async def test_webhook_no_retry_on_4xx():
     """Webhook should NOT retry on 4xx client errors."""
-    with patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls, \
-         patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls,
+        patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         mock_response = MagicMock()
         mock_response.status_code = 404
         mock_response.text = "Not Found"
@@ -86,8 +91,10 @@ async def test_webhook_no_retry_on_4xx():
 @pytest.mark.asyncio
 async def test_webhook_retries_on_network_error():
     """Webhook should retry on network exceptions."""
-    with patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls, \
-         patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls,
+        patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         mock_response_ok = MagicMock()
         mock_response_ok.status_code = 200
 
@@ -111,8 +118,10 @@ async def test_webhook_retries_on_network_error():
 @pytest.mark.asyncio
 async def test_webhook_exhausts_retries():
     """Webhook should give up after MAX_RETRIES attempts."""
-    with patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls, \
-         patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls,
+        patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         mock_client = AsyncMock()
         mock_client.post.side_effect = ConnectionError("Always fails")
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -155,8 +164,10 @@ async def test_webhook_hmac_signature():
 @pytest.mark.asyncio
 async def test_webhook_exponential_backoff_timing():
     """Backoff delays should follow exponential pattern: 2s, 4s, 8s."""
-    with patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls, \
-         patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep:
+    with (
+        patch("app.services.webhook_notify.httpx.AsyncClient") as mock_client_cls,
+        patch("app.services.webhook_notify.asyncio.sleep", new_callable=AsyncMock) as mock_sleep,
+    ):
         mock_client = AsyncMock()
         mock_client.post.side_effect = ConnectionError("Always fails")
         mock_client.__aenter__ = AsyncMock(return_value=mock_client)
@@ -169,7 +180,7 @@ async def test_webhook_exponential_backoff_timing():
         )
 
         sleep_calls = [call[0][0] for call in mock_sleep.call_args_list]
-        expected = [BACKOFF_BASE_SECONDS * (2 ** i) for i in range(MAX_RETRIES - 1)]
+        expected = [BACKOFF_BASE_SECONDS * (2**i) for i in range(MAX_RETRIES - 1)]
         assert sleep_calls == expected
 
 

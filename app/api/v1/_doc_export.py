@@ -58,7 +58,7 @@ def _safe_attachment_disposition(filename: str | None) -> str:
     safe = (filename or "document").replace("\r", " ").replace("\n", " ").replace('"', "")
     safe = safe.strip() or "document"
     ascii_safe = safe.encode("ascii", "ignore").decode("ascii") or "document"
-    return f'attachment; filename="{ascii_safe}"; filename*=UTF-8\'\'{quote(safe)}'
+    return f"attachment; filename=\"{ascii_safe}\"; filename*=UTF-8''{quote(safe)}"
 
 
 def _external_mistral_enabled() -> bool:
@@ -66,9 +66,7 @@ def _external_mistral_enabled() -> bool:
 
     settings = get_settings()
     return bool(
-        not settings.SENSITIVE_CLIENT_MODE
-        and settings.MISTRAL_ENABLED
-        and settings.MISTRAL_API_KEY
+        not settings.SENSITIVE_CLIENT_MODE and settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY
     )
 
 
@@ -93,9 +91,7 @@ async def _require_external_ai_gate_if_enabled(
     status_code=status.HTTP_200_OK,
     summary="Exporter le texte anonymisé",
 )
-async def export_document(
-    document_id: str, current_user: CurrentUser, db: DbSession
-):
+async def export_document(document_id: str, current_user: CurrentUser, db: DbSession):
     try:
         document = await _get_user_document_or_404(
             db,
@@ -123,9 +119,12 @@ async def export_document(
                 db,
                 user_id=_user_id,
                 org_id=_org_id,
-                action="export:text", resource_type="document",
-                resource_id=_doc_id, method="GET",
-                path=f"/api/v1/documents/{document_id}/export", status_code=200,
+                action="export:text",
+                resource_type="document",
+                resource_id=_doc_id,
+                method="GET",
+                path=f"/api/v1/documents/{document_id}/export",
+                status_code=200,
                 actor_type="user",
             )
             await db.commit()
@@ -150,9 +149,7 @@ async def export_document(
     status_code=status.HTTP_200_OK,
     summary="Exporter au format FEC (Fichier des Écritures Comptables)",
 )
-async def export_fec(
-    document_id: str, current_user: CurrentUser, db: DbSession
-):
+async def export_fec(document_id: str, current_user: CurrentUser, db: DbSession):
     """Génère un fichier FEC simplifié pour intégration logicielle comptable."""
     document = await _get_user_document_or_404(
         db,
@@ -247,9 +244,12 @@ async def export_fec(
             db,
             user_id=current_user.id,
             org_id=document.org_id,
-            action="export:fec", resource_type="document",
-            resource_id=str(document.id), method="GET",
-            path=f"/api/v1/documents/{document_id}/export-fec", status_code=200,
+            action="export:fec",
+            resource_type="document",
+            resource_id=str(document.id),
+            method="GET",
+            path=f"/api/v1/documents/{document_id}/export-fec",
+            status_code=200,
             actor_type="user",
         )
         await db.commit()
@@ -259,8 +259,7 @@ async def export_fec(
             await db.rollback()
 
     return PlainTextResponse(
-        fec_content,
-        headers={"Content-Disposition": f"attachment; filename=FEC_{document.id}.txt"}
+        fec_content, headers={"Content-Disposition": f"attachment; filename=FEC_{document.id}.txt"}
     )
 
 
@@ -270,9 +269,7 @@ async def export_fec(
     status_code=status.HTTP_200_OK,
     summary="Exporter le PDF avec données visuellement masquées",
 )
-async def export_redacted_pdf(
-    document_id: str, current_user: CurrentUser, db: DbSession
-):
+async def export_redacted_pdf(document_id: str, current_user: CurrentUser, db: DbSession):
     try:
         document = await _get_user_document_or_404(
             db,
@@ -297,6 +294,7 @@ async def export_redacted_pdf(
                     anonymize_text,
                     classify_document_type,
                 )
+
                 effective_type = classify_document_type(source_text, document.original_filename)
                 _anon_text, regenerated, _registry = anonymize_text(
                     source_text, profile="strict", document_type=effective_type
@@ -314,6 +312,7 @@ async def export_redacted_pdf(
 
         try:
             from app.services.pdf_redaction_service import redact_pdf_bytes
+
             loop = asyncio.get_running_loop()
             redacted_bytes = await loop.run_in_executor(
                 None, redact_pdf_bytes, original_bytes, sensitive_values
@@ -364,6 +363,7 @@ async def get_audit_report(
     entries: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
+
         result = await db.execute(
             select(AuditLog)
             .where(AuditLog.resource_id == str(document.id))
@@ -391,6 +391,7 @@ async def get_audit_report(
     human_validated_for_trust = False
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
+
         mr = await db.execute(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
@@ -416,9 +417,9 @@ async def get_audit_report(
     detections_count = 0
     try:
         detections_count_result = await db.execute(
-            select(func.count()).select_from(EntityDetection).where(
-                EntityDetection.document_id == document.id
-            )
+            select(func.count())
+            .select_from(EntityDetection)
+            .where(EntityDetection.document_id == document.id)
         )
         detections_count = int(detections_count_result.scalar() or 0)
     except Exception:
@@ -455,9 +456,7 @@ async def get_audit_report(
         "created_at": document.created_at.isoformat() if document.created_at else None,
         "report_summary": {
             "processing_status": (
-                document.status.value
-                if hasattr(document.status, "value")
-                else str(document.status)
+                document.status.value if hasattr(document.status, "value") else str(document.status)
             ),
             "entities_detected": detections_count,
             "audit_events": audit_count,
@@ -495,9 +494,7 @@ async def get_audit_report_pdf(
     entity_summary: dict[str, int] = {}
     try:
         det_result = await db.execute(
-            select(EntityDetection).where(
-                EntityDetection.document_id == uuid.UUID(document_id)
-            )
+            select(EntityDetection).where(EntityDetection.document_id == uuid.UUID(document_id))
         )
         for det in det_result.scalars().all():
             etype = det.entity_type or "unknown"
@@ -520,6 +517,7 @@ async def get_audit_report_pdf(
     risk_info = report_data.get("risk")
     if risk_info and anonymized_preview:
         from app.services.reidentification_risk_service import analyze_reidentification_risk
+
         risk_report = analyze_reidentification_risk(anonymized_preview, entity_summary)
         risk_info["recommendation"] = risk_report.recommendation
 
@@ -539,6 +537,7 @@ async def get_audit_report_pdf(
     }
 
     from app.services.pdf_audit_report_service import generate_audit_pdf
+
     pdf_bytes = generate_audit_pdf(
         document_info=document_info,
         risk_info=risk_info,
@@ -569,6 +568,7 @@ async def get_document_risk_score(
     doc_uuid = document.id
 
     from app.models.pseudonym_mapping import PseudonymMapping
+
     pm_result = await db.execute(
         select(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid)
     )
@@ -619,9 +619,9 @@ async def get_document_risk_score(
         from app.models.audit_log import AuditLog
 
         audit_count_result = await db.execute(
-            select(func.count()).select_from(AuditLog).where(
-                AuditLog.resource_id == str(document.id)
-            )
+            select(func.count())
+            .select_from(AuditLog)
+            .where(AuditLog.resource_id == str(document.id))
         )
         audit_count = int(audit_count_result.scalar() or 0)
     except Exception:
@@ -733,6 +733,7 @@ async def get_compliance_report(
 
     # Risk info
     from app.models.pseudonym_mapping import PseudonymMapping
+
     pm_result = await db.execute(
         select(PseudonymMapping)
         .where(PseudonymMapping.document_id == doc_uuid)
@@ -766,6 +767,7 @@ async def get_compliance_report(
     if anonymized_preview and entity_counts:
         try:
             from app.services.reidentification_risk_service import analyze_reidentification_risk
+
             rr = analyze_reidentification_risk(anonymized_preview, entity_counts)
             risk_info["recommendation"] = rr.recommendation
         except Exception:
@@ -801,6 +803,7 @@ async def get_compliance_report(
     audit_entries: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
+
         a_result = await db.execute(
             select(AuditLog)
             .where(AuditLog.resource_id == str(document.id))
@@ -839,6 +842,7 @@ async def get_compliance_report(
         "conclusion": "Document conforme en l'état pour un usage interne.",
     }
     from app.config import get_settings
+
     settings = get_settings()
     llm_privacy_gate: dict[str, Any] | None = None
     llm_gate_allows = False
@@ -859,11 +863,7 @@ async def get_compliance_report(
                 )
         except Exception as exc:
             logger.warning("compliance_llm_privacy_gate_failed", error=str(exc))
-    if (
-        settings.SENSITIVE_CLIENT_MODE
-        and settings.MISTRAL_ENABLED
-        and settings.MISTRAL_API_KEY
-    ):
+    if settings.SENSITIVE_CLIENT_MODE and settings.MISTRAL_ENABLED and settings.MISTRAL_API_KEY:
         logger.info(
             "compliance_llm_skipped_sensitive_client_mode",
             document_id=str(document.id),
@@ -906,9 +906,7 @@ async def get_compliance_report(
             "filename": document.original_filename,
             "created_at": document.created_at.isoformat() if document.created_at else None,
             "status": (
-                document.status.value
-                if hasattr(document.status, "value")
-                else str(document.status)
+                document.status.value if hasattr(document.status, "value") else str(document.status)
             ),
         },
         "conformity": {
@@ -949,9 +947,7 @@ async def get_compliance_report(
                 and llm_report.get("summary") != "Rapport généré automatiquement."
             ),
             "privacy_gate": (
-                privacy_gate_public_summary(llm_privacy_gate)
-                if llm_privacy_gate
-                else None
+                privacy_gate_public_summary(llm_privacy_gate) if llm_privacy_gate else None
             ),
         },
         "certifications": {
@@ -986,6 +982,7 @@ async def get_compliance_certificate(
 
         # Risk info retrieval
         from app.models.pseudonym_mapping import PseudonymMapping
+
         pm_result = await db.execute(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
@@ -1007,9 +1004,7 @@ async def get_compliance_certificate(
         entity_summary: dict[str, int] = {}
         try:
             det_result = await db.execute(
-                select(EntityDetection).where(
-                    EntityDetection.document_id == document.id
-                )
+                select(EntityDetection).where(EntityDetection.document_id == document.id)
             )
             for det in det_result.scalars().all():
                 etype = det.entity_type or "unknown"
@@ -1021,10 +1016,11 @@ async def get_compliance_certificate(
         audit_count = 0
         try:
             from app.models.audit_log import AuditLog
+
             audit_count_result = await db.execute(
-                select(func.count()).select_from(AuditLog).where(
-                    AuditLog.resource_id == str(document.id)
-                )
+                select(func.count())
+                .select_from(AuditLog)
+                .where(AuditLog.resource_id == str(document.id))
             )
             audit_count = int(audit_count_result.scalar() or 0)
         except Exception:
@@ -1059,6 +1055,7 @@ async def get_compliance_certificate(
 
         # Generate compliance certificate PDF bytes
         from app.services.pdf_certificate_service import generate_compliance_certificate
+
         pdf_bytes = generate_compliance_certificate(
             document_info=document_info,
             risk_info=risk_info,

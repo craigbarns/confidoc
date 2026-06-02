@@ -54,11 +54,7 @@ def celery_workers_available(queue: str | None = None, timeout: float = 1.0) -> 
             queue=queue,
             workers=list(workers.keys()),
             active_queues={
-                name: [
-                    q.get("name")
-                    for q in queues
-                    if isinstance(q, dict) and q.get("name")
-                ]
+                name: [q.get("name") for q in queues if isinstance(q, dict) and q.get("name")]
                 for name, queues in active_queues.items()
             },
         )
@@ -180,6 +176,7 @@ async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
 def extract_document_task(self, doc_id: str) -> dict[str, Any]:
     """Background task: Step 1 - OCR Extraction."""
     from app.core.metrics import PIPELINE_LATENCY, PIPELINE_STEPS
+
     start_time = time.time()
     try:
         res = _run_async(_extract_document_async(doc_id))
@@ -235,6 +232,7 @@ def anonymize_document_task(
 ) -> dict[str, Any]:
     """Background task: Step 2 - Anonymization/Pseudonymization."""
     from app.core.metrics import PIPELINE_LATENCY, PIPELINE_STEPS
+
     start_time = time.time()
     try:
         res = _run_async(
@@ -332,14 +330,16 @@ async def _anonymize_document_async_v2(
                 if raw_mapping:
                     encrypted = encrypt_mapping(raw_mapping, settings.PSEUDO_MAPPING_KEY)
                     expiry = datetime.now(UTC) + timedelta(days=settings.RETENTION_MAPPING_DAYS)
-                    db.add(PseudonymMapping(
-                        document_id=document.id,
-                        user_id=document.uploaded_by_user_id,
-                        encrypted_mapping=encrypted,
-                        expires_at=expiry,
-                        risk_score=risk_report.score,
-                        risk_level=risk_report.level,
-                    ))
+                    db.add(
+                        PseudonymMapping(
+                            document_id=document.id,
+                            user_id=document.uploaded_by_user_id,
+                            encrypted_mapping=encrypted,
+                            expires_at=expiry,
+                            risk_score=risk_report.score,
+                            risk_level=risk_report.level,
+                        )
+                    )
             except Exception as exc:
                 logger.warning("pseudo_mapping_save_failed_in_task", error=str(exc))
 
@@ -422,6 +422,7 @@ async def _process_document_legacy_async(
 
 # ── Scheduled tasks (called by Celery Beat) ─────────────────────────────
 
+
 @shared_task(bind=True, max_retries=1, default_retry_delay=60, time_limit=600, acks_late=True)
 def run_retention_purge_task(self) -> dict[str, Any]:
     """Purge RGPD planifiée — appelée par Celery Beat tous les jours à 2h."""
@@ -451,6 +452,7 @@ def run_retention_purge_task(self) -> dict[str, Any]:
     async def _update_redis_ts() -> None:
         try:
             import redis.asyncio as aioredis
+
             r = aioredis.from_url(
                 settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1
             )

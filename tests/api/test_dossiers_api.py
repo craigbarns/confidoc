@@ -8,6 +8,7 @@ class TestDossiersRoutes:
 
     def _get_paths(self):
         from app.api.v1.documents import router
+
         return [r.path for r in router.routes]
 
     def test_dossiers_route_exists(self):
@@ -45,14 +46,17 @@ class TestDocumentResponseSchema:
 
     def test_client_name_field_exists(self):
         from app.schemas.document import DocumentResponse
+
         assert "client_name" in DocumentResponse.model_fields
 
     def test_exercice_field_exists(self):
         from app.schemas.document import DocumentResponse
+
         assert "exercice" in DocumentResponse.model_fields
 
     def test_doc_category_field_exists(self):
         from app.schemas.document import DocumentResponse
+
         assert "doc_category" in DocumentResponse.model_fields
 
 
@@ -61,17 +65,21 @@ class TestDocumentMetadataPatchSchema:
 
     def test_valid_exercice(self):
         from app.schemas.document import DocumentMetadataPatch
+
         p = DocumentMetadataPatch(exercice="2024")
         assert p.exercice == "2024"
 
     def test_invalid_exercice_format(self):
         from pydantic import ValidationError
+
         from app.schemas.document import DocumentMetadataPatch
+
         with pytest.raises(ValidationError):
             DocumentMetadataPatch(exercice="24")
 
     def test_all_none_is_valid(self):
         from app.schemas.document import DocumentMetadataPatch
+
         p = DocumentMetadataPatch()
         assert p.client_name is None
         assert p.exercice is None

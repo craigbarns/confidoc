@@ -121,11 +121,7 @@ def compute_document_trust_score(
         100,
         max(
             0,
-            pipeline_points
-            + privacy_points
-            + validation_points
-            + audit_points
-            + detection_points,
+            pipeline_points + privacy_points + validation_points + audit_points + detection_points,
         ),
     )
 

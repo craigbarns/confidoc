@@ -14,7 +14,6 @@ from app.services.pcg_mapping_service import (
 )
 from app.services.pcg_rules import RULES
 
-
 # ──────────────────────────────────────────────────────────────────────
 # Backward compatibility: existing callers (llm_extraction_service)
 # only rely on suggest_pcg_code(libelle, nature) returning {"code", "label"}.
@@ -87,9 +86,7 @@ class TestSimpleRuleMatches:
         result = suggest("Loyer mars 2026", "charge")
         assert result.suggestion.source == PcgSource.RULE
         assert result.suggestion.reason
-        assert any(
-            "loyer" in kw.lower() for kw in result.suggestion.matched_keywords
-        )
+        assert any("loyer" in kw.lower() for kw in result.suggestion.matched_keywords)
 
     def test_rule_match_confidence_is_in_range(self):
         result = suggest("Honoraires expert-comptable", "charge")

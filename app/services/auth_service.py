@@ -1,6 +1,6 @@
 """ConfiDoc Backend — Auth Service."""
 
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 
 from sqlalchemy import delete, select
 from sqlalchemy.ext.asyncio import AsyncSession
@@ -20,9 +20,7 @@ from app.schemas.auth import LoginRequest, TokenResponse
 settings = get_settings()
 
 
-async def authenticate_user(
-    db: AsyncSession, login_req: LoginRequest
-) -> TokenResponse:
+async def authenticate_user(db: AsyncSession, login_req: LoginRequest) -> TokenResponse:
     """Verifie le compte et génère la paire JWT + Refresh."""
     normalized_email = str(login_req.email).strip().lower()
     stmt = select(User).where(User.email == normalized_email)
@@ -39,16 +37,14 @@ async def authenticate_user(
         raise http_400("Ce compte est désactivé")
 
     # Mettre à jour last_login
-    user.last_login_at = datetime.now(timezone.utc)
-    
+    user.last_login_at = datetime.now(UTC)
+
     # Générer le token d'accès
     access_token = create_access_token(user.id)
 
     # Générer le refresh token (stocké en base)
     refresh_token_value = generate_opaque_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    expires_at = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
 
     new_refresh = RefreshToken(
         user_id=user.id,
@@ -65,9 +61,7 @@ async def authenticate_user(
     )
 
 
-async def refresh_access_token(
-    db: AsyncSession, refresh_token_value: str
-) -> TokenResponse:
+async def refresh_access_token(db: AsyncSession, refresh_token_value: str) -> TokenResponse:
     """Consomme le refresh token et en génère un nouveau + JWT."""
     stmt = select(RefreshToken).where(RefreshToken.token == hash_token(refresh_token_value))
     result = await db.execute(stmt)
@@ -84,7 +78,7 @@ async def refresh_access_token(
         await db.commit()
         raise http_401("Ce token a été révoqué, session terminée")
 
-    if rt.expires_at < datetime.now(timezone.utc):
+    if rt.expires_at < datetime.now(UTC):
         raise http_401("Refresh token expiré")
 
     # Rotation : DELETE explicite (évite SAWarning "0 rows matched" en course
@@ -106,9 +100,7 @@ async def refresh_access_token(
     # Génération
     new_access = create_access_token(user.id)
     new_refresh_value = generate_opaque_token()
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS
-    )
+    expires_at = datetime.now(UTC) + timedelta(days=settings.JWT_REFRESH_TOKEN_EXPIRE_DAYS)
 
     new_rt = RefreshToken(
         user_id=user.id,
@@ -134,6 +126,7 @@ async def logout_user(db: AsyncSession, user_id: str) -> None:
 
 # ── Password reset ────────────────────────────────────────────────────
 
+
 async def request_password_reset(db: AsyncSession, email: str) -> None:
     """Génère un token de reset et envoie l'email.
 
@@ -152,19 +145,17 @@ async def request_password_reset(db: AsyncSession, email: str) -> None:
         return  # silencieux
 
     # Invalider les anciens tokens pour cet utilisateur
-    await db.execute(
-        delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id)
-    )
+    await db.execute(delete(PasswordResetToken).where(PasswordResetToken.user_id == user.id))
 
     token_value = generate_opaque_token(40)
-    expires_at = datetime.now(timezone.utc) + timedelta(
-        minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES
+    expires_at = datetime.now(UTC) + timedelta(minutes=settings.PASSWORD_RESET_TOKEN_EXPIRE_MINUTES)
+    db.add(
+        PasswordResetToken(
+            user_id=user.id,
+            token=hash_token(token_value),
+            expires_at=expires_at,
+        )
     )
-    db.add(PasswordResetToken(
-        user_id=user.id,
-        token=hash_token(token_value),
-        expires_at=expires_at,
-    ))
     await db.commit()
 
     reset_url = f"{settings.APP_BASE_URL}/ui?reset_token={token_value}"
@@ -173,20 +164,18 @@ async def request_password_reset(db: AsyncSession, email: str) -> None:
 
 async def reset_password(db: AsyncSession, token_value: str, new_password: str) -> None:
     """Vérifie le token et met à jour le mot de passe."""
-    from app.core.security import hash_token, get_password_hash
+    from app.core.security import get_password_hash, hash_token
     from app.models.password_reset_token import PasswordResetToken
 
     result = await db.execute(
-        select(PasswordResetToken).where(
-            PasswordResetToken.token == hash_token(token_value)
-        )
+        select(PasswordResetToken).where(PasswordResetToken.token == hash_token(token_value))
     )
     prt = result.scalar_one_or_none()
 
     if not prt:
         raise http_400("Token invalide ou expiré")
 
-    if prt.expires_at < datetime.now(timezone.utc):
+    if prt.expires_at < datetime.now(UTC):
         await db.delete(prt)
         await db.commit()
         raise http_400("Token expiré. Faites une nouvelle demande.")
@@ -198,7 +187,7 @@ async def reset_password(db: AsyncSession, token_value: str, new_password: str) 
         raise http_400("Compte introuvable ou désactivé")
 
     user.password_hash = get_password_hash(new_password)
-    user.last_login_at = datetime.now(timezone.utc)
+    user.last_login_at = datetime.now(UTC)
 
     # Invalider toutes les sessions actives (refresh tokens)
     await db.execute(delete(RefreshToken).where(RefreshToken.user_id == user.id))

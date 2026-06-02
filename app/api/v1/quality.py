@@ -48,9 +48,7 @@ async def create_golden_draft_endpoint(
     if current_user.org_id is None:
         raise http_400("Aucune organisation associée à l'utilisateur courant")
 
-    if not await _document_belongs_to_org(
-        db, payload.document_id, current_user.org_id
-    ):
+    if not await _document_belongs_to_org(db, payload.document_id, current_user.org_id):
         raise http_404("Document introuvable")
 
     draft = await create_golden_draft(
@@ -96,9 +94,7 @@ async def list_golden_drafts(
     if current_user.org_id is None:
         return []
 
-    stmt = select(GoldenCaseDraft).where(
-        GoldenCaseDraft.org_id == current_user.org_id
-    )
+    stmt = select(GoldenCaseDraft).where(GoldenCaseDraft.org_id == current_user.org_id)
     if status_filter is not None:
         stmt = stmt.where(GoldenCaseDraft.status == status_filter)
     if document_type is not None:

@@ -171,9 +171,7 @@ def _score_rule(rule: PcgRule, matched: tuple[str, ...]) -> float:
     return min(1.0, rule.base_confidence + bonus)
 
 
-def _suggestions_from_rules(
-    libelle: str, nature: str
-) -> list[PcgSuggestion]:
+def _suggestions_from_rules(libelle: str, nature: str) -> list[PcgSuggestion]:
     """Run every rule, return one ``PcgSuggestion`` per rule that matched.
 
     The list is sorted by descending confidence; later steps are responsible

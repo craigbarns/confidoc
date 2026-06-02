@@ -15,6 +15,12 @@ from typing import Any
 
 from app.services.anonymization.cleanup import clean_ocr_artifacts
 from app.services.anonymization.detector import detect_entities
+from app.services.anonymization.detector import (
+    detect_entities as _detect_entities,
+)
+from app.services.anonymization.detector import (
+    is_false_positive as _is_false_positive,
+)
 from app.services.anonymization.pseudonymizer import apply_business_pseudonyms
 from app.services.classification.service import classify_document_type
 from app.services.entity_registry import EntityRegistry
@@ -22,9 +28,21 @@ from app.services.extraction.service import (
     extract_text_from_file,
     extract_text_from_file_with_meta,
 )
-from app.services.anonymization.detector import detect_entities as _detect_entities, is_false_positive as _is_false_positive
-from app.services.ocr.engines import HAS_OCR, get_tesseract_config as _get_tesseract_config, ocr_image as _ocr_image
-from app.services.ocr.preprocessing import preprocess_image_for_ocr as _preprocess_image_for_ocr, _deskew_image
+from app.services.ocr.engines import (
+    HAS_OCR,
+)
+from app.services.ocr.engines import (
+    get_tesseract_config as _get_tesseract_config,
+)
+from app.services.ocr.engines import (
+    ocr_image as _ocr_image,
+)
+from app.services.ocr.preprocessing import (
+    _deskew_image,
+)
+from app.services.ocr.preprocessing import (
+    preprocess_image_for_ocr as _preprocess_image_for_ocr,
+)
 
 
 def anonymize_text(
@@ -41,10 +59,10 @@ def anonymize_text(
         registry = EntityRegistry()
 
     detections = detect_entities(text, profile=profile, document_type=document_type)
-    
+
     if profile == "dataset_accounting_pseudo":
         detections = apply_business_pseudonyms(text, detections, registry)
-        
+
     anonymized = text
     # Apply replacements from end to start to preserve indices
     for match in sorted(detections, key=lambda m: m["start_index"], reverse=True):

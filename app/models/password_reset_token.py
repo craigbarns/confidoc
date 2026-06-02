@@ -1,7 +1,7 @@
 """ConfiDoc Backend — PasswordResetToken model."""
 
-from datetime import datetime
 import uuid
+from datetime import datetime
 
 from sqlalchemy import DateTime, ForeignKey, String
 from sqlalchemy.dialects.postgresql import UUID
@@ -33,8 +33,6 @@ class PasswordResetToken(BaseModel):
         index=True,
         nullable=False,
     )
-    expires_at: Mapped[datetime] = mapped_column(
-        DateTime(timezone=True), nullable=False
-    )
+    expires_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), nullable=False)
 
     user = relationship("User")

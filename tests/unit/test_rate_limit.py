@@ -23,6 +23,7 @@ def test_rate_limit_handler_returns_429():
 def test_rate_limit_config_values():
     """Rate limit settings should have expected defaults."""
     from app.config import Settings
+
     s = Settings()
     assert s.RATE_LIMIT_LOGIN == "10/minute"
     assert s.RATE_LIMIT_UPLOAD == "30/minute"

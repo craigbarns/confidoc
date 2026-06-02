@@ -56,7 +56,10 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert 'id="upload-client-name"' in resp.text
     assert 'for="upload-client-name"' in resp.text
     assert "Document prêt pour l’analyse IA" in resp.text
-    assert "Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité." in resp.text
+    assert (
+        "Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité."
+        in resp.text
+    )
     assert "Résumer le document" in resp.text
     assert "Document anonymisé et prêt pour l’IA" in resp.text
     assert "Score RGPD non disponible" in resp.text
@@ -156,11 +159,22 @@ async def test_ui_is_de_jargonised(client):
     """Technical jargon is replaced by plain, reassuring wording across /ui."""
     resp = await client.get("/ui")
     assert resp.status_code == 200
-    for jargon in ("Data Flywheel", "Pilotage Qualité", "Distribution des Ajustements",
-                   "pipeline de production", "Trust score", "Golden sets", "Audit-Ready"):
+    for jargon in (
+        "Data Flywheel",
+        "Pilotage Qualité",
+        "Distribution des Ajustements",
+        "pipeline de production",
+        "Trust score",
+        "Golden sets",
+        "Audit-Ready",
+    ):
         assert jargon not in resp.text, jargon
-    for plain in ("Apprentissage continu", "Indice de confiance",
-                  "Journal d'audit & preuve", "Répartition des risques"):
+    for plain in (
+        "Apprentissage continu",
+        "Indice de confiance",
+        "Journal d'audit & preuve",
+        "Répartition des risques",
+    ):
         assert plain in resp.text, plain
     # "Grand livre" survives only as the accounting document type, never as a UI title.
     assert "Grand livre d'audit" not in resp.text

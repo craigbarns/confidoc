@@ -1,7 +1,7 @@
 """ConfiDoc Backend — Review Agent Node: Filter."""
 
-from app.services.review.state import ReviewState
 from app.services.review.constants import ALARMIST_KEYWORDS, DOWNGRADE_TRIGGERS
+from app.services.review.state import ReviewState
 
 
 async def filter_node(state: ReviewState) -> ReviewState:

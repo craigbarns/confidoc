@@ -1,9 +1,10 @@
 """ConfiDoc Backend — Review Agent Node: Synthesize."""
 
 import json
+
 from app.services.review import llm
-from app.services.review.state import ReviewState
 from app.services.review.constants import GUARDRAILS
+from app.services.review.state import ReviewState
 
 
 async def synthesize_node(state: ReviewState) -> ReviewState:
@@ -78,9 +79,15 @@ Reponds en JSON strict:
     return {
         **state,
         "review_note": parsed.get("resume_executif", ""),
-        "demandes_formelles": [str(x) for x in (parsed.get("demandes_formelles") or []) if str(x).strip()][:12],
-        "pieces_a_verifier": [str(x) for x in (parsed.get("pieces_a_verifier") or []) if str(x).strip()][:12],
-        "prochaines_actions": [str(x) for x in (parsed.get("prochaines_actions") or []) if str(x).strip()][:12],
+        "demandes_formelles": [
+            str(x) for x in (parsed.get("demandes_formelles") or []) if str(x).strip()
+        ][:12],
+        "pieces_a_verifier": [
+            str(x) for x in (parsed.get("pieces_a_verifier") or []) if str(x).strip()
+        ][:12],
+        "prochaines_actions": [
+            str(x) for x in (parsed.get("prochaines_actions") or []) if str(x).strip()
+        ][:12],
         "confidence": float(parsed.get("confiance", 0.5) or 0.5),
         "verdict": parsed.get("verdict", "reserve"),
         "review_complement": {

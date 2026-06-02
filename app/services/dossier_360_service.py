@@ -163,22 +163,19 @@ def _build_mission_control(
         urgency = "danger"
         headline = f"{at_risk_count} dossier(s) a securiser avant diffusion."
         summary = (
-            "Priorite aux dossiers a risque, aux pieces manquantes "
-            "et aux blocages d'anonymisation."
+            "Priorite aux dossiers a risque, aux pieces manquantes et aux blocages d'anonymisation."
         )
     elif critical_actions:
         urgency = "warning"
         headline = f"{critical_actions} action(s) bloquante(s) a traiter."
         summary = (
-            "Le portefeuille avance, mais certains dossiers doivent etre "
-            "completes avant revue."
+            "Le portefeuille avance, mais certains dossiers doivent etre completes avant revue."
         )
     elif ready_count:
         urgency = "success"
         headline = f"{ready_count} dossier(s) pret(s) pour revue cabinet."
         summary = (
-            "Les pieces essentielles sont suffisantes pour preparer notes, "
-            "exports et controles."
+            "Les pieces essentielles sont suffisantes pour preparer notes, exports et controles."
         )
     else:
         urgency = "warning"
@@ -193,15 +190,13 @@ def _build_mission_control(
     ]
     if risky_dossiers:
         client_names = ", ".join(
-            str(dossier.get("client_name") or "Sans client")
-            for dossier in risky_dossiers[:2]
+            str(dossier.get("client_name") or "Sans client") for dossier in risky_dossiers[:2]
         )
         actions.append(f"Revoir les preuves et mappings sensibles: {client_names}.")
     if top_missing:
         missing = top_missing[0]
         actions.append(
-            f"Collecter en priorite: {missing.get('label')} "
-            f"({missing.get('count')} dossier(s))."
+            f"Collecter en priorite: {missing.get('label')} ({missing.get('count')} dossier(s))."
         )
     blocked_dossier = next((dossier for dossier in dossiers if dossier.get("blockers")), None)
     if blocked_dossier:
@@ -362,8 +357,7 @@ def build_dossier_360(
         "at_risk_dossiers": at_risk,
         "critical_actions": sum(len(dossier["blockers"]) for dossier in dossiers),
         "top_missing_documents": [
-            {"label": label, "count": count}
-            for label, count in missing_counter.most_common(5)
+            {"label": label, "count": count} for label, count in missing_counter.most_common(5)
         ],
     }
 
