@@ -54,6 +54,12 @@ class Settings(BaseSettings):
     )
     DB_POOL_SIZE: int = 20
     DB_MAX_OVERFLOW: int = 30
+    # Schema strategy: Alembic is the source of truth (the Docker entrypoint runs
+    # `alembic upgrade head`). DB_AUTO_INIT controls the startup auto-schema
+    # (create_all + idempotent ALTER/index fallback) — handy for demo/dev and
+    # single-service Railway, but set it to False in a strict, migration-managed
+    # production so the schema is owned solely by Alembic.
+    DB_AUTO_INIT: bool = True
 
     # ---- Redis ----
     REDIS_URL: str = "redis://localhost:6379/0"

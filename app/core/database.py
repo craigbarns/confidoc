@@ -44,8 +44,18 @@ async_session_factory = async_sessionmaker(
 
 
 async def init_database() -> None:
-    """Initialise le schéma minimal si les tables n'existent pas."""
+    """Initialise le schéma minimal si les tables n'existent pas.
+
+    Stratégie : Alembic est la source de vérité du schéma (l'entrypoint Docker
+    lance `alembic upgrade head`). Cet auto-init (create_all + ALTER/index
+    idempotents) est un confort démo/dev et un filet de sécurité mono-service ;
+    désactivable via DB_AUTO_INIT=False en production gérée par migrations.
+    """
     from sqlalchemy import text
+
+    if not settings.DB_AUTO_INIT:
+        logger.info("db_auto_init_disabled", detail="schema managed by Alembic migrations")
+        return
 
     async with engine.begin() as conn:
         try:
