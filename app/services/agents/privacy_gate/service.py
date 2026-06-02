@@ -24,4 +24,3 @@ async def run_privacy_gate(**kwargs: Any) -> dict[str, Any]:
         "evidence": final_state.get("evidence") or {},
         "steps_completed": final_state.get("steps_completed") or [],
     }
-

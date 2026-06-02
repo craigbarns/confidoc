@@ -251,5 +251,7 @@ async def send_beta_welcome_email(lead: dict[str, Any]) -> bool:
         html_body=html_body,
     )
     if sent:
-        logger.info("beta_welcome_email_sent", email_domain=email.split("@")[-1] if "@" in email else "")
+        logger.info(
+            "beta_welcome_email_sent", email_domain=email.split("@")[-1] if "@" in email else ""
+        )
     return sent

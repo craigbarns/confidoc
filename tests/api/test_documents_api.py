@@ -19,11 +19,13 @@ import pytest
 # Routes déclarées (structure)
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestDocumentsRouterStructure:
     """Vérifie que toutes les routes attendues sont bien enregistrées."""
 
     def _get_paths(self):
         from app.api.v1.documents import router
+
         return [r.path for r in router.routes]
 
     def test_list_route_exists(self):
@@ -115,6 +117,7 @@ class TestDocumentsRouterStructure:
         from fastapi.routing import APIRoute
 
         from app.api.v1.documents import router
+
         seen: set[tuple] = set()
         for route in router.routes:
             if not isinstance(route, APIRoute):
@@ -151,6 +154,7 @@ class TestDocumentsRouterStructure:
 # ══════════════════════════════════════════════════════════════════════
 # Authentication requise (401 sans token)
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestDocumentsAuthRequired:
     """Toutes les routes protégées doivent retourner 401 sans JWT."""
@@ -244,6 +248,7 @@ class TestDocumentsAuthRequired:
 # ══════════════════════════════════════════════════════════════════════
 # Faux token : 401 (pas 500)
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestDocumentsFakeToken:
     """Un token invalide doit retourner 401, jamais 500."""

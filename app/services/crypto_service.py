@@ -30,10 +30,10 @@ def encrypt_data(data: str | bytes, master_key: str | None = None) -> str:
     """Encrypt a string or bytes using the master key."""
     if master_key is None:
         master_key = get_settings().ENCRYPTION_MASTER_KEY
-    
+
     key = _derive_key(master_key)
     f = Fernet(key)
-    
+
     payload = data if isinstance(data, bytes) else data.encode("utf-8")
     return f.encrypt(payload).decode("ascii")
 
@@ -44,7 +44,7 @@ def decrypt_data(token: str, master_key: str | None = None) -> str:
         return ""
     if master_key is None:
         master_key = get_settings().ENCRYPTION_MASTER_KEY
-        
+
     try:
         key = _derive_key(master_key)
         f = Fernet(key)
@@ -56,6 +56,7 @@ def decrypt_data(token: str, master_key: str | None = None) -> str:
 
 
 # ── Backward compatible mapping encryption ─────────────────────────────
+
 
 def encrypt_mapping(mapping: dict[str, Any], master_key: str) -> str:
     """Encrypt a mapping dict to a Fernet token string."""
@@ -75,6 +76,7 @@ def decrypt_mapping(token: str, master_key: str) -> dict[str, Any]:
 
 
 # ── SQLAlchemy Type Decorator ──────────────────────────────────────────
+
 
 class EncryptedString(TypeDecorator):
     """A type which provides transparent encryption for strings."""

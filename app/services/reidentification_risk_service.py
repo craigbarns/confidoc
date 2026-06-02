@@ -180,9 +180,12 @@ def analyze_reidentification_risk(
     """Analyze re-identification risk of an anonymized document."""
     if not anonymized_text or not anonymized_text.strip():
         return ReidentificationReport(
-            score=0.0, level="low", signals=[],
+            score=0.0,
+            level="low",
+            signals=[],
             recommendation="Document vide.",
-            quasi_identifiers_count=0, unique_combinations_estimate=0,
+            quasi_identifiers_count=0,
+            unique_combinations_estimate=0,
         )
 
     signals: list[RiskSignal] = []
@@ -208,11 +211,15 @@ def analyze_reidentification_risk(
             continue
 
         categories_found.add(cat)
-        signals.append(RiskSignal(
-            category=cat, description=desc, weight=weight,
-            occurrences=len(real_matches),
-            examples=[v[:80] for v in real_matches[:3]],
-        ))
+        signals.append(
+            RiskSignal(
+                category=cat,
+                description=desc,
+                weight=weight,
+                occurrences=len(real_matches),
+                examples=[v[:80] for v in real_matches[:3]],
+            )
+        )
 
     base_score = min(sum(s.weight * min(s.occurrences, 5) for s in signals), 0.75)
 
@@ -246,12 +253,13 @@ def analyze_reidentification_risk(
     else:
         level = "critical"
         recommendation = (
-            "Anonymisation insuffisante. "
-            "Ne pas partager en l'etat. Renforcer les regles."
+            "Anonymisation insuffisante. Ne pas partager en l'etat. Renforcer les regles."
         )
 
     return ReidentificationReport(
-        score=total_score, level=level, signals=signals,
+        score=total_score,
+        level=level,
+        signals=signals,
         recommendation=recommendation,
         quasi_identifiers_count=sum(s.occurrences for s in signals),
         unique_combinations_estimate=unique_est,

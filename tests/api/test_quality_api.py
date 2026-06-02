@@ -10,7 +10,6 @@ import pytest
 from sqlalchemy.sql import operators
 from sqlalchemy.sql.elements import BinaryExpression, BooleanClauseList
 
-
 # ──────────────────────────────────────────────────────────────────────
 # Route registration
 # ──────────────────────────────────────────────────────────────────────
@@ -134,7 +133,7 @@ class _FakeResult:
     def scalar_one_or_none(self) -> Any:
         return self._rows[0] if self._rows else None
 
-    def scalars(self) -> "_FakeResult":
+    def scalars(self) -> _FakeResult:
         return self
 
     def all(self) -> list[Any]:
@@ -184,19 +183,13 @@ class _FakeAsyncSession:
         target_type = descs[0].get("type") if descs else None
 
         if target is Document or target_type is Document:
-            matches = [
-                d for d in self.documents.values() if self._eval(stmt.whereclause, d)
-            ]
+            matches = [d for d in self.documents.values() if self._eval(stmt.whereclause, d)]
             return _FakeResult([m.id for m in matches])
 
         if target is GoldenCaseDraft or target_type is GoldenCaseDraft:
-            matches = [
-                d for d in self.drafts.values() if self._eval(stmt.whereclause, d)
-            ]
+            matches = [d for d in self.drafts.values() if self._eval(stmt.whereclause, d)]
             # Approximate ORDER BY created_at DESC for the list endpoint.
-            matches.sort(
-                key=lambda x: getattr(x, "created_at", 0) or 0, reverse=True
-            )
+            matches.sort(key=lambda x: getattr(x, "created_at", 0) or 0, reverse=True)
             return _FakeResult(matches)
 
         return _FakeResult([])
@@ -325,9 +318,7 @@ async def test_create_validates_required_fields(app_with_overrides, client):
 
 
 @pytest.mark.asyncio
-async def test_create_rejects_document_from_other_org(
-    app_with_overrides, client
-):
+async def test_create_rejects_document_from_other_org(app_with_overrides, client):
     _, db, set_user = app_with_overrides
     org_id = uuid.uuid4()
     other_org_id = uuid.uuid4()
@@ -410,26 +401,20 @@ async def test_list_filters_by_status_and_doc_type(app_with_overrides, client):
         )
         db.add(d)
 
-    resp = await client.get(
-        "/api/v1/quality/golden-drafts?status=draft&document_type=invoice"
-    )
+    resp = await client.get("/api/v1/quality/golden-drafts?status=draft&document_type=invoice")
     assert resp.status_code == 200
     body = resp.json()
     assert len(body) == 1
     assert body[0]["document_type"] == "invoice"
     assert body[0]["status"] == "draft"
 
-    resp = await client.get(
-        "/api/v1/quality/golden-drafts?error_type=missed_field"
-    )
+    resp = await client.get("/api/v1/quality/golden-drafts?error_type=missed_field")
     assert resp.status_code == 200
     assert len(resp.json()) == 1
 
 
 @pytest.mark.asyncio
-async def test_status_change_updates_persisted_draft(
-    app_with_overrides, client
-):
+async def test_status_change_updates_persisted_draft(app_with_overrides, client):
     _, db, set_user = app_with_overrides
     org_id = uuid.uuid4()
     set_user(uuid.uuid4(), org_id)
@@ -487,9 +472,7 @@ async def test_status_change_blocked_for_other_org(app_with_overrides, client):
 
 
 @pytest.mark.asyncio
-async def test_status_change_invalid_value_returns_422(
-    app_with_overrides, client
-):
+async def test_status_change_invalid_value_returns_422(app_with_overrides, client):
     _, db, set_user = app_with_overrides
     set_user(uuid.uuid4(), uuid.uuid4())
 

@@ -37,6 +37,7 @@ class TestEmailServiceDevMode:
         settings = _make_settings(smtp_host="", is_production=False)
         with patch("app.services.email_service.get_settings", return_value=settings):
             from app.services import email_service
+
             result = await email_service.send_password_reset_email(
                 "user@test.com", "https://example.com/reset?token=abc"
             )
@@ -47,6 +48,7 @@ class TestEmailServiceDevMode:
         settings = _make_settings(smtp_host="", is_production=False)
         with patch("app.services.email_service.get_settings", return_value=settings):
             from app.services import email_service
+
             try:
                 await email_service.send_password_reset_email(
                     "anyone@domain.org", "http://localhost/reset?token=xyz"
@@ -63,6 +65,7 @@ class TestEmailServiceProductionNoSMTP:
         settings = _make_settings(smtp_host="", is_production=True)
         with patch("app.services.email_service.get_settings", return_value=settings):
             from app.services import email_service
+
             result = await email_service.send_password_reset_email(
                 "user@test.com", "https://example.com/reset?token=abc"
             )
@@ -73,6 +76,7 @@ class TestEmailServiceProductionNoSMTP:
         settings = _make_settings(smtp_host="", is_production=True)
         with patch("app.services.email_service.get_settings", return_value=settings):
             from app.services import email_service
+
             try:
                 await email_service.send_password_reset_email(
                     "user@test.com", "https://example.com/reset"
@@ -95,9 +99,12 @@ class TestEmailServiceSMTP:
         settings = _make_settings(smtp_host="smtp.example.com", is_production=False, smtp_tls=True)
         mock_server = self._smtp_ctx_manager()
 
-        with patch("app.services.email_service.get_settings", return_value=settings), \
-             patch("smtplib.SMTP", return_value=mock_server):
+        with (
+            patch("app.services.email_service.get_settings", return_value=settings),
+            patch("smtplib.SMTP", return_value=mock_server),
+        ):
             from app.services import email_service
+
             result = await email_service.send_password_reset_email(
                 "dest@test.com", "https://app.io/reset?token=tok"
             )
@@ -108,9 +115,12 @@ class TestEmailServiceSMTP:
         settings = _make_settings(smtp_host="smtp.example.com", is_production=False, smtp_tls=True)
         mock_server = self._smtp_ctx_manager()
 
-        with patch("app.services.email_service.get_settings", return_value=settings), \
-             patch("smtplib.SMTP", return_value=mock_server):
+        with (
+            patch("app.services.email_service.get_settings", return_value=settings),
+            patch("smtplib.SMTP", return_value=mock_server),
+        ):
             from app.services import email_service
+
             await email_service.send_password_reset_email(
                 "dest@test.com", "https://app.io/reset?token=tok"
             )
@@ -120,9 +130,12 @@ class TestEmailServiceSMTP:
     async def test_smtp_error_returns_false(self):
         settings = _make_settings(smtp_host="smtp.example.com", is_production=False, smtp_tls=True)
 
-        with patch("app.services.email_service.get_settings", return_value=settings), \
-             patch("smtplib.SMTP", side_effect=smtplib.SMTPException("connexion refusée")):
+        with (
+            patch("app.services.email_service.get_settings", return_value=settings),
+            patch("smtplib.SMTP", side_effect=smtplib.SMTPException("connexion refusée")),
+        ):
             from app.services import email_service
+
             result = await email_service.send_password_reset_email(
                 "dest@test.com", "https://app.io/reset?token=tok"
             )
@@ -132,9 +145,12 @@ class TestEmailServiceSMTP:
     async def test_smtp_timeout_returns_false(self):
         settings = _make_settings(smtp_host="smtp.example.com", is_production=False, smtp_tls=True)
 
-        with patch("app.services.email_service.get_settings", return_value=settings), \
-             patch("smtplib.SMTP", side_effect=TimeoutError("timeout")):
+        with (
+            patch("app.services.email_service.get_settings", return_value=settings),
+            patch("smtplib.SMTP", side_effect=TimeoutError("timeout")),
+        ):
             from app.services import email_service
+
             result = await email_service.send_password_reset_email(
                 "dest@test.com", "https://app.io/reset"
             )
@@ -145,9 +161,12 @@ class TestEmailServiceSMTP:
         settings = _make_settings(smtp_host="smtp.example.com", is_production=False, smtp_tls=True)
         mock_server = self._smtp_ctx_manager()
 
-        with patch("app.services.email_service.get_settings", return_value=settings), \
-             patch("smtplib.SMTP", return_value=mock_server):
+        with (
+            patch("app.services.email_service.get_settings", return_value=settings),
+            patch("smtplib.SMTP", return_value=mock_server),
+        ):
             from app.services import email_service
+
             result = await email_service.send_beta_welcome_email(
                 {
                     "email": "dest@test.com",

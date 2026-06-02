@@ -320,9 +320,7 @@ async def test_export_fec_uses_live_extraction_from_anonymized_text(monkeypatch)
         calls["doc_type"] = doc_type
         return {
             "type_document": "facture",
-            "montants_cles": [
-                {"libelle": "Honoraires", "montant": 1200.0, "pcg_code": "622600"}
-            ],
+            "montants_cles": [{"libelle": "Honoraires", "montant": 1200.0, "pcg_code": "622600"}],
         }
 
     monkeypatch.setattr(_doc_export, "_get_user_document_or_404", fake_get_document)

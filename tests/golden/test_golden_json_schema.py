@@ -12,7 +12,9 @@ ROOT = Path(__file__).resolve().parents[2]
 
 def test_golden_minimal_conforms_to_schema() -> None:
     schema = json.loads((ROOT / "golden" / "golden_schema.json").read_text(encoding="utf-8"))
-    instance = json.loads((ROOT / "golden" / "golden_sets.minimal.json").read_text(encoding="utf-8"))
+    instance = json.loads(
+        (ROOT / "golden" / "golden_sets.minimal.json").read_text(encoding="utf-8")
+    )
     jsonschema.validate(instance=instance, schema=schema)
 
 

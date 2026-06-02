@@ -1,9 +1,10 @@
 """ConfiDoc Backend — Review Agent Node: Analyze."""
 
 import json
+
 from app.services.review import llm
-from app.services.review.state import ReviewState, build_docling_context
 from app.services.review.constants import GUARDRAILS
+from app.services.review.state import ReviewState, build_docling_context
 
 
 async def analyze_node(state: ReviewState) -> ReviewState:

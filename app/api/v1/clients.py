@@ -3,8 +3,9 @@
 from __future__ import annotations
 
 import uuid
-from fastapi import APIRouter, status, Query
-from sqlalchemy import select, desc
+
+from fastapi import APIRouter, Query, status
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
@@ -32,10 +33,7 @@ async def list_clients(
     """Retourne la liste des clients pour l'organisation de l'utilisateur."""
     result = await db.execute(
         select(Client)
-        .where(
-            Client.org_id == current_user.org_id,
-            Client.is_deleted.is_(False)
-        )
+        .where(Client.org_id == current_user.org_id, Client.is_deleted.is_(False))
         .order_by(Client.name)
         .offset(skip)
         .limit(limit)
@@ -55,10 +53,7 @@ async def create_client(
     db: DbSession,
 ) -> Client:
     """Crée un nouveau client rattaché à l'organisation."""
-    client = Client(
-        **client_in.model_dump(),
-        org_id=current_user.org_id
-    )
+    client = Client(**client_in.model_dump(), org_id=current_user.org_id)
     db.add(client)
     await db.commit()
     await db.refresh(client)
@@ -82,7 +77,7 @@ async def get_client(
         select(Client).where(
             Client.id == client_id,
             Client.org_id == current_user.org_id,
-            Client.is_deleted.is_(False)
+            Client.is_deleted.is_(False),
         )
     )
     client = result.scalar_one_or_none()
@@ -108,17 +103,17 @@ async def update_client(
         select(Client).where(
             Client.id == client_id,
             Client.org_id == current_user.org_id,
-            Client.is_deleted.is_(False)
+            Client.is_deleted.is_(False),
         )
     )
     client = result.scalar_one_or_none()
     if not client:
         raise http_404("Client non trouvé")
-    
+
     update_data = client_in.model_dump(exclude_unset=True)
     for field, value in update_data.items():
         setattr(client, field, value)
-    
+
     await db.commit()
     await db.refresh(client)
     logger.info("client_updated", client_id=str(client.id), user_id=str(current_user.id))
@@ -141,16 +136,17 @@ async def delete_client(
         select(Client).where(
             Client.id == client_id,
             Client.org_id == current_user.org_id,
-            Client.is_deleted.is_(False)
+            Client.is_deleted.is_(False),
         )
     )
     client = result.scalar_one_or_none()
     if not client:
         raise http_404("Client non trouvé")
-    
+
     client.is_deleted = True
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
+
     client.deleted_at = datetime.now(UTC)
-    
+
     await db.commit()
     logger.info("client_deleted", client_id=str(client_id), user_id=str(current_user.id))

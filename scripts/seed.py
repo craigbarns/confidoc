@@ -91,9 +91,7 @@ async def create_system_roles(db: AsyncSession) -> None:
     """Crée les rôles par défaut s'ils n'existent pas."""
     for role_data in SYSTEM_ROLES:
         result = await db.execute(
-            select(Role).where(
-                Role.name == role_data["name"], Role.org_id.is_(None)
-            )
+            select(Role).where(Role.name == role_data["name"], Role.org_id.is_(None))
         )
         existing_role = result.scalars().first()
 

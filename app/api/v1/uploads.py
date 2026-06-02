@@ -170,23 +170,25 @@ async def upload_document(
             raise http_400(f"Fichier rejeté : {str(scan_err)}") from scan_err
 
         org_id = getattr(request.state, "org_id", None)
-        request_hash = build_request_hash({
-            "route": "POST /api/v1/uploads",
-            "filename": filename,
-            "extension": extension,
-            "size": size,
-            "sha256": sha256_hash.hexdigest(),
-            "auto_anonymize": auto_anonymize,
-            "profile": profile,
-            "document_type": document_type,
-            **_upload_metadata_fingerprint(
-                client_name=client_name,
-                client_id=client_id,
-                dossier_id=dossier_id,
-                exercice=exercice,
-                doc_category=doc_category,
-            ),
-        })
+        request_hash = build_request_hash(
+            {
+                "route": "POST /api/v1/uploads",
+                "filename": filename,
+                "extension": extension,
+                "size": size,
+                "sha256": sha256_hash.hexdigest(),
+                "auto_anonymize": auto_anonymize,
+                "profile": profile,
+                "document_type": document_type,
+                **_upload_metadata_fingerprint(
+                    client_name=client_name,
+                    client_id=client_id,
+                    dossier_id=dossier_id,
+                    exercice=exercice,
+                    doc_category=doc_category,
+                ),
+            }
+        )
         replay = await get_idempotency_replay(
             db,
             user_id=current_user.id,
@@ -300,7 +302,7 @@ async def _upload_document_body(
             select(Client).where(
                 Client.name.ilike(resolved_client_name),
                 Client.org_id == org_id,
-                Client.is_deleted.is_(False)
+                Client.is_deleted.is_(False),
             )
         )
         client = client_res.scalar_one_or_none()
@@ -323,6 +325,7 @@ async def _upload_document_body(
     raw_text = ""
     try:
         from app.services.anonymization_service import extract_text_from_file
+
         raw_text = await extract_text_from_file(file_path.read_bytes(), extension) or ""
     except Exception:
         pass
@@ -352,7 +355,7 @@ async def _upload_document_body(
             select(Dossier).where(
                 Dossier.client_id == resolved_client_id,
                 Dossier.exercice == resolved_exercice,
-                Dossier.is_deleted.is_(False)
+                Dossier.is_deleted.is_(False),
             )
         )
         dossier = dossier_res.scalar_one_or_none()
@@ -373,6 +376,7 @@ async def _upload_document_body(
         logger.warning("external_storage_failed", error=str(exc))
         storage_backend = "database"
         from uuid import uuid4
+
         storage_key = f"db://{sha256}.{uuid4().hex}.{extension}"
 
     uploaded_by_snapshot = str(current_user.id)
@@ -497,7 +501,8 @@ async def _upload_document_body(
             "exercice_detected": suggestions["exercice"],
             "doc_category_detected": suggestions["doc_category"],
             "auto_filled": [
-                k for k, v in [
+                k
+                for k, v in [
                     ("exercice", not exercice.strip() and suggestions["exercice"]),
                     ("doc_category", not doc_category.strip() and suggestions["doc_category"]),
                 ]
@@ -581,35 +586,39 @@ async def upload_batch(
                 except SandboxError as scan_err:
                     raise http_400(f"Fichier rejeté : {str(scan_err)}") from scan_err
 
-                temp_uploads.append({
-                    "file": file,
-                    "temp_path": temp_path,
-                    "filename": filename,
-                    "extension": extension,
-                    "size": size,
-                    "sha256": sha256_hash.hexdigest(),
-                })
-
-            request_hash = build_request_hash({
-                "route": "POST /api/v1/uploads/batch",
-                "files": [
+                temp_uploads.append(
                     {
-                        "filename": item["filename"],
-                        "extension": item["extension"],
-                        "size": item["size"],
-                        "sha256": item["sha256"],
+                        "file": file,
+                        "temp_path": temp_path,
+                        "filename": filename,
+                        "extension": extension,
+                        "size": size,
+                        "sha256": sha256_hash.hexdigest(),
                     }
-                    for item in temp_uploads
-                ],
-                "auto_anonymize": auto_anonymize,
-                "profile": profile,
-                "document_type": document_type,
-                **_upload_metadata_fingerprint(
-                    client_name=client_name,
-                    exercice=exercice,
-                    doc_category=doc_category,
-                ),
-            })
+                )
+
+            request_hash = build_request_hash(
+                {
+                    "route": "POST /api/v1/uploads/batch",
+                    "files": [
+                        {
+                            "filename": item["filename"],
+                            "extension": item["extension"],
+                            "size": item["size"],
+                            "sha256": item["sha256"],
+                        }
+                        for item in temp_uploads
+                    ],
+                    "auto_anonymize": auto_anonymize,
+                    "profile": profile,
+                    "document_type": document_type,
+                    **_upload_metadata_fingerprint(
+                        client_name=client_name,
+                        exercice=exercice,
+                        doc_category=doc_category,
+                    ),
+                }
+            )
             replay = await get_idempotency_replay(
                 db,
                 user_id=current_user.id,
@@ -650,11 +659,13 @@ async def upload_batch(
                 except Exception:
                     await db.rollback()
                     failed += 1
-                    batch_results.append({
-                        "status": "error",
-                        "original_filename": item["filename"],
-                        "error": "Upload impossible pour ce fichier.",
-                    })
+                    batch_results.append(
+                        {
+                            "status": "error",
+                            "original_filename": item["filename"],
+                            "error": "Upload impossible pour ce fichier.",
+                        }
+                    )
 
             final_result = {
                 "batch_size": len(files),
@@ -743,11 +754,13 @@ async def upload_batch(
             with contextlib.suppress(Exception):
                 await db.rollback()
             logger.warning("batch_upload_file_failed", filename=filename, error=str(exc))
-            results.append({
-                "status": "error",
-                "original_filename": filename,
-                "error": "Upload impossible pour ce fichier.",
-            })
+            results.append(
+                {
+                    "status": "error",
+                    "original_filename": filename,
+                    "error": "Upload impossible pour ce fichier.",
+                }
+            )
             failed += 1
         finally:
             if temp_path and os.path.exists(temp_path):

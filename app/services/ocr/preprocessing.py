@@ -9,12 +9,14 @@ logger = get_logger(__name__)
 
 try:
     from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -24,7 +26,7 @@ def preprocess_image_for_ocr(img: "Image.Image") -> "Image.Image":
     """Apply a multi-step preprocessing pipeline to boost OCR accuracy."""
     if not HAS_PIL:
         return img
-        
+
     # 1. Grayscale
     img = img.convert("L")
 
@@ -60,7 +62,7 @@ def _deskew_image(img: "Image.Image") -> "Image.Image":
     """Deskew a grayscale image by detecting dominant line angle."""
     if not HAS_NUMPY:
         return img
-        
+
     # Compute horizontal projection profile variance at different angles
     best_angle = 0.0
     best_score = 0.0

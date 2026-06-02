@@ -1,2 +1,1 @@
 """ConfiDoc agent services."""
-

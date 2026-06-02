@@ -42,9 +42,7 @@ LEGAL_DENOMINATION_RE = re.compile(
     r"(?P<name>[A-ZÀ-ÖØ-Ý0-9][A-ZÀ-ÖØ-Ý0-9&' \-]{2,60})"
     r"(?=\s+(?:\[|SIREN|N[°o]|%|\||$))"
 )
-CAPITAL_HOLDER_RE = re.compile(
-    r"(?i)\bNom\s+complet\s*\|\s*(?P<name>[^|\n]{3,80}?)(?=\s*\|)"
-)
+CAPITAL_HOLDER_RE = re.compile(r"(?i)\bNom\s+complet\s*\|\s*(?P<name>[^|\n]{3,80}?)(?=\s*\|)")
 BIRTH_TABLE_DATE_RE = re.compile(
     r"(?i)\bNaissance\s*:\s*\|\s*Date\s*\|\s*"
     r"(?P<date>\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})"
@@ -299,8 +297,8 @@ def _detect_accounting_sensitive_values(text: str, matches: list[dict[str, Any]]
         clean = line.strip()
         if not clean:
             continue
-        previous_lines = [item[2].strip() for item in lines[max(0, index - 3):index]]
-        next_lines = [item[2].strip() for item in lines[index + 1:index + 4]]
+        previous_lines = [item[2].strip() for item in lines[max(0, index - 3) : index]]
+        next_lines = [item[2].strip() for item in lines[index + 1 : index + 4]]
         context = "\n".join([*previous_lines, clean, *next_lines])
         if not _is_sensitive_accounting_heading(clean, context):
             continue
@@ -385,8 +383,7 @@ def _detect_identity_block(text: str, matches: list[dict[str, Any]]) -> None:
         ):
             replacement = TOKEN_PERSONNE
         elif any(
-            kw in clean.lower()
-            for kw in ("rue", "avenue", "boulevard", "résidence", "residence")
+            kw in clean.lower() for kw in ("rue", "avenue", "boulevard", "résidence", "residence")
         ):
             replacement = TOKEN_ADRESSE
         elif any(kw in clean.lower() for kw in ("sci", "sas", "sarl", "eurl", "selarl")):

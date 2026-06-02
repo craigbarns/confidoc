@@ -233,8 +233,7 @@ class TestUploadHappyPath:
 
         # 1. The endpoint did not 500 — this is the regression guard.
         assert response.status_code == 201, (
-            f"Upload happy path must return 201, got "
-            f"{response.status_code}: {response.text}"
+            f"Upload happy path must return 201, got {response.status_code}: {response.text}"
         )
 
         body = response.json()

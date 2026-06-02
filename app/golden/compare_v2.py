@@ -46,17 +46,15 @@ def compare_minimal_expected(expected: dict[str, Any], actual: dict[str, Any]) -
         diffs.append(f"doc_type: attendu={exp_doc_type!r} obtenu={actual.get('doc_type')!r}")
 
     exp_extractor = expected.get("extractor_name")
-    act_extractor = ((actual.get("provenance") or {}).get("extractor_name"))
+    act_extractor = (actual.get("provenance") or {}).get("extractor_name")
     if exp_extractor is not None and act_extractor != exp_extractor:
-        diffs.append(
-            f"extractor_name: attendu={exp_extractor!r} obtenu={act_extractor!r}"
-        )
+        diffs.append(f"extractor_name: attendu={exp_extractor!r} obtenu={act_extractor!r}")
 
     # Critical fields
     exp_fields = expected.get("critical_fields") or {}
     act_fields = actual.get("fields") or {}
     for key, exp_val in exp_fields.items():
-        got = ((act_fields.get(key) or {}).get("value"))
+        got = (act_fields.get(key) or {}).get("value")
         if exp_val is None:
             if got not in (None, "", []):
                 diffs.append(f"critical_fields.{key}: attendu=null obtenu={got!r}")
@@ -103,4 +101,3 @@ def compare_minimal_expected(expected: dict[str, Any], actual: dict[str, Any]) -
                 diffs.append(f"quality.{flag}: attendu={exp_v} obtenu={got_v}")
 
     return diffs
-

@@ -173,6 +173,7 @@ async def build_anonymization_llm(
 
     # 4. Final Cleanup
     from app.services.anonymization.cleanup import clean_ocr_artifacts
+
     preview_text = clean_ocr_artifacts(preview_text)
 
     # 5. Persistence
@@ -229,16 +230,21 @@ async def build_anonymization_llm(
     # RAG embedding
     try:
         from app.services.rag_service import embed_document
+
         await embed_document(db, document.id, preview_text)
     except Exception:
         pass
 
-    return preview_text, detections, {
-        "method": method,
-        "detections_count": len(detections),
-        "entity_summary": registry.export_entity_summary(),
-        "registry_raw_mapping": registry.export_raw_mapping(),
-    }
+    return (
+        preview_text,
+        detections,
+        {
+            "method": method,
+            "detections_count": len(detections),
+            "entity_summary": registry.export_entity_summary(),
+            "registry_raw_mapping": registry.export_raw_mapping(),
+        },
+    )
 
 
 async def build_anonymization_preview(

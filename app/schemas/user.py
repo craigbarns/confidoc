@@ -1,8 +1,8 @@
 """ConfiDoc Backend — Schemas User."""
 
+import uuid
 from datetime import datetime
 from typing import Optional
-import uuid
 
 from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
@@ -18,8 +18,8 @@ class UserCreate(UserBase):
 
 
 class UserUpdate(BaseModel):
-    first_name: Optional[str] = Field(None, max_length=100)
-    last_name: Optional[str] = Field(None, max_length=100)
+    first_name: str | None = Field(None, max_length=100)
+    last_name: str | None = Field(None, max_length=100)
     # email: Le changement d'email demande un flow spécial
     # password: Le changement mdp demande un endpoint spécial
 
@@ -28,7 +28,7 @@ class UserResponse(UserBase):
     id: uuid.UUID
     is_active: bool
     is_platform_admin: bool
-    last_login_at: Optional[datetime]
+    last_login_at: datetime | None
     created_at: datetime
     updated_at: datetime
 
@@ -37,8 +37,9 @@ class UserResponse(UserBase):
 
 class MemberResponse(BaseModel):
     """Réponse quand on liste les membres d'une organisation."""
+
     user: UserResponse
     role_name: str
-    joined_at: Optional[datetime]
+    joined_at: datetime | None
 
     model_config = ConfigDict(from_attributes=True)

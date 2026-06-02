@@ -23,6 +23,7 @@ logger = get_logger(__name__)
 
 class SandboxError(Exception):
     """Raised when a file fails sandbox validation."""
+
     pass
 
 

@@ -247,9 +247,7 @@ async def test_authenticated_demo_materializes_ready_snapshot_without_live_pipel
     versions = [obj for obj in db.added if obj.__class__.__name__ == "DocumentVersion"]
     detections = [obj for obj in db.added if obj.__class__.__name__ == "EntityDetection"]
     mappings = [obj for obj in db.added if obj.__class__.__name__ == "PseudonymMapping"]
-    audit_actions = [
-        obj.action for obj in db.added if obj.__class__.__name__ == "AuditLog"
-    ]
+    audit_actions = [obj.action for obj in db.added if obj.__class__.__name__ == "AuditLog"]
 
     assert {version.version_type.value for version in versions} == {
         "original_text",

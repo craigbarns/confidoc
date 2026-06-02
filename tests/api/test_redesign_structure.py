@@ -45,9 +45,7 @@ async def test_style_css_runtime_bridge_wins_after_legacy_tokens(client):
     resp = await client.get("/static/css/style.css")
     assert resp.status_code == 200
     css = resp.text
-    assert css.rfind("FINAL REDESIGN TOKEN BRIDGE") > css.rfind(
-        "linear-gradient(135deg, #6366f1"
-    )
+    assert css.rfind("FINAL REDESIGN TOKEN BRIDGE") > css.rfind("linear-gradient(135deg, #6366f1")
     assert _last_css_var(css, "--grad-brand") == "var(--accent)"
     assert _last_css_var(css, "--glass") == "none"
     assert _last_css_var(css, "--accent") == "#047857"
@@ -90,6 +88,7 @@ async def test_components_css_defines_layout_pieces(client):
 
 # --- Phase 2 · Signature layer -------------------------------------------------
 
+
 @pytest.mark.anyio
 async def test_signatures_define_token_card(client):
     resp = await client.get("/static/css/signatures.css")
@@ -127,6 +126,7 @@ async def test_privacy_lens_uses_safe_dom_rendering(client):
 
 # --- Phase 3 · Navigation ------------------------------------------------------
 
+
 @pytest.mark.anyio
 async def test_sidebar_groups_nav_into_three_zones(client):
     resp = await client.get("/ui")
@@ -160,6 +160,7 @@ async def test_redesign_actions_are_wired_in_app_js(client):
 
 # --- Phase 4 · Documents list --------------------------------------------------
 
+
 @pytest.mark.anyio
 async def test_documents_panel_uses_segments_and_filters(client):
     resp = await client.get("/ui")
@@ -172,6 +173,7 @@ async def test_documents_panel_uses_segments_and_filters(client):
 
 
 # --- Phase 5 · Document detail -------------------------------------------------
+
 
 @pytest.mark.anyio
 async def test_document_detail_layout_three_columns(client):
@@ -188,6 +190,7 @@ async def test_document_detail_layout_three_columns(client):
 
 
 # --- Phase 6 · Accueil ---------------------------------------------------------
+
 
 @pytest.mark.anyio
 async def test_accueil_uses_hero_literary(client):
@@ -231,7 +234,7 @@ async def test_home_briefing_renderer_is_wired(client):
     js = resp.text
     assert "function renderHomeBriefing" in js
     assert "renderHomeBriefing(data, summary, dossier360)" in js
-    assert 'home-priority-count' in js
-    assert 'home-priority-list' in js
-    assert 'home-timeline' in js
-    assert 'home-kpis' in js
+    assert "home-priority-count" in js
+    assert "home-priority-list" in js
+    assert "home-timeline" in js
+    assert "home-kpis" in js

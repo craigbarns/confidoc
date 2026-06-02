@@ -4,14 +4,14 @@ from app.models.audit_log import AuditLog
 from app.models.base import Base, BaseModel, TenantModel, TimestampMixin
 from app.models.beta_lead import BetaLead
 from app.models.client import Client
-from app.models.dossier import Dossier
 from app.models.document import Document, DocumentStatus
 from app.models.document_chunk import DocumentChunk
 from app.models.document_version import DocumentVersion, DocumentVersionType
+from app.models.dossier import Dossier
 from app.models.entity_detection import EntityDetection
 from app.models.gdpr_consent import GDPRConsent
-from app.models.golden_case_draft import GoldenCaseDraft, GoldenDraftStatus
 from app.models.gdpr_register import GDPRProcessingRegister
+from app.models.golden_case_draft import GoldenCaseDraft, GoldenDraftStatus
 from app.models.integration import ApiKey, IdempotencyRecord, WebhookDelivery, WebhookEndpoint
 from app.models.llm_request import LlmRequest
 from app.models.membership import Membership
@@ -23,20 +23,35 @@ from app.models.role import Role
 from app.models.user import User
 
 __all__ = [
-    "Base", "BaseModel", "TenantModel", "TimestampMixin",
-    "Organization", "ProfessionType", "PlanType",
-    "User", "Role", "Membership", "RefreshToken",
-    "Client", "Dossier",
-    "Document", "DocumentStatus",
+    "Base",
+    "BaseModel",
+    "TenantModel",
+    "TimestampMixin",
+    "Organization",
+    "ProfessionType",
+    "PlanType",
+    "User",
+    "Role",
+    "Membership",
+    "RefreshToken",
+    "Client",
+    "Dossier",
+    "Document",
+    "DocumentStatus",
     "DocumentChunk",
-    "DocumentVersion", "DocumentVersionType",
+    "DocumentVersion",
+    "DocumentVersionType",
     "EntityDetection",
-    "GoldenCaseDraft", "GoldenDraftStatus",
+    "GoldenCaseDraft",
+    "GoldenDraftStatus",
     "LlmRequest",
     "AuditLog",
     "GDPRConsent",
     "GDPRProcessingRegister",
-    "ApiKey", "WebhookEndpoint", "IdempotencyRecord", "WebhookDelivery",
+    "ApiKey",
+    "WebhookEndpoint",
+    "IdempotencyRecord",
+    "WebhookDelivery",
     "PasswordResetToken",
     "PseudonymMapping",
     "BetaLead",

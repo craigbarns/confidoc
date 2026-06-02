@@ -26,6 +26,7 @@ logger = get_logger(__name__)
 
 # ── Normalization ─────────────────────────────────────────────────────
 
+
 def _normalize_client_name(value: str | None) -> str:
     raw = str(value or "").strip()
     if not raw:
@@ -88,6 +89,7 @@ def _infer_semantic_type(placeholder: str) -> str:
 
 # ── Document access ───────────────────────────────────────────────────
 
+
 async def _get_user_document_or_404(
     db: AsyncSession,
     document_id: str,
@@ -125,6 +127,7 @@ async def _get_user_document_or_404(
 
 def _read_file_or_404(document: Document) -> bytes:
     from app.services.storage_service import read_document_bytes
+
     try:
         return read_document_bytes(document)
     except Exception as exc:
@@ -133,9 +136,7 @@ def _read_file_or_404(document: Document) -> bytes:
     raise http_404("Fichier source introuvable. Ré-uploadez le document.")
 
 
-async def _get_or_create_final_version(
-    db: AsyncSession, document: Document
-) -> DocumentVersion:
+async def _get_or_create_final_version(db: AsyncSession, document: Document) -> DocumentVersion:
     result = await db.execute(
         select(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
@@ -154,9 +155,7 @@ async def _get_or_create_final_version(
     )
     preview = preview_result.scalar_one_or_none()
     if not preview:
-        raise http_404(
-            "Aucune version anonymisée disponible. Lancez d'abord l'anonymisation."
-        )
+        raise http_404("Aucune version anonymisée disponible. Lancez d'abord l'anonymisation.")
 
     final = DocumentVersion(
         document_id=document.id,
@@ -170,6 +169,7 @@ async def _get_or_create_final_version(
 
 async def _get_original_text(db: AsyncSession, document: Document) -> str:
     from app.services.anonymization_service import extract_text_from_file
+
     result = await db.execute(
         select(DocumentVersion).where(
             DocumentVersion.document_id == document.id,
@@ -208,6 +208,7 @@ async def _check_export_gate(db: AsyncSession, document: Document, current_user:
     user_id = str(getattr(current_user, "id", "unknown"))
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
+
         result = await db.execute(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)

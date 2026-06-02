@@ -6,13 +6,13 @@ d'erreur propre, même si l'API LLM retourne un code d'erreur ou une
 exception réseau.
 """
 
-import pytest
-import httpx
-
 from unittest.mock import AsyncMock, MagicMock, patch
 
+import httpx
+import pytest
 
 # ── Helpers ────────────────────────────────────────────────────────────
+
 
 async def collect_chunks(async_gen) -> list[str]:
     """Collecte tous les chunks d'un async generator dans une liste."""
@@ -24,8 +24,8 @@ async def collect_chunks(async_gen) -> list[str]:
 
 # ── Tests stream_mistral_response ──────────────────────────────────────
 
-class TestStreamMistralResponse:
 
+class TestStreamMistralResponse:
     @pytest.mark.asyncio
     async def test_disabled_yields_message(self):
         """Si MISTRAL_ENABLED=False, le générateur yielde un message et s'arrête."""
@@ -75,8 +75,10 @@ class TestStreamMistralResponse:
         mock_client_ctx.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.services.mistral_service.get_settings") as mock_settings, \
-             patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        with (
+            patch("app.services.mistral_service.get_settings") as mock_settings,
+            patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx),
+        ):
             s = MagicMock()
             s.MISTRAL_ENABLED = True
             s.MISTRAL_API_KEY = "test-key"
@@ -102,8 +104,10 @@ class TestStreamMistralResponse:
         )
         mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.services.mistral_service.get_settings") as mock_settings, \
-             patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        with (
+            patch("app.services.mistral_service.get_settings") as mock_settings,
+            patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx),
+        ):
             s = MagicMock()
             s.MISTRAL_ENABLED = True
             s.MISTRAL_API_KEY = "test-key"
@@ -115,7 +119,11 @@ class TestStreamMistralResponse:
             chunks = await collect_chunks(stream_mistral_response("test"))
 
         assert len(chunks) == 1
-        assert "délai" in chunks[0].lower() or "timeout" in chunks[0].lower() or "erreur" in chunks[0].lower()
+        assert (
+            "délai" in chunks[0].lower()
+            or "timeout" in chunks[0].lower()
+            or "erreur" in chunks[0].lower()
+        )
 
     @pytest.mark.asyncio
     async def test_network_error_yields_error_not_raises(self):
@@ -123,13 +131,13 @@ class TestStreamMistralResponse:
         from app.services.mistral_service import stream_mistral_response
 
         mock_client_ctx = AsyncMock()
-        mock_client_ctx.__aenter__ = AsyncMock(
-            side_effect=httpx.ConnectError("Connection refused")
-        )
+        mock_client_ctx.__aenter__ = AsyncMock(side_effect=httpx.ConnectError("Connection refused"))
         mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.services.mistral_service.get_settings") as mock_settings, \
-             patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        with (
+            patch("app.services.mistral_service.get_settings") as mock_settings,
+            patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx),
+        ):
             s = MagicMock()
             s.MISTRAL_ENABLED = True
             s.MISTRAL_API_KEY = "test-key"
@@ -174,8 +182,10 @@ class TestStreamMistralResponse:
         mock_client_ctx.__aenter__ = AsyncMock(return_value=mock_client)
         mock_client_ctx.__aexit__ = AsyncMock(return_value=False)
 
-        with patch("app.services.mistral_service.get_settings") as mock_settings, \
-             patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx):
+        with (
+            patch("app.services.mistral_service.get_settings") as mock_settings,
+            patch("app.services.mistral_service.httpx.AsyncClient", return_value=mock_client_ctx),
+        ):
             s = MagicMock()
             s.MISTRAL_ENABLED = True
             s.MISTRAL_API_KEY = "test-key"
@@ -187,5 +197,3 @@ class TestStreamMistralResponse:
             chunks = await collect_chunks(stream_mistral_response("test"))
 
         assert chunks == ["Bonjour", " monde"]
-
-

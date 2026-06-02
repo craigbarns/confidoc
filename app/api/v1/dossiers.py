@@ -3,12 +3,13 @@
 from __future__ import annotations
 
 import uuid
-from fastapi import APIRouter, status, Query
-from sqlalchemy import select, desc
+
+from fastapi import APIRouter, Query, status
+from sqlalchemy import desc, select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
-from app.core.exceptions import http_404, http_400
+from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
 from app.models.client import Client
 from app.models.dossier import Dossier
@@ -33,17 +34,12 @@ async def list_dossiers(
 ) -> list[Dossier]:
     """Liste les dossiers, optionnellement filtrés par client."""
     query = select(Dossier).where(
-        Dossier.org_id == current_user.org_id,
-        Dossier.is_deleted.is_(False)
+        Dossier.org_id == current_user.org_id, Dossier.is_deleted.is_(False)
     )
     if client_id:
         query = query.where(Dossier.client_id == client_id)
-    
-    result = await db.execute(
-        query.order_by(desc(Dossier.exercice))
-        .offset(skip)
-        .limit(limit)
-    )
+
+    result = await db.execute(query.order_by(desc(Dossier.exercice)).offset(skip).limit(limit))
     return list(result.scalars().all())
 
 
@@ -64,7 +60,7 @@ async def create_dossier(
         select(Client).where(
             Client.id == dossier_in.client_id,
             Client.org_id == current_user.org_id,
-            Client.is_deleted.is_(False)
+            Client.is_deleted.is_(False),
         )
     )
     if not client_result.scalar_one_or_none():
@@ -75,16 +71,13 @@ async def create_dossier(
         select(Dossier).where(
             Dossier.client_id == dossier_in.client_id,
             Dossier.exercice == dossier_in.exercice,
-            Dossier.is_deleted.is_(False)
+            Dossier.is_deleted.is_(False),
         )
     )
     if existing.scalar_one_or_none():
         raise http_400("Ce dossier (exercice) existe déjà pour ce client")
 
-    dossier = Dossier(
-        **dossier_in.model_dump(),
-        org_id=current_user.org_id
-    )
+    dossier = Dossier(**dossier_in.model_dump(), org_id=current_user.org_id)
     db.add(dossier)
     await db.commit()
     await db.refresh(dossier)
@@ -107,7 +100,7 @@ async def get_dossier(
         select(Dossier).where(
             Dossier.id == dossier_id,
             Dossier.org_id == current_user.org_id,
-            Dossier.is_deleted.is_(False)
+            Dossier.is_deleted.is_(False),
         )
     )
     dossier = result.scalar_one_or_none()
@@ -131,16 +124,17 @@ async def delete_dossier(
         select(Dossier).where(
             Dossier.id == dossier_id,
             Dossier.org_id == current_user.org_id,
-            Dossier.is_deleted.is_(False)
+            Dossier.is_deleted.is_(False),
         )
     )
     dossier = result.scalar_one_or_none()
     if not dossier:
         raise http_404("Dossier non trouvé")
-    
+
     dossier.is_deleted = True
-    from datetime import datetime, UTC
+    from datetime import UTC, datetime
+
     dossier.deleted_at = datetime.now(UTC)
-    
+
     await db.commit()
     logger.info("dossier_deleted", dossier_id=str(dossier_id))

@@ -13,16 +13,16 @@ def extract_json(raw_text: str) -> dict[str, Any]:
     """Extract and parse JSON from a raw string (potentially containing markdown)."""
     if not raw_text:
         return {}
-        
+
     # Try to find the JSON block
     start = raw_text.find("{")
     end = raw_text.rfind("}")
-    
+
     if start == -1 or end == -1 or start >= end:
         return {}
-        
+
     candidate = raw_text[start : end + 1]
-    
+
     try:
         return json.loads(candidate)
     except json.JSONDecodeError:

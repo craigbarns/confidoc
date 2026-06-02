@@ -1,10 +1,11 @@
 """Tests for soft delete functionality on Document model."""
 
-import pytest
 from datetime import datetime, timezone
 
-from app.models.document import Document, DocumentStatus
+import pytest
+
 from app.models.base import SoftDeleteMixin
+from app.models.document import Document, DocumentStatus
 
 
 class TestSoftDeleteMixin:

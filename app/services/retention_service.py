@@ -96,6 +96,7 @@ async def purge_expired_data(
     # 5) Pseudonym mappings (expired)
     try:
         from app.models.pseudonym_mapping import PseudonymMapping
+
         if retention_mapping_days > 0:
             cutoff = now - timedelta(days=retention_mapping_days)
             delete_stmt = delete(PseudonymMapping).where(PseudonymMapping.created_at < cutoff)

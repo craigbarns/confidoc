@@ -67,8 +67,8 @@ def _get_embed_model() -> Any | None:
 
 # ── Chunking ────────────────────────────────────────────────────────────
 
-CHUNK_SIZE = 512      # target chars per chunk
-CHUNK_OVERLAP = 128   # overlap between chunks for context continuity
+CHUNK_SIZE = 512  # target chars per chunk
+CHUNK_OVERLAP = 128  # overlap between chunks for context continuity
 
 
 def _chunk_text(
@@ -109,6 +109,7 @@ def _chunk_text(
 
 # ── Public API ──────────────────────────────────────────────────────────
 
+
 async def embed_document(
     db: AsyncSession,
     document_id: uuid.UUID,
@@ -125,9 +126,7 @@ async def embed_document(
         return 0
 
     # 1) Remove existing chunks for this document
-    await db.execute(
-        delete(DocumentChunk).where(DocumentChunk.document_id == document_id)
-    )
+    await db.execute(delete(DocumentChunk).where(DocumentChunk.document_id == document_id))
 
     # 2) Chunk
     chunks = _chunk_text(text)

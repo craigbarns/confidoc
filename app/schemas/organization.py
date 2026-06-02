@@ -1,8 +1,8 @@
 """ConfiDoc Backend — Schemas Organization."""
 
+import uuid
 from datetime import datetime
 from typing import Any, Optional
-import uuid
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -19,9 +19,9 @@ class OrganizationCreate(OrganizationBase):
 
 
 class OrganizationUpdate(BaseModel):
-    name: Optional[str] = Field(None, max_length=255)
-    profession_type: Optional[ProfessionType] = None
-    settings: Optional[dict[str, Any]] = None
+    name: str | None = Field(None, max_length=255)
+    profession_type: ProfessionType | None = None
+    settings: dict[str, Any] | None = None
 
 
 class OrganizationResponse(OrganizationBase):

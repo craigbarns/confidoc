@@ -14,8 +14,8 @@ import pytest
 
 from app.api.v1._doc_stats import _calculate_gdpr_score
 
-
 # ── Helpers ───────────────────────────────────────────────────────────
+
 
 def _score(
     total: int = 0,
@@ -34,6 +34,7 @@ def _score(
 # ══════════════════════════════════════════════════════════════════════
 # Score bounds
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestScoreBounds:
     def test_score_is_integer(self):
@@ -69,6 +70,7 @@ class TestScoreBounds:
 # Grade thresholds
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestGradeThresholds:
     def test_grade_a_perfect(self):
         # 40 (success) + 30 (all low risk) + 15 (no failures) + 5 (no pending) = 90
@@ -103,6 +105,7 @@ class TestGradeThresholds:
 # ══════════════════════════════════════════════════════════════════════
 # Breakdown components
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestBreakdownComponents:
     def test_breakdown_keys_present(self):
@@ -155,6 +158,7 @@ class TestBreakdownComponents:
 # Recommendations
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestRecommendations:
     def test_recommendations_list_present(self):
         result = _score(10, {"ready": 10})
@@ -175,7 +179,11 @@ class TestRecommendations:
     def test_critical_risk_triggers_recommendation(self):
         result = _score(10, {"ready": 5}, {"high": 3, "critical": 3, "low": 4})
         joined = " ".join(result["recommendations"])
-        assert "risque" in joined.lower() or "haut risque" in joined.lower() or "mappings" in joined.lower()
+        assert (
+            "risque" in joined.lower()
+            or "haut risque" in joined.lower()
+            or "mappings" in joined.lower()
+        )
 
     def test_no_ready_docs_triggers_recommendation(self):
         result = _score(5, {"uploaded": 5})

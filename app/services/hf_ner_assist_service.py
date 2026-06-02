@@ -40,7 +40,9 @@ def _replacement_token_for_entity(entity_group: str, entity_text: str) -> str | 
     if "LOC" in g or "LOCATION" in g or "GPE" in g:
         # Heuristique: une LOC avec chiffres/tokens d'adresse -> adresse, sinon ville.
         if re.search(r"\b\d{1,4}\b", entity_text) or re.search(
-            r"\b(rue|avenue|bd|boulevard|chemin|place|quai|route)\b", entity_text, flags=re.IGNORECASE
+            r"\b(rue|avenue|bd|boulevard|chemin|place|quai|route)\b",
+            entity_text,
+            flags=re.IGNORECASE,
         ):
             return "[ADDRESS]"
         return "[CITY]"
@@ -131,4 +133,3 @@ async def propose_spans_huggingface_ner(snippet_text: str) -> list[dict[str, Any
         )
 
     return spans
-

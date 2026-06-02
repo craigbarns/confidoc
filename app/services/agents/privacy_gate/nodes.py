@@ -76,9 +76,8 @@ async def evaluate_node(state: PrivacyGateState) -> PrivacyGateState:
                 flags.append("medium_risk_external_use")
     if entity_types.intersection(SENSITIVE_ENTITY_TYPES):
         flags.append("sensitive_entities_detected")
-    if (
-        action in {"external_ai", "share", "demo", "export"}
-        and entity_types.intersection({"IBAN", "BANK", "CARTE_BANCAIRE", "NSS", "SOCIAL_SECURITY"})
+    if action in {"external_ai", "share", "demo", "export"} and entity_types.intersection(
+        {"IBAN", "BANK", "CARTE_BANCAIRE", "NSS", "SOCIAL_SECURITY"}
     ):
         if not state.get("human_validated"):
             if state.get("autopilot_validated"):
@@ -137,7 +136,9 @@ async def decide_node(state: PrivacyGateState) -> PrivacyGateState:
 
     if decision == "allow":
         if "autopilot_validated_external_use" in flags:
-            warnings.append("Contrôles automatiques réussis — validation humaine recommandée pour usage externe.")
+            warnings.append(
+                "Contrôles automatiques réussis — validation humaine recommandée pour usage externe."
+            )
         if risk_level in {"medium", "high"}:
             warnings.append("Usage autorisé avec conservation de la preuve DPO et journal d'audit.")
         if "sensitive_entities_detected" in flags:

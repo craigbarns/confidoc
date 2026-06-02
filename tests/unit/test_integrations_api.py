@@ -16,21 +16,27 @@ def test_api_key_generation_uses_public_prefix():
 
 
 def test_idempotency_hash_is_stable_and_sensitive_to_payload():
-    first = build_request_hash({
-        "route": "POST /api/v1/uploads",
-        "filename": "liasse.pdf",
-        "sha256": "abc",
-    })
-    same = build_request_hash({
-        "sha256": "abc",
-        "filename": "liasse.pdf",
-        "route": "POST /api/v1/uploads",
-    })
-    different = build_request_hash({
-        "route": "POST /api/v1/uploads",
-        "filename": "liasse-v2.pdf",
-        "sha256": "abc",
-    })
+    first = build_request_hash(
+        {
+            "route": "POST /api/v1/uploads",
+            "filename": "liasse.pdf",
+            "sha256": "abc",
+        }
+    )
+    same = build_request_hash(
+        {
+            "sha256": "abc",
+            "filename": "liasse.pdf",
+            "route": "POST /api/v1/uploads",
+        }
+    )
+    different = build_request_hash(
+        {
+            "route": "POST /api/v1/uploads",
+            "filename": "liasse-v2.pdf",
+            "sha256": "abc",
+        }
+    )
     assert first == same
     assert first != different
 

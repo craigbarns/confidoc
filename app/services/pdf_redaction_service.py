@@ -1,6 +1,7 @@
 """ConfiDoc Backend — Visual PDF redaction service (v2)."""
 
 import re
+
 import fitz
 
 from app.core.logging import get_logger
@@ -13,7 +14,9 @@ def redact_pdf_bytes(original_pdf: bytes, sensitive_values: list[str]) -> bytes:
 
     Returns the redacted PDF bytes.
     """
-    cleaned_values = [v.strip() for v in sensitive_values if v and v.strip() and len(v.strip()) >= 3]
+    cleaned_values = [
+        v.strip() for v in sensitive_values if v and v.strip() and len(v.strip()) >= 3
+    ]
     if not cleaned_values:
         return original_pdf
 
@@ -59,7 +62,7 @@ def redact_pdf_bytes(original_pdf: bytes, sensitive_values: list[str]) -> bytes:
             cands.add(digits)
             # Also try with spaces between groups of 3
             if len(digits) >= 9:
-                spaced = " ".join(digits[i:i + 3] for i in range(0, len(digits), 3))
+                spaced = " ".join(digits[i : i + 3] for i in range(0, len(digits), 3))
                 cands.add(spaced)
 
         return cands

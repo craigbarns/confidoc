@@ -107,9 +107,7 @@ def confidence_bucket(citations: list[dict[str, Any]]) -> str:
 
 
 async def generate_copilot_answer(question: str, citations: list[dict[str, Any]]) -> str:
-    context = "\n\n".join(
-        [f"[Source {idx+1}] {c['snippet']}" for idx, c in enumerate(citations)]
-    )
+    context = "\n\n".join([f"[Source {idx + 1}] {c['snippet']}" for idx, c in enumerate(citations)])
     payload = {
         "anonymized_text": context[:9000],
         "user_question": question.strip(),

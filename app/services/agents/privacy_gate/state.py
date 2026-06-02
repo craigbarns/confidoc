@@ -92,4 +92,3 @@ def initial_privacy_gate_state(
         "current_step": "init",
         "steps_completed": [],
     }
-

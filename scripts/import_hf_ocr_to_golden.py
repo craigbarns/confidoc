@@ -14,10 +14,9 @@ import sys
 import urllib.parse
 import urllib.request
 from dataclasses import dataclass
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from pathlib import Path
 from typing import Any
-
 
 ROOT = Path(__file__).resolve().parents[1]
 DEFAULT_CASES_ROOT = ROOT / "golden" / "cases"
@@ -130,9 +129,7 @@ def _extract_text_and_hints(source_key: str, row: dict[str, Any]) -> tuple[str, 
     if source_key == "sroie":
         entities = row.get("entities")
         if isinstance(entities, dict):
-            hints["entities"] = {
-                k: str(v).strip() for k, v in entities.items() if str(v).strip()
-            }
+            hints["entities"] = {k: str(v).strip() for k, v in entities.items() if str(v).strip()}
     elif source_key == "docvqa":
         question = row.get("question") or row.get("query")
         if isinstance(question, str) and question.strip():
@@ -182,7 +179,7 @@ def _write_case(
             "dataset": source.dataset,
             "split": split,
             "row_index": idx,
-            "imported_at": datetime.now(timezone.utc).isoformat(),
+            "imported_at": datetime.now(UTC).isoformat(),
             "hints": hints,
         },
     }
@@ -207,7 +204,7 @@ def _build_report(
     lines = [
         "# OCR Stress Import Report (Hugging Face)",
         "",
-        f"- Generated at: {datetime.now(timezone.utc).isoformat()}",
+        f"- Generated at: {datetime.now(UTC).isoformat()}",
         f"- Cases created: {len(created)}",
         f"- Sources requested: {', '.join(spec_summaries) if spec_summaries else '-'}",
         "",
@@ -320,4 +317,3 @@ def main() -> int:
 
 if __name__ == "__main__":
     raise SystemExit(main())
-

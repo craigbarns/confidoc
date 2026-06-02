@@ -37,12 +37,14 @@ def _extract_user_id_from_request(request: Request) -> str | None:
         return None
     try:
         from app.core.security import decode_access_token
+
         payload = decode_access_token(token)
         if payload and "sub" in payload:
             return str(payload["sub"])
     except Exception:
         pass
     return None
+
 
 # Only audit mutating methods on API paths
 _AUDITED_METHODS = {"POST", "PUT", "PATCH", "DELETE"}

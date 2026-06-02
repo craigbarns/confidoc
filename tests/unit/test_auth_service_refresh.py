@@ -3,7 +3,7 @@
 from __future__ import annotations
 
 import uuid
-from datetime import datetime, timedelta, timezone
+from datetime import UTC, datetime, timedelta, timezone
 from types import SimpleNamespace
 from unittest.mock import AsyncMock, MagicMock
 
@@ -18,7 +18,7 @@ def _valid_rt() -> SimpleNamespace:
         id=uuid.uuid4(),
         user_id=uuid.uuid4(),
         is_revoked=False,
-        expires_at=datetime.now(timezone.utc) + timedelta(days=1),
+        expires_at=datetime.now(UTC) + timedelta(days=1),
     )
 
 
@@ -37,9 +37,7 @@ async def test_refresh_concurrent_delete_zero_rows_401_and_rollback(monkeypatch)
     db.execute = AsyncMock(side_effect=[select_result, delete_result])
     db.rollback = AsyncMock()
 
-    monkeypatch.setattr(
-        auth_service, "hash_token", lambda _v: "hashed"
-    )
+    monkeypatch.setattr(auth_service, "hash_token", lambda _v: "hashed")
 
     with pytest.raises(HTTPException) as exc:
         await auth_service.refresh_access_token(db, "opaque-refresh")

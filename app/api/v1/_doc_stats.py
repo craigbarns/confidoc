@@ -66,10 +66,7 @@ def _document_to_dossier_360_input(document: Document) -> dict[str, Any]:
 
 
 def _created_last_7_days(created_values: list[datetime], now: datetime) -> list[dict[str, Any]]:
-    buckets = {
-        (now.date() - timedelta(days=offset)): 0
-        for offset in range(6, -1, -1)
-    }
+    buckets = {(now.date() - timedelta(days=offset)): 0 for offset in range(6, -1, -1)}
     for created_at in created_values:
         if created_at is None:
             continue
@@ -114,11 +111,15 @@ def _calculate_gdpr_score(
     total_risks = sum(risk_distribution.values())
     if total_risks:
         risk_pts = (
-            risk_distribution.get("low", 0) * 1.0
-            + risk_distribution.get("medium", 0) * 0.7
-            + risk_distribution.get("high", 0) * 0.3
-            + risk_distribution.get("critical", 0) * 0.0
-        ) / total_risks * 30
+            (
+                risk_distribution.get("low", 0) * 1.0
+                + risk_distribution.get("medium", 0) * 0.7
+                + risk_distribution.get("high", 0) * 0.3
+                + risk_distribution.get("critical", 0) * 0.0
+            )
+            / total_risks
+            * 30
+        )
     else:
         risk_pts = 30
 
@@ -184,6 +185,7 @@ def _calculate_gdpr_score(
 async def get_golden_report(current_user: CurrentUser) -> dict:
     """Sert le rapport JSON généré par scripts/run_golden_v2.py."""
     import os
+
     root = os.getcwd()
     report_path = os.path.join(root, "golden", "latest_quality_report.json")
 
@@ -191,7 +193,7 @@ async def get_golden_report(current_user: CurrentUser) -> dict:
         return {
             "status": "no_report",
             "message": "Aucun rapport généré.",
-            "metrics": {"pass_rate": 0, "total": 0, "passed": 0, "failed": 0}
+            "metrics": {"pass_rate": 0, "total": 0, "passed": 0, "failed": 0},
         }
 
     try:
@@ -226,8 +228,7 @@ async def get_dashboard_stats(
         .group_by(Document.status)
     )
     status_counts = {
-        row[0].value if hasattr(row[0], "value") else str(row[0]): row[1]
-        for row in result.all()
+        row[0].value if hasattr(row[0], "value") else str(row[0]): row[1] for row in result.all()
     }
     total_docs = sum(status_counts.values())
 
@@ -261,8 +262,7 @@ async def get_dashboard_stats(
             .group_by(EntityDetection.entity_type)
         )
         entity_distribution = {
-            str(row[0] or "unknown").upper(): int(row[1] or 0)
-            for row in entity_result.all()
+            str(row[0] or "unknown").upper(): int(row[1] or 0) for row in entity_result.all()
         }
     except Exception:
         entity_distribution = {}
@@ -270,6 +270,7 @@ async def get_dashboard_stats(
     recent_activity: list[dict] = []
     try:
         from app.models.audit_log import AuditLog
+
         now = datetime.now(UTC)
         since = now - timedelta(days=6)
         activity_result = await db.execute(
@@ -282,7 +283,9 @@ async def get_dashboard_stats(
         pass
 
     trash_result = await db.execute(
-        select(func.count()).select_from(Document).where(
+        select(func.count())
+        .select_from(Document)
+        .where(
             Document.uploaded_by_user_id == user_id,
             Document.is_deleted.is_(True),
         )
@@ -334,6 +337,7 @@ async def get_dossier_360_stats(
 ) -> dict:
     # On délègue à la fonction de chargement existante
     from app.api.v1._doc_stats import _load_dossier_360_payload
+
     return await _load_dossier_360_payload(current_user, db, limit)
 
 
@@ -517,8 +521,7 @@ async def _load_dossier_360_payload(current_user, db, limit):
             .group_by(EntityDetection.document_id)
         )
         entity_counts_by_document = {
-            str(document_id): int(count or 0)
-            for document_id, count in entity_result.all()
+            str(document_id): int(count or 0) for document_id, count in entity_result.all()
         }
 
     return build_dossier_360(

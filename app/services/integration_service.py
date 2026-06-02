@@ -130,9 +130,7 @@ async def get_idempotency_replay(
     if not record:
         return None
     if record.request_hash != request_hash:
-        raise http_409(
-            "Idempotency-Key deja utilisee avec une requete differente"
-        )
+        raise http_409("Idempotency-Key deja utilisee avec une requete differente")
     return record
 
 
@@ -222,9 +220,7 @@ async def dispatch_document_event(document_id: str, event: str) -> None:
             )
         )
         endpoints = [
-            endpoint
-            for endpoint in result.scalars().all()
-            if event in (endpoint.events or [])
+            endpoint for endpoint in result.scalars().all() if event in (endpoint.events or [])
         ]
         if not endpoints:
             return

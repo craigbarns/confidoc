@@ -34,17 +34,21 @@ class PseudonymMapping(BaseModel):
     encrypted_mapping: Mapped[str] = mapped_column(Text, nullable=False)
     # Expiration: mapping auto-deleted after this date
     expires_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True, index=True,
+        DateTime(timezone=True),
+        nullable=True,
+        index=True,
     )
     # Human validation flag: must be True before export is allowed in high-risk
     human_validated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     # Autopilot validation flag: True if scanned/validated by the DPO Autopilot agent
     autopilot_validated: Mapped[bool] = mapped_column(Boolean, default=False, nullable=False)
     validated_by_user_id: Mapped[uuid.UUID | None] = mapped_column(
-        UUID(as_uuid=True), nullable=True,
+        UUID(as_uuid=True),
+        nullable=True,
     )
     validated_at: Mapped[datetime | None] = mapped_column(
-        DateTime(timezone=True), nullable=True,
+        DateTime(timezone=True),
+        nullable=True,
     )
     # Risk snapshot at time of anonymization
     risk_score: Mapped[float | None] = mapped_column(nullable=True)

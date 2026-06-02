@@ -1,11 +1,12 @@
 """Tests unitaires pour doc_metadata_service."""
 
 import pytest
+
 from app.services.doc_metadata_service import (
+    build_metadata_suggestions,
+    classify_doc_category,
     extract_exercice,
     suggest_client,
-    classify_doc_category,
-    build_metadata_suggestions,
 )
 
 
@@ -55,9 +56,7 @@ class TestClassifyDocCategory:
         assert result == "liasse_fiscale"
 
     def test_grand_livre(self):
-        result = classify_doc_category(
-            "grand livre écriture comptable balance lettrage", "gl.pdf"
-        )
+        result = classify_doc_category("grand livre écriture comptable balance lettrage", "gl.pdf")
         assert result == "grand_livre"
 
     def test_contrat(self):

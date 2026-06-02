@@ -12,4 +12,3 @@ def test_privacy_gate_route_registered() -> None:
 async def test_privacy_gate_requires_auth(client) -> None:
     resp = await client.get("/api/v1/ai/privacy-gate/some-fake-uuid")
     assert resp.status_code == 401
-

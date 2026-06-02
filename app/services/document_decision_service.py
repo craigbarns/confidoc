@@ -77,8 +77,7 @@ def build_document_decision(
             "severity": "error",
             "decision": "Le document n'est pas utilisable pour le moment",
             "explanation": (
-                "Le traitement n'a pas pu être terminé. Relancez ou contactez "
-                "l'administrateur."
+                "Le traitement n'a pas pu être terminé. Relancez ou contactez l'administrateur."
             ),
             "recommended_action": "Relancer le traitement",
             "actions": ["Relancer anonymisation", "Voir audit trail"],
@@ -89,9 +88,7 @@ def build_document_decision(
             "label": "Traitement en cours",
             "severity": "neutral",
             "decision": "Attendez la fin du traitement",
-            "explanation": (
-                "Le document est en cours d'OCR, d'anonymisation ou de scoring."
-            ),
+            "explanation": ("Le document est en cours d'OCR, d'anonymisation ou de scoring."),
             "recommended_action": "Patienter ou relancer le traitement",
             "actions": ["Voir audit trail"],
         }
@@ -138,8 +135,7 @@ def build_document_decision(
             "severity": "success",
             "decision": "Vous pouvez exporter",
             "explanation": (
-                "Le document anonymisé a été relu et validé par un utilisateur "
-                "autorisé."
+                "Le document anonymisé a été relu et validé par un utilisateur autorisé."
             ),
             "recommended_action": "Analyser avec IA ou exporter le rapport",
             "actions": ["Analyser avec IA", "Exporter rapport", "Voir audit trail"],

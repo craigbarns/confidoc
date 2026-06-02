@@ -21,7 +21,6 @@ import pathlib
 import subprocess
 import sys
 
-
 REPO_ROOT = pathlib.Path(__file__).resolve().parents[2]
 APP_DIR = REPO_ROOT / "app"
 

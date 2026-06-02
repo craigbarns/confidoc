@@ -78,6 +78,7 @@ def _ui_version_context() -> dict[str, str]:
     short_sha = commit_sha[:7] if commit_sha else "local"
     if short_sha == "local":
         import time
+
         asset_version = f"local-{int(time.time())}"
     else:
         asset_version = short_sha
@@ -266,21 +267,25 @@ async def firewall_dashboard_page(request: Request) -> HTMLResponse:
 
 _ARCHITECTURE_TEMPLATE = _TEMPLATE_DIR / "architecture.html"
 
+
 @router.get("/architecture", response_class=HTMLResponse, include_in_schema=False)
 async def architecture_page(request: Request) -> HTMLResponse:
     """Page d'architecture interactive du backend ConfiDoc."""
     import json
-    
+
     # 1. Calcul dynamique des métriques de modularité
     def _count_py_files(subdir: str) -> int:
         try:
             p = Path(__file__).resolve().parent.parent / subdir
             if not p.exists():
                 return 0
-            return len([
-                f for f in p.glob("**/*.py") 
-                if f.name != "__init__.py" and "__pycache__" not in str(f)
-            ])
+            return len(
+                [
+                    f
+                    for f in p.glob("**/*.py")
+                    if f.name != "__init__.py" and "__pycache__" not in str(f)
+                ]
+            )
         except Exception:
             return 0
 
@@ -297,7 +302,7 @@ async def architecture_page(request: Request) -> HTMLResponse:
         # Exclure les routes internes du schéma openapi ou les routes de redirection techniques
         if route.path in {"/openapi.json", "/docs", "/redoc", "/metrics"}:
             continue
-            
+
         methods = list(route.methods) if hasattr(route, "methods") and route.methods else []
         clean_methods = [m for m in methods if m not in {"HEAD", "OPTIONS"}]
         if not clean_methods and not route.path.startswith("/static"):
@@ -329,13 +334,15 @@ async def architecture_page(request: Request) -> HTMLResponse:
             else:
                 tags = ["system"]
 
-        routes_data.append({
-            "path": route.path,
-            "methods": clean_methods,
-            "name": route.name or "",
-            "description": docstring,
-            "tag": tags[0] if tags else "system"
-        })
+        routes_data.append(
+            {
+                "path": route.path,
+                "methods": clean_methods,
+                "name": route.name or "",
+                "description": docstring,
+                "tag": tags[0] if tags else "system",
+            }
+        )
 
     routes_data.sort(key=lambda r: r["path"])
 

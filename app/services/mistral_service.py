@@ -55,9 +55,9 @@ async def _chat_completion(prompt: str, *, temperature: float) -> str:
         raise RuntimeError("MISTRAL_ENABLED=false")
     if not settings.MISTRAL_API_KEY:
         raise RuntimeError("MISTRAL_API_KEY manquant")
-    
+
     logger.info("mistral_chat_request", model=settings.MISTRAL_MODEL, prompt_length=len(prompt))
-    
+
     headers = {
         "Authorization": f"Bearer {settings.MISTRAL_API_KEY}",
         "Content-Type": "application/json",
@@ -89,11 +89,18 @@ async def _chat_completion(prompt: str, *, temperature: float) -> str:
             return ""
         msg = (choices[0] or {}).get("message") or {}
         content = str(msg.get("content") or "")
-        logger.info("mistral_chat_response", response_length=len(content), has_content=bool(content))
+        logger.info(
+            "mistral_chat_response", response_length=len(content), has_content=bool(content)
+        )
         return content
     except Exception as exc:
         error_msg = str(exc) or repr(exc) or "unknown error"
-        logger.error("mistral_chat_error", error=error_msg, error_type=type(exc).__name__, error_attrs=dir(exc) if hasattr(exc, 'response') else None)
+        logger.error(
+            "mistral_chat_error",
+            error=error_msg,
+            error_type=type(exc).__name__,
+            error_attrs=dir(exc) if hasattr(exc, "response") else None,
+        )
         raise
 
 
@@ -180,7 +187,12 @@ async def generate_summary_with_mistral(
             last_raw = await _chat_completion(prompt, temperature=0.1)
         except Exception as exc:
             last_failure = f"erreur_appel_mistral: {type(exc).__name__}: {exc}"
-            logger.error("mistral_api_error", error=last_failure, attempt=attempt, model=settings.MISTRAL_MODEL)
+            logger.error(
+                "mistral_api_error",
+                error=last_failure,
+                attempt=attempt,
+                model=settings.MISTRAL_MODEL,
+            )
             repair_suffix = ""
             if attempt < _MAX_VALIDATION_ATTEMPTS:
                 continue
@@ -195,9 +207,7 @@ async def generate_summary_with_mistral(
         parsed = _extract_json_object(last_raw)
         if parsed is None:
             last_failure = f"Réponse non JSON: {last_raw[:200]}"
-            repair_suffix = (
-                "\n\nJSON invalide. Renvoie uniquement un objet JSON avec les clés exactes demandées."
-            )
+            repair_suffix = "\n\nJSON invalide. Renvoie uniquement un objet JSON avec les clés exactes demandées."
             continue
         try:
             validated = SummaryResult.model_validate(parsed)
@@ -243,7 +253,8 @@ async def stream_mistral_response(
     messages = [
         {
             "role": "system",
-            "content": system_prompt or (
+            "content": system_prompt
+            or (
                 "Tu es un assistant comptable et juridique expert, integre dans ConfiDoc. "
                 "REGLES ABSOLUES: "
                 "1) Ne JAMAIS inventer de montants, ventilations ou repartitions qui ne sont PAS explicitement dans le document. "
@@ -285,9 +296,7 @@ async def stream_mistral_response(
                     try:
                         chunk = json.loads(data)
                         content = (
-                            ((chunk.get("choices") or [{}])[0])
-                            .get("delta", {})
-                            .get("content")
+                            ((chunk.get("choices") or [{}])[0]).get("delta", {}).get("content")
                             or ""
                         )
                         if content:

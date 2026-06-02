@@ -31,9 +31,10 @@ async def test_streaming_review_degrades_when_llm_is_rate_limited(monkeypatch) -
         )
 
     from unittest.mock import patch
+
     with patch("app.services.review.llm.llm_call", side_effect=rate_limited_call):
         review_agent._reset_graph()
-    
+
         events = [
             event
             async for event in review_agent.run_review_streaming(

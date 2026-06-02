@@ -15,6 +15,7 @@ def test_anonymize_with_dictionary_empty():
     assert res["count"] == 0
     assert res["method"] == "dictionary"
 
+
 def test_anonymize_with_dictionary_matches():
     text = (
         "Mon nom est Mme Alice Dupont, je travaille chez SAS ACME CONSEIL, "
@@ -30,6 +31,7 @@ def test_anonymize_with_dictionary_matches():
     registry = res["registry"]
     assert registry is not None
 
+
 def test_anonymize_with_dictionary_partial_and_post_cleanup():
     text = "Client 421 DUPONT is here. Siret 83241942812345. 41 RUE EXEMPLE\n75008 PARIS"
     res = anonymize_with_dictionary(text)
@@ -37,6 +39,7 @@ def test_anonymize_with_dictionary_partial_and_post_cleanup():
     anonymized = res["anonymized_text"]
     assert "[COMPTE" in anonymized
     assert "[ADRESSE" in anonymized
+
 
 def test_anonymize_with_dictionary_masks_labeled_identity_fields():
     text = (
@@ -58,6 +61,7 @@ def test_anonymize_with_dictionary_masks_labeled_identity_fields():
     assert "01/01/1985" not in anonymized
     assert "Lyon" not in anonymized
     assert "Nom: [DONNEE" in anonymized
+
 
 def test_anonymize_with_dictionary_preserves_siret_and_vat_boundaries():
     text = (
@@ -85,6 +89,7 @@ def test_anonymize_with_dictionary_preserves_siret_and_vat_boundaries():
     assert "TVA: [COMPTE" in anonymized
     assert "IBAN: [BANQUE" in anonymized
 
+
 def test_anonymize_with_dictionary_masks_accounting_name_lines_without_amount_false_positive():
     text = (
         "DUPONT ALICE\n"
@@ -97,6 +102,7 @@ def test_anonymize_with_dictionary_masks_accounting_name_lines_without_amount_fa
     res = anonymize_with_dictionary(text)
     anonymized = res["anonymized_text"]
     assert "120000 EUR" in anonymized
+
 
 @pytest.mark.asyncio
 async def test_anonymize_document_dictionary():

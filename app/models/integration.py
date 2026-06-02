@@ -60,9 +60,7 @@ class WebhookEndpoint(BaseModel):
     """Outbound webhook endpoint configured by a cabinet."""
 
     __tablename__ = "webhook_endpoints"
-    __table_args__ = (
-        Index("ix_webhook_endpoints_org_active", "org_id", "is_active"),
-    )
+    __table_args__ = (Index("ix_webhook_endpoints_org_active", "org_id", "is_active"),)
 
     org_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True),

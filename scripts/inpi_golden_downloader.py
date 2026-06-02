@@ -165,13 +165,14 @@ def process_siren(
 
     # Index bilans-saisis par id pour matching rapide
     saisis_by_id: dict[str, dict] = {}
-    for bs in (data.get("bilansSaisis") or []):
+    for bs in data.get("bilansSaisis") or []:
         if not bs.get("deleted") and bs.get("id"):
             saisis_by_id[bs["id"]] = bs
 
     # Bilans PDF publics, non supprimés, types C ou S
     bilans_pdf = [
-        b for b in (data.get("bilans") or [])
+        b
+        for b in (data.get("bilans") or [])
         if not b.get("deleted")
         and b.get("confidentiality") == "Public"
         and b.get("typeBilan") in ("C", "S")
@@ -198,12 +199,7 @@ def process_siren(
         # Extrait les champs depuis les pages CERFA
         pages = []
         try:
-            pages = (
-                saisi.get("bilanSaisi", {})
-                .get("bilan", {})
-                .get("detail", {})
-                .get("pages", [])
-            )
+            pages = saisi.get("bilanSaisi", {}).get("bilan", {}).get("detail", {}).get("pages", [])
         except Exception:
             pass
 
@@ -228,20 +224,24 @@ def process_siren(
         doc_type = pick_doc_type(type_bilan, cerfa_fields)
         case_id = f"inpi_{siren}_{date_cloture}_{doc_type}"
 
-        golden_cases.append({
-            "id": case_id,
-            "doc_type": doc_type,
-            "source": "inpi_api",
-            "siren": siren,
-            "denomination": denom,
-            "date_cloture": date_cloture,
-            "type_bilan": type_bilan,
-            "pdf_file": str(pdf_path.relative_to(output_dir.parent)),
-            "cerfa_fields": cerfa_fields,
-            "note": "Golden case auto-généré via API INPI — valeurs issues bilans-saisis CERFA",
-        })
+        golden_cases.append(
+            {
+                "id": case_id,
+                "doc_type": doc_type,
+                "source": "inpi_api",
+                "siren": siren,
+                "denomination": denom,
+                "date_cloture": date_cloture,
+                "type_bilan": type_bilan,
+                "pdf_file": str(pdf_path.relative_to(output_dir.parent)),
+                "cerfa_fields": cerfa_fields,
+                "note": "Golden case auto-généré via API INPI — valeurs issues bilans-saisis CERFA",
+            }
+        )
 
-        print(f"  [{siren}] ✓ {doc_type} {date_cloture} — {len(cerfa_fields)} champs CERFA — {len(pdf_bytes)//1024}KB")
+        print(
+            f"  [{siren}] ✓ {doc_type} {date_cloture} — {len(cerfa_fields)} champs CERFA — {len(pdf_bytes) // 1024}KB"
+        )
         generated += 1
         time.sleep(0.2)  # politesse API
 
@@ -282,7 +282,9 @@ def main() -> None:
     # Sauvegarde l'index des golden cases
     index_path = output_dir / "golden_cases_inpi.json"
     index_path.write_text(
-        json.dumps({"count": len(golden_cases), "cases": golden_cases}, indent=2, ensure_ascii=False),
+        json.dumps(
+            {"count": len(golden_cases), "cases": golden_cases}, indent=2, ensure_ascii=False
+        ),
         encoding="utf-8",
     )
     print(f"\n✓ {len(golden_cases)} golden cases générés → {index_path}")

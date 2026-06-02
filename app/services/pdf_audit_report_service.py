@@ -11,11 +11,10 @@ Generates a branded, premium-grade PDF report with:
 
 from __future__ import annotations
 
-from datetime import datetime, timezone
+from datetime import UTC, datetime, timezone
 from typing import Any
 
 from fpdf import FPDF
-
 
 _PURPLE = (124, 116, 255)
 _DARK = (15, 17, 23)
@@ -80,7 +79,7 @@ class _AuditPDF(FPDF):
         self.set_font("Helvetica", "", 8)
         self.set_xy(120, 7)
         self.set_text_color(*_GRAY)
-        now = datetime.now(timezone.utc).strftime("%d/%m/%Y %H:%M UTC")
+        now = datetime.now(UTC).strftime("%d/%m/%Y %H:%M UTC")
         self.cell(80, 6, f"Genere le {now}", align="R")
         self.set_xy(15, 30)
 
@@ -198,7 +197,7 @@ def _draw_cover_page(
     pdf.set_font("Helvetica", "", 9)
     pdf.set_text_color(*_GRAY)
     pdf.set_xy(15, 86)
-    now_str = datetime.now(timezone.utc).strftime("%d/%m/%Y a %H:%M UTC")
+    now_str = datetime.now(UTC).strftime("%d/%m/%Y a %H:%M UTC")
     pdf.cell(0, 6, f"Genere le {now_str}")
 
     # Divider
@@ -215,9 +214,27 @@ def _draw_cover_page(
     card_y = 103.0
     gap = 7.5
     _draw_stat_card(pdf, 15, card_y, card_w, card_h, str(entity_count), "entites masquees", _PURPLE)
-    _draw_stat_card(pdf, 15 + card_w + gap, card_y, card_w, card_h, risk_label_text, "niveau de risque", risk_color)
+    _draw_stat_card(
+        pdf,
+        15 + card_w + gap,
+        card_y,
+        card_w,
+        card_h,
+        risk_label_text,
+        "niveau de risque",
+        risk_color,
+    )
     pages_val = str(page_count) if page_count else "--"
-    _draw_stat_card(pdf, 15 + 2 * (card_w + gap), card_y, card_w, card_h, pages_val, "pages analysees", (100, 120, 200))
+    _draw_stat_card(
+        pdf,
+        15 + 2 * (card_w + gap),
+        card_y,
+        card_w,
+        card_h,
+        pages_val,
+        "pages analysees",
+        (100, 120, 200),
+    )
 
     # ---- Content summary ----
     pdf.set_font("Helvetica", "B", 8)
@@ -453,7 +470,8 @@ def generate_audit_pdf(
             pdf.set_font("Helvetica", "I", 7)
             pdf.set_text_color(*_GRAY)
             pdf.cell(
-                0, 5,
+                0,
+                5,
                 f"... et {len(audit_entries) - 50} entrees supplementaires",
                 new_x="LMARGIN",
                 new_y="NEXT",
@@ -532,7 +550,8 @@ def generate_audit_pdf(
     pdf.set_font("Helvetica", "", 8)
     pdf.set_xy(20, notice_y + 10)
     pdf.multi_cell(
-        165, 4,
+        165,
+        4,
         "Score d'aide a la decision, ne remplace pas une validation juridique/DPO. "
         "ConfiDoc aide a la conformite RGPD mais ne constitue pas un avis juridique. "
         "Une analyse de risque (AIPD) specifique peut etre necessaire selon le contexte.",
@@ -546,12 +565,13 @@ def generate_audit_pdf(
     pdf.ln(4)
     pdf.set_font("Helvetica", "B", 9)
     pdf.set_text_color(*_PURPLE)
-    now = datetime.now(timezone.utc).strftime("%d/%m/%Y a %H:%M UTC")
+    now = datetime.now(UTC).strftime("%d/%m/%Y a %H:%M UTC")
     pdf.cell(0, 6, f"Document genere le {now}", new_x="LMARGIN", new_y="NEXT")
     pdf.set_font("Helvetica", "", 8)
     pdf.set_text_color(*_GRAY)
     pdf.cell(
-        0, 5,
+        0,
+        5,
         "ConfiDoc -- Plateforme d'usage securise de l'IA sur documents sensibles",
         new_x="LMARGIN",
         new_y="NEXT",

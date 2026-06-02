@@ -47,10 +47,7 @@ def _safe_content_disposition_filename(
     safe = (filename or "document").replace("\r", " ").replace("\n", " ").replace('"', "")
     safe = safe.strip() or "document"
     ascii_safe = safe.encode("ascii", "ignore").decode("ascii") or "document"
-    return (
-        f'{disposition}; filename="{ascii_safe}"; '
-        f"filename*=UTF-8''{quote(safe)}"
-    )
+    return f"{disposition}; filename=\"{ascii_safe}\"; filename*=UTF-8''{quote(safe)}"
 
 
 def _raw_document_content_type(document: Document) -> str:
@@ -218,13 +215,10 @@ async def list_clients(
     names: list[str] = [row[0] for row in cn_result.all() if row[0]]
 
     # Fallback: docs without client_name — read from tags[0]
-    fb_query = (
-        select(Document)
-        .where(
-            visibility_clause,
-            Document.client_name.is_(None),
-            Document.tags.isnot(None),
-        )
+    fb_query = select(Document).where(
+        visibility_clause,
+        Document.client_name.is_(None),
+        Document.tags.isnot(None),
     )
     if not include_deleted:
         fb_query = fb_query.where(Document.is_deleted.is_(False))
@@ -367,6 +361,7 @@ async def get_document_raw(
 
     try:
         from app.services.storage_service import read_document_bytes
+
         content = read_document_bytes(document)
         if not content:
             logger.warning(
@@ -383,7 +378,7 @@ async def get_document_raw(
                 "Content-Disposition": _raw_document_disposition(document),
                 "Content-Length": str(len(content)),
                 "Accept-Ranges": "bytes",
-            }
+            },
         )
     except Exception as exc:
         if hasattr(exc, "status_code"):

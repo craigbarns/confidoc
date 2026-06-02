@@ -24,15 +24,9 @@ class GoldenDraftCreate(BaseModel):
 
     document_id: uuid.UUID
     field_name: str = Field(min_length=1, max_length=120)
-    predicted_value: str | None = Field(
-        default=None, max_length=PREDICTED_VALUE_MAX_CHARS
-    )
-    corrected_value: str = Field(
-        min_length=1, max_length=CORRECTED_VALUE_MAX_CHARS
-    )
-    source_snippet: str | None = Field(
-        default=None, max_length=SOURCE_SNIPPET_MAX_CHARS
-    )
+    predicted_value: str | None = Field(default=None, max_length=PREDICTED_VALUE_MAX_CHARS)
+    corrected_value: str = Field(min_length=1, max_length=CORRECTED_VALUE_MAX_CHARS)
+    source_snippet: str | None = Field(default=None, max_length=SOURCE_SNIPPET_MAX_CHARS)
     error_type: str = Field(min_length=1, max_length=60)
     confidence_before: float | None = Field(default=None, ge=0.0, le=1.0)
     document_type: str = Field(min_length=1, max_length=60)

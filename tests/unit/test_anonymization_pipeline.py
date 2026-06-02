@@ -40,6 +40,7 @@ from app.services.anonymization_service import (
 
 # ── Helpers ───────────────────────────────────────────────────────────
 
+
 def _find_replacements(detections: list[dict], entity_type: str) -> list[str]:
     return [d["replacement"] for d in detections if d["entity_type"] == entity_type]
 
@@ -51,6 +52,7 @@ def _find_excerpts(detections: list[dict], entity_type: str) -> list[str]:
 # ══════════════════════════════════════════════════════════════════════
 # EMAIL
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestEmailDetection:
     def test_simple_email(self):
@@ -80,6 +82,7 @@ class TestEmailDetection:
 # TÉLÉPHONE
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestPhoneDetection:
     def test_french_mobile(self):
         text = "Appelez le 06 12 34 56 78 pour confirmation."
@@ -106,6 +109,7 @@ class TestPhoneDetection:
 # IBAN
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestIBANDetection:
     def test_french_iban_spaced(self):
         text = "IBAN : FR76 3000 6000 0112 3456 7890 189"
@@ -130,6 +134,7 @@ class TestIBANDetection:
 # SIRET / SIREN / TVA
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestCompanyIdentifiers:
     def test_siret_detection(self):
         text = "SIRET : 123 456 789 01234"
@@ -152,6 +157,7 @@ class TestCompanyIdentifiers:
 # NSS
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestNSSDetection:
     def test_nss_male(self):
         # Format: 1 + YY + MM + dept(2) + commune(3) + order(3) + key(2)
@@ -168,6 +174,7 @@ class TestNSSDetection:
 # ══════════════════════════════════════════════════════════════════════
 # PERSONNES (noms avec titre)
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestPersonDetection:
     def test_monsieur(self):
@@ -195,6 +202,7 @@ class TestPersonDetection:
 # ADRESSES & VILLES
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestAddressDetection:
     def test_street_address(self):
         text = "Domicile : 12 rue des Lilas, appartement 4"
@@ -221,11 +229,24 @@ class TestAddressDetection:
 # FAUX POSITIFS
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestFalsePositives:
-    @pytest.mark.parametrize("word", [
-        "FACTURE", "TOTAL", "TVA", "SOLDE", "DATE", "CLIENT",
-        "DEBIT", "CREDIT", "BILAN", "ACTIF", "PASSIF",
-    ])
+    @pytest.mark.parametrize(
+        "word",
+        [
+            "FACTURE",
+            "TOTAL",
+            "TVA",
+            "SOLDE",
+            "DATE",
+            "CLIENT",
+            "DEBIT",
+            "CREDIT",
+            "BILAN",
+            "ACTIF",
+            "PASSIF",
+        ],
+    )
     def test_accounting_header_not_flagged(self, word: str):
         assert _is_false_positive(word) is True
 
@@ -242,6 +263,7 @@ class TestFalsePositives:
 # ══════════════════════════════════════════════════════════════════════
 # anonymize_text — end-to-end
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestAnonymizeText:
     def test_empty_text_returns_unchanged(self):
@@ -290,6 +312,7 @@ class TestAnonymizeText:
 
     def test_returns_entity_registry(self):
         from app.services.entity_registry import EntityRegistry
+
         text = "Mme Dupont alice@example.com"
         out, dets, registry = anonymize_text(text)
         assert isinstance(registry, EntityRegistry)
@@ -310,11 +333,7 @@ class TestAnonymizeText:
         assert len(pii_dets) == 0
 
     def test_dataset_accounting_bank_label_does_not_consume_following_lines(self):
-        text = (
-            "51210000 QONTO\n"
-            "CHIFFRE D AFFAIRES 120000 EUR\n"
-            "SIRET: 832 419 428 00038"
-        )
+        text = "51210000 QONTO\nCHIFFRE D AFFAIRES 120000 EUR\nSIRET: 832 419 428 00038"
         out, dets, _ = anonymize_text(
             text,
             profile="dataset_accounting",
@@ -374,6 +393,7 @@ class TestAnonymizeText:
 # clean_ocr_artifacts
 # ══════════════════════════════════════════════════════════════════════
 
+
 class TestCleanOCRArtifacts:
     def test_broken_token_trailing_chars_removed(self):
         text = "[PERSONNE]ÉE some text"
@@ -408,6 +428,7 @@ class TestCleanOCRArtifacts:
 # ══════════════════════════════════════════════════════════════════════
 # classify_document_type
 # ══════════════════════════════════════════════════════════════════════
+
 
 class TestClassifyDocumentType:
     def test_invoice_detection(self):

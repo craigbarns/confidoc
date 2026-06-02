@@ -11,8 +11,9 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main() -> int:
-    from app.golden.compare import compare_expected_values_to_fields
     from app.services.structured_dataset_service import build_structured_dataset
+
+    from app.golden.compare import compare_expected_values_to_fields
 
     path = ROOT / "golden" / "regression_fixtures.json"
     data = json.loads(path.read_text(encoding="utf-8"))

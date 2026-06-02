@@ -28,5 +28,5 @@ def test_llm_services_do_not_log_raw_parse_failures() -> None:
 
     assert "raw_response[:200]" not in extraction_source
     assert "raw_response[:200]" not in anonymization_source
-    assert 'raw=raw_response' not in extraction_source
-    assert 'raw=raw_response' not in anonymization_source
+    assert "raw=raw_response" not in extraction_source
+    assert "raw=raw_response" not in anonymization_source

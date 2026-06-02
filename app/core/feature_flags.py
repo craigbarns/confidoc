@@ -1,18 +1,21 @@
 """ConfiDoc Backend — Redis-based Feature Flags."""
 
 from typing import Any
+
 import redis.asyncio as aioredis
+
 from app.config import get_settings
 from app.core.logging import get_logger
 
 logger = get_logger(__name__)
 settings = get_settings()
 
+
 class FeatureFlags:
     """Simple feature flag manager using Redis."""
-    
+
     PREFIX = "confidoc:ff:"
-    
+
     def __init__(self):
         self.redis_url = settings.REDIS_URL
         self._redis = None
@@ -44,6 +47,7 @@ class FeatureFlags:
             logger.info("feature_flag_updated", flag=flag_name, enabled=enabled)
         except Exception as exc:
             logger.error("feature_flag_update_failed", flag=flag_name, error=str(exc))
+
 
 # Singleton instance
 feature_flags = FeatureFlags()

@@ -21,8 +21,8 @@ from app.middleware import RequestIdMiddleware, SecurityHeadersMiddleware, Timin
 from app.rate_limit import limiter, rate_limit_exceeded_handler
 
 _RETENTION_REDIS_KEY = "confidoc:retention:last_purge_ts"
-_RETENTION_INTERVAL_SECONDS = 86400      # 24h normal interval
-_RETENTION_MAX_GAP_SECONDS = 172800      # alerte si gap > 48h au démarrage
+_RETENTION_INTERVAL_SECONDS = 86400  # 24h normal interval
+_RETENTION_MAX_GAP_SECONDS = 172800  # alerte si gap > 48h au démarrage
 
 
 async def _run_retention_purge(logger: object) -> None:
@@ -42,6 +42,7 @@ async def _run_retention_purge(logger: object) -> None:
 
     try:
         import redis.asyncio as aioredis
+
         settings = get_settings()
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1)
         async with r:
@@ -67,6 +68,7 @@ async def _periodic_retention_purge() -> None:
     last_purge_ts: float = 0.0
     try:
         import redis.asyncio as aioredis
+
         settings = get_settings()
         r = aioredis.from_url(settings.REDIS_URL, decode_responses=True, socket_connect_timeout=1)
         async with r:
@@ -127,10 +129,7 @@ def create_app() -> FastAPI:
 
     app = FastAPI(
         title=settings.APP_NAME,
-        description=(
-            "API backend de confidentialité documentaire "
-            "pour professions réglementées."
-        ),
+        description=("API backend de confidentialité documentaire pour professions réglementées."),
         version="0.3.0",
         docs_url="/docs" if not settings.is_production else None,
         redoc_url="/redoc" if not settings.is_production else None,
@@ -177,6 +176,7 @@ def create_app() -> FastAPI:
     @app.get("/metrics", include_in_schema=False)
     def metrics():
         from app.core.metrics import get_metrics_response
+
         return get_metrics_response()
 
     app.include_router(v1_router, prefix=settings.API_V1_PREFIX)

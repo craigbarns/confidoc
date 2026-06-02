@@ -3,12 +3,12 @@
 import pytest
 
 from app.services.copilot_service import (
-    extract_keywords,
-    split_chunks,
-    retrieve_citations,
-    confidence_bucket,
-    build_dual_corpus,
     _normalize_spaces,
+    build_dual_corpus,
+    confidence_bucket,
+    extract_keywords,
+    retrieve_citations,
+    split_chunks,
 )
 
 

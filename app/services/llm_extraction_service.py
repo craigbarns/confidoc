@@ -29,6 +29,7 @@ def _response_fingerprint(raw: str | None) -> dict[str, object]:
         "response_chars": len(payload),
     }
 
+
 EXTRACTION_PROMPT = """Tu es un expert-comptable français.
 Extrais les informations clés du document ci-dessous.
 
@@ -109,10 +110,10 @@ def _clean_json_response(raw: str) -> dict[str, Any] | None:
         return None
 
     try:
-        return json.loads(raw[start:end + 1])
+        return json.loads(raw[start : end + 1])
     except json.JSONDecodeError:
         # Tentative de nettoyage
-        cleaned = raw[start:end + 1]
+        cleaned = raw[start : end + 1]
         cleaned = cleaned.replace("\n", " ")
         cleaned = cleaned.replace("'", '"')
         try:
@@ -148,7 +149,7 @@ def _validate_and_normalize(data: dict[str, Any]) -> dict[str, Any]:
         },
         "confiance": data.get("confiance") or "low",
         "source": data.get("source") or "llm:mistral-large",
-        "business_rules": {}
+        "business_rules": {},
     }
 
     # Normalise montants_cles
@@ -167,13 +168,15 @@ def _validate_and_normalize(data: dict[str, Any]) -> dict[str, Any]:
                         suggestion = suggest_pcg_code(libelle, nature)
                         pcg_code = suggestion["code"]
 
-                    result["montants_cles"].append({
-                        "libelle": libelle,
-                        "montant": montant_val,
-                        "nature": nature,
-                        "pcg_code": pcg_code,
-                        "source_snippet": str(m.get("source_snippet", ""))
-                    })
+                    result["montants_cles"].append(
+                        {
+                            "libelle": libelle,
+                            "montant": montant_val,
+                            "nature": nature,
+                            "pcg_code": pcg_code,
+                            "source_snippet": str(m.get("source_snippet", "")),
+                        }
+                    )
                 except (ValueError, TypeError):
                     pass
 
@@ -220,7 +223,7 @@ def _semantic_chunking(text: str, max_chars: int = 15000) -> str:
         r"(?i)compte\s*de\s*r[ée]sultat",
         r"(?i)r[ée]sultat\s*de\s*l[' ]?exercice",
         r"(?i)2072",
-        r"(?i)liasse\s*fiscale"
+        r"(?i)liasse\s*fiscale",
     ]
 
     # Diviser par pages ou gros blocs (approximation)

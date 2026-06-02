@@ -1,16 +1,19 @@
 """Tests for OCR image preprocessing pipeline."""
 
+from unittest.mock import MagicMock, patch
+
 import pytest
-from unittest.mock import patch, MagicMock
 
 try:
-    from PIL import Image, ImageFilter, ImageOps, ImageEnhance
+    from PIL import Image, ImageEnhance, ImageFilter, ImageOps
+
     HAS_PIL = True
 except ImportError:
     HAS_PIL = False
 
 try:
     import numpy as np
+
     HAS_NUMPY = True
 except ImportError:
     HAS_NUMPY = False
@@ -18,9 +21,9 @@ except ImportError:
 pytestmark = pytest.mark.skipif(not HAS_PIL, reason="Pillow not installed")
 
 from app.services.anonymization_service import (
-    _preprocess_image_for_ocr,
-    _get_tesseract_config,
     _deskew_image,
+    _get_tesseract_config,
+    _preprocess_image_for_ocr,
 )
 
 

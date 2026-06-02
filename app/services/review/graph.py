@@ -1,13 +1,14 @@
 """ConfiDoc Backend — Review Agent Graph Construction."""
 
 from langgraph.graph import END, StateGraph
-from app.services.review.state import ReviewState
+
+from app.services.review.nodes.analyze import analyze_node
 from app.services.review.nodes.classify import classify_node
 from app.services.review.nodes.extract import extract_node
-from app.services.review.nodes.analyze import analyze_node
-from app.services.review.nodes.findings import findings_node
 from app.services.review.nodes.filter import filter_node
+from app.services.review.nodes.findings import findings_node
 from app.services.review.nodes.synthesize import synthesize_node
+from app.services.review.state import ReviewState
 
 
 def build_review_graph() -> StateGraph:

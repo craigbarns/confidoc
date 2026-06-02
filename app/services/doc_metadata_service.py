@@ -18,34 +18,84 @@ EXERCICE_PATTERNS = [
 ]
 
 CATEGORY_RULES = [
-    ("releve_bancaire", [
-        "relevé de compte", "releve de compte", "solde", "iban",
-        "débit", "crédit", "virement reçu", "prélèvement",
-        "numéro de compte", "arrêté du compte",
-    ]),
-    ("liasse_fiscale", [
-        "liasse fiscale", "2065", "2050", "2051", "2052", "2053",
-        "2058", "résultat fiscal",
-        "impôt sur les sociétés",
-    ]),
-    ("bilan", [
-        "bilan", "actif", "passif", "capitaux propres",
-        "immobilisations", "résultat de l'exercice",
-        "compte de résultat",
-    ]),
-    ("grand_livre", [
-        "grand livre", "écriture comptable",
-        "balance", "lettrage",
-    ]),
-    ("contrat", [
-        "contrat", "convention", "avenant", "bail",
-        "clause", "article", "signataires",
-        "tribunal", "juridiction", "assignation", "jugement",
-    ]),
-    ("facture", [
-        "facture", "invoice", "total ttc", "total ht",
-        "tva", "avoir", "bon de commande",
-    ]),
+    (
+        "releve_bancaire",
+        [
+            "relevé de compte",
+            "releve de compte",
+            "solde",
+            "iban",
+            "débit",
+            "crédit",
+            "virement reçu",
+            "prélèvement",
+            "numéro de compte",
+            "arrêté du compte",
+        ],
+    ),
+    (
+        "liasse_fiscale",
+        [
+            "liasse fiscale",
+            "2065",
+            "2050",
+            "2051",
+            "2052",
+            "2053",
+            "2058",
+            "résultat fiscal",
+            "impôt sur les sociétés",
+        ],
+    ),
+    (
+        "bilan",
+        [
+            "bilan",
+            "actif",
+            "passif",
+            "capitaux propres",
+            "immobilisations",
+            "résultat de l'exercice",
+            "compte de résultat",
+        ],
+    ),
+    (
+        "grand_livre",
+        [
+            "grand livre",
+            "écriture comptable",
+            "balance",
+            "lettrage",
+        ],
+    ),
+    (
+        "contrat",
+        [
+            "contrat",
+            "convention",
+            "avenant",
+            "bail",
+            "clause",
+            "article",
+            "signataires",
+            "tribunal",
+            "juridiction",
+            "assignation",
+            "jugement",
+        ],
+    ),
+    (
+        "facture",
+        [
+            "facture",
+            "invoice",
+            "total ttc",
+            "total ht",
+            "tva",
+            "avoir",
+            "bon de commande",
+        ],
+    ),
 ]
 
 

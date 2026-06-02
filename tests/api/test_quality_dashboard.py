@@ -9,7 +9,6 @@ from typing import Any
 
 import pytest
 
-
 # ──────────────────────────────────────────────────────────────────────
 # Route registration & auth
 # ──────────────────────────────────────────────────────────────────────
@@ -101,9 +100,7 @@ async def test_compute_quality_metrics_aggregates_known_values(monkeypatch):
         return 3  # 3 of 6 validated docs needed at least one correction
 
     monkeypatch.setattr(svc, "_count_documents", fake_count_documents)
-    monkeypatch.setattr(
-        svc, "_count_processed_and_validated", fake_processed_validated
-    )
+    monkeypatch.setattr(svc, "_count_processed_and_validated", fake_processed_validated)
     monkeypatch.setattr(svc, "_avg_durations_seconds", fake_avg)
     monkeypatch.setattr(svc, "_draft_aggregates", fake_drafts)
     monkeypatch.setattr(
@@ -165,14 +162,10 @@ async def test_compute_quality_metrics_no_validation_yields_null_ratios(
         return 0
 
     monkeypatch.setattr(svc, "_count_documents", fake_count_documents)
-    monkeypatch.setattr(
-        svc, "_count_processed_and_validated", fake_processed_validated
-    )
+    monkeypatch.setattr(svc, "_count_processed_and_validated", fake_processed_validated)
     monkeypatch.setattr(svc, "_avg_durations_seconds", fake_avg)
     monkeypatch.setattr(svc, "_draft_aggregates", fake_drafts)
-    monkeypatch.setattr(
-        svc, "_count_validated_documents_with_drafts", fake_validated_with_drafts
-    )
+    monkeypatch.setattr(svc, "_count_validated_documents_with_drafts", fake_validated_with_drafts)
 
     metrics = await svc.compute_quality_metrics(object(), org_id)  # type: ignore[arg-type]
 
@@ -211,9 +204,7 @@ def app_with_overrides():
     app.dependency_overrides[get_db] = _override_db
 
     def set_user(org_id: uuid.UUID | None) -> None:
-        state["user"] = SimpleNamespace(
-            id=uuid.uuid4(), org_id=org_id, is_active=True
-        )
+        state["user"] = SimpleNamespace(id=uuid.uuid4(), org_id=org_id, is_active=True)
 
     yield app, set_user
 
@@ -222,9 +213,7 @@ def app_with_overrides():
 
 
 @pytest.mark.asyncio
-async def test_route_returns_empty_for_user_without_org(
-    app_with_overrides, client, monkeypatch
-):
+async def test_route_returns_empty_for_user_without_org(app_with_overrides, client, monkeypatch):
     from app.api.v1 import _doc_stats as stats_mod
 
     captured: dict[str, Any] = {}
@@ -255,9 +244,7 @@ async def test_route_returns_empty_for_user_without_org(
 
 
 @pytest.mark.asyncio
-async def test_route_passes_only_caller_org_id(
-    app_with_overrides, client, monkeypatch
-):
+async def test_route_passes_only_caller_org_id(app_with_overrides, client, monkeypatch):
     """The route must hand the caller's org_id to the service — never a
     different org's id (no cross-tenant leak)."""
     from app.api.v1 import _doc_stats as stats_mod
@@ -302,9 +289,7 @@ async def test_route_passes_only_caller_org_id(
 
 
 @pytest.mark.asyncio
-async def test_route_exposes_grouped_corrections(
-    app_with_overrides, client, monkeypatch
-):
+async def test_route_exposes_grouped_corrections(app_with_overrides, client, monkeypatch):
     from app.api.v1 import _doc_stats as stats_mod
 
     org_id = uuid.uuid4()
@@ -363,7 +348,7 @@ async def test_compute_quality_metrics_ai_readiness_and_oneshot_calculation(monk
     # failure_penalty = (1 / 10) * 25 = 2.5
     # Expected AI Readiness Score:
     # round(0.8 * 45 + 0.5 * 30 + 0.60 * 20 + 5 - 2.5) = round(36 + 15 + 12 + 5 - 2.5) = round(65.5) = 66
-    
+
     async def fake_count_documents(db, oid):
         return 10, {"ready": 5, "processing": 3, "uploaded": 1, "failed": 1}
 
@@ -390,4 +375,3 @@ async def test_compute_quality_metrics_ai_readiness_and_oneshot_calculation(monk
     assert metrics.one_shot_full_ready_rate == 0.60
     assert metrics.ai_readiness_score == 66
     assert metrics.ai_readiness_level == "internal_review"
-
