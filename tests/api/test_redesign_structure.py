@@ -131,7 +131,7 @@ async def test_privacy_lens_uses_safe_dom_rendering(client):
 async def test_sidebar_groups_nav_into_three_zones(client):
     resp = await client.get("/ui")
     html = resp.text
-    for label in ["Workspace", "Confiance", "Système"]:
+    for label in ["Travail", "Confiance", "Compte"]:
         assert label in html, f"missing group label {label!r}"
     for nav in ["home", "documents", "clients", "quality", "audit", "settings"]:
         assert f'data-nav="{nav}"' in html, f"missing nav destination {nav}"

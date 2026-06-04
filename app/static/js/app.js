@@ -80,10 +80,10 @@ function documentStatusLabel(status) {
   const map = {
     uploaded: "Ajouté",
     processing: "Traitement",
-    extracting: "OCR",
-    extracted: "OCR terminé",
-    anonymizing: "Sécurisation",
-    anonymized: "Prêt IA",
+    extracting: "Lecture du document",
+    extracted: "Lecture terminée",
+    anonymizing: "Masquage",
+    anonymized: "Prêt",
     ready: "Prêt IA",
     failed: "Erreur",
   };
@@ -623,7 +623,7 @@ function showAuditPanel() {
   const panel = $("panel-audit");
   if (panel) panel.classList.add("active");
   setActiveNav("audit");
-  setPageTitle("Journal d'audit");
+  setPageTitle("Preuves RGPD");
   closeAppNavDrawer();
   syncLegacySidebarVisibility();
 }
@@ -1059,11 +1059,11 @@ function setPageTitle(section) {
   const titleEl = $("page-title");
   if (!titleEl) return;
   const titles = {
-    "": "ConfiDoc — Documents confidentiels anonymisés",
-    "Accueil": "ConfiDoc — Accueil cabinet",
-    "Ajouter": "ConfiDoc — Ajouter un document",
-    "Sécuriser": "ConfiDoc — Sécuriser le document",
-    "Analyser": "ConfiDoc — Analyse IA",
+    "": "ConfiDoc — Pièces client sécurisées",
+    "Accueil": "ConfiDoc — Accueil",
+    "Ajouter": "ConfiDoc — Ajouter une pièce",
+    "Sécuriser": "ConfiDoc — Vérifier le masquage",
+    "Analyser": "ConfiDoc — Questions sur le document",
     "Clients": "ConfiDoc — Dossiers clients",
     "Dossier": "ConfiDoc — Dossier client",
   };
@@ -1094,7 +1094,7 @@ function renderSensitiveModeBanner(message = "") {
   banner.style.display = sensitiveClientMode ? "flex" : "none";
   const text = banner.querySelector("span");
   if (text) {
-    text.textContent = message || "IA externe désactivée. OCR local/fallbacks déterministes et traitement anonymisé uniquement.";
+    text.textContent = message || "Mode sensible: les documents sont traités sans IA externe.";
   }
 }
 
@@ -1177,7 +1177,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       label: "Traitement en cours",
       severity: "neutral",
       decision: "Attendez la fin du traitement",
-      explanation: "Le document est en cours d'OCR, d'anonymisation ou de scoring.",
+      explanation: "Le document est en cours de lecture et de masquage.",
       recommended_action: "Patienter",
       reasons: ["Traitement en cours"],
       actions: ["Voir audit trail"],
@@ -1210,7 +1210,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Certaines données sensibles ou quasi-identifiants peuvent encore permettre une réidentification.",
       recommended_action: validated ? "Télécharger le rapport DPO" : "Valider manuellement",
       reasons: ["Contrôle recommandé avant export"],
-      actions: ["Corriger l'anonymisation", "Valider manuellement", "Voir pourquoi"],
+      actions: ["Corriger le masquage", "Valider manuellement", "Voir pourquoi"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1222,11 +1222,11 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
     severity: "success",
     decision: "Vous pouvez exporter",
     explanation: validated
-      ? "Le document anonymisé a été relu et validé par un utilisateur autorisé."
-      : "Le document anonymisé ne présente pas de risque évident. Il peut être utilisé pour une analyse IA ou un export.",
+      ? "Le document masqué a été relu et validé par un utilisateur autorisé."
+      : "Le document masqué ne présente pas de risque évident. Il peut être utilisé pour une analyse IA ou un export.",
     recommended_action: "Analyser avec IA",
     reasons: ["Aucun risque évident détecté"],
-    actions: ["Analyser avec IA", "Exporter rapport", "Voir audit trail"],
+    actions: ["Analyser avec IA", "Exporter rapport", "Voir la preuve"],
     risk_score: score,
     risk_level: level,
     human_validated: validated,
@@ -1362,13 +1362,13 @@ function renderExportGuard(payload = {}) {
   const detailEl = $("export-guard-detail");
   let state = "ready";
   let title = "Vous pouvez exporter";
-  let detail = `${scoreText}Document anonymisé.`;
+  let detail = `${scoreText}Document masqué.`;
   let canApprove = false;
 
   if (!ready) {
     state = "watch";
     title = "Export en attente";
-    detail = "Le document doit être anonymisé puis validé avant diffusion.";
+    detail = "Le document doit être masqué puis validé avant diffusion.";
   } else if (level === "critical") {
     state = "blocked";
     title = "Export bloqué";
@@ -1549,7 +1549,7 @@ function updateProcessingConsole(payload = {}) {
   const widths = { upload: 12, ocr: 38, detect: 58, mask: 78, ready: 100, failed: 100 };
   const labels = {
     upload: "Ajout sécurisé",
-    ocr: "Mistral OCR en cours",
+    ocr: "Lecture du document en cours",
     detect: "Détection des données sensibles",
     mask: "Masquage RGPD",
     ready: "Document prêt pour l'IA",
@@ -1573,7 +1573,7 @@ function updateProcessingConsole(payload = {}) {
   const ocrMetric = $("processing-ocr-metric");
   if (ocrMetric) {
     const len = payload.ocrLength;
-    ocrMetric.textContent = Number.isFinite(len) ? `OCR ${len.toLocaleString("fr-FR")} car.` : "OCR —";
+    ocrMetric.textContent = Number.isFinite(len) ? `${len.toLocaleString("fr-FR")} caractères lus` : "Lecture —";
   }
   const entityMetric = $("processing-entity-metric");
   if (entityMetric) {
@@ -1766,13 +1766,13 @@ function renderDocList(docs) {
       failed: "risk-dot-red",
     }[d.status] || "risk-dot-orange";
     const riskDotTitle = {
-      ready: "Anonymisé — prêt pour l'IA",
-      anonymized: "Anonymisé — prêt pour l'IA",
-      processing: "Sécurisation en cours…",
-      extracting: "OCR en cours…",
-      extracted: "OCR terminé",
-      anonymizing: "Sécurisation en cours…",
-      uploaded: "Non anonymisé — risque RGPD",
+      ready: "Prêt pour vos questions",
+      anonymized: "Prêt pour vos questions",
+      processing: "Masquage en cours…",
+      extracting: "Lecture en cours…",
+      extracted: "Lecture terminée",
+      anonymizing: "Masquage en cours…",
+      uploaded: "À masquer avant analyse",
       failed: "Erreur de traitement",
     }[d.status] || "";
     const riskDot = isDeleted ? "" : `<span class="risk-dot ${riskDotClass}" title="${riskDotTitle}"></span>`;
@@ -1897,8 +1897,8 @@ let _redesignDocsSegment = "seg-all";
 let _redesignDocsQuery = "";
 
 function statusToPill(status) {
-  if (REDESIGN_DOC_STATUS_GROUPS["seg-anon"].has(status)) return { cls: "pill-anon", label: "Anonymisé" };
-  if (REDESIGN_DOC_STATUS_GROUPS["seg-review"].has(status)) return { cls: "pill-review", label: "À reviewer" };
+  if (REDESIGN_DOC_STATUS_GROUPS["seg-anon"].has(status)) return { cls: "pill-anon", label: "Prêt" };
+  if (REDESIGN_DOC_STATUS_GROUPS["seg-review"].has(status)) return { cls: "pill-review", label: "À vérifier" };
   if (status === "failed") return { cls: "pill-danger", label: "Échec" };
   if (status === "exported") return { cls: "pill-exported", label: "Exporté" };
   return { cls: "pill-draft", label: documentStatusLabel(status) };
@@ -1948,7 +1948,7 @@ function renderDocumentsRedesign(docs) {
   }
 
   if (summary) {
-    summary.textContent = `${counts.all} document${counts.all > 1 ? "s" : ""} · ${counts.review} en revue · ${counts.anon} anonymisé${counts.anon > 1 ? "s" : ""}`;
+    summary.textContent = `${counts.all} pièce${counts.all > 1 ? "s" : ""} · ${counts.review} à vérifier · ${counts.anon} prête${counts.anon > 1 ? "s" : ""}`;
   }
 
   // Filter according to segment + search
@@ -1996,7 +1996,7 @@ function renderDocumentsRedesign(docs) {
         </td>
         <td data-col="modified" class="tabular">${date}</td>
         <td data-col="actions">
-          <button class="btn-ghost btn-xs" data-action="redesign-open-doc" data-doc-id="${escapeHtml(d?.id || "")}">▶ Reviewer</button>
+          <button class="btn-ghost btn-xs" data-action="redesign-open-doc" data-doc-id="${escapeHtml(d?.id || "")}">Vérifier</button>
         </td>
       </tr>`;
   }).join("");
@@ -2870,12 +2870,12 @@ async function batchAnonymizeSelected() {
     return d && (d.status === "uploaded" || d.status === "failed");
   });
   if (!ids.length) {
-    toast("Aucun document éligible (seuls les docs non anonymisés sont traités)", "error");
+    toast("Aucune pièce à masquer", "error");
     return;
   }
   const ok = await confirm(
-    `${ids.length} document(s) vont être anonymisés.`,
-    `Anonymiser ${ids.length} document(s) ?`,
+    `${ids.length} document(s) vont être masqués.`,
+    `Masquer ${ids.length} document(s) ?`,
     "Lancer"
   );
   if (!ok) return;
@@ -2886,7 +2886,7 @@ async function batchAnonymizeSelected() {
       launched++;
     } catch (_e) { /* continue */ }
   }
-  toast(`${launched} anonymisation(s) lancée(s)`, "success");
+  toast(`${launched} masquage(s) lancé(s)`, "success");
   selectedDocIds.clear();
   batchMode = false;
   const btn = $("btn-batch-toggle");
@@ -3009,7 +3009,7 @@ async function selectDoc(id, status, name, sizeBytes) {
         empty.style.display = "";
         const p = empty.querySelector("p");
         if (p) p.innerHTML =
-        "Document ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.";
+        "Document ajouté.<br>Cliquez sur <strong>Masquer les données</strong> pour démarrer.";
       }
     } else if (st === "failed") {
       const empty = $("anon-empty");
@@ -3019,7 +3019,7 @@ async function selectDoc(id, status, name, sizeBytes) {
         if (icon) icon.innerHTML = `<svg aria-hidden="true" focusable="false" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>`;
         const p = empty.querySelector("p");
         if (p) p.innerHTML =
-        "Le traitement a échoué.<br>Cliquez sur <strong>Anonymiser</strong> pour réessayer.";
+        "Le traitement a échoué.<br>Cliquez sur <strong>Masquer les données</strong> pour réessayer.";
       }
     } else {
       const empty = $("anon-empty");
@@ -3118,8 +3118,8 @@ function buildAIChatIntroHtml() {
     '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
     '</div>' +
-    '<h3>Document prêt pour l’analyse IA</h3>' +
-    '<p>Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité.</p>' +
+    '<h3>Document prêt pour vos questions</h3>' +
+    '<p>Les données sensibles sont masquées. Vous pouvez poser vos questions en sécurité.</p>' +
     `<div class="chat-suggestions" aria-label="Suggestions de questions">${suggestions}</div>` +
     '</div>';
 }
@@ -3148,7 +3148,7 @@ function renderAIReadySummary(details = {}) {
   const fileKind = documentFileKind();
   const entities = details.entitiesText || formatEntitySummary(details.entitySummary);
   const exportTitle = $("export-guard-title")?.textContent || "Export prêt";
-  const exportDetail = $("export-guard-detail")?.textContent || "Document anonymisé.";
+  const exportDetail = $("export-guard-detail")?.textContent || "Document masqué.";
   const previewNote = details.previewError
     ? `<p class="ai-ready-note">${escapeHtml(details.previewError)}</p>`
     : "";
@@ -3156,7 +3156,7 @@ function renderAIReadySummary(details = {}) {
   card.innerHTML = `
     <div class="ai-ready-copy">
       <p class="ai-ready-eyebrow">${details.justValidated ? "Validation terminée" : "Document sélectionné"}</p>
-      <h3>Document anonymisé et prêt pour l’IA</h3>
+      <h3>Document prêt pour vos questions</h3>
       <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve DPO ou revenir à la revue.</p>
       ${previewNote}
     </div>
@@ -3312,7 +3312,7 @@ function renderDocumentDetailShell(details = {}) {
   if (auditLog) {
     auditLog.innerHTML = `
       <li><span class="ts">now</span><span class="what"><strong>Original chargé</strong><br>${escapeHtml(fileKind)} · ${escapeHtml(size || "taille inconnue")}</span></li>
-      <li><span class="ts">DPO</span><span class="what"><strong>Anonymisation</strong><br>${Number(count || 0)} entité(s) suivie(s)</span></li>
+      <li><span class="ts">RGPD</span><span class="what"><strong>Masquage</strong><br>${Number(count || 0)} donnée(s) suivie(s)</span></li>
     `;
   }
 }
@@ -3647,12 +3647,12 @@ async function uploadFile(file) {
             `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Sécurisation en cours en arrière-plan…`;
             } else {
               pEl.innerHTML =
-            `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Cliquez sur <strong>Anonymiser</strong> pour démarrer.`;
+            `<strong>${escapeHtml(file.name)}</strong> ajouté.<br>Cliquez sur <strong>Masquer les données</strong> pour démarrer.`;
             }
           }
         }
         if (autoAnon) {
-          showAnonLoading("Mistral OCR et sécurisation en cours…");
+          showAnonLoading("Lecture et masquage en cours…");
           updateProcessingConsole({
             status: currentDocStatus,
             backend: (data.processing?.background_processing || "api").toUpperCase(),
@@ -4129,7 +4129,7 @@ async function anonymize() {
   if (!currentDocId) { toast("Aucun document sélectionné", "error"); return; }
   const profile = $("anon-profile").value;
   const mode = $("anon-mode") ? $("anon-mode").value : "pseudonymization";
-  showAnonLoading(mode === "anonymization" ? "Anonymisation forte en cours…" : "Sécurisation en cours…");
+  showAnonLoading("Masquage en cours…");
 
   try {
     const res = await fetch(
@@ -5507,14 +5507,14 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
   const leadEl = $("home-hero-lead");
   if (leadEl) {
     if (reviewCount === 0 && totalDocs === 0) {
-      leadEl.textContent = "Aucun document n'a encore été uploadé. Importe ton premier PDF pour démarrer.";
+      leadEl.textContent = "Aucune pièce n'a encore été déposée. Déposez une première pièce pour démarrer.";
     } else if (reviewCount === 0) {
-      leadEl.textContent = "Aucun document n'attend ta revue.";
+      leadEl.textContent = "Aucune pièce n'attend votre vérification.";
     } else {
       const failed = Number(summary.failed ?? sc.failed ?? 0);
       leadEl.textContent = failed > 0
-        ? `${failed} document${failed > 1 ? "s ont" : " a"} échoué — pense à les ré-anonymiser.`
-        : "Tout est sous contrôle, prends ton café et review tranquillement.";
+        ? `${failed} document${failed > 1 ? "s ont" : " a"} échoué — relancez le masquage.`
+        : "Tout est sous contrôle.";
     }
   }
 
@@ -5526,9 +5526,9 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
       list.innerHTML = `
         <li>
           <div></div>
-          <div><div class="name">Aucun document à reviewer.</div><div class="meta">Glisse un PDF dans Documents pour démarrer.</div></div>
+          <div><div class="name">Aucune pièce à vérifier.</div><div class="meta">Déposez une pièce client pour démarrer.</div></div>
           <div></div>
-          <button class="btn-ghost" data-action="open-upload">+ Importer</button>
+          <button class="btn-ghost" data-action="open-upload">Ajouter</button>
         </li>`;
     } else {
       list.innerHTML = items.map(d => {
@@ -5546,8 +5546,8 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
               <div class="name">${name}</div>
               <div class="meta">${meta}</div>
             </div>
-            <span class="pill pill-review">À reviewer</span>
-            <button class="btn-ghost" data-action="open-dossier" data-dossier="${escapeHtml(d?.client_id || d?.id || "")}">▶ Reviewer</button>
+            <span class="pill pill-review">À vérifier</span>
+            <button class="btn-ghost" data-action="open-dossier" data-dossier="${escapeHtml(d?.client_id || d?.id || "")}">Vérifier</button>
           </li>`;
       }).join("");
     }
@@ -5558,7 +5558,7 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
   if (tl) {
     const events = [];
     const uploaded24 = Number(summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
-    if (uploaded24 > 0) events.push(`<div class="ev"><span class="ts">24 h</span> · ${uploaded24} document${uploaded24 > 1 ? "s" : ""} uploadé${uploaded24 > 1 ? "s" : ""}</div>`);
+    if (uploaded24 > 0) events.push(`<div class="ev"><span class="ts">24 h</span> · ${uploaded24} document${uploaded24 > 1 ? "s" : ""} déposé${uploaded24 > 1 ? "s" : ""}</div>`);
     const ready = Number(summary.ready ?? sc.ready ?? 0) + Number(summary.anonymized ?? sc.anonymized ?? 0);
     if (ready > 0) events.push(`<div class="ev"><span class="ts">Cumulé</span> · ${ready} anonymisation${ready > 1 ? "s" : ""} validée${ready > 1 ? "s" : ""}</div>`);
     const failed = Number(summary.failed ?? sc.failed ?? 0);
@@ -5818,10 +5818,10 @@ function renderSettingsRedesignTab(tab) {
   const stubs = {
     "set-profile": ["Profil", "Email, mot de passe, photo de profil, signature DPO."],
     "set-appearance": ["Apparence", "Thème (clair / sombre), densité d'affichage, taille de typo."],
-    "set-anonymization": ["Anonymisation", "Mode par défaut (pseudonymiser vs. anonymiser fort), règles personnalisées par type de document."],
-    "set-copilot": ["Copilot", "Modèle IA, contexte autorisé, limites d'usage, audit des questions posées."],
-    "set-api": ["API & intégrations", "Clés API, webhooks, intégration cabinet, exports automatiques."],
-    "set-team": ["Équipe", "Membres, rôles (admin, comptable, DPO), invitations en attente."],
+    "set-anonymization": ["Masquage", "Règles de masquage réservées aux administrateurs."],
+    "set-copilot": ["Assistant", "Réglages avancés de l'assistant réservés aux administrateurs."],
+    "set-api": ["Connexions", "Accès techniques et intégrations réservés aux administrateurs."],
+    "set-team": ["Équipe", "Membres, rôles et invitations."],
   };
   const [title, desc] = stubs[tab] || stubs["set-profile"];
   c.innerHTML = `
@@ -7268,7 +7268,7 @@ document.addEventListener("DOMContentLoaded", () => {
           showAuditPanel();
           break;
         case "settings":
-          showStubPanel("panel-settings", "settings", "Paramètres");
+          showStubPanel("panel-settings", "settings", "Compte");
           break;
       }
     });
@@ -7573,11 +7573,11 @@ document.addEventListener("DOMContentLoaded", () => {
     reportMode = !reportMode;
     const b = $("btn-report-mode");
     b.dataset.on = reportMode ? "true" : "false";
-    b.textContent = reportMode ? "Mode rapport: ON" : "Mode rapport: OFF";
+    b.textContent = reportMode ? "Rapport: ON" : "Rapport: OFF";
     b.classList.toggle("active", reportMode);
     // Show/hide export rapport button
     if ($("btn-export-rapport")) $("btn-export-rapport").style.display = reportMode ? "" : "none";
-    toast(reportMode ? "Mode rapport activé — les réponses seront structurées automatiquement" : "Mode rapport désactivé", "info");
+    toast(reportMode ? "Rapport activé" : "Rapport désactivé", "info");
   });
   // Export rapport: export latest structured answer as Premium Branded PDF
   if ($("btn-export-rapport")) {
@@ -7605,7 +7605,7 @@ document.addEventListener("DOMContentLoaded", () => {
         <html lang="fr">
         <head>
           <meta charset="UTF-8">
-          <title>Rapport d'Analyse IA — ${docName}</title>
+          <title>Rapport ConfiDoc — ${docName}</title>
           <style>
             @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap');
             @page { margin: 20mm; size: A4; }
@@ -7638,7 +7638,7 @@ document.addEventListener("DOMContentLoaded", () => {
             <div class="logo">ConfiDoc</div>
             <div class="meta">
               <p><strong>Date d'analyse :</strong> ${dateStr}</p>
-              <p><strong>Modèle d'IA :</strong> Mistral-Large (Contexte Anonymisé)</p>
+              <p><strong>Traitement :</strong> document masqué</p>
             </div>
           </div>
           <div class="doc-title">Document analysé : ${docName}</div>
@@ -7646,7 +7646,7 @@ document.addEventListener("DOMContentLoaded", () => {
             ${lastAnswerHtml}
           </div>
           <div class="footer">
-            Rapport confidentiel généré par ConfiDoc. Les données personnelles et financières ont été anonymisées par un système déterministe avant soumission à l'Intelligence Artificielle afin de garantir le strict respect du RGPD et du secret professionnel.
+            Rapport confidentiel généré par ConfiDoc. Les données sensibles ont été masquées avant analyse pour protéger le secret professionnel et le RGPD.
           </div>
           <script>
             window.onload = function() { 
@@ -7667,10 +7667,10 @@ document.addEventListener("DOMContentLoaded", () => {
       copilotMode = !copilotMode;
       const b = $("btn-copilot-mode");
       b.dataset.on = copilotMode ? "true" : "false";
-      b.textContent = copilotMode ? "Copilot: ON" : "Copilot: OFF";
+      b.textContent = copilotMode ? "Assistant: ON" : "Assistant: OFF";
       b.classList.toggle("active", copilotMode);
       if (!copilotMode && $("copilot-insights")) $("copilot-insights").style.display = "none";
-      toast(copilotMode ? "Copilot activé" : "Copilot désactivé", "info");
+      toast(copilotMode ? "Assistant activé" : "Assistant désactivé", "info");
     });
   }
 

@@ -48,20 +48,21 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert "google_translate_element" not in resp.text
     assert "onclick=" not in resp.text
     assert "oninput=" not in resp.text
-    assert "Accueil cabinet" in resp.text
+    assert "Déposez une pièce client" in resp.text
+    assert "ConfiDoc masque les données sensibles avant l'analyse ou l'export." in resp.text
     assert 'id="btn-work-clients"' in resp.text
     assert 'data-action="open-clients"' in resp.text
     assert 'id="upload-zone"' in resp.text
     assert 'class="upload-zone-inner"' in resp.text
     assert 'id="upload-client-name"' in resp.text
     assert 'for="upload-client-name"' in resp.text
-    assert "Document prêt pour l’analyse IA" in resp.text
+    assert "Document prêt pour vos questions" in resp.text
     assert (
-        "Le document a été anonymisé. Vous pouvez poser vos questions en toute sécurité."
+        "Les données sensibles sont masquées. Vous pouvez poser vos questions en sécurité."
         in resp.text
     )
     assert "Résumer le document" in resp.text
-    assert "Document anonymisé et prêt pour l’IA" in resp.text
+    assert "Document prêt pour vos questions" in resp.text
     assert "Score RGPD non disponible" in resp.text
     assert "Ajoutez un premier document pour calculer votre posture RGPD." in resp.text
     assert "Aucune recommandation pour le moment." in resp.text
@@ -126,9 +127,9 @@ async def test_home_secondary_content_is_progressively_disclosed(client):
     """Accueil: dense secondary blocks are collapsed behind <details> (less noise)."""
     resp = await client.get("/ui")
     assert resp.status_code == 200
-    # Collapsible sections present (standard "Accès rapides" + expert dashboard).
-    assert resp.text.count('class="home-advanced"') >= 2
-    assert "Accès rapides" in resp.text
+    # Secondary dashboard sections are hidden/collapsed; primary upload stays first.
+    assert resp.text.count("home-advanced") >= 2
+    assert "Déposez une pièce client" in resp.text
     assert "Tableau de bord détaillé" in resp.text
     assert "/static/css/workspace.css" in resp.text
     # Jargon removed.
@@ -145,7 +146,8 @@ async def test_document_analysis_advanced_blocks_are_collapsed(client):
     resp = await client.get("/ui")
     assert resp.status_code == 200
     # Document-analysis collapsibles add to the home ones.
-    assert resp.text.count('class="home-advanced"') >= 4
+    assert resp.text.count("home-advanced") >= 4
+    assert 'class="home-advanced expert-only"' in resp.text
     assert "Outils cabinet" in resp.text
     assert "Détails techniques du document" in resp.text
     # Primary analysis surface + advanced controls remain in the DOM (JS intact).
@@ -167,13 +169,19 @@ async def test_ui_is_de_jargonised(client):
         "Trust score",
         "Golden sets",
         "Audit-Ready",
+        "Copilot: OFF",
+        "Mode rapport: OFF",
+        "À reviewer",
+        "Reviewer",
     ):
         assert jargon not in resp.text, jargon
     for plain in (
         "Apprentissage continu",
         "Indice de confiance",
-        "Journal d'audit & preuve",
+        "Preuve RGPD détaillée",
         "Répartition des risques",
+        "Pièces client",
+        "Questions sur le document",
     ):
         assert plain in resp.text, plain
     # "Grand livre" survives only as the accounting document type, never as a UI title.
@@ -185,7 +193,8 @@ async def test_quality_and_compliance_analytics_are_collapsed(client):
     """Qualité/Conformité: dense analytics collapse, keeping the score primary."""
     resp = await client.get("/ui")
     assert resp.status_code == 200
-    assert resp.text.count('class="home-advanced"') >= 6
+    assert resp.text.count("home-advanced") >= 6
+    assert 'class="home-advanced expert-only"' in resp.text
     assert "Détails : apprentissage & traitement" in resp.text
     assert "Détails de conformité" in resp.text
     # JS-driven analytics still in the DOM.
@@ -195,11 +204,23 @@ async def test_quality_and_compliance_analytics_are_collapsed(client):
 
 
 @pytest.mark.anyio
+async def test_audit_panel_stays_simple_and_document_oriented(client):
+    resp = await client.get("/ui")
+    assert resp.status_code == 200
+    assert "Preuves RGPD" in resp.text
+    assert "La preuve se télécharge depuis chaque document validé." in resp.text
+    assert 'data-action="open-documents"' in resp.text
+    assert 'id="audit-resource-filter"' not in resp.text
+    assert 'id="btn-audit-refresh"' not in resp.text
+    assert "Le journal d'audit s'affichera ici. Branchement API à venir." not in resp.text
+
+
+@pytest.mark.anyio
 async def test_platform_navigation_links_ui_and_firewall(client):
-    """One platform: /ui links to the AI Firewall, /firewall links back to the workspace."""
+    """One platform: /ui keeps advanced AI protection reachable from the header."""
     ui = await client.get("/ui")
     assert ui.status_code == 200
-    assert 'class="topbar__firewall-link"' in ui.text
+    assert 'topbar__firewall-link expert-only' in ui.text
     assert 'href="/firewall"' in ui.text
     assert "fw-badge" in ui.text  # the Active badge
 
@@ -207,7 +228,7 @@ async def test_platform_navigation_links_ui_and_firewall(client):
     assert fw.status_code == 200
     assert 'class="nav-back"' in fw.text
     assert 'href="/ui"' in fw.text
-    assert "← Workspace" in fw.text
+    assert "← ConfiDoc" in fw.text
 
 
 @pytest.mark.anyio
