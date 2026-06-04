@@ -47,6 +47,9 @@ BIRTH_TABLE_DATE_RE = re.compile(
     r"(?i)\bNaissance\s*:\s*\|\s*Date\s*\|\s*"
     r"(?P<date>\d{1,2}[/\-\.]\d{1,2}[/\-\.]\d{2,4})"
 )
+IDENTITY_BLOCK_AMOUNT_RE = re.compile(
+    r"(?i)\b\d{1,3}(?:[\s\u00a0]?\d{3})*(?:[.,]\d{2})?\s?(?:€|EUR|euros?)\b"
+)
 
 
 def is_false_positive(value: str) -> bool:
@@ -339,6 +342,13 @@ def _detect_identity_block(text: str, matches: list[dict[str, Any]]) -> None:
         clean = line.strip()
         if not clean or len(clean) < 6:
             continue
+        amount_match = IDENTITY_BLOCK_AMOUNT_RE.search(clean)
+        if amount_match:
+            identity_prefix = clean[: amount_match.start()].rstrip(" \t,.;:-")
+            if not identity_prefix or len(identity_prefix) < 6:
+                continue
+            clean = identity_prefix
+
         lowered = clean.lower()
         if "|" in clean or lowered.startswith(("dénomination", "denomination")):
             continue
@@ -371,10 +381,14 @@ def _detect_identity_block(text: str, matches: list[dict[str, Any]]) -> None:
         if not looks_identity:
             continue
 
-        start = text.find(line)
-        if start < 0:
+        line_start = text.find(line)
+        if line_start < 0:
             continue
-        end = start + len(line)
+        offset = line.find(clean)
+        if offset < 0:
+            continue
+        start = line_start + offset
+        end = start + len(clean)
         replacement = "[IDENTITY]"
         if re.search(
             r"\b(?:M\.|Mr\.|Monsieur|Mme|Madame|Mlle|Mademoiselle|Dr\.?|Me|Ma[iî]tre)"

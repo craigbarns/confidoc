@@ -78,3 +78,30 @@ def test_dataset_accounting_pseudo_keeps_business_amounts_but_masks_identities()
     assert (
         any(rep.startswith("[PERSONNE") for rep in replacements) or TOKEN_PERSONNE in replacements
     )
+
+
+def test_compact_accounting_line_keeps_amount_but_masks_identity():
+    text = (
+        "Client Jean Dupont, ACME SAS, SIRET 832 419 428 00038, "
+        "IBAN FR76 3000 6000 0112 3456 7890 189, email jean.dupont@example.com, "
+        "téléphone 06 12 34 56 78. Montant facture 12 000 EUR."
+    )
+
+    out, detections, _ = anonymize_text(
+        text,
+        profile="dataset_accounting_pseudo",
+        document_type="accounting",
+    )
+
+    assert "12 000 EUR" in out
+    for leak in (
+        "Jean Dupont",
+        "ACME SAS",
+        "832 419 428 00038",
+        "FR76 3000",
+        "jean.dupont@example.com",
+        "06 12 34 56 78",
+    ):
+        assert leak not in out
+
+    assert any(item["entity_type"] == "invoice_identity_block" for item in detections)
