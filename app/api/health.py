@@ -45,9 +45,16 @@ def _inspect_celery_workers() -> dict[str, Any]:
 async def _check_celery_workers() -> dict[str, Any]:
     """Return a cached, non-critical Celery readiness result.
 
-    Celery inspect is blocking and can take ~2s on Railway. Keep readiness fast:
+    In mono-service mode (`DOCUMENT_PROCESSING_BACKEND=api`), Celery is not part
+    of the runtime contract and must not make readiness look degraded. When the
+    celery backend is explicitly enabled, inspect workers with a short timeout:
     DB/Redis remain critical, while worker state is informational and cached.
     """
+    settings = get_settings()
+    backend = str(settings.DOCUMENT_PROCESSING_BACKEND or "api").lower()
+    if backend != "celery":
+        return {"status": "skipped", "detail": f"backend={backend}"}
+
     now = time.monotonic()
     cached = _celery_probe_cache.get("payload")
     checked_at = float(_celery_probe_cache.get("checked_at") or 0.0)
@@ -62,7 +69,6 @@ async def _check_celery_workers() -> dict[str, Any]:
             timeout=_CELERY_PROBE_TIMEOUT_SECONDS,
         )
     except Exception as exc:
-        settings = get_settings()
         payload = {
             "status": "warning",
             "detail": _safe_dependency_error(exc, production=settings.is_production),

@@ -1,5 +1,7 @@
 """ConfiDoc — Tests health / readiness / metrics endpoints."""
 
+from types import SimpleNamespace
+
 import pytest
 from httpx import AsyncClient
 
@@ -53,6 +55,29 @@ async def test_readiness_endpoint_responds_with_known_shape(client: AsyncClient)
     checks = body.get("checks", {})
     assert "database" in checks
     assert "redis" in checks
+
+
+@pytest.mark.anyio
+async def test_celery_readiness_is_skipped_in_api_backend(monkeypatch):
+    """Mono-service Railway does not require Celery workers."""
+    from app.api import health
+
+    monkeypatch.setattr(
+        health,
+        "get_settings",
+        lambda: SimpleNamespace(DOCUMENT_PROCESSING_BACKEND="api", is_production=True),
+    )
+    monkeypatch.setattr(
+        health,
+        "_inspect_celery_workers",
+        lambda: pytest.fail("Celery must not be inspected in api backend mode"),
+    )
+    health._celery_probe_cache["checked_at"] = 0.0
+    health._celery_probe_cache["payload"] = None
+
+    payload = await health._check_celery_workers()
+
+    assert payload == {"status": "skipped", "detail": "backend=api"}
 
 
 @pytest.mark.anyio

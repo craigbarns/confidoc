@@ -139,7 +139,7 @@ Variables minimales a fournir en production :
 Checks operationnels :
 
 - `GET /health` : liveness rapide.
-- `GET /readiness` : PostgreSQL, Redis, stockage et workers Celery informatifs.
+- `GET /readiness` : PostgreSQL, Redis, stockage; Celery est `skipped` en mono-service et sonde uniquement si `DOCUMENT_PROCESSING_BACKEND=celery`.
 - `GET /version` : version, environnement et metadata Railway non sensibles.
 - Docker : healthcheck integre sur `/health`.
 - Audit : les details sensibles sont minimises, les champs suspects sont hashes, et chaque entree recoit un `event_hash`.
@@ -147,11 +147,12 @@ Checks operationnels :
 ### Railway production checklist
 
 - Configurer `APP_ENV=production` et `APP_VERSION`.
+- Configurer `DEBUG=false`.
 - Fournir `DATABASE_URL` PostgreSQL Railway et `REDIS_URL` Redis Railway.
 - Fournir `SECRET_KEY`, `JWT_SECRET_KEY`, `ENCRYPTION_MASTER_KEY`, `PSEUDO_MAPPING_KEY`, `BOOTSTRAP_SECRET`.
-- Configurer `SENSITIVE_CLIENT_MODE=true` pour les clients pilotes qui refusent les appels IA externes.
 - Utiliser `STORAGE_BACKEND=database` pour un premier pilote Railway simple, ou `STORAGE_BACKEND=minio` avec bucket S3/R2/MinIO persistant; `local` est bloque en production.
 - Restreindre `ALLOWED_ORIGINS` au domaine Railway/front reel.
+- Garder `DOCUMENT_PROCESSING_BACKEND=api` pour les pilotes mono-service; ne passer a `celery` que si des workers dedies sont réellement deployes.
 - Lancer les migrations Alembic avant demo client : `alembic upgrade head`.
 - Tests locaux avant deploy : `pytest tests/ -q` puis `ruff check app tests scripts`.
 - Smoke test post-deploy : `python scripts/smoke_test.py --base-url https://VOTRE-APP.up.railway.app`.
@@ -162,6 +163,7 @@ Checks operationnels :
 Variables Railway obligatoires pour une demo live :
 
 - `APP_ENV=production`
+- `DEBUG=false`
 - `DATABASE_URL`
 - `REDIS_URL`
 - `SECRET_KEY`
@@ -172,6 +174,23 @@ Variables Railway obligatoires pour une demo live :
 - `ALLOWED_ORIGINS`
 - `STORAGE_BACKEND`
 - `DOCUMENT_PROCESSING_BACKEND=api` pour une demo mono-service, `celery` seulement si workers Railway dedies.
+
+Preset Railway "demo standard" :
+
+- `DOCUMENT_PROCESSING_BACKEND=api`
+- `DEMO_MODE=true`
+- `DEMO_SEED_ENABLED=true`
+- `SENSITIVE_CLIENT_MODE=false`
+- `MISTRAL_ENABLED=true` si la demo utilise l'OCR/IA externe.
+
+Preset Railway "cabinet sensible" :
+
+- `DOCUMENT_PROCESSING_BACKEND=api`
+- `DEMO_MODE=true` ou `false` selon le contexte commercial.
+- `SENSITIVE_CLIENT_MODE=true`
+- `MISTRAL_ENABLED=false` si le client refuse tout appel IA externe.
+- `OLLAMA_ENABLED=false` par defaut; activer une IA locale seulement avec une infrastructure dediee.
+- Ne pas activer Celery tant que les temps de traitement des pilotes ne le justifient pas.
 
 Checklist avant demo investisseur :
 
