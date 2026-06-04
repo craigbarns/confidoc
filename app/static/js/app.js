@@ -4872,8 +4872,9 @@ async function sendCopilotMessage(question, inputEl) {
     $("btn-copy-answer").disabled = !latestAssistantText.trim();
     renderCopilotInsights(resp);
   } catch (e) {
-    bodyEl.textContent = `[Erreur: ${e.message}]`;
-    toast(`Copilot indisponible: ${e.message}`, "error");
+    const friendly = copilotFriendlyErrorMessage(e.message);
+    bodyEl.textContent = friendly;
+    toast(friendly, "error");
   } finally {
     bodyEl.classList.remove("streaming");
     if (reportMode && latestAssistantText.trim()) {
@@ -4886,6 +4887,24 @@ async function sendCopilotMessage(question, inputEl) {
     $("btn-stop-stream").style.display = "none";
     saveChatHistory(currentDocId);
   }
+}
+
+function copilotFriendlyErrorMessage(message = "") {
+  const raw = String(message || "");
+  if (raw.includes("Aucun texte anonymisé") || raw.includes("document n'est pas prêt")) {
+    return "Le document doit d'abord être anonymisé avant de poser une question.";
+  }
+  if (
+    raw.includes("Risque élevé") ||
+    raw.includes("identifiants directs") ||
+    raw.includes("validation humaine")
+  ) {
+    return "Le Copilot attend une validation humaine avant de répondre sur ce document.";
+  }
+  if (raw.includes("Contrôle RGPD") || raw.includes("Privacy Gate")) {
+    return "Le contrôle RGPD bloque temporairement le Copilot par sécurité.";
+  }
+  return "Le Copilot ne peut pas répondre pour le moment. Réessayez après vérification du document.";
 }
 
 function renderCopilotInsights(resp = {}) {
@@ -7822,7 +7841,7 @@ async function askCopilotFromDrawer(question) {
       </div>
     `;
   } catch (e) {
-    recentEl.innerHTML = `<div style="color:var(--danger)">Erreur Copilot: ${escapeHtml(e.message)}</div>`;
+    recentEl.innerHTML = `<div style="color:var(--danger)">${escapeHtml(copilotFriendlyErrorMessage(e.message))}</div>`;
   }
 }
 

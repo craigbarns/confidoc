@@ -10,7 +10,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._firewall import guard_inbound_response, guard_outbound_prompt
-from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
+from app.api.v1._privacy_gate import privacy_gate_public_summary
 from app.config import get_settings
 from app.core.exceptions import http_400, http_404
 from app.models.document import Document
@@ -21,6 +21,7 @@ from app.schemas.copilot import (
     CopilotAskResponse,
     CopilotCompareRequest,
 )
+from app.services.agents.privacy_gate import evaluate_document_privacy_gate
 from app.services.copilot_service import (
     build_dual_corpus,
     confidence_bucket,
@@ -29,6 +30,15 @@ from app.services.copilot_service import (
 )
 
 router = APIRouter()
+
+_HARD_COPILOT_PRIVACY_FLAGS = {
+    "critical_reidentification_risk",
+    "direct_identifier_external_use",
+    "document_not_ready",
+    "document_unusable",
+    "high_risk_without_human_validation",
+    "missing_anonymized_text",
+}
 
 
 def _copilot_privacy_action() -> str:
@@ -75,6 +85,83 @@ async def _get_anonymized_text(db: DbSession, document: Document) -> str:
     return ""
 
 
+def _append_unique(items: list[str], value: str) -> None:
+    cleaned = str(value or "").strip()
+    if cleaned and cleaned not in items:
+        items.append(cleaned)
+
+
+def _privacy_gate_flags(result: dict) -> set[str]:
+    evidence = result.get("evidence") or {}
+    return {str(flag) for flag in evidence.get("flags") or []}
+
+
+def _can_answer_locally_without_external_ai(result: dict) -> bool:
+    flags = _privacy_gate_flags(result)
+    return (
+        result.get("decision") == "human_review_required"
+        and "medium_risk_external_use" in flags
+        and not flags.intersection(_HARD_COPILOT_PRIVACY_FLAGS)
+    )
+
+
+def _copilot_privacy_block_detail(result: dict) -> str:
+    reasons = [str(item).strip() for item in result.get("reasons") or [] if str(item).strip()]
+    actions = [
+        str(item).strip() for item in result.get("required_actions") or [] if str(item).strip()
+    ]
+    detail = "Le Copilot ne peut pas répondre automatiquement pour ce document."
+    if reasons:
+        detail += " " + " ".join(reasons)
+    if actions:
+        detail += " Action requise : " + " ".join(actions)
+    return detail
+
+
+def _copilot_privacy_warnings(result: dict, *, local_only: bool = False) -> list[str]:
+    warnings: list[str] = []
+    for warning in privacy_gate_public_summary(result).get("warnings", []):
+        _append_unique(warnings, str(warning))
+    if result.get("decision") == "human_review_required":
+        for reason in result.get("reasons") or []:
+            _append_unique(warnings, str(reason))
+        for action in result.get("required_actions") or []:
+            _append_unique(warnings, str(action))
+    if local_only:
+        _append_unique(
+            warnings,
+            "Réponse générée localement depuis la version masquée, sans appel IA externe.",
+        )
+    return warnings
+
+
+async def _evaluate_copilot_privacy_gate(
+    db: DbSession,
+    document: Document,
+    anonymized_text: str,
+) -> dict:
+    try:
+        return await evaluate_document_privacy_gate(
+            db,
+            document,
+            requested_action=_copilot_privacy_action(),
+            anonymized_text=anonymized_text,
+        )
+    except Exception as exc:
+        raise http_400(
+            "Contrôle RGPD indisponible : le Copilot est temporairement bloqué par sécurité."
+        ) from exc
+
+
+def _copilot_allow_llm_or_raise(privacy_gate: dict) -> bool:
+    decision = privacy_gate.get("decision")
+    if decision == "allow":
+        return True
+    if _can_answer_locally_without_external_ai(privacy_gate):
+        return False
+    raise http_400(_copilot_privacy_block_detail(privacy_gate))
+
+
 @router.post(
     "/{document_id}/ask",
     response_model=CopilotAskResponse,
@@ -93,21 +180,15 @@ async def copilot_ask(
     if not anonymized_text:
         raise http_400("Aucun texte anonymisé disponible. Lancez d'abord l'anonymisation.")
 
-    privacy_gate = await require_privacy_gate(
-        db,
-        document,
-        _copilot_privacy_action(),
-        anonymized_text=anonymized_text,
-    )
+    privacy_gate = await _evaluate_copilot_privacy_gate(db, document, anonymized_text)
+    allow_llm = _copilot_allow_llm_or_raise(privacy_gate)
     top_k = 3 if body.mode != "quick" else 2
     citations = retrieve_citations(body.question, anonymized_text, top_k=top_k)
     # ── AI Firewall (outbound): inspect the user question before it reaches the LLM ──
     guarded_question, _ = await guard_outbound_prompt(body.question)
-    answer = await generate_copilot_answer(guarded_question, citations)
+    answer = await generate_copilot_answer(guarded_question, citations, allow_llm=allow_llm)
     confidence = confidence_bucket(citations)
-    warnings: list[str] = [
-        *privacy_gate_public_summary(privacy_gate).get("warnings", []),
-    ]
+    warnings = _copilot_privacy_warnings(privacy_gate, local_only=not allow_llm)
     if confidence != "high":
         warnings.append("Réponse à valider humainement avant décision.")
 
@@ -155,30 +236,32 @@ async def copilot_compare(
             "Lancez l'anonymisation sur chacun."
         )
 
-    privacy_gate_a = await require_privacy_gate(
-        db,
-        doc_a,
-        _copilot_privacy_action(),
-        anonymized_text=text_a,
-    )
-    privacy_gate_b = await require_privacy_gate(
-        db,
-        doc_b,
-        _copilot_privacy_action(),
-        anonymized_text=text_b,
-    )
+    privacy_gate_a = await _evaluate_copilot_privacy_gate(db, doc_a, text_a)
+    privacy_gate_b = await _evaluate_copilot_privacy_gate(db, doc_b, text_b)
+    allow_llm_a = _copilot_allow_llm_or_raise(privacy_gate_a)
+    allow_llm_b = _copilot_allow_llm_or_raise(privacy_gate_b)
+    allow_llm = allow_llm_a and allow_llm_b
     question = (body.question or "").strip() or DEFAULT_COMPARE_QUESTION
     combined = build_dual_corpus(text_a, text_b)
     citations = retrieve_citations(question, combined, top_k=4)
     # ── AI Firewall (outbound): inspect the question before it reaches the LLM ──
     guarded_question, _ = await guard_outbound_prompt(question)
-    answer = await generate_copilot_answer(guarded_question, citations)
+    answer = await generate_copilot_answer(guarded_question, citations, allow_llm=allow_llm)
     confidence = confidence_bucket(citations)
-    warnings: list[str] = [
-        *privacy_gate_public_summary(privacy_gate_a).get("warnings", []),
-        *privacy_gate_public_summary(privacy_gate_b).get("warnings", []),
+    warnings: list[str] = []
+    for warning in _copilot_privacy_warnings(privacy_gate_a):
+        _append_unique(warnings, warning)
+    for warning in _copilot_privacy_warnings(privacy_gate_b):
+        _append_unique(warnings, warning)
+    if not allow_llm:
+        _append_unique(
+            warnings,
+            "Réponse générée localement depuis la version masquée, sans appel IA externe.",
+        )
+    _append_unique(
+        warnings,
         "Comparaison indicative — validation humaine obligatoire avant toute décision.",
-    ]
+    )
     if confidence != "high":
         warnings.append("Couverture des sources limitée sur un ou deux documents.")
     # Same client tag hint (optional)

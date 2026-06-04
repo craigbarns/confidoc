@@ -106,25 +106,88 @@ def confidence_bucket(citations: list[dict[str, Any]]) -> str:
     return "low"
 
 
-async def generate_copilot_answer(question: str, citations: list[dict[str, Any]]) -> str:
-    context = "\n\n".join([f"[Source {idx + 1}] {c['snippet']}" for idx, c in enumerate(citations)])
-    payload = {
-        "anonymized_text": context[:9000],
-        "user_question": question.strip(),
-    }
-    try:
-        llm = await generate_summary_with_mistral(payload, prudent_mode=True, mode="question")
-        validated = llm.get("validated") or {}
-        resume = str(validated.get("resume_executif") or "").strip()
-        points = validated.get("points_cles") or []
-        if resume:
-            return "\n".join([resume] + [f"- {p}" for p in points[:3] if str(p).strip()])
-    except Exception:
-        pass
+def _citation_bullets(citations: list[dict[str, Any]], *, limit: int = 3) -> list[str]:
+    bullets: list[str] = []
+    for citation in citations[:limit]:
+        snippet = _normalize_spaces(str(citation.get("snippet") or ""))
+        if snippet:
+            bullets.append(f"- {snippet[:520]}")
+    return bullets
 
+
+def _generate_local_answer(question: str, citations: list[dict[str, Any]]) -> str:
     if not citations:
-        return "Je ne trouve pas d'éléments suffisants dans le document anonymisé pour répondre avec fiabilité."
-    return (
-        "Voici ce que je peux établir à partir des extraits retrouvés.\n"
-        "Je recommande une vérification humaine si une décision engageante est prise."
+        return (
+            "Je ne trouve pas d'éléments suffisants dans la version masquée du document "
+            "pour répondre avec fiabilité."
+        )
+
+    question_lower = question.lower()
+    bullets = _citation_bullets(citations)
+    if not bullets:
+        return (
+            "Je ne trouve pas d'éléments suffisamment lisibles dans la version masquée "
+            "du document pour répondre avec fiabilité."
+        )
+
+    if any(term in question_lower for term in ("résum", "resume", "synth", "document")):
+        return "\n".join(
+            [
+                "Synthèse basée sur la version masquée du document.",
+                *bullets,
+                "À valider humainement si cette synthèse est partagée hors du cabinet.",
+            ]
+        )
+
+    if any(term in question_lower for term in ("rgpd", "risque", "dpo", "donnée", "privacy")):
+        return "\n".join(
+            [
+                "Risques RGPD à contrôler sur la version masquée.",
+                "- Vérifier qu'aucun identifiant direct ne reste visible dans les extraits utiles.",
+                "- Relire les mappings et la preuve d'anonymisation avant diffusion externe.",
+                *bullets[:2],
+            ]
+        )
+
+    if any(term in question_lower for term in ("audit", "comptable", "bilan", "liasse")):
+        return "\n".join(
+            [
+                "Lecture comptable basée uniquement sur les extraits masqués retrouvés.",
+                "- Contrôler la cohérence des montants, variations et annexes citées.",
+                "- Ne pas conclure sans rapprochement avec les pièces et la liasse complète.",
+                *bullets,
+            ]
+        )
+
+    return "\n".join(
+        [
+            "Voici ce que je peux établir à partir de la version masquée du document.",
+            *bullets,
+            "Réponse prudente : une vérification humaine reste nécessaire avant décision.",
+        ]
     )
+
+
+async def generate_copilot_answer(
+    question: str,
+    citations: list[dict[str, Any]],
+    *,
+    allow_llm: bool = True,
+) -> str:
+    context = "\n\n".join([f"[Source {idx + 1}] {c['snippet']}" for idx, c in enumerate(citations)])
+    if allow_llm:
+        payload = {
+            "anonymized_text": context[:9000],
+            "user_question": question.strip(),
+        }
+        try:
+            llm = await generate_summary_with_mistral(payload, prudent_mode=True, mode="question")
+            validated = llm.get("validated") or {}
+            resume = str(validated.get("resume_executif") or "").strip()
+            points = validated.get("points_cles") or []
+            if resume:
+                return "\n".join([resume] + [f"- {p}" for p in points[:3] if str(p).strip()])
+        except Exception:
+            pass
+
+    return _generate_local_answer(question, citations)

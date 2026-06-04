@@ -141,18 +141,29 @@ def _copilot_setup(monkeypatch):
 
 
 @pytest.mark.asyncio
-async def test_copilot_ask_blocked_if_medium_risk_and_no_validation(client, _copilot_setup) -> None:
+async def test_copilot_ask_medium_risk_uses_local_answer_without_external_llm(
+    client, _copilot_setup, monkeypatch
+) -> None:
     _, _, doc, _, _ = _copilot_setup
 
-    # 1. Medium risk, no validation -> should block
+    import app.services.copilot_service as copilot_svc
+
+    async def _fail_summary(*args, **kwargs):
+        pytest.fail("Medium-risk Copilot fallback must not call external LLM")
+
+    monkeypatch.setattr(copilot_svc, "generate_summary_with_mistral", _fail_summary)
+
+    # 1. Medium risk, no validation -> local answer, no external LLM
     resp = await client.post(
         f"/api/v1/copilot/{doc.id}/ask",
         headers={"Authorization": "Bearer fake-token"},
         json={"question": "Quel est le chiffre d'affaires ?"},
     )
-    assert resp.status_code == 400
-    assert "Privacy Gate DPO" in resp.json()["detail"]
-    assert "Risque moyen pour un usage externe" in resp.json()["detail"]
+    assert resp.status_code == 200
+    body = resp.json()
+    assert "version masquée" in body["answer"]
+    assert any("Risque moyen pour un usage externe" in w for w in body["warnings"])
+    assert any("sans appel IA externe" in w for w in body["warnings"])
 
 
 @pytest.mark.asyncio

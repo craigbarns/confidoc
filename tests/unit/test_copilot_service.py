@@ -7,6 +7,7 @@ from app.services.copilot_service import (
     build_dual_corpus,
     confidence_bucket,
     extract_keywords,
+    generate_copilot_answer,
     retrieve_citations,
     split_chunks,
 )
@@ -118,3 +119,23 @@ class TestNormalizeSpaces:
 
     def test_none(self):
         assert _normalize_spaces(None) == ""
+
+
+class TestGenerateCopilotAnswer:
+    @pytest.mark.asyncio
+    async def test_local_summary_does_not_call_llm(self, monkeypatch):
+        import app.services.copilot_service as copilot_svc
+
+        async def _fail_summary(*args, **kwargs):
+            pytest.fail("Local Copilot answer should not call Mistral")
+
+        monkeypatch.setattr(copilot_svc, "generate_summary_with_mistral", _fail_summary)
+
+        answer = await generate_copilot_answer(
+            "Résumer le document",
+            [{"snippet": "Le chiffre d'affaires est de 500 000 euros.", "score": 0.5}],
+            allow_llm=False,
+        )
+
+        assert "version masquée" in answer
+        assert "500 000" in answer
