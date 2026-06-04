@@ -63,9 +63,24 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     )
     assert "Résumer le document" in resp.text
     assert "Document prêt pour vos questions" in resp.text
+    assert "Preuve RGPD" in resp.text
+    assert 'id="btn-context-proof"' in resp.text
+    assert (
+        'href="/trust" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Preuve RGPD'
+        not in resp.text
+    )
+    assert (
+        'href="/trust" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Preuve DPO'
+        not in resp.text
+    )
     assert "Score RGPD non disponible" in resp.text
     assert "Ajoutez un premier document pour calculer votre posture RGPD." in resp.text
     assert "Aucune recommandation pour le moment." in resp.text
+
+    js = await client.get("/static/js/app.js")
+    assert js.status_code == 200
+    assert "Télécharger la preuve RGPD" in js.text
+    assert "downloadAuditReport();" in js.text
 
 
 @pytest.mark.anyio
@@ -220,7 +235,7 @@ async def test_platform_navigation_links_ui_and_firewall(client):
     """One platform: /ui keeps advanced AI protection reachable from the header."""
     ui = await client.get("/ui")
     assert ui.status_code == 200
-    assert 'topbar__firewall-link expert-only' in ui.text
+    assert "topbar__firewall-link expert-only" in ui.text
     assert 'href="/firewall"' in ui.text
     assert "fw-badge" in ui.text  # the Active badge
 

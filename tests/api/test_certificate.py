@@ -149,6 +149,27 @@ async def test_get_compliance_certificate_requires_auth(client):
 
 
 @pytest.mark.asyncio
+async def test_get_audit_report_pdf_success(client, cert_auth_overrides, monkeypatch):
+    _, _, _, document = cert_auth_overrides
+
+    import app.api.v1._doc_export as doc_export
+
+    async def _mock_anon_text(*args, **kwargs):
+        return "Document masqué: [SOCIETE_1] [IBAN_1]."
+
+    monkeypatch.setattr(doc_export, "_get_anonymized_text", _mock_anon_text)
+
+    resp = await client.get(
+        f"/api/v1/documents/{document.id}/audit-report-pdf",
+        headers={"Authorization": "Bearer fake-token-passed-by-dependency-override"},
+    )
+
+    assert resp.status_code == 200
+    assert resp.headers["content-type"] == "application/pdf"
+    assert resp.content.startswith(b"%PDF")
+
+
+@pytest.mark.asyncio
 async def test_get_compliance_certificate_success(client, cert_auth_overrides, monkeypatch):
     app_instance, db, user, document = cert_auth_overrides
 

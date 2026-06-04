@@ -3157,7 +3157,7 @@ function renderAIReadySummary(details = {}) {
     <div class="ai-ready-copy">
       <p class="ai-ready-eyebrow">${details.justValidated ? "Validation terminée" : "Document sélectionné"}</p>
       <h3>Document prêt pour vos questions</h3>
-      <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve DPO ou revenir à la revue.</p>
+      <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve RGPD ou revenir à la revue.</p>
       ${previewNote}
     </div>
     <dl class="ai-ready-meta">
@@ -3172,7 +3172,7 @@ function renderAIReadySummary(details = {}) {
     <div class="ai-ready-actions">
       <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Analyser ce document</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="original">Ouvrir l’original</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger preuve DPO</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger la preuve RGPD</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir l’anonymisation</button>
     </div>`;
   card.style.display = "";
@@ -5130,17 +5130,27 @@ async function showApproveExportPrompt() {
 }
 
 async function downloadAuditReport() {
-  if (!currentDocId) return;
+  if (!currentDocId) {
+    toast("Sélectionnez une pièce validée pour télécharger sa preuve RGPD.", "info");
+    openDocumentWorkspace();
+    return;
+  }
   try {
     const path = publicDemoMode
       ? "/api/v1/demo/public/audit-report-pdf"
       : `/documents/${currentDocId}/audit-report-pdf`;
     const resp = await apiRequest(path, { auth: !publicDemoMode });
+    const contentType = resp.headers.get("content-type") || "";
+    if (!contentType.includes("application/pdf")) {
+      const message = await readApiError(resp);
+      throw new Error(message.message || "La preuve RGPD n'est pas encore prête.");
+    }
     const blob = await resp.blob();
+    if (!blob.size) throw new Error("La preuve RGPD est vide.");
     triggerDownload(blob, `audit_rgpd_${currentDocId.slice(0, 8)}.pdf`);
-    toast("Rapport d'audit PDF telecharge", "success");
+    toast("Preuve RGPD téléchargée", "success");
   } catch (e) {
-    toast(`Erreur rapport: ${e.message}`, "error");
+    toast(`Erreur preuve RGPD: ${e.message}`, "error");
   }
 }
 
@@ -7417,6 +7427,9 @@ document.addEventListener("DOMContentLoaded", () => {
       goToChat();
     });
   }
+  if ($("btn-context-proof")) {
+    $("btn-context-proof").addEventListener("click", downloadAuditReport);
+  }
   if ($("btn-ai-back-anon")) {
     $("btn-ai-back-anon").addEventListener("click", () => openAnonReviewForCurrentDocument());
   }
@@ -7533,7 +7546,7 @@ document.addEventListener("DOMContentLoaded", () => {
         $("chat-input")?.focus();
         document.querySelector(".chat-input-zone")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
       } else if (action === "proof") {
-        ($("btn-compliance-certificate") || $("btn-compliance-report"))?.click();
+        downloadAuditReport();
       } else if (action === "original") {
         openCurrentOriginal(false);
       } else if (action === "review") {
