@@ -482,6 +482,7 @@ async def correct_anonymized_document(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
             .order_by(PseudonymMapping.created_at.desc())
+            .limit(1)
         )
         mapping = mapping_result.scalar_one_or_none()
         if mapping is None:
@@ -588,6 +589,7 @@ async def validate_document(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
             .order_by(PseudonymMapping.created_at.desc())
+            .limit(1)
         )
         mapping = result_mapping.scalar_one_or_none()
         if mapping:
@@ -763,6 +765,7 @@ async def approve_export(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
             .order_by(PseudonymMapping.created_at.desc())
+            .limit(1)
         )
         mapping = result.scalar_one_or_none()
         if not mapping:

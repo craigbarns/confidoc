@@ -41,6 +41,7 @@ async def load_document_privacy_gate_context(
         select(PseudonymMapping)
         .where(PseudonymMapping.document_id == document.id)
         .order_by(PseudonymMapping.created_at.desc())
+        .limit(1)
     )
     mapping = mapping_result.scalar_one_or_none()
 

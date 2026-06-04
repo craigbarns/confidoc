@@ -396,6 +396,7 @@ async def get_audit_report(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
             .order_by(PseudonymMapping.created_at.desc())
+            .limit(1)
         )
         mapping = mr.scalar_one_or_none()
         if mapping:
@@ -570,7 +571,10 @@ async def get_document_risk_score(
     from app.models.pseudonym_mapping import PseudonymMapping
 
     pm_result = await db.execute(
-        select(PseudonymMapping).where(PseudonymMapping.document_id == doc_uuid)
+        select(PseudonymMapping)
+        .where(PseudonymMapping.document_id == doc_uuid)
+        .order_by(PseudonymMapping.created_at.desc())
+        .limit(1)
     )
     mapping = pm_result.scalar_one_or_none()
 
@@ -738,6 +742,7 @@ async def get_compliance_report(
         select(PseudonymMapping)
         .where(PseudonymMapping.document_id == doc_uuid)
         .order_by(PseudonymMapping.created_at.desc())
+        .limit(1)
     )
     mapping = pm_result.scalar_one_or_none()
     risk_score_val = (
@@ -987,6 +992,7 @@ async def get_compliance_certificate(
             select(PseudonymMapping)
             .where(PseudonymMapping.document_id == document.id)
             .order_by(PseudonymMapping.created_at.desc())
+            .limit(1)
         )
         mapping = pm_result.scalar_one_or_none()
 

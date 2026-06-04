@@ -193,6 +193,7 @@ async def _demo_document_payload(
         select(PseudonymMapping)
         .where(PseudonymMapping.document_id == document.id)
         .order_by(PseudonymMapping.created_at.desc())
+        .limit(1)
     )
     mapping = mapping_result.scalar_one_or_none()
     if mapping and hasattr(mapping, "risk_score"):

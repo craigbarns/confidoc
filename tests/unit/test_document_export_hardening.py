@@ -41,6 +41,20 @@ class _FakeDb:
         self.commits += 1
 
 
+class _RowsResult:
+    def __init__(self, rows: list[Any]) -> None:
+        self.rows = rows
+
+    def scalar_one_or_none(self) -> Any:
+        return self.rows[0] if self.rows else None
+
+    def scalar(self) -> Any:
+        return self.rows[0] if self.rows else None
+
+    def all(self) -> list[Any]:
+        return self.rows
+
+
 @pytest.mark.asyncio
 async def test_export_gate_blocks_high_risk_without_human_validation() -> None:
     document = SimpleNamespace(id=uuid.uuid4())
@@ -79,6 +93,45 @@ def test_risk_score_percent_normalizes_fractional_and_percent_scores() -> None:
     assert _doc_export._risk_score_percent(None) == 0.0
     assert _doc_export._risk_score_percent(0.82) == 82
     assert _doc_export._risk_score_percent(82) == 82
+
+
+@pytest.mark.asyncio
+async def test_risk_score_uses_latest_mapping_limit(monkeypatch) -> None:
+    document_id = str(uuid.uuid4())
+    document = SimpleNamespace(id=uuid.UUID(document_id), status=SimpleNamespace(value="ready"))
+    user = SimpleNamespace(id=uuid.uuid4())
+    latest_mapping = SimpleNamespace(risk_score=0.82, risk_level="high", human_validated=True)
+    captured: dict[str, str] = {}
+
+    async def fake_get_document(_db: Any, requested_id: str, _user_id: uuid.UUID):
+        assert requested_id == document_id
+        return document
+
+    async def fake_anonymized_text(_db: Any, _document: Any) -> str:
+        return "[SOCIETE_1] [IBAN_1]"
+
+    class _Db:
+        async def execute(self, stmt: Any) -> _RowsResult:
+            stmt_text = str(stmt)
+            stmt_lower = stmt_text.lower()
+            if "pseudonym_mappings" in stmt_lower:
+                captured["mapping_stmt"] = stmt_text
+                return _RowsResult([latest_mapping])
+            if "entity_detections" in stmt_lower:
+                return _RowsResult([("IBAN",)])
+            if "audit_logs" in stmt_lower:
+                return _RowsResult([0])
+            return _RowsResult([])
+
+    monkeypatch.setattr(_doc_export, "_get_user_document_or_404", fake_get_document)
+    monkeypatch.setattr(_doc_export, "_get_anonymized_text", fake_anonymized_text)
+
+    result = await _doc_export.get_document_risk_score(document_id, user, _Db())
+
+    assert "LIMIT" in captured["mapping_stmt"].upper()
+    assert result["risk_score"] == 82.0
+    assert result["risk_level"] == "high"
+    assert result["human_validated"] is True
 
 
 def test_raw_document_content_disposition_sanitizes_filename() -> None:
