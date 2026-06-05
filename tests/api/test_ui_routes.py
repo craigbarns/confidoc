@@ -38,6 +38,22 @@ async def test_landing_links_to_trust_center(client):
 
 
 @pytest.mark.anyio
+async def test_architecture_page_controls_are_csp_safe(client):
+    resp = await client.get("/architecture")
+
+    assert resp.status_code == 200
+    assert "Architecture & Diagnostics" in resp.text
+    assert "onclick=" not in resp.text
+    assert "oninput=" not in resp.text
+    assert 'data-tab="cartographie"' in resp.text
+    assert 'data-tab="api-explorer"' in resp.text
+    assert 'data-filter-tag="all"' in resp.text
+    assert 'data-route-index="${idx}"' in resp.text
+    assert "addEventListener('click'" in resp.text
+    assert "addEventListener('input'" in resp.text
+
+
+@pytest.mark.anyio
 async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     resp = await client.get("/ui")
 
