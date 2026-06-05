@@ -4755,7 +4755,9 @@ async function sendMessage() {
     appendUserMsg(question);
     const bodyEl = appendAssistantMsg();
     latestAssistantText = buildDemoAssistantAnswer(question);
-    bodyEl.textContent = latestAssistantText;
+    bodyEl.classList.add("streaming");
+    await revealAnswerProgressively(bodyEl, latestAssistantText, { delayMs: 12 });
+    bodyEl.classList.remove("streaming");
     $("btn-copy-answer").disabled = false;
     if (reportMode) renderStructuredAnswer(bodyEl, latestAssistantText);
     saveChatHistory(currentDocId);
@@ -4826,7 +4828,7 @@ async function sendMessage() {
             $("btn-copy-answer").disabled = latestAssistantText.trim().length === 0;
             $("chat-messages").scrollTop = $("chat-messages").scrollHeight;
           } else if (parsed.error) {
-            bodyEl.textContent += `\n[Erreur: ${parsed.error}]`;
+            bodyEl.textContent += `\n${copilotFriendlyErrorMessage(parsed.error)}`;
             latestAssistantText = bodyEl.textContent;
             $("btn-copy-answer").disabled = latestAssistantText.trim().length === 0;
             bodyEl.classList.remove("streaming");
@@ -4839,7 +4841,7 @@ async function sendMessage() {
   } catch (e) {
     if (e.name !== "AbortError") {
       console.error("sendMessage stream error:", e);
-      bodyEl.textContent += `\n[Erreur: ${e.message}]`;
+      bodyEl.textContent += `\n${copilotFriendlyErrorMessage(e.message)}`;
       latestAssistantText = bodyEl.textContent;
     } else {
       bodyEl.textContent += "\n[Réponse interrompue]";
@@ -4921,6 +4923,21 @@ function copilotFriendlyErrorMessage(message = "") {
     return "La protection RGPD bloque temporairement la réponse. Vérifiez le masquage, puis relancez la question.";
   }
   return "La réponse n'est pas disponible pour le moment. Vérifiez la pièce, puis réessayez.";
+}
+
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
+}
+
+async function revealAnswerProgressively(targetEl, text, { delayMs = 18 } = {}) {
+  if (!targetEl) return;
+  const answer = String(text || "");
+  targetEl.textContent = "";
+  const chunks = answer.match(/.{1,36}(?:\s|$)|.+/g) || [answer];
+  for (const chunk of chunks) {
+    targetEl.textContent += chunk;
+    await sleep(delayMs);
+  }
 }
 
 function renderCopilotInsights(resp = {}) {
@@ -7836,10 +7853,7 @@ async function askCopilotFromDrawer(question) {
       body: JSON.stringify({ question: question, mode: "expert" }),
     });
     
-    let answer = resp.answer || "Aucune réponse.";
-    if (typeof formatCitations === "function") {
-      answer = formatCitations(answer);
-    }
+    const answer = resp.answer || "Aucune réponse.";
     
     let warningsHtml = "";
     if (resp.warnings && resp.warnings.length) {
@@ -7853,10 +7867,18 @@ async function askCopilotFromDrawer(question) {
     recentEl.innerHTML = `
       <div style="background:rgba(255,255,255,0.05); border-left:3px solid var(--accent); padding:10px; border-radius:4px; margin-bottom:12px; font-size:12px; line-height:1.4;">
         <strong style="display:block; margin-bottom:4px; color:var(--text-muted)">Question: ${escapeHtml(question)}</strong>
-        <div style="color:#fff">${answer}</div>
+        <div class="copilot-streamed-answer streaming" style="color:#fff"></div>
         ${warningsHtml}
       </div>
     `;
+    const answerEl = recentEl.querySelector(".copilot-streamed-answer");
+    await revealAnswerProgressively(answerEl, answer);
+    if (answerEl) {
+      answerEl.classList.remove("streaming");
+      if (typeof formatCitations === "function") {
+        answerEl.innerHTML = formatCitations(answerEl.textContent);
+      }
+    }
   } catch (e) {
     recentEl.innerHTML = `<div style="color:var(--warning); background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.22); border-radius:6px; padding:10px;">${escapeHtml(copilotFriendlyErrorMessage(e.message))}</div>`;
   }

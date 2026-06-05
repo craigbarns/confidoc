@@ -93,6 +93,39 @@ def _privacy_action_for_review_agent() -> str:
     return "external_ai" if external_mistral_possible else "internal_review"
 
 
+_STREAM_SAFE_SEPARATORS = ("\n\n", "\n", ". ", "! ", "? ", "; ", ": ")
+
+
+def _pop_next_safe_stream_segment(buffer: str, *, final: bool = False) -> tuple[str, str]:
+    """Return the next complete segment that can be firewall-scanned.
+
+    Streaming is intentionally phrase/line based, not raw-token based: this keeps
+    identifiers such as emails and IBANs together long enough for the inbound
+    firewall to detect or block them before any text is restituted.
+    """
+    if not buffer:
+        return "", ""
+    if final:
+        return buffer, ""
+
+    cuts: list[int] = []
+    for sep in _STREAM_SAFE_SEPARATORS:
+        idx = buffer.find(sep)
+        if idx >= 0:
+            cuts.append(idx + len(sep))
+    if not cuts:
+        return "", buffer
+
+    cut = min(cuts)
+    return buffer[:cut], buffer[cut:]
+
+
+async def _firewall_stream_segment(segment: str) -> tuple[str, dict | None, bool]:
+    safe_text, fw_response = await guard_inbound_response(segment)
+    blocked = bool(fw_response and fw_response.get("verdict") == "block")
+    return safe_text, fw_response, blocked
+
+
 async def _get_document_or_404(db: DbSession, document_id: str, user_id: uuid.UUID) -> Document:
     try:
         doc_uuid = uuid.UUID(document_id)
@@ -387,15 +420,39 @@ async def ai_stream(
                 yield f"data: {payload}\n\n"
                 yield "data: [DONE]\n\n"
                 return
-            # Buffer the model output server-side and inspect it BEFORE anything
-            # reaches the client — nothing is restituted until the firewall clears it.
-            collected: list[str] = []
+            # Stream complete phrases/lines only after inbound firewall clearance.
+            # This preserves the anti-leak guarantee while making the UI respond
+            # progressively instead of waiting for the full LLM answer.
+            pending = ""
             async for chunk in gen:
-                collected.append(chunk)
-            safe_text, fw_response = await guard_inbound_response("".join(collected))
-            yield "data: " + json.dumps({"chunk": safe_text}, ensure_ascii=False) + "\n\n"
-            if fw_response:
-                yield "data: " + json.dumps({"firewall": fw_response}, ensure_ascii=False) + "\n\n"
+                pending += chunk
+                while True:
+                    segment, pending = _pop_next_safe_stream_segment(pending)
+                    if not segment:
+                        break
+                    safe_text, fw_response, blocked = await _firewall_stream_segment(segment)
+                    yield "data: " + json.dumps({"chunk": safe_text}, ensure_ascii=False) + "\n\n"
+                    if fw_response and fw_response.get("verdict") != "allow":
+                        yield (
+                            "data: "
+                            + json.dumps({"firewall": fw_response}, ensure_ascii=False)
+                            + "\n\n"
+                        )
+                    if blocked:
+                        yield "data: [DONE]\n\n"
+                        return
+            if pending:
+                safe_text, fw_response, blocked = await _firewall_stream_segment(pending)
+                yield "data: " + json.dumps({"chunk": safe_text}, ensure_ascii=False) + "\n\n"
+                if fw_response and fw_response.get("verdict") != "allow":
+                    yield (
+                        "data: "
+                        + json.dumps({"firewall": fw_response}, ensure_ascii=False)
+                        + "\n\n"
+                    )
+                if blocked:
+                    yield "data: [DONE]\n\n"
+                    return
             yield "data: [DONE]\n\n"
         except Exception as exc:
             err = json.dumps({"error": str(exc)}, ensure_ascii=False)

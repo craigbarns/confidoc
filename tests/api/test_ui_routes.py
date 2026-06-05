@@ -128,6 +128,9 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert "downloadAuditReport();" in js.text
     assert "Par sécurité, ConfiDoc demande une revue humaine légère." in js.text
     assert "Privacy Gate DPO: human_review_required" not in js.text
+    assert "/ai/stream/" in js.text
+    assert "resp.body.getReader()" in js.text
+    assert "revealAnswerProgressively" in js.text
 
 
 @pytest.mark.anyio
