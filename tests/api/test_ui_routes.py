@@ -126,8 +126,10 @@ async def test_firewall_dashboard_renders(client):
 
     assert resp.status_code == 200
     # Headline positioning
-    assert "Tous les échanges IA sont inspectés en temps réel" in resp.text
-    assert "AI Security" in resp.text and "Control Tower" in resp.text
+    assert "Chaque prompt et chaque réponse sont vérifiés en temps réel" in resp.text
+    assert "Protection" in resp.text and "anti-fuite IA" in resp.text
+    assert "AI Security" not in resp.text
+    assert "Control Tower" not in resp.text
     # Metric tiles
     for tile in ("c-prompts", "c-responses", "c-redactions", "c-blocks", "c-critical"):
         assert f'id="{tile}"' in resp.text
@@ -139,6 +141,8 @@ async def test_firewall_dashboard_renders(client):
     # Demo orchestration
     assert 'id="demo-btn"' in resp.text
     assert "Lancer la démonstration" in resp.text
+    assert "Prompt vérifié" in resp.text
+    assert "Réponse vérifiée" in resp.text
     # Premium assets are externalised (CSP-friendly, no inline handlers)
     assert "/static/css/firewall.css" in resp.text
     assert "/static/js/firewall.js" in resp.text

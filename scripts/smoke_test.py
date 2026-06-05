@@ -93,6 +93,31 @@ def request_json(
         return exc.code, parsed
 
 
+def request_bytes(
+    base_url: str,
+    path: str,
+    *,
+    method: str = "GET",
+    body: bytes | None = None,
+    content_type: str | None = None,
+    timeout: float = 15.0,
+) -> tuple[int, dict[str, str], bytes]:
+    headers: dict[str, str] = {"User-Agent": "confidoc-smoke-test/1.0"}
+    if content_type and body is not None:
+        headers["Content-Type"] = content_type
+    req = urllib.request.Request(
+        _url(base_url, path),
+        data=body,
+        headers=headers,
+        method=method,
+    )
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as resp:
+            return resp.status, dict(resp.headers.items()), resp.read()
+    except urllib.error.HTTPError as exc:
+        return exc.code, dict(exc.headers.items()), exc.read()
+
+
 def multipart_upload_body(
     *,
     field_name: str,
@@ -119,6 +144,87 @@ def check_endpoint(base_url: str, path: str, expected_statuses: set[int]) -> Che
     ok = status in expected_statuses
     detail = payload.get("status") or payload.get("service") or payload.get("version") or status
     return CheckResult(path, ok, f"HTTP {status} · {detail}")
+
+
+def check_public_page(
+    base_url: str,
+    path: str,
+    *,
+    label: str,
+    required: tuple[str, ...] = (),
+    forbidden: tuple[str, ...] = (),
+) -> CheckResult:
+    status, headers, content = request_bytes(base_url, path)
+    text = content.decode("utf-8", errors="replace")
+    missing = [item for item in required if item not in text]
+    present_forbidden = [item for item in forbidden if item in text]
+    is_html = "text/html" in str(headers.get("Content-Type") or headers.get("content-type") or "")
+    ok = status == 200 and is_html and not missing and not present_forbidden
+    detail = f"HTTP {status} · html={is_html}"
+    if missing:
+        detail += f" · missing={missing}"
+    if present_forbidden:
+        detail += f" · forbidden={present_forbidden}"
+    return CheckResult(label, ok, detail)
+
+
+def check_public_pdf(base_url: str, path: str, *, label: str) -> CheckResult:
+    status, headers, content = request_bytes(base_url, path)
+    content_type = str(headers.get("Content-Type") or headers.get("content-type") or "")
+    ok = status == 200 and content_type.startswith("application/pdf") and len(content) > 1000
+    return CheckResult(
+        label,
+        ok,
+        f"HTTP {status} · content_type={content_type} · size={len(content)}",
+    )
+
+
+def check_firewall_stats(base_url: str) -> CheckResult:
+    status, payload = request_json(base_url, "/api/v1/firewall/stats")
+    firewall = payload.get("firewall") if isinstance(payload, dict) else {}
+    counters = payload.get("counters") if isinstance(payload, dict) else {}
+    ok = (
+        status == 200
+        and isinstance(firewall, dict)
+        and firewall.get("enabled") is True
+        and isinstance(counters, dict)
+        and counters.get("available") is True
+    )
+    return CheckResult(
+        "firewall stats",
+        ok,
+        (
+            f"HTTP {status} · enabled={firewall.get('enabled')} "
+            f"· mode={firewall.get('mode')} · counters={counters.get('available')}"
+        ),
+    )
+
+
+def check_firewall_demo(base_url: str) -> CheckResult:
+    status, payload = request_json(
+        base_url,
+        "/api/v1/firewall/demo",
+        method="POST",
+        content_type=None,
+    )
+    steps = payload.get("steps") if isinstance(payload, dict) else []
+    verdicts = [
+        ((step.get("firewall") or {}).get("verdict") if isinstance(step, dict) else None)
+        for step in steps
+        if isinstance(step, dict)
+    ]
+    outputs = [str(step.get("output") or "") for step in steps if isinstance(step, dict)]
+    ok = (
+        status == 200
+        and {"allow", "redact", "block"}.issubset(set(verdicts))
+        and any("[EMAIL]" in output for output in outputs)
+        and any("bloqu" in output.lower() for output in outputs)
+    )
+    return CheckResult(
+        "firewall live demo",
+        ok,
+        f"HTTP {status} · verdicts={verdicts}",
+    )
 
 
 def login(base_url: str, email: str, password: str) -> tuple[CheckResult, str | None]:
@@ -313,6 +419,60 @@ def main() -> int:
             "/readiness",
             {200, 503} if args.allow_degraded_readiness else {200},
         ),
+        check_public_page(
+            args.base_url,
+            "/",
+            label="landing public promises",
+            required=(
+                'href="#demo-sandbox"',
+                "Contacter l'équipe",
+                "/api/v1/leads/beta",
+                "consent_to_contact: true",
+            ),
+            forbidden=("mailto:contact@confidoc.io",),
+        ),
+        check_public_page(
+            args.base_url,
+            "/architecture",
+            label="architecture interactions",
+            required=(
+                'data-tab="api-explorer"',
+                'data-filter-tag="all"',
+                "addEventListener('click'",
+            ),
+            forbidden=("onclick=", "oninput="),
+        ),
+        check_public_page(
+            args.base_url,
+            "/trust",
+            label="trust center interactions",
+            required=(
+                "data-scorecard-toggle",
+                'href="/#demo-sandbox"',
+                "<script nonce=",
+            ),
+            forbidden=("onclick=", "oninput=", "/#demo-section"),
+        ),
+        check_public_page(
+            args.base_url,
+            "/firewall",
+            label="firewall dashboard copy",
+            required=(
+                "Protection",
+                "anti-fuite IA",
+                "Prompt vérifié",
+                "Réponse vérifiée",
+                "/static/js/firewall.js",
+            ),
+            forbidden=("AI Security", "Control Tower", "onclick=", "oninput="),
+        ),
+        check_public_pdf(
+            args.base_url,
+            "/api/v1/demo/public/audit-report-pdf",
+            label="public DPO proof PDF",
+        ),
+        check_firewall_stats(args.base_url),
+        check_firewall_demo(args.base_url),
     ]
 
     token = None

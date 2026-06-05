@@ -18,7 +18,7 @@
         <img src="/static/confidoc-mark.svg?v={{ASSET_VERSION}}" alt="ConfiDoc" />
         ConfiDoc
         <span class="sep"></span>
-        <span class="tag">Protection IA</span>
+        <span class="tag">Protection anti-fuite IA</span>
       </a>
       <nav class="nav">
         <a class="nav-back" href="/ui">← ConfiDoc</a>
@@ -32,11 +32,11 @@
     <!-- 1 ─ Hero -->
     <section class="hero">
       <div class="reveal">
-        <span class="live-badge"><span class="live-dot"></span>AI Firewall · Active</span>
-        <h1>AI Security<br /><em>Control Tower</em></h1>
-        <p class="lede"><b>Tous les échanges IA sont inspectés en temps réel</b> — avant,
-          pendant et après l'utilisation de l'IA. Vos données confidentielles ne quittent
-          jamais le périmètre sans contrôle.</p>
+        <span class="live-badge"><span class="live-dot"></span>Protection IA · active</span>
+        <h1>Protection<br /><em>anti-fuite IA</em></h1>
+        <p class="lede"><b>Chaque prompt et chaque réponse sont vérifiés en temps réel</b>.
+          Les emails résiduels sont masqués, les IBAN sont bloqués, et les événements sont
+          tracés sans exposer de donnée brute.</p>
         <div class="cta-row">
           <button class="btn btn-primary" id="demo-btn" type="button">Lancer la démonstration</button>
           <a class="btn btn-ghost" href="/trust">Voir le Trust Center</a>
@@ -49,8 +49,8 @@
           <span class="led ok" id="led-fw"></span>
         </div>
         <div class="sys-rows">
-          <div class="sys-row"><span class="k"><span class="led ok" id="led-fw2"></span>AI Firewall</span><span class="v ok" id="fw-state">ACTIVE</span></div>
-          <div class="sys-row"><span class="k">Mode de protection</span><span class="v ok sk" id="v-mode">Normal · redact</span></div>
+          <div class="sys-row"><span class="k"><span class="led ok" id="led-fw2"></span>Protection IA</span><span class="v ok" id="fw-state">ACTIF</span></div>
+          <div class="sys-row"><span class="k">Mode de protection</span><span class="v ok sk" id="v-mode">Normal · masquage</span></div>
           <div class="sys-row"><span class="k"><span class="led" id="led-api"></span>API</span><span class="v" id="v-api">…</span></div>
           <div class="sys-row"><span class="k"><span class="led" id="led-db"></span>Base de données</span><span class="v" id="v-db">…</span></div>
           <div class="sys-row"><span class="k"><span class="led" id="led-redis"></span>Cache / Redis</span><span class="v" id="v-redis">…</span></div>
@@ -59,7 +59,7 @@
     </section>
 
     <!-- 2 ─ Metrics -->
-    <div class="sec-h reveal"><span class="idx">01</span><h2>Indicateurs live</h2><span class="desc">Inspection continue des flux IA</span></div>
+    <div class="sec-h reveal"><span class="idx">01</span><h2>Ce qui est vérifié en direct</h2><span class="desc">Prompts, réponses, masquages et blocages</span></div>
     <section class="metrics reveal" style="animation-delay:.05s">
       <div class="metric ok">
         <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17 17 7M9 7h8v8"/></svg>Prompts scannés</div>
@@ -70,7 +70,7 @@
         <div class="num sk" id="c-responses">0</div><div class="sub">retours de l'IA</div>
       </div>
       <div class="metric warn">
-        <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8M9.4 5.2A9.7 9.7 0 0 1 12 5c5 0 9 4.5 9 7-.4 1-1.2 2.2-2.4 3.3M6.1 6.2C3.8 7.6 2.3 9.8 2 12c.6 1.6 2.4 4 5 5.4"/></svg>Redactions</div>
+        <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M3 3l18 18M10.6 10.7a2 2 0 0 0 2.8 2.8M9.4 5.2A9.7 9.7 0 0 1 12 5c5 0 9 4.5 9 7-.4 1-1.2 2.2-2.4 3.3M6.1 6.2C3.8 7.6 2.3 9.8 2 12c.6 1.6 2.4 4 5 5.4"/></svg>Données masquées</div>
         <div class="num sk" id="c-redactions">0</div><div class="sub">données masquées</div>
       </div>
       <div class="metric bad">
@@ -84,23 +84,23 @@
     </section>
 
     <!-- 3+4 ─ AI flow + Risk center -->
-    <div class="sec-h reveal"><span class="idx">02</span><h2>Pipeline & exposition au risque</h2><span class="desc">Inspection avant / pendant / après l'IA</span></div>
+    <div class="sec-h reveal"><span class="idx">02</span><h2>Contrôle avant restitution</h2><span class="desc">Le flux s'arrête si une donnée critique ressort</span></div>
     <div class="grid-2">
       <section class="panel reveal">
-        <div class="panel-head"><span class="t">Flux IA inspecté</span><span class="meta">7 points de contrôle</span></div>
+        <div class="panel-head"><span class="t">Flux IA inspecté</span><span class="meta">7 contrôles</span></div>
         <div class="panel-body">
           <div class="flow">
             <div class="node" id="n-doc"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/></svg></div><div class="nm">Document</div></div>
             <div class="connector" id="c1"><span class="pulse"></span></div>
             <div class="node" id="n-anon"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/><path d="M3 3l18 18" opacity=".5"/></svg></div><div class="nm">Anonymisation</div></div>
             <div class="connector" id="c2"><span class="pulse"></span></div>
-            <div class="node" id="n-gate"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 4v5c0 4.5-3 7.5-8 9-5-1.5-8-4.5-8-9V7z"/></svg></div><div class="nm">Privacy Gate</div></div>
+            <div class="node" id="n-gate"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 4v5c0 4.5-3 7.5-8 9-5-1.5-8-4.5-8-9V7z"/></svg></div><div class="nm">Contrôle RGPD</div></div>
             <div class="connector" id="c3"><span class="pulse"></span></div>
-            <div class="node fw" id="n-fwin"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><div class="nm">Firewall · prompt</div></div>
+            <div class="node fw" id="n-fwin"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><div class="nm">Prompt vérifié</div></div>
             <div class="connector" id="c4"><span class="pulse"></span></div>
             <div class="node" id="n-llm"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="5" y="5" width="14" height="14" rx="3"/><path d="M9 2v3M15 2v3M9 19v3M15 19v3M2 9h3M2 15h3M19 9h3M19 15h3"/></svg></div><div class="nm">Modèle IA</div></div>
             <div class="connector" id="c5"><span class="pulse"></span></div>
-            <div class="node fw" id="n-fwout"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><div class="nm">Firewall · réponse</div></div>
+            <div class="node fw" id="n-fwout"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><div class="nm">Réponse vérifiée</div></div>
             <div class="connector" id="c6"><span class="pulse"></span></div>
             <div class="node" id="n-audit"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><div class="nm">Audit</div></div>
           </div>
@@ -109,7 +109,7 @@
       </section>
 
       <section class="panel reveal" style="animation-delay:.06s">
-        <div class="panel-head"><span class="t">Risk Center</span><span class="meta">posture</span></div>
+        <div class="panel-head"><span class="t">Risques neutralisés</span><span class="meta">posture</span></div>
         <div class="panel-body">
           <div class="risk-wrap">
             <div class="ring">
@@ -141,10 +141,10 @@
     </div>
 
     <!-- 3 + 6 ─ Event stream + Audit timeline -->
-    <div class="sec-h reveal"><span class="idx">04</span><h2>Flux d'événements & journal d'audit</h2><span class="desc">Types d'entités et compteurs uniquement — jamais de donnée brute</span></div>
+    <div class="sec-h reveal"><span class="idx">04</span><h2>Preuve d'inspection</h2><span class="desc">Types d'entités et compteurs uniquement — jamais de donnée brute</span></div>
     <div class="grid-stream">
       <section class="panel reveal">
-        <div class="panel-head"><span class="t">Flux d'événements firewall</span><span class="meta">temps réel</span></div>
+        <div class="panel-head"><span class="t">Événements de protection</span><span class="meta">temps réel</span></div>
         <div class="stream" id="events"><div class="empty"><p>Chargement…</p></div></div>
       </section>
       <section class="panel reveal" style="animation-delay:.06s">

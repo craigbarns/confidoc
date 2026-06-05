@@ -1,5 +1,5 @@
 /* ============================================================================
-   ConfiDoc — AI Security Control Tower (behavior)
+   ConfiDoc — protection anti-fuite IA (behavior)
    Uses existing endpoints only: /api/v1/firewall/stats, /api/v1/firewall/demo,
    /health, /readiness. No external dependencies.
    ========================================================================== */
@@ -60,11 +60,11 @@
 
     var fw = (d && d.firewall) || {};
     var enabled = fw.enabled !== false;
-    $("fw-state").textContent = enabled ? "ACTIVE" : "OFFLINE";
+    $("fw-state").textContent = enabled ? "ACTIF" : "HORS LIGNE";
     $("led-fw").className = "led " + (enabled ? "ok" : "bad");
     var modeEl = $("v-mode");
     if (modeEl) {
-      modeEl.textContent = fw.mode === "strict" ? "Strict (sensible)" : "Normal · redact";
+      modeEl.textContent = fw.mode === "strict" ? "Strict (cabinet sensible)" : "Normal · masquage";
       modeEl.className = "v " + (fw.mode === "strict" ? "warn" : "ok");
     }
 
