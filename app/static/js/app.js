@@ -84,7 +84,7 @@ function documentStatusLabel(status) {
     extracted: "Lecture terminée",
     anonymizing: "Masquage",
     anonymized: "Prêt",
-    ready: "Prêt IA",
+    ready: "Prêt",
     failed: "Erreur",
   };
   return map[(status || "").toLowerCase()] || status || "—";
@@ -775,7 +775,7 @@ function renderQualityDashboard(data) {
   const statusGrid = $("quality-status-summary-grid");
   if (statusGrid && data.documents_by_status) {
     const statuses = [
-      { key: "ready", label: "Prêt IA", dot: "ready" },
+      { key: "ready", label: "Prêt", dot: "ready" },
       { key: "processing", label: "Traitement", dot: "processing" },
       { key: "uploaded", label: "Ajouté", dot: "uploaded" },
       { key: "failed", label: "Erreur", dot: "failed" },
@@ -1042,7 +1042,7 @@ function updateHeaderContext() {
   const docPill = $("header-doc-pill");
   const providerPill = $("header-provider-pill");
   if (currentDocId && currentDocName) {
-    const labelMap = { uploaded: "Ajouté", processing: "Traitement", ready: "Prêt IA", failed: "Erreur" };
+    const labelMap = { uploaded: "Ajouté", processing: "Traitement", ready: "Prêt", failed: "Erreur" };
     docPill.textContent = `${currentDocName} · ${labelMap[currentDocStatus] || currentDocStatus || "—"}`;
     docPill.style.display = "";
   } else {
@@ -1139,7 +1139,7 @@ function renderTrustIndicator(payload = {}) {
   const statusEl = $("trust-status");
   const level = String(trust.ai_readiness_level || payload.ai_readiness_level || "");
   const labels = {
-    ready_for_ai: "Prêt pour IA",
+    ready_for_ai: "Prêt pour questions",
     internal_review: "Usage interne",
     human_review_required: "Revue humaine",
     needs_review: "À contrôler",
@@ -1195,7 +1195,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Des données sensibles critiques semblent encore présentes.",
       recommended_action: "Corriger les risques",
       reasons: ["Risque critique"],
-      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger rapport DPO"],
+      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger la preuve"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1218,15 +1218,15 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
   }
   return {
     code: validated ? "human_validated" : "ready_for_ai",
-    label: validated ? "Validé manuellement" : "Prêt pour IA",
+    label: validated ? "Validé manuellement" : "Prêt pour questions",
     severity: "success",
-    decision: "Vous pouvez exporter",
+    decision: "Vous pouvez poser vos questions ou télécharger la preuve",
     explanation: validated
       ? "Le document masqué a été relu et validé par un utilisateur autorisé."
-      : "Le document masqué ne présente pas de risque évident. Il peut être utilisé pour une analyse IA ou un export.",
-    recommended_action: "Analyser avec IA",
+      : "Le document masqué ne présente pas de risque évident. Il peut être utilisé pour vos questions ou vos exports.",
+    recommended_action: "Poser une question",
     reasons: ["Aucun risque évident détecté"],
-    actions: ["Analyser avec IA", "Exporter rapport", "Voir la preuve"],
+    actions: ["Poser une question", "PDF masqué", "Télécharger la preuve"],
     risk_score: score,
     risk_level: level,
     human_validated: validated,
@@ -1272,12 +1272,14 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
   $("decision-main-reason").textContent = (decision.reasons || [])[0] || "Aucun risque évident détecté";
   $("decision-action-text").textContent = decision.recommended_action || "—";
   $("decision-notice").textContent = decision.decision_notice
-    || "Ce score aide à prioriser les risques. Il ne remplace pas une validation juridique ou DPO.";
+    || "Ce résultat aide à décider si la pièce peut être utilisée ou doit être relue.";
   const actions = $("decision-actions");
   if (actions) {
     const actionMap = {
       "Analyser avec IA": "analyze",
+      "Poser une question": "analyze",
       "Exporter rapport": "report",
+      "PDF masqué": "report",
       "Voir audit trail": "audit",
       "Corriger l'anonymisation": "correct",
       "Corriger les risques": "correct",
@@ -1286,6 +1288,7 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
       "Relancer anonymisation": "retry",
       "Voir les données détectées": "why",
       "Télécharger rapport DPO": "report",
+      "Télécharger la preuve": "report",
     };
     actions.innerHTML = (decision.actions || []).slice(0, 4).map(label => {
       const action = actionMap[label] || "why";
@@ -1306,13 +1309,13 @@ function renderWhyScore(decision = {}) {
   const label = decision.label || "Traitement en cours";
   const mainReason = reasons[0] || "Aucun risque évident détecté";
   $("why-score-summary").textContent =
-    `Le document est en statut "${label}" car ${mainReason.toLowerCase()}.`;
+    `ConfiDoc indique "${label}" car ${mainReason.toLowerCase()}.`;
   const list = $("why-score-list");
   if (list) {
     const items = [
       ...reasons.map(reason => `Raison: ${reason}`),
       `Niveau de risque: ${decision.risk_level || "non disponible"}`,
-      `Validation humaine: ${decision.human_validated ? "présente" : "absente"}`,
+      `Revue humaine: ${decision.human_validated ? "faite" : "non faite"}`,
       decision.decision ? `Export: ${decision.decision}` : "",
     ].filter(Boolean);
     list.innerHTML = items.map(item => `<li>${escapeHtml(item)}</li>`).join("");
@@ -1642,7 +1645,7 @@ function renderSidebarStats(docs = []) {
   const trashed = docs.filter((d) => !!d.is_deleted).length;
   el.innerHTML = [
     `<span class="stat-chip">Total: ${total}</span>`,
-    `<span class="stat-chip">Prêt IA: ${ready}</span>`,
+    `<span class="stat-chip">Prêts: ${ready}</span>`,
     `<span class="stat-chip">Traitement: ${processing}</span>`,
     `<span class="stat-chip">Corbeille: ${trashed}</span>`,
   ].join("");
@@ -3465,7 +3468,7 @@ function renderUploadQueue() {
         <div style="display: flex; align-items: center; gap: 8px; flex-shrink: 0;">
           <strong style="font-size: 11px; text-transform: uppercase; color: ${statusColor}; margin-right: 4px;">${item.status_label}</strong>
           ${isDone 
-            ? `<button class="btn btn-ghost btn-sm" type="button" style="padding: 4px 8px; font-size: 11px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); height: auto;" onclick="selectDoc('${item.docId}', '${item.docStatus}', '${escapeAttr(item.file.name)}', ${item.file.size})">Ouvrir</button>`
+            ? `<button class="btn btn-ghost btn-sm" type="button" data-upload-open="true" data-doc-id="${escapeAttr(item.docId || "")}" data-doc-status="${escapeAttr(item.docStatus || "")}" data-doc-name="${escapeAttr(item.file.name)}" data-doc-size="${Number(item.file.size) || 0}" style="padding: 4px 8px; font-size: 11px; border: 1px solid rgba(255,255,255,0.08); background: rgba(255,255,255,0.02); height: auto;">Ouvrir</button>`
             : ""
           }
         </div>
@@ -3495,6 +3498,16 @@ function renderUploadQueue() {
   }
 
   el.innerHTML = headerHtml + completedHtml + queueHtml;
+  el.querySelectorAll("[data-upload-open]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      selectDoc(
+        btn.dataset.docId || "",
+        btn.dataset.docStatus || "",
+        btn.dataset.docName || "",
+        Number(btn.dataset.docSize || 0),
+      );
+    });
+  });
 }
 
 function enqueueUpload(files) {
@@ -4874,7 +4887,7 @@ async function sendCopilotMessage(question, inputEl) {
   } catch (e) {
     const friendly = copilotFriendlyErrorMessage(e.message);
     bodyEl.textContent = friendly;
-    toast(friendly, "error");
+    toast(friendly, "warning");
   } finally {
     bodyEl.classList.remove("streaming");
     if (reportMode && latestAssistantText.trim()) {
@@ -4892,19 +4905,22 @@ async function sendCopilotMessage(question, inputEl) {
 function copilotFriendlyErrorMessage(message = "") {
   const raw = String(message || "");
   if (raw.includes("Aucun texte anonymisé") || raw.includes("document n'est pas prêt")) {
-    return "Le document doit d'abord être anonymisé avant de poser une question.";
+    return "Masquez d'abord la pièce avant de poser une question.";
   }
   if (
     raw.includes("Risque élevé") ||
+    raw.includes("Risque moyen") ||
+    raw.includes("human_review_required") ||
     raw.includes("identifiants directs") ||
-    raw.includes("validation humaine")
+    raw.includes("validation humaine") ||
+    raw.includes("usage externe")
   ) {
-    return "Le Copilot attend une validation humaine avant de répondre sur ce document.";
+    return "Par sécurité, ConfiDoc demande une revue humaine légère. Vérifiez le masquage, validez la pièce, puis relancez votre question.";
   }
   if (raw.includes("Contrôle RGPD") || raw.includes("Privacy Gate")) {
-    return "Le contrôle RGPD bloque temporairement le Copilot par sécurité.";
+    return "La protection RGPD bloque temporairement la réponse. Vérifiez le masquage, puis relancez la question.";
   }
-  return "Le Copilot ne peut pas répondre pour le moment. Réessayez après vérification du document.";
+  return "La réponse n'est pas disponible pour le moment. Vérifiez la pièce, puis réessayez.";
 }
 
 function renderCopilotInsights(resp = {}) {
@@ -4984,8 +5000,9 @@ async function runCopilotCompare() {
     renderCopilotInsights(resp);
     toast("Comparaison terminée — à valider humainement.", "info");
   } catch (e) {
-    bodyEl.textContent = `[Erreur: ${e.message}]`;
-    toast(`Comparaison impossible: ${e.message}`, "error");
+    const friendly = copilotFriendlyErrorMessage(e.message);
+    bodyEl.textContent = friendly;
+    toast(friendly, "warning");
   } finally {
     bodyEl.classList.remove("streaming");
     saveChatHistory(currentDocId);
@@ -5024,12 +5041,12 @@ async function exportText() {
   } catch (e) {
     console.error("exportText error:", e);
     if (e.message && e.message.includes("bloqu")) {
-      toast(e.message, "error");
+      toast("Export bloqué par sécurité. Vérifiez ou validez la pièce avant diffusion.", "warning");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
       }
     } else {
-      toast(`Erreur export texte: ${e.message}`, "error");
+      toast(`Export texte indisponible: ${e.message}`, "error");
     }
   }
 }
@@ -5051,12 +5068,12 @@ async function exportPdf() {
   } catch (e) {
     console.error("exportPdf error:", e);
     if (e.message && e.message.includes("bloqu")) {
-      toast(e.message, "error");
+      toast("PDF bloqué par sécurité. Vérifiez ou validez la pièce avant diffusion.", "warning");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
       }
     } else {
-      toast(`Erreur export PDF: ${e.message}`, "error");
+      toast(`PDF indisponible: ${e.message}`, "error");
     }
   }
 }
@@ -5072,12 +5089,12 @@ async function exportFec() {
   } catch (e) {
     console.error("exportFec error:", e);
     if (e.message && e.message.includes("bloqu")) {
-      toast(e.message, "error");
+      toast("Export FEC bloqué par sécurité. Vérifiez ou validez la pièce avant diffusion.", "warning");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
       }
     } else {
-      toast(`Erreur export FEC: ${e.message}`, "error");
+      toast(`Export FEC indisponible: ${e.message}`, "error");
     }
   }
 }
@@ -7812,7 +7829,7 @@ async function askCopilotFromDrawer(question) {
   const recentEl = document.getElementById("copilot-recent");
   if (!recentEl) return;
   
-  recentEl.innerHTML = `<div class="streaming" style="color:var(--text-muted)">Copilot réfléchit...</div>`;
+  recentEl.innerHTML = `<div class="streaming" style="color:var(--text-muted)">Analyse du document...</div>`;
   try {
     const resp = await apiFetch(`/copilot/${currentDocId}/ask`, {
       method: "POST",
@@ -7828,7 +7845,7 @@ async function askCopilotFromDrawer(question) {
     if (resp.warnings && resp.warnings.length) {
       warningsHtml = resp.warnings.map(w => `
         <div style="margin-top: 6px; font-size: 11px; color: var(--warning); display: flex; align-items: flex-start; gap: 4px; background: rgba(245, 158, 11, 0.08); border-left: 2px solid var(--warning); padding: 4px 8px; border-radius: 2px;">
-          <span>⚠️</span> <span>${escapeHtml(w)}</span>
+          <span>À vérifier</span> <span>${escapeHtml(w)}</span>
         </div>
       `).join("");
     }
@@ -7841,7 +7858,7 @@ async function askCopilotFromDrawer(question) {
       </div>
     `;
   } catch (e) {
-    recentEl.innerHTML = `<div style="color:var(--danger)">${escapeHtml(copilotFriendlyErrorMessage(e.message))}</div>`;
+    recentEl.innerHTML = `<div style="color:var(--warning); background:rgba(245,158,11,0.08); border:1px solid rgba(245,158,11,0.22); border-radius:6px; padding:10px;">${escapeHtml(copilotFriendlyErrorMessage(e.message))}</div>`;
   }
 }
 

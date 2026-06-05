@@ -136,18 +136,18 @@
       <span class="kbd" aria-hidden="true">⌘K</span>
     </button>
     <div class="header-actions">
-      <a href="/firewall" class="topbar__firewall-link expert-only" title="Gouvernance IA">
+      <a href="/firewall" class="topbar__firewall-link expert-only" title="Protection anti-fuite">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span class="topbar__firewall-label">Protection IA</span>
+        <span class="topbar__firewall-label">Anti-fuite IA</span>
         <span class="fw-badge"><span class="fw-dot"></span>Active</span>
       </a>
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
 
-      <button type="button" class="btn-ghost topbar__copilot-btn expert-only" data-action="open-copilot" aria-label="Ouvrir le Copilot IA">
-        Copilot <span class="kbd" aria-hidden="true">⌘J</span>
+      <button type="button" class="btn-ghost topbar__copilot-btn expert-only" data-action="open-copilot" aria-label="Ouvrir les questions document">
+        Questions <span class="kbd" aria-hidden="true">⌘J</span>
       </button>
       <label class="expert-mode-switch" style="display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; margin-right: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px; transition: all 0.2s;" id="label-expert-mode">
         <input type="checkbox" id="chk-expert-mode" style="cursor: pointer; accent-color: var(--accent);" />
@@ -177,7 +177,7 @@
       </div>
     </div>
     <h1>ConfiDoc</h1>
-    <p class="auth-subtitle">Anonymisez vos documents avant toute utilisation IA</p>
+    <p class="auth-subtitle">Déposez une pièce, vérifiez le masquage, téléchargez la preuve.</p>
 
     <form id="form-login" autocomplete="off">
       <div class="field">
@@ -402,7 +402,7 @@
         <input id="filter-search" class="input-sm mt-8" type="text" placeholder="Rechercher un document…" />
         <select id="filter-status" class="input-sm mt-8">
           <option value="">Tous les statuts</option>
-          <option value="ready">Prêt IA</option>
+          <option value="ready">Prêt</option>
           <option value="processing">En traitement</option>
           <option value="uploaded">Ajouté</option>
           <option value="failed">Erreur</option>
@@ -552,9 +552,27 @@
           <header class="panel-head" style="margin-bottom:24px;">
             <div>
               <h1 class="page-title" style="font-family:'Fraunces',serif; font-size:34px; font-weight:600; letter-spacing:-0.5px; color:var(--text);">Déposez une pièce client</h1>
-              <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">ConfiDoc masque les données sensibles avant l'analyse ou l'export.</p>
+              <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">ConfiDoc protège la pièce, puis vous guide jusqu'aux questions et à la preuve RGPD.</p>
             </div>
           </header>
+
+          <div class="simple-flow" aria-label="Parcours ConfiDoc">
+            <div class="simple-flow-step is-current">
+              <span>1</span>
+              <strong>Déposer</strong>
+              <small>PDF ou image</small>
+            </div>
+            <div class="simple-flow-step">
+              <span>2</span>
+              <strong>Vérifier</strong>
+              <small>Données masquées</small>
+            </div>
+            <div class="simple-flow-step">
+              <span>3</span>
+              <strong>Utiliser</strong>
+              <small>Questions + preuve</small>
+            </div>
+          </div>
 
           <!-- 1. Grande zone d'upload simplifiée -->
           <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%); border: 1px solid rgba(16,185,129,0.18); border-radius:var(--radius-lg); padding:32px 24px; margin-bottom:28px; transition:all 0.2s;">
@@ -625,7 +643,7 @@
           <!-- 3. Liste simplifiée "Mes actions recommandées" -->
           <div class="card animate-fade-in" style="padding:24px;">
             <h3 style="font-family:'Hanken Grotesk',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-top:0; margin-bottom:16px; display:flex; align-items:center; gap:8px;">
-              Vos tâches en attente
+              À faire maintenant
             </h3>
             <div id="std-pending-actions-list" style="display:flex; flex-direction:column; gap:12px;">
               <div style="color:var(--text-muted); font-size:12px; text-align:center; padding:12px 0;">Chargement des tâches...</div>
@@ -793,7 +811,7 @@
                 </svg>
               </div>
               <div class="dash-kpi-num" id="dash-ready-count">0</div>
-              <div class="dash-kpi-label">Prêts IA</div>
+              <div class="dash-kpi-label">Prêts</div>
             </div>
             <div class="dash-kpi-card">
               <div class="dash-kpi-icon kpi-orange">
@@ -810,7 +828,7 @@
           </div>
 
           <div class="dash-buckets">
-            <div class="dash-bucket"><span>Prêts IA</span><strong id="dash-bucket-ready">0</strong></div>
+            <div class="dash-bucket"><span>Prêts</span><strong id="dash-bucket-ready">0</strong></div>
             <div class="dash-bucket"><span>Traitement</span><strong id="dash-bucket-processing">0</strong></div>
             <div class="dash-bucket"><span>Ajoutés</span><strong id="dash-bucket-uploaded">0</strong></div>
             <div class="dash-bucket"><span>Échecs</span><strong id="dash-bucket-failed">0</strong></div>
@@ -894,7 +912,7 @@
         <header class="panel-head">
           <div>
             <h1 class="page-title">Pièces client</h1>
-            <p class="page-lead" id="documents-summary">— · — · —</p>
+            <p class="page-lead" id="documents-summary">Ajoutez une pièce, vérifiez le masquage, puis posez vos questions.</p>
           </div>
           <div class="panel-actions">
             <button class="btn-ghost expert-only" data-action="open-batch-upload">Importer un dossier</button>
@@ -941,8 +959,12 @@
       <!-- AJOUT -->
       <div id="panel-upload" class="panel">
         <h2>Ajouter une pièce client</h2>
+        <div class="simple-panel-intro">
+          <strong>Deux informations suffisent.</strong>
+          <span>Indiquez le client, choisissez le fichier. Le masquage démarre automatiquement.</span>
+        </div>
         <div class="field-inline">
-          <label for="upload-client-name">Client (obligatoire)</label>
+          <label for="upload-client-name">Nom du client</label>
           <div style="flex:1;position:relative;display:flex;align-items:center">
             <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" style="flex:1" />
             <span class="auto-badge" id="badge-client" style="display:none;position:absolute;right:8px;cursor:pointer" title="Cliquer pour accepter la suggestion IA">✨ Suggéré</span>
@@ -986,10 +1008,10 @@
                 <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
               </svg>
             </div>
-            <p class="upload-main">Déposez la pièce ici ou</p>
+            <p class="upload-main">Déposez la pièce ici</p>
             <label class="btn btn-secondary" for="file-input" style="cursor:pointer">Choisir un fichier</label>
             <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
-            <p class="upload-hint">PDF ou image — max 50 Mo</p>
+            <p class="upload-hint">PDF ou image, jusqu'à 50 Mo</p>
           </div>
         </div>
 
@@ -1079,9 +1101,9 @@
               </section>
 
               <section class="rail-section" id="rail-copilot">
-                <h2 class="rail-h">Copilot IA</h2>
+                <h2 class="rail-h">Questions</h2>
                 <div id="detail-copilot-alerts"></div>
-                <button class="rail-copilot-ask" data-action="open-copilot">Demander au Copilot… <span class="kbd">⌘J</span></button>
+                <button class="rail-copilot-ask" data-action="open-copilot">Questionner la pièce… <span class="kbd">⌘J</span></button>
               </section>
 
               <section class="rail-section" id="rail-audit">
@@ -1172,7 +1194,7 @@
               <polyline points="14 2 14 8 20 8"/>
             </svg>
           </div>
-          <p>Sélectionnez un document dans la liste<br>ou uploadez-en un nouveau.</p>
+          <p>Sélectionnez une pièce dans la liste<br>ou ajoutez-en une nouvelle.</p>
         </div>
 
         <div id="anon-loading" class="loading-state" style="display:none">
@@ -1191,7 +1213,7 @@
               <span data-phase="ocr">Lecture</span>
               <span data-phase="detect">Détection</span>
               <span data-phase="mask">Masquage</span>
-              <span data-phase="ready">Prêt IA</span>
+              <span data-phase="ready">Prêt</span>
             </div>
             <div class="processing-metrics">
                 <span id="processing-ocr-metric">Lecture —</span>
@@ -1205,13 +1227,13 @@
           <section id="decision-card" class="decision-card" aria-live="polite">
             <div class="decision-card-main">
               <span id="decision-status-pill" class="decision-status-pill neutral">Traitement en cours</span>
-              <h3>Décision ConfiDoc</h3>
+              <h3>Résultat du masquage</h3>
               <p id="decision-explanation">Le document est en cours d'analyse.</p>
             </div>
             <div class="decision-score-grid">
-              <div><span>Score de risque RGPD</span><strong id="decision-risk-score">—</strong></div>
-              <div><span>Niveau de confiance</span><strong id="decision-trust-score">—</strong></div>
-              <div><span>Prêt pour IA</span><strong id="decision-ai-score">—</strong></div>
+              <div><span>Risque restant</span><strong id="decision-risk-score">—</strong></div>
+              <div><span>Confiance</span><strong id="decision-trust-score">—</strong></div>
+              <div><span>Prêt pour questions</span><strong id="decision-ai-score">—</strong></div>
             </div>
             <div class="decision-detail-grid">
               <div>
@@ -1228,15 +1250,15 @@
               </div>
             </div>
             <p class="decision-notice" id="decision-notice">
-              Ce score aide à prioriser les risques. Il ne remplace pas une validation juridique ou DPO.
+              Ce résultat aide à décider si la pièce peut être utilisée ou doit être relue.
             </p>
             <div id="decision-actions" class="decision-actions"></div>
           </section>
 
           <section id="why-score-card" class="why-score-card">
             <div class="why-score-header">
-              <h3>Pourquoi ce score ?</h3>
-              <button type="button" id="btn-toggle-score-details" class="btn btn-ghost btn-sm">Voir pourquoi</button>
+              <h3>Pourquoi cette décision ?</h3>
+              <button type="button" id="btn-toggle-score-details" class="btn btn-ghost btn-sm">Voir le détail</button>
             </div>
             <p id="why-score-summary">Le score sera détaillé après masquage.</p>
             <div id="why-score-details" class="why-score-details" style="display:none">
@@ -1248,7 +1270,7 @@
           <div class="anon-stats">
             <div class="stat-badge">
               <span id="stat-count" class="stat-num">0</span>
-              <span class="stat-label">entités masquées</span>
+              <span class="stat-label">données masquées</span>
             </div>
             <div id="anon-summary-chips" class="sidebar-stats" style="margin-left:14px;border-left:1px solid var(--border);padding-left:14px;"></div>
             <div id="risk-indicator" class="risk-indicator" style="display:none;margin-left:14px;border-left:1px solid var(--border);padding-left:14px;">
@@ -1261,14 +1283,14 @@
             </div>
             <div id="trust-indicator" class="trust-indicator" style="display:none;margin-left:14px;border-left:1px solid var(--border);padding-left:14px;">
               <div class="trust-score-badge" id="trust-badge">
-                <span class="risk-label">Prêt IA</span>
+                <span class="risk-label">Questions</span>
                 <span id="ai-readiness-score" class="risk-score">—</span>
                 <span id="trust-score" class="risk-level">Confiance —</span>
               </div>
               <p id="trust-status" class="risk-recommendation"></p>
             </div>
             <div class="stat-actions">
-              <button id="btn-go-ai" class="btn btn-ghost btn-sm">Analyse directe</button>
+              <button id="btn-go-ai" class="btn btn-ghost btn-sm">Questions</button>
               <button id="btn-validate" class="btn btn-success">Valider et continuer <svg aria-hidden="true" focusable="false" width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="vertical-align:middle"><polyline points="9 18 15 12 9 6"/></svg></button>
             </div>
           </div>
@@ -1292,7 +1314,7 @@
             <div id="review-container" class="review-container mode-split">
               <!-- Pane Gauche : Original (PDF/Image) -->
               <div class="review-pane original-pane">
-                <div class="pane-header">Document original</div>
+                <div class="pane-header">Original</div>
                 <div id="original-viewer-container" class="viewer-container">
                    <div id="original-loading-spinner" class="spinner-overlay" style="display:none"><div class="spinner"></div></div>
                    <!-- Sera rempli dynamiquement par un iframe ou img -->
@@ -1302,7 +1324,7 @@
 
               <!-- Pane Droite : Texte Anonymisé -->
               <div class="review-pane anonymized-pane">
-                <div class="pane-header">Texte masqué modifiable</div>
+                <div class="pane-header">Version protégée</div>
                 <div class="viewer-container">
                    <div id="preview-anon-text-legacy" class="preview-text interactive-text" contenteditable="true" spellcheck="false"></div>
                 </div>
@@ -1335,19 +1357,19 @@
            legacy code paths and tests continue to work. -->
       <template id="tmpl-copilot">
         <div class="copilot-drawer">
-          <p class="rail-h">Demander au Copilot</p>
+          <p class="rail-h">Questionner le document</p>
           <p style="margin: 0 0 10px; font-size: 11px; color: var(--text-muted); font-style: italic;">
-            Analyse basée sur la version masquée du document.
+            Réponses basées sur la version masquée du document.
           </p>
           <textarea class="input" rows="6" style="width:100%" placeholder="Pose une question sur le document ouvert…"></textarea>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <button class="btn-ghost" data-action="copilot-summarize">Résumer le document</button>
-            <button class="btn-ghost" data-action="copilot-risks">Lister les risques RGPD</button>
+            <button class="btn-ghost" data-action="copilot-risks">Risques à vérifier</button>
             <button class="btn-ghost" data-action="copilot-audit">Audit comptable</button>
           </div>
           <p class="rail-h" style="margin-top:18px">Réponses récentes</p>
           <div id="copilot-recent" style="font-size:12px;color:var(--ink-muted)">Aucune question posée pour l'instant.</div>
-          <p style="margin-top:18px;font-size:11px;color:var(--ink-dim)">⌘J pour fermer · contexte basé sur le document actif</p>
+          <p style="margin-top:18px;font-size:11px;color:var(--ink-dim)">⌘J pour fermer · document actif uniquement</p>
         </div>
       </template>
 
@@ -1396,11 +1418,11 @@
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
               Preuve RGPD
             </button>
-            <button id="btn-compliance-report" class="btn btn-ghost btn-sm">
+            <button id="btn-compliance-report" class="btn btn-ghost btn-sm expert-only">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               Conformité
             </button>
-            <button id="btn-compliance-certificate" class="btn btn-ghost btn-sm" title="Télécharger le Certificat de Preuve RGPD cryptographique">
+            <button id="btn-compliance-certificate" class="btn btn-ghost btn-sm expert-only" title="Télécharger le certificat de preuve RGPD">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="8" r="7"></circle>
                 <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
@@ -1472,7 +1494,7 @@
         </div>
 
         <div id="copilot-insights" class="dash-chart-card" style="display:none;margin-bottom:12px">
-          <h3>ConfiDoc Copilot</h3>
+          <h3>Réponse document</h3>
           <div><strong>Confiance :</strong> <span id="copilot-confidence">—</span></div>
           <div id="copilot-warnings" class="sidebar-stats"></div>
           <div id="copilot-citations" class="dash-entity-list" style="margin-top:10px"></div>
@@ -1494,15 +1516,15 @@
             <div id="kpi-anonymization-status" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label" title="Ce score aide à prioriser les risques. Il ne remplace pas une validation juridique ou DPO.">Score de risque RGPD</div>
+            <div class="kpi-label" title="Ce résultat aide à décider si la pièce peut être utilisée ou doit être relue.">Risque restant</div>
             <div id="kpi-risk-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Niveau de confiance</div>
+            <div class="kpi-label">Confiance</div>
             <div id="kpi-trust-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Prêt pour IA</div>
+            <div class="kpi-label">Prêt pour questions</div>
             <div id="kpi-ai-readiness" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">

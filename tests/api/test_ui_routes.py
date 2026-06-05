@@ -86,13 +86,21 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert "onclick=" not in resp.text
     assert "oninput=" not in resp.text
     assert "Déposez une pièce client" in resp.text
-    assert "ConfiDoc masque les données sensibles avant l'analyse ou l'export." in resp.text
+    assert (
+        "ConfiDoc protège la pièce, puis vous guide jusqu'aux questions et à la preuve RGPD."
+        in resp.text
+    )
+    assert "1</span>" in resp.text and "Déposer" in resp.text
+    assert "2</span>" in resp.text and "Vérifier" in resp.text
+    assert "3</span>" in resp.text and "Utiliser" in resp.text
     assert 'id="btn-work-clients"' in resp.text
     assert 'data-action="open-clients"' in resp.text
     assert 'id="upload-zone"' in resp.text
     assert 'class="upload-zone-inner"' in resp.text
     assert 'id="upload-client-name"' in resp.text
     assert 'for="upload-client-name"' in resp.text
+    assert "Deux informations suffisent." in resp.text
+    assert "Le masquage démarre automatiquement." in resp.text
     assert "Document prêt pour vos questions" in resp.text
     assert (
         "Les données sensibles sont masquées. Vous pouvez poser vos questions en sécurité."
@@ -118,6 +126,8 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert js.status_code == 200
     assert "Télécharger la preuve RGPD" in js.text
     assert "downloadAuditReport();" in js.text
+    assert "Par sécurité, ConfiDoc demande une revue humaine légère." in js.text
+    assert "Privacy Gate DPO: human_review_required" not in js.text
 
 
 @pytest.mark.anyio
@@ -226,6 +236,7 @@ async def test_ui_is_de_jargonised(client):
         "Golden sets",
         "Audit-Ready",
         "Copilot: OFF",
+        "Copilot réfléchit",
         "Mode rapport: OFF",
         "À reviewer",
         "Reviewer",
@@ -238,6 +249,8 @@ async def test_ui_is_de_jargonised(client):
         "Répartition des risques",
         "Pièces client",
         "Questions sur le document",
+        "Questionner le document",
+        "À faire maintenant",
     ):
         assert plain in resp.text, plain
     # "Grand livre" survives only as the accounting document type, never as a UI title.
