@@ -694,16 +694,21 @@ graph TD
   <script src="https://cdn.jsdelivr.net/npm/mermaid/dist/mermaid.min.js" nonce="{{CSP_NONCE}}"></script>
   <script nonce="{{CSP_NONCE}}">
     // Initialise Mermaid
-    mermaid.initialize({
-      startOnLoad: true,
-      theme: 'dark',
-      themeVariables: {
-        background: '#080812',
-        primaryColor: '#6366f1',
-        lineColor: '#rgba(255,255,255,0.1)',
-        textColor: '#f1f5f9'
-      }
-    });
+    const mermaidAvailable = Boolean(
+      window.mermaid && typeof window.mermaid.initialize === 'function'
+    );
+    if (mermaidAvailable) {
+      window.mermaid.initialize({
+        startOnLoad: true,
+        theme: 'dark',
+        themeVariables: {
+          background: '#080812',
+          primaryColor: '#6366f1',
+          lineColor: 'rgba(255,255,255,0.1)',
+          textColor: '#f1f5f9'
+        }
+      });
+    }
 
     // Données injectées depuis le backend
     const routes = {{RAW_ROUTES_JSON}};
@@ -722,8 +727,8 @@ graph TD
       if (targetContent) targetContent.classList.add('active');
 
       // Si on active l'onglet Cartographie, on force Mermaid à re-rendre
-      if (tabId === 'cartographie') {
-        mermaid.init();
+      if (tabId === 'cartographie' && window.mermaid && typeof window.mermaid.init === 'function') {
+        window.mermaid.init();
       }
     }
 
