@@ -31,6 +31,10 @@ async def test_landing_links_to_trust_center(client):
     assert '<meta property="og:title"' in resp.text
     assert 'name="twitter:card" content="summary_large_image"' in resp.text
     assert "/api/v1/leads/beta" in resp.text
+    assert 'href="mailto:contact@confidoc.io"' not in resp.text
+    assert 'href="#beta-access" class="btn-ghost">Contacter l\'équipe' in resp.text
+    assert "consent_to_contact: true" in resp.text
+    assert "landing_contact_cta" in resp.text
 
 
 @pytest.mark.anyio

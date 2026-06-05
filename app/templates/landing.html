@@ -423,6 +423,7 @@
     .beta-msg { display: none; margin-top: 14px; font-size: 13.5px; font-weight: 600; }
     .beta-msg.success { color: var(--success); }
     .beta-msg.error { color: var(--danger); }
+    .beta-consent { max-width: 520px; margin: 10px auto 0; color: var(--dim); font-size: 12px; line-height: 1.5; }
 
     /* FOOTER */
     footer { text-align: center; padding: 40px 24px; color: var(--dim); font-size: 13px; border-top: 1px solid var(--border); }
@@ -466,7 +467,7 @@
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
         Essayer le Sandbox Live
       </a>
-      <a href="mailto:contact@confidoc.io" class="btn-ghost">Contacter un DPO →</a>
+      <a href="#beta-access" class="btn-ghost">Contacter l'équipe →</a>
     </div>
   </section>
 
@@ -760,6 +761,9 @@
       <input id="beta-email" type="email" placeholder="votre.email@cabinet.fr" required />
       <button class="btn btn-primary" type="submit">Demander l'accès beta</button>
     </form>
+    <p class="beta-consent">
+      En envoyant cette demande, vous acceptez d'être recontacté au sujet de ConfiDoc.
+    </p>
     <div class="beta-msg" id="beta-msg"></div>
   </section>
 
@@ -888,8 +892,12 @@ Par exemple, un nom comme Sophie Bernard, un SIRET 123 456 789 00012, un email t
     if (betaForm) {
       betaForm.addEventListener('submit', async (e) => {
         e.preventDefault();
-        const email = $('beta-email').value;
+        const email = $('beta-email').value.trim();
         if (!email) return;
+        const localPart = email.split('@')[0] || 'Contact beta';
+        const readableName = localPart
+          .replace(/[._-]+/g, ' ')
+          .replace(/\b\w/g, char => char.toUpperCase());
 
         betaMsg.style.display = 'block';
         betaMsg.className = 'beta-msg';
@@ -899,12 +907,19 @@ Par exemple, un nom comme Sophie Bernard, un SIRET 123 456 789 00012, un email t
           const res = await fetch('/api/v1/leads/beta', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
-            body: JSON.stringify({ email: email, company: 'Cabinet Pilote' })
+            body: JSON.stringify({
+              email: email,
+              full_name: readableName,
+              company: 'Cabinet pilote',
+              use_case: 'Demande de démonstration depuis la landing ConfiDoc.',
+              source: 'landing_contact_cta',
+              consent_to_contact: true
+            })
           });
           const data = await res.json();
           if (res.ok) {
             betaMsg.className = 'beta-msg success';
-            betaMsg.textContent = 'Félicitations ! Votre demande d\'accès beta a été validée. Notre équipe DPO va vous contacter sous 24h.';
+            betaMsg.textContent = 'Demande reçue. Notre équipe vous contacte sous 24h.';
             $('beta-email').value = '';
           } else {
             throw new Error(data.detail || 'Une erreur est survenue lors de l\'inscription.');
