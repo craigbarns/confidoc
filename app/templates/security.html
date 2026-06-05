@@ -49,7 +49,7 @@
     <p>ConfiDoc est concu pour permettre aux cabinets d'utiliser l'IA sur des dossiers sensibles avec pseudonymisation, anonymisation forte, scoring du risque residuel, validation humaine et tracabilite exportable.</p>
     <div class="sec-hero-actions">
       <a href="/api/v1/demo/public/audit-report-pdf" class="btn btn-primary">Telecharger la Preuve DPO</a>
-      <a href="/#demo-section" class="btn btn-ghost">Voir la demo publique</a>
+      <a href="/#demo-sandbox" class="btn btn-ghost">Voir la demo publique</a>
     </div>
   </div>
 
@@ -185,7 +185,7 @@
       Découvrez nos garanties opérationnelles et d'infrastructure pour chaque grand pilier réglementaire. Cliquez sur une certification pour lire notre cahier de preuves.
     </p>
     <div class="trust-scorecard-grid">
-      <div class="trust-scorecard-card" onclick="toggleScorecard(this)">
+      <div class="trust-scorecard-card" data-scorecard-toggle role="button" tabindex="0">
         <div class="trust-scorecard-header">
           <div class="trust-scorecard-title">
             <span class="sec-badge sec-badge-green" style="background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); font-weight: 700; font-size: 10px; padding: 2px 8px; border-radius: 99px;">Bonnes pratiques</span>
@@ -198,7 +198,7 @@
         </div>
       </div>
 
-      <div class="trust-scorecard-card" onclick="toggleScorecard(this)">
+      <div class="trust-scorecard-card" data-scorecard-toggle role="button" tabindex="0">
         <div class="trust-scorecard-header">
           <div class="trust-scorecard-title">
             <span class="sec-badge sec-badge-green" style="background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); font-weight: 700; font-size: 10px; padding: 2px 8px; border-radius: 99px;">Security Controls</span>
@@ -211,7 +211,7 @@
         </div>
       </div>
 
-      <div class="trust-scorecard-card" onclick="toggleScorecard(this)">
+      <div class="trust-scorecard-card" data-scorecard-toggle role="button" tabindex="0">
         <div class="trust-scorecard-header">
           <div class="trust-scorecard-title">
             <span class="sec-badge sec-badge-purple" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2); font-weight: 700; font-size: 10px; padding: 2px 8px; border-radius: 99px;">Audit-Ready</span>
@@ -224,7 +224,7 @@
         </div>
       </div>
 
-      <div class="trust-scorecard-card" onclick="toggleScorecard(this)">
+      <div class="trust-scorecard-card" data-scorecard-toggle role="button" tabindex="0">
         <div class="trust-scorecard-header">
           <div class="trust-scorecard-title">
             <span class="sec-badge sec-badge-green" style="background: rgba(16, 185, 129, 0.1); color: #34d399; border: 1px solid rgba(16, 185, 129, 0.2); font-weight: 700; font-size: 10px; padding: 2px 8px; border-radius: 99px;">Audit-Ready</span>
@@ -321,14 +321,20 @@
 
 </div>
 
-<script>
-  // Dynamic scorecard toggling
-  function toggleScorecard(card) {
-    card.classList.toggle('expanded');
-  }
-
+<script nonce="{{CSP_NONCE}}">
   // Interactive China Wall Pipeline hover events
   document.addEventListener('DOMContentLoaded', () => {
+    document.querySelectorAll('[data-scorecard-toggle]').forEach(card => {
+      const toggle = () => card.classList.toggle('expanded');
+      card.addEventListener('click', toggle);
+      card.addEventListener('keydown', event => {
+        if (event.key === 'Enter' || event.key === ' ') {
+          event.preventDefault();
+          toggle();
+        }
+      });
+    });
+
     const steps = document.querySelectorAll('.china-wall-step');
     const detailsCard = document.getElementById('china-wall-details-card');
     

@@ -17,6 +17,23 @@ async def test_trust_center_renders_security_positioning(client):
     assert '<meta property="og:title"' in resp.text
     assert "confidoc-og-card.png" in resp.text
     assert "🔒" not in resp.text
+    assert "onclick=" not in resp.text
+    assert "oninput=" not in resp.text
+    assert 'href="/#demo-sandbox"' in resp.text
+    assert "data-scorecard-toggle" in resp.text
+    assert "<script nonce=" in resp.text
+
+
+@pytest.mark.anyio
+async def test_security_page_controls_are_csp_safe(client):
+    resp = await client.get("/security")
+
+    assert resp.status_code == 200
+    assert "Trust Center" in resp.text
+    assert "onclick=" not in resp.text
+    assert "oninput=" not in resp.text
+    assert 'href="/#demo-sandbox"' in resp.text
+    assert "data-scorecard-toggle" in resp.text
 
 
 @pytest.mark.anyio
