@@ -155,7 +155,10 @@ async def test_get_audit_report_pdf_success(client, cert_auth_overrides, monkeyp
     import app.api.v1._doc_export as doc_export
 
     async def _mock_anon_text(*args, **kwargs):
-        return "Document masqué: [SOCIETE_1] [IBAN_1]."
+        return (
+            "Document masqué: [SOCIETE_1] facture de 1\u202f234,56 € "
+            "– “honoraires” • échéance <= 30 jours."
+        )
 
     monkeypatch.setattr(doc_export, "_get_anonymized_text", _mock_anon_text)
 

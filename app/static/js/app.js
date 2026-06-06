@@ -5286,7 +5286,12 @@ async function downloadAuditReport() {
     triggerDownload(blob, `audit_rgpd_${currentDocId.slice(0, 8)}.pdf`);
     toast("Preuve RGPD téléchargée", "success");
   } catch (e) {
-    toast(`Erreur preuve RGPD: ${e.message}`, "error");
+    const rawMessage = e.message || "";
+    const friendlyMessage =
+      e.status >= 500 || /internal server error/i.test(rawMessage)
+        ? "La preuve RGPD est temporairement indisponible. Réessayez dans quelques instants."
+        : rawMessage || "La preuve RGPD n'est pas disponible.";
+    toast(`Preuve RGPD indisponible : ${friendlyMessage}`, "error");
   }
 }
 

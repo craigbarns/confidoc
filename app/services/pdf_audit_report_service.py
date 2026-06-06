@@ -11,10 +11,37 @@ Generates a branded, premium-grade PDF report with:
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timezone
+from datetime import UTC, datetime
 from typing import Any
 
 from fpdf import FPDF
+
+_PDF_TEXT_REPLACEMENTS = str.maketrans(
+    {
+        "\u00a0": " ",
+        "\u202f": " ",
+        "\ufeff": "",
+        "\u2018": "'",
+        "\u2019": "'",
+        "\u201a": ",",
+        "\u201c": '"',
+        "\u201d": '"',
+        "\u201e": '"',
+        "\u2013": "-",
+        "\u2014": "-",
+        "\u2212": "-",
+        "\u2022": "-",
+        "\u2026": "...",
+        "\u20ac": "EUR",
+        "\u0152": "OE",
+        "\u0153": "oe",
+        "\u2264": "<=",
+        "\u2265": ">=",
+        "\u2122": "(TM)",
+        "\u00ae": "(R)",
+        "\u00a9": "(C)",
+    }
+)
 
 _PURPLE = (124, 116, 255)
 _DARK = (15, 17, 23)
@@ -37,6 +64,18 @@ _RISK_LABELS = {
     "high": "ELEVE",
     "critical": "CRITIQUE",
 }
+
+
+def _pdf_text(value: Any) -> str:
+    """Return text safe for fpdf core fonts.
+
+    fpdf's built-in Helvetica/Courier fonts use latin-1. Accounting documents
+    often include euro signs, smart quotes, bullets or non-breaking spaces; a
+    single unsupported character must not make the proof download fail.
+    """
+    text = str(value or "")
+    text = text.translate(_PDF_TEXT_REPLACEMENTS)
+    return text.encode("latin-1", "replace").decode("latin-1")
 
 
 def _fmt_date(raw: str | None) -> str:
@@ -109,17 +148,17 @@ class _AuditPDF(FPDF):
         self.set_font("Helvetica", "B", 12)
         self.set_text_color(*_DARK)
         self.set_xy(16, bar_y)
-        self.cell(0, 9, title, new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 9, _pdf_text(title), new_x="LMARGIN", new_y="NEXT")
         self.ln(4)
 
     def kv_row(self, key: str, value: str) -> None:
         self.set_font("Helvetica", "B", 9)
         self.set_text_color(80, 80, 100)
         self.set_x(12)
-        self.cell(60, 7, key, new_x="END")
+        self.cell(60, 7, _pdf_text(key), new_x="END")
         self.set_font("Helvetica", "", 9)
         self.set_text_color(30, 30, 50)
-        self.cell(0, 7, value, new_x="LMARGIN", new_y="NEXT")
+        self.cell(0, 7, _pdf_text(value), new_x="LMARGIN", new_y="NEXT")
 
 
 def _draw_stat_card(
@@ -145,12 +184,12 @@ def _draw_stat_card(
     pdf.set_font("Helvetica", "B", 15)
     pdf.set_text_color(*_WHITE)
     pdf.set_xy(x, y + 6)
-    pdf.cell(w, 8, value, align="C")
+    pdf.cell(w, 8, _pdf_text(value), align="C")
     # Label (small)
     pdf.set_font("Helvetica", "", 7)
     pdf.set_text_color(*_GRAY)
     pdf.set_xy(x, y + 16)
-    pdf.cell(w, 5, label, align="C")
+    pdf.cell(w, 5, _pdf_text(label), align="C")
 
 
 def _draw_cover_page(
@@ -191,7 +230,7 @@ def _draw_cover_page(
     pdf.set_font("Helvetica", "B", 11)
     pdf.set_text_color(*_WHITE)
     pdf.set_xy(21, 66)
-    pdf.cell(0, 10, doc_name[:72])
+    pdf.cell(0, 10, _pdf_text(doc_name[:72]))
 
     # Generation date
     pdf.set_font("Helvetica", "", 9)
@@ -264,7 +303,7 @@ def _draw_cover_page(
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(180, 180, 210)
         pdf.set_xy(23, y_item)
-        pdf.cell(0, 6, item)
+        pdf.cell(0, 6, _pdf_text(item))
         y_item += 8.0
 
     # ---- Purple bottom bar ----
@@ -294,7 +333,7 @@ def generate_audit_pdf(
     anonymized_text_preview: str = "",
 ) -> bytes:
     """Generate a professional PDF audit report."""
-    doc_name = document_info.get("filename", "Document")
+    doc_name = _pdf_text(document_info.get("filename", "Document"))
     pdf = _AuditPDF(doc_name)
     pdf.alias_nb_pages()
 
@@ -354,7 +393,7 @@ def generate_audit_pdf(
         if recommendation:
             pdf.set_font("Helvetica", "", 9)
             pdf.set_text_color(80, 80, 100)
-            pdf.multi_cell(0, 5, recommendation)
+            pdf.multi_cell(0, 5, _pdf_text(recommendation))
             pdf.ln(2)
 
         validation_label = "Oui" if risk_info.get("human_validated") else "Non - revue recommandee"
@@ -383,7 +422,7 @@ def generate_audit_pdf(
         )
         pdf.set_font("Helvetica", "", 9)
         pdf.set_text_color(80, 80, 100)
-        pdf.multi_cell(0, 5, dpo)
+        pdf.multi_cell(0, 5, _pdf_text(dpo))
 
     # 3. Entity summary
     pdf.section_title("3. Entites detectees")
@@ -407,7 +446,7 @@ def generate_audit_pdf(
             pdf.set_text_color(30, 30, 50)
             pdf.set_font("Helvetica", "", 9)
             pdf.set_x(12)
-            pdf.cell(82, 7, f"  {etype}", fill=True, new_x="END")
+            pdf.cell(82, 7, _pdf_text(f"  {etype}"), fill=True, new_x="END")
             pdf.cell(36, 7, str(count), fill=True, align="C", new_x="END")
             pct = f"{count / total * 100:.1f}%" if total else "--"
             pdf.cell(36, 7, pct, fill=True, align="C", new_x="LMARGIN", new_y="NEXT")
@@ -447,16 +486,16 @@ def generate_audit_pdf(
             if len(ts) > 19:
                 ts = ts[:19].replace("T", " ")
 
-            action = str(entry.get("action") or "--")
-            method = str(entry.get("method") or "--")
-            code = str(entry.get("status_code") or "--")
+            action = _pdf_text(entry.get("action") or "--")
+            method = _pdf_text(entry.get("method") or "--")
+            code = _pdf_text(entry.get("status_code") or "--")
 
             details_dict = entry.get("details") or {}
             details_parts: list[str] = []
             if isinstance(details_dict, dict):
                 for k, v in list(details_dict.items())[:3]:
                     details_parts.append(f"{k}={v}")
-            details = ", ".join(details_parts)[:42]
+            details = _pdf_text(", ".join(details_parts))[:42]
 
             pdf.set_x(12)
             pdf.cell(36, 5, f"  {ts[:19]}", fill=True, new_x="END")
@@ -487,7 +526,7 @@ def generate_audit_pdf(
         pdf.set_fill_color(248, 248, 252)
         pdf.set_font("Courier", "", 7)
         pdf.set_text_color(60, 60, 80)
-        truncated = anonymized_text_preview[:3000]
+        truncated = _pdf_text(anonymized_text_preview[:3000])
         if len(anonymized_text_preview) > 3000:
             truncated += "\n\n[... texte tronque -- voir l'application pour le texte complet ...]"
         pdf.multi_cell(0, 4, truncated, fill=True)
