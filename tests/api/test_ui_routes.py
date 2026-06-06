@@ -131,6 +131,15 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
     assert "/ai/stream/" in js.text
     assert "resp.body.getReader()" in js.text
     assert "revealAnswerProgressively" in js.text
+    assert "entityLabelFr" in js.text
+    for label in (
+        "En-tête d'identité",
+        "Ville postale",
+        "Libellé de compte société",
+        "Autre donnée détectée",
+    ):
+        assert label in js.text
+    assert "${type}: ${cnt}" not in js.text
 
 
 @pytest.mark.anyio

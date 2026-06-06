@@ -3127,12 +3127,78 @@ function buildAIChatIntroHtml() {
     '</div>';
 }
 
-function formatEntitySummary(summary) {
+const ENTITY_LABELS_FR = {
+  address: "Adresse",
+  address_line: "Adresse",
+  accounting_company_account_label: "Libellé de compte société",
+  accounting_identity_heading: "En-tête d'identité",
+  accounting_identity_repeat: "Identité répétée",
+  accounting_person_account_label: "Libellé de compte personne",
+  adresse: "Adresse",
+  associe: "Associé",
+  banque: "Banque",
+  birth_place_labeled: "Lieu de naissance",
+  cabinet: "Cabinet",
+  cadastre: "Cadastre",
+  city: "Ville",
+  city_name: "Ville",
+  company: "Société",
+  date: "Date",
+  email: "Email",
+  iban: "IBAN",
+  legal_denomination: "Dénomination juridique",
+  montant: "Montant",
+  nom: "Nom",
+  nss: "Numéro de sécurité sociale",
+  person: "Personne",
+  personne: "Personne",
+  phone: "Téléphone",
+  postal_city: "Ville postale",
+  siren: "SIREN",
+  siret: "SIRET",
+  societe: "Société",
+  telephone: "Téléphone",
+  tva: "TVA",
+  ville: "Ville",
+};
+
+function entityLabelFr(type) {
+  const key = String(type || "").trim().toLowerCase();
+  if (!key) return "Autre donnée détectée";
+  if (ENTITY_LABELS_FR[key]) return ENTITY_LABELS_FR[key];
+  if (key.includes("siret")) return "SIRET";
+  if (key.includes("siren")) return "SIREN";
+  if (key.includes("iban")) return "IBAN";
+  if (key.includes("email") || key.includes("mail")) return "Email";
+  if (key.includes("phone") || key.includes("tel")) return "Téléphone";
+  if (key.includes("address") || key.includes("adresse")) return "Adresse";
+  if (key.includes("city") || key.includes("ville") || key.includes("postal")) return "Ville / code postal";
+  if (key.includes("company") || key.includes("societe") || key.includes("denomination")) return "Société";
+  if (key.includes("person") || key.includes("personne") || key.includes("name") || key.includes("identity")) return "Personne / identité";
+  if (key.includes("accounting") || key.includes("account")) return "Donnée comptable";
+  return "Autre donnée détectée";
+}
+
+function groupedEntitySummary(summary) {
+  const grouped = {};
+  Object.entries(summary || {}).forEach(([key, value]) => {
+    const count = Number(value);
+    if (!Number.isFinite(count) || count <= 0) return;
+    const label = entityLabelFr(key);
+    grouped[label] = (grouped[label] || 0) + count;
+  });
+  return Object.entries(grouped).sort((a, b) => b[1] - a[1]);
+}
+
+function formatEntitySummary(summary, { limit = 6 } = {}) {
   if (!summary || typeof summary !== "object") return "Non disponible";
-  const items = Object.entries(summary)
-    .filter(([, value]) => Number(value) > 0)
-    .map(([key, value]) => `${escapeHtml(key)}: ${Number(value)}`);
-  return items.length ? items.join(" · ") : "Non disponible";
+  const items = groupedEntitySummary(summary);
+  if (!items.length) return "Non disponible";
+  const visible = items.slice(0, limit);
+  const hiddenCount = items.slice(limit).reduce((sum, [, value]) => sum + value, 0);
+  const parts = visible.map(([label, value]) => `${label}: ${Number(value)}`);
+  if (hiddenCount > 0) parts.push(`${hiddenCount} autre${hiddenCount > 1 ? "s" : ""}`);
+  return parts.join(" · ");
 }
 
 function renderAIReadySummary(details = {}) {
@@ -3169,7 +3235,7 @@ function renderAIReadySummary(details = {}) {
       <div><dt>Statut</dt><dd>${escapeHtml(status)}</dd></div>
       <div><dt>Taille</dt><dd>${escapeHtml(size)}</dd></div>
       <div><dt>Original</dt><dd>${escapeHtml(fileKind)} · source disponible</dd></div>
-      <div><dt>Entités masquées</dt><dd>${entities}</dd></div>
+      <div><dt>Entités masquées</dt><dd>${escapeHtml(entities)}</dd></div>
       <div><dt>Score / export</dt><dd>${escapeHtml(exportTitle)} · ${escapeHtml(exportDetail)}</dd></div>
     </dl>
     <div class="ai-ready-actions">
@@ -4071,9 +4137,9 @@ function showAnonResults(previewText, count, summary = {}, risk = null, mode = "
   // Render summary chips
   const chips = $("anon-summary-chips");
   if (chips) {
-    const sorted = Object.entries(summary).sort((a, b) => b[1] - a[1]);
-    chips.innerHTML = sorted.map(([type, cnt]) =>
-      `<span class="stat-chip" style="background: var(--bg-hover); border-color: var(--accent);">${type}: ${cnt}</span>`
+    const sorted = groupedEntitySummary(summary);
+    chips.innerHTML = sorted.slice(0, 8).map(([type, cnt]) =>
+      `<span class="stat-chip" style="background: var(--bg-hover); border-color: var(--accent);">${escapeHtml(type)}: ${Number(cnt)}</span>`
     ).join("");
   }
   renderEntityLegend(summary);
@@ -4279,14 +4345,14 @@ async function loadOriginalText(docId) {
 function renderEntityLegend(summary = {}) {
   const el = $("entity-legend");
   if (!el) return;
-  const entries = Object.entries(summary || {});
+  const entries = groupedEntitySummary(summary);
   if (!entries.length) {
     el.innerHTML = "";
     return;
   }
   el.innerHTML = entries
-    .sort((a, b) => b[1] - a[1])
-    .map(([type, cnt]) => `<span class="entity-pill">${escapeHtml(type)} (${cnt})</span>`)
+    .slice(0, 8)
+    .map(([type, cnt]) => `<span class="entity-pill">${escapeHtml(type)} (${Number(cnt)})</span>`)
     .join("");
 }
 
