@@ -40,9 +40,9 @@ function populate(body) {
   } else {
     body.innerHTML = `
       <p style="margin:0 0 12px;font-size:13px;color:var(--ink-2)">
-        Aucun contenu Copilot disponible pour le moment.
+        Aucune question ouverte pour le moment.
       </p>
-      <textarea class="input" rows="6" style="width:100%" placeholder="Demande au Copilot…"></textarea>
+      <textarea class="input" rows="6" style="width:100%" placeholder="Pose une question…"></textarea>
       <p style="margin-top:10px;font-size:11px;color:var(--ink-dim)">⌘J pour fermer.</p>
     `;
   }
@@ -74,10 +74,10 @@ function ensureDom() {
   drawer.id = "drawer-copilot";
   drawer.className = "drawer";
   drawer.setAttribute("role", "complementary");
-  drawer.setAttribute("aria-label", "Copilot IA");
+  drawer.setAttribute("aria-label", "Questions document");
   drawer.innerHTML = `
     <div class="drawer__header">
-      <div class="drawer__title">Copilot IA</div>
+      <div class="drawer__title">Questions document</div>
       <button class="drawer__close" aria-label="Fermer">×</button>
     </div>
     <div class="drawer__body"></div>

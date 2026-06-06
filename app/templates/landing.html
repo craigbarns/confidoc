@@ -443,11 +443,11 @@
       <span class="logo-text">ConfiDoc</span>
     </a>
     <div class="nav-links">
-      <a href="#demo-sandbox">Sandbox Live</a>
+      <a href="#demo-sandbox">Démo</a>
       <a href="#how-it-works">Fonctionnement</a>
       <a href="#solution">Architecture</a>
       <a href="#pricing">Tarifs</a>
-      <a href="/trust" id="pilot-proof" style="color: #34d399; font-weight: 600;">Télécharger la preuve DPO</a>
+      <a href="/trust" id="pilot-proof" style="color: #34d399; font-weight: 600;">Télécharger la preuve RGPD</a>
       <a href="/ui" class="btn-nav">
         Accéder à la console 
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -458,14 +458,14 @@
   <section class="hero">
     <div class="badge">
       <span class="badge-dot"></span>
-      Filtre d'Anonymisation Automatique &amp; Souverain
+      Masquage automatique des données sensibles
     </div>
     <h1>Sécurisez l'IA pour vos<br><span>liasses et pièces comptables</span></h1>
     <p>ConfiDoc caviarde instantanément les données nominatives et bancaires de vos bilans et contrats avant tout envoi à l'IA. Préservez le secret professionnel en toute simplicité.</p>
     <div class="hero-actions">
       <a href="#demo-sandbox" class="btn-primary">
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
-        Essayer le Sandbox Live
+        Essayer la démo
       </a>
       <a href="#beta-access" class="btn-ghost">Contacter l'équipe →</a>
     </div>
@@ -473,15 +473,15 @@
 
   <section class="stats" aria-label="Chiffres clés">
     <div class="stat"><h3>100%</h3><p>Données chiffrées localement</p></div>
-    <div class="stat"><h3>&lt; 5s</h3><p>Anonymisation et scan OCR</p></div>
+    <div class="stat"><h3>&lt; 5s</h3><p>Lecture et masquage</p></div>
     <div class="stat"><h3>DORA</h3><p>Alignement réglementaire</p></div>
-    <div class="stat"><h3>Zero Trust</h3><p>Pas de fuite aux LLMs tiers</p></div>
+    <div class="stat"><h3>Anti-fuite</h3><p>Pas de document brut envoyé à l'IA</p></div>
   </section>
 
   <!-- INTERACTIVE SANDBOX DEMO -->
   <section id="demo-sandbox" class="sandbox-container">
     <div class="section-title">
-      <h2>Testez le Sandbox en direct</h2>
+      <h2>Testez le masquage en direct</h2>
       <p>Sélectionnez un modèle de document d'audit réglementaire ci-dessous, ou tapez votre propre texte sensible pour voir comment ConfiDoc l'isole instantanément.</p>
     </div>
     
@@ -528,19 +528,19 @@
       <div class="sandbox-timeline-ceremony" id="sandbox-timeline-ceremony" style="display:none; grid-template-columns: repeat(4, 1fr); gap: 10px; margin-top: 15px; padding: 12px; background: rgba(99, 102, 241, 0.03); border: 1px solid var(--border); border-radius: var(--radius-md);">
         <div class="timeline-step" id="t-step-1" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
           <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
-          <span>1. Sandbox Antivirus</span>
+          <span>1. Fichier vérifié</span>
         </div>
         <div class="timeline-step" id="t-step-2" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
           <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
-          <span>2. OCR & Structure</span>
+          <span>2. Texte lu</span>
         </div>
         <div class="timeline-step" id="t-step-3" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
           <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
-          <span>3. Caviardage PII</span>
+          <span>3. Données masquées</span>
         </div>
         <div class="timeline-step" id="t-step-4" style="display:flex; align-items:center; gap:8px; font-size:11px; font-weight:600; color:var(--text-muted); transition: all 0.2s;">
           <span class="step-dot" style="width:8px; height:8px; border-radius:50%; background:rgba(255,255,255,0.1); display:inline-block; transition: all 0.2s;"></span>
-          <span>4. Post-OCR Guard</span>
+          <span>4. Contrôle final</span>
         </div>
       </div>
 
@@ -551,11 +551,11 @@
         </div>
         <div class="sandbox-metric-card">
           <strong id="sb-entities-count">0</strong>
-          <span>Entités détectées et isolées</span>
+          <span>Données détectées et masquées</span>
         </div>
         <div class="sandbox-metric-card">
           <strong id="sb-readiness-score" style="color:#60a5fa">100%</strong>
-          <span>Trust Score / AI Readiness</span>
+          <span>Niveau de protection</span>
         </div>
       </div>
     </div>
@@ -565,7 +565,7 @@
   <section id="how-it-works">
      <div class="section-title">
        <h2>Sécurisation en 3 étapes simples</h2>
-       <p>Un flux ergonomique conçu pour s'adapter à la réalité opérationnelle des cabinets et départements DPO.</p>
+       <p>Un flux conçu pour la réalité opérationnelle des cabinets comptables.</p>
      </div>
      <div class="workflow-steps">
         <div class="step-card">
@@ -576,12 +576,12 @@
         <div class="step-card">
            <div class="step-number">2</div>
            <h3>Caviardage à la source</h3>
-           <p>Nos algorithmes de scan OCR identifient et appliquent un masque d'anonymisation fort sur tous les quasi-identifiants.</p>
+           <p>ConfiDoc lit le document, repère les données sensibles et applique un masquage fort avant les questions.</p>
         </div>
         <div class="step-card">
            <div class="step-number">3</div>
-           <h3>Restitution &amp; IA</h3>
-           <p>Utilisez les assistants IA sur les données caviardées. Les rapports finaux réintègrent les données réelles en local.</p>
+           <h3>Questions &amp; preuve</h3>
+           <p>Posez vos questions sur la version masquée et téléchargez une preuve RGPD claire.</p>
         </div>
      </div>
   </section>
@@ -615,7 +615,7 @@
              </svg>
            </div>
            <h3>Revue d'un Bail Commercial</h3>
-           <p>Générez un résumé des obligations du preneur, localisez immédiatement la date de renouvellement ou comparez les indexations complexes sans fuite de PII.</p>
+           <p>Générez un résumé des obligations du preneur, localisez immédiatement la date de renouvellement ou comparez les indexations complexes sans fuite de données personnelles.</p>
         </div>
         <div class="card" style="background: var(--surface);">
            <div class="card-icon" aria-hidden="true">
@@ -641,7 +641,7 @@
         <ul>
           <li><strong>Traitement Hermétique :</strong> Les PDF sont lus en local sur votre serveur. Aucune donnée personnelle ne part en clair sur internet.</li>
           <li><strong>Filtre Censeur :</strong> Le dictionnaire dynamique neutralise SIRET, IBAN, noms, emails et montants avant l'envoi au moteur d'IA.</li>
-          <li><strong>Zéro Persistance IA :</strong> Les modèles de langage distants rédigent leurs synthèses d'audit en se basant sur des tokens anonymes.</li>
+          <li><strong>Aucune conservation par l'IA :</strong> Les réponses sont rédigées à partir d'une version masquée, sans donnée client lisible.</li>
           <li><strong>Rembobinage :</strong> Vos documents de sortie réintègrent automatiquement les données d'origine grâce au déchiffrement client.</li>
         </ul>
       </div>
@@ -652,7 +652,7 @@
            </span>
            <div>
              <h4 style="margin-bottom:4px; font-weight:700;">Dossier Original Cabinet</h4>
-             <small style="color:var(--text-muted)">Les données brutes restent au sein de votre infrastructure DPO.</small>
+             <small style="color:var(--text-muted)">Les données brutes restent dans votre environnement sécurisé.</small>
            </div>
         </div>
         <div class="arch-arrow">↓</div>
@@ -691,8 +691,8 @@
         <div class="plan-price">0€ <small>/ mois</small></div>
         <ul>
           <li>10 documents inclus</li>
-          <li>Sandbox d'anonymisation</li>
-          <li>Preuve DPO simplifiée</li>
+          <li>Démo de masquage</li>
+          <li>Preuve RGPD simplifiée</li>
         </ul>
       </div>
       <div class="plan-card featured">
@@ -700,9 +700,9 @@
         <div class="plan-price">49€ <small>/ mois / user</small></div>
         <ul>
           <li>Documents illimités</li>
-          <li>OCR premium &amp; IA</li>
-          <li>Citations IA synchronisées</li>
-          <li>Preuve DPO &amp; PDF d'audit</li>
+          <li>Lecture avancée des documents</li>
+          <li>Réponses avec sources</li>
+          <li>Preuve RGPD &amp; PDF d'audit</li>
         </ul>
       </div>
       <div class="plan-card">
@@ -711,7 +711,7 @@
         <ul>
           <li>Stockage sur-mesure (S3)</li>
           <li>Double authentification &amp; SSO</li>
-          <li>Garanties SLA DPO</li>
+          <li>Garanties de service</li>
           <li>Contrat DPA personnalisé</li>
         </ul>
       </div>
@@ -735,11 +735,11 @@
     </div>
     <div class="faq-item">
       <button class="faq-trigger">
-        Comment garantissez-vous l'absence de fuite auprès des serveurs de LLM ?
+        Comment garantissez-vous l'absence de fuite auprès des modèles d'IA ?
         <svg class="faq-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"><polyline points="6 9 12 15 18 9"/></svg>
       </button>
       <div class="faq-content">
-        Le filtre d'anonymisation de ConfiDoc est appliqué localement, au niveau de votre serveur. Toutes les entités identifiables sont remplacées par des étiquettes neutres cryptées avant toute requête extérieure. L'IA externe ne reçoit donc que des résumés techniques anonymisés.
+        Le masquage ConfiDoc est appliqué avant toute question. Toutes les données identifiantes sont remplacées par des repères neutres. Le modèle d'IA ne reçoit donc que la version masquée du document.
       </div>
     </div>
     <div class="faq-item">
@@ -768,7 +768,7 @@
   </section>
 
   <footer>
-    © 2026 ConfiDoc. Tous droits réservés. Développé en conformité avec le RGPD et la DPO Assurance.
+    © 2026 ConfiDoc. Tous droits réservés. Développé en conformité avec le RGPD.
   </footer>
 
   <script nonce="{{CSP_NONCE}}">
@@ -1090,7 +1090,7 @@ Par exemple, un nom comme Sophie Bernard, un SIRET 123 456 789 00012, un email t
         }
       }
       
-      statusText.textContent = `Traitement réussi en 0.2s. ${count} entités sensibles neutralisées avec succès.`;
+      statusText.textContent = `Traitement réussi en 0.2s. ${count} donnée(s) sensible(s) masquée(s) avec succès.`;
     }
   })();
   </script>

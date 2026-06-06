@@ -699,7 +699,7 @@ function renderQualityDashboard(data) {
     if (fill) fill.setAttribute("stroke-dasharray", `${score}, 100`);
 
     const levels = {
-      ready_for_ai: { text: "Prêt pour l'IA", color: "var(--success)" },
+      ready_for_ai: { text: "Prêt pour questions", color: "var(--success)" },
       internal_review: { text: "Revue interne", color: "var(--warning)" },
       needs_review: { text: "Revue requise", color: "var(--warning)" },
       not_ready: { text: "Non prêt", color: "var(--danger)" },
@@ -946,7 +946,7 @@ function resumeWorkspaceReview() {
     return;
   }
   openDocumentWorkspace();
-  toast("Sélectionnez un document prêt IA pour lancer l'analyse.", "warning");
+  toast("Sélectionnez une pièce prête pour poser vos questions.", "warning");
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────
@@ -1048,7 +1048,7 @@ function updateHeaderContext() {
   } else {
     docPill.style.display = "none";
   }
-  providerPill.textContent = `Provider IA: ${currentProvider || "—"}`;
+  providerPill.textContent = `Analyse: ${currentProvider || "—"}`;
   providerPill.classList.toggle("warning", sensitiveClientMode);
   providerPill.style.display = "";
 }
@@ -1078,7 +1078,7 @@ async function loadProviderInfo() {
     const data = await apiFetch("/ai/providers");
     sensitiveClientMode = !!data.sensitive_client_mode;
     currentProvider = sensitiveClientMode
-      ? "IA externe OFF"
+      ? "Analyse externe OFF"
       : (data.selected_provider || "mistral").toUpperCase();
     renderSensitiveModeBanner(data.policy_message || "");
   } catch (_e) {
@@ -1094,7 +1094,7 @@ function renderSensitiveModeBanner(message = "") {
   banner.style.display = sensitiveClientMode ? "flex" : "none";
   const text = banner.querySelector("span");
   if (text) {
-    text.textContent = message || "Mode sensible: les documents sont traités sans IA externe.";
+    text.textContent = message || "Mode sensible : aucune analyse externe.";
   }
 }
 
@@ -1147,8 +1147,8 @@ function renderTrustIndicator(payload = {}) {
     blocked: "Bloqué",
   };
   if (aiEl) aiEl.textContent = Number.isFinite(aiScore) ? `${Math.round(aiScore)}/100` : "—";
-  if (trustEl) trustEl.textContent = Number.isFinite(trustScore) ? `Confiance ${Math.round(trustScore)}` : "Confiance —";
-  if (statusEl) statusEl.textContent = labels[level] || level || "Score de confiance disponible.";
+  if (trustEl) trustEl.textContent = Number.isFinite(trustScore) ? `Protection ${Math.round(trustScore)}` : "Protection —";
+  if (statusEl) statusEl.textContent = labels[level] || level || "Niveau de protection disponible.";
 }
 
 function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
@@ -1165,7 +1165,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Le traitement n'a pas pu être terminé. Relancez ou contactez l'administrateur.",
       recommended_action: "Relancer le traitement",
       reasons: ["Traitement incomplet"],
-      actions: ["Relancer anonymisation", "Voir audit trail"],
+      actions: ["Relancer le masquage", "Voir la preuve"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1180,7 +1180,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Le document est en cours de lecture et de masquage.",
       recommended_action: "Patienter",
       reasons: ["Traitement en cours"],
-      actions: ["Voir audit trail"],
+      actions: ["Voir la preuve"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1208,7 +1208,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       severity: "warning",
       decision: "Vous devez vérifier avant export",
       explanation: "Certaines données sensibles ou quasi-identifiants peuvent encore permettre une réidentification.",
-      recommended_action: validated ? "Télécharger le rapport DPO" : "Valider manuellement",
+      recommended_action: validated ? "Télécharger la preuve" : "Valider manuellement",
       reasons: ["Contrôle recommandé avant export"],
       actions: ["Corriger le masquage", "Valider manuellement", "Voir pourquoi"],
       risk_score: score,
@@ -1277,23 +1277,34 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
   if (actions) {
     const actionMap = {
       "Analyser avec IA": "analyze",
+      "Analyser ce document": "analyze",
       "Poser une question": "analyze",
       "Exporter rapport": "report",
       "PDF masqué": "report",
       "Voir audit trail": "audit",
+      "Voir la preuve": "audit",
       "Corriger l'anonymisation": "correct",
       "Corriger les risques": "correct",
       "Valider manuellement": "validate",
       "Voir pourquoi": "why",
       "Relancer anonymisation": "retry",
+      "Relancer le masquage": "retry",
       "Voir les données détectées": "why",
       "Télécharger rapport DPO": "report",
       "Télécharger la preuve": "report",
     };
+    const actionLabelMap = {
+      "Analyser avec IA": "Poser une question",
+      "Relancer anonymisation": "Relancer le masquage",
+      "Voir audit trail": "Voir la preuve",
+      "Corriger l'anonymisation": "Corriger le masquage",
+      "Télécharger rapport DPO": "Télécharger la preuve",
+    };
     actions.innerHTML = (decision.actions || []).slice(0, 4).map(label => {
       const action = actionMap[label] || "why";
+      const displayLabel = actionLabelMap[label] || label;
       const cls = action === "analyze" || action === "correct" ? "btn-primary" : "btn-ghost";
-      return `<button type="button" class="btn ${cls} btn-sm" data-decision-action="${escapeAttr(action)}">${escapeHtml(label)}</button>`;
+      return `<button type="button" class="btn ${cls} btn-sm" data-decision-action="${escapeAttr(action)}">${escapeHtml(displayLabel)}</button>`;
     }).join("");
   }
   renderWhyScore(decision);
@@ -1359,41 +1370,46 @@ function renderExportGuard(payload = {}) {
   const level = String(payload.risk_level || payload.level || currentRiskLevel || "low").toLowerCase();
   const validated = !!(payload.human_validated ?? payload.humanValidated);
   const score = normalizeRiskPercent(payload.risk_score ?? payload.score);
-  const scoreText = score === null ? "" : `Score RGPD ${score}% · `;
+  const hasResidualRisk = score !== null && score > 0;
+  const residualText = score === null
+    ? ""
+    : hasResidualRisk
+      ? `Risque restant ${score}% · `
+      : "Aucun risque restant détecté · ";
   const approveBtn = $("btn-export-approve-inline");
   const titleEl = $("export-guard-title");
   const detailEl = $("export-guard-detail");
   let state = "ready";
-  let title = "Vous pouvez exporter";
-  let detail = `${scoreText}Document masqué.`;
+  let title = "Document protégé";
+  let detail = `${residualText}Vous pouvez poser vos questions ou télécharger la preuve RGPD.`;
   let canApprove = false;
 
   if (!ready) {
     state = "watch";
-    title = "Export en attente";
-    detail = "Le document doit être masqué puis validé avant diffusion.";
+    title = "Masquage en attente";
+    detail = "Le document doit être masqué avant les questions ou les exports.";
   } else if (level === "critical") {
     state = "blocked";
-    title = "Export bloqué";
-    detail = `${scoreText}Risque critique de réidentification.`;
+    title = "Utilisation bloquée";
+    detail = `${residualText}Certaines données peuvent encore identifier le client. Vérifiez le masquage.`;
   } else if (level === "high" && !validated) {
     state = "watch";
-    title = "Validation humaine requise";
-    detail = `${scoreText}Les exports restent verrouillés jusqu'à validation.`;
+    title = "Revue humaine requise";
+    detail = `${residualText}Validez la pièce avant de l'utiliser ou de la diffuser.`;
     canApprove = true;
   } else if (level === "high" && validated) {
     state = "ready";
-    title = "Export validé";
-    detail = `${scoreText}Validation humaine journalisée.`;
+    title = "Document protégé";
+    detail = `${residualText}Revue humaine journalisée.`;
   } else if (level === "medium" && !validated) {
     state = "watch";
-    title = "Revue recommandée avant export IA";
-    detail = `${scoreText}Contrôle recommandé avant partage externe.`;
+    title = "Revue conseillée";
+    detail = `${residualText}Contrôle recommandé avant partage externe.`;
     canApprove = true;
   } else if (level === "medium" && validated) {
     state = "ready";
-    title = "Export validé";
-    detail = `${scoreText}Contrôle effectué et validé.`;
+    title = "Document protégé";
+    detail = `${residualText}Contrôle effectué et validé.`;
   }
 
   guard.className = `export-guard ${state}`;
@@ -1440,7 +1456,7 @@ async function refreshAIDocInsights(docId) {
     const risk = riskResult.status === "fulfilled" ? riskResult.value : {};
     const auditData = auditResult.status === "fulfilled" ? auditResult.value : {};
     const auditEntries = Array.isArray(auditData.audit_entries) ? auditData.audit_entries : [];
-    const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Analyse IA";
+    const next = Array.isArray(st.next_steps) && st.next_steps.length ? st.next_steps.join(" → ") : "Questions";
     updatePipelineTimeline({
       status: st.status || currentDocStatus,
       extractDone: !!st?.extraction?.done,
@@ -1555,7 +1571,7 @@ function updateProcessingConsole(payload = {}) {
     ocr: "Lecture du document en cours",
     detect: "Détection des données sensibles",
     mask: "Masquage RGPD",
-    ready: "Document prêt pour l'IA",
+    ready: "Document prêt",
     failed: "Traitement interrompu",
   };
 
@@ -1581,7 +1597,7 @@ function updateProcessingConsole(payload = {}) {
   const entityMetric = $("processing-entity-metric");
   if (entityMetric) {
     const count = payload.detections;
-    entityMetric.textContent = Number.isFinite(count) ? `Entités ${count}` : "Entités —";
+    entityMetric.textContent = Number.isFinite(count) ? `Données ${count}` : "Données —";
   }
   const backendMetric = $("processing-backend-metric");
   if (backendMetric) backendMetric.textContent = payload.backend || "API";
@@ -2672,7 +2688,7 @@ function renderDossierClientSummary(client, readyCount) {
         <span>${totalDocs} document${totalDocs > 1 ? "s" : ""} réparti${totalDocs > 1 ? "s" : ""} sur ${exercices.length} exercice${exercices.length > 1 ? "s" : ""}</span>
       </div>
       <div class="dossier-summary-metrics">
-        <span><strong>${readyCount}</strong> prêts IA</span>
+        <span><strong>${readyCount}</strong> prêt${readyCount > 1 ? "s" : ""}</span>
         <span><strong>${pendingCount}</strong> à traiter</span>
         <span><strong>${lastActivity}</strong> dernière activité</span>
       </div>
@@ -3216,8 +3232,9 @@ function renderAIReadySummary(details = {}) {
   const size = formatBytes(details.sizeBytes ?? currentDocSize);
   const fileKind = documentFileKind();
   const entities = details.entitiesText || formatEntitySummary(details.entitySummary);
-  const exportTitle = $("export-guard-title")?.textContent || "Export prêt";
-  const exportDetail = $("export-guard-detail")?.textContent || "Document masqué.";
+  const exportTitle = $("export-guard-title")?.textContent || "Document protégé";
+  const exportDetail = $("export-guard-detail")?.textContent
+    || "Vous pouvez poser vos questions ou télécharger la preuve RGPD.";
   const previewNote = details.previewError
     ? `<p class="ai-ready-note">${escapeHtml(details.previewError)}</p>`
     : "";
@@ -3235,11 +3252,11 @@ function renderAIReadySummary(details = {}) {
       <div><dt>Statut</dt><dd>${escapeHtml(status)}</dd></div>
       <div><dt>Taille</dt><dd>${escapeHtml(size)}</dd></div>
       <div><dt>Original</dt><dd>${escapeHtml(fileKind)} · source disponible</dd></div>
-      <div><dt>Entités masquées</dt><dd>${escapeHtml(entities)}</dd></div>
-      <div><dt>Score / export</dt><dd>${escapeHtml(exportTitle)} · ${escapeHtml(exportDetail)}</dd></div>
+      <div><dt>Données masquées</dt><dd>${escapeHtml(entities)}</dd></div>
+      <div><dt>Utilisation</dt><dd>${escapeHtml(exportTitle)} · ${escapeHtml(exportDetail)}</dd></div>
     </dl>
     <div class="ai-ready-actions">
-      <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Analyser ce document</button>
+      <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Poser une question</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="original">Ouvrir l’original</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger la preuve RGPD</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir l’anonymisation</button>
@@ -3314,10 +3331,10 @@ function renderDocumentDetailShell(details = {}) {
   setText("detail-doc-name", name);
   setText("detail-status", status);
   setText("pane-original-meta", [fileKind, size].filter(Boolean).join(" · ") || "Source");
-  setText("pane-anon-meta", `${Number(count || 0)} entité(s)`);
+  setText("pane-anon-meta", `${Number(count || 0)} donnée(s)`);
   setText(
     "detail-summary",
-    `${Number(count || 0)} entité(s) · ${riskScore === null ? "risque —" : `risque ${Math.round(riskScore)}%`}`,
+    `${Number(count || 0)} donnée(s) · ${riskScore === null ? "risque —" : `risque ${Math.round(riskScore)}%`}`,
   );
 
   const originalViewer = root.querySelector(".viewer-original");
@@ -3354,7 +3371,7 @@ function renderDocumentDetailShell(details = {}) {
       documentDetailRow("Format", fileKind),
       documentDetailRow("Taille", size || "—"),
       documentDetailRow("Statut", status),
-      documentDetailRow("Entités", `${Number(count || 0)}`),
+      documentDetailRow("Données", `${Number(count || 0)}`),
       documentDetailRow("ID", fileId || "—"),
     ].join("");
   }
@@ -3371,9 +3388,9 @@ function renderDocumentDetailShell(details = {}) {
   if (legend) {
     const entities = formatEntitySummary(entitySummary);
     legend.innerHTML = `
-      <li><span class="swatch" style="background:var(--accent)"></span>Entités masquées<span class="leg-val">${Number(count || 0)}</span></li>
-      <li><span class="swatch" style="background:var(--warning)"></span>Risque résiduel<span class="leg-val">${riskScore === null ? "—" : `${Math.round(riskScore)}%`}</span></li>
-      <li><span class="swatch" style="background:var(--raw)"></span>Types détectés<span class="leg-val">${escapeHtml(entities)}</span></li>
+      <li><span class="swatch" style="background:var(--accent)"></span>Données masquées<span class="leg-val">${Number(count || 0)}</span></li>
+      <li><span class="swatch" style="background:var(--warning)"></span>Risque restant<span class="leg-val">${riskScore === null ? "—" : `${Math.round(riskScore)}%`}</span></li>
+      <li><span class="swatch" style="background:var(--raw)"></span>Données détectées<span class="leg-val">${escapeHtml(entities)}</span></li>
     `;
   }
 
@@ -3834,7 +3851,7 @@ async function createDemoDocument() {
       }
       if (copy) {
         copy.innerHTML =
-          `<strong>${res.original_filename}</strong> créé.<br>Workflow démo: upload → OCR → anonymisation → scores → audit → export.`;
+          `<strong>${res.original_filename}</strong> créé.<br>Démo: dépôt → lecture → masquage → protection → preuve → export.`;
       }
     }
 
@@ -3845,7 +3862,7 @@ async function createDemoDocument() {
       } catch (previewErr) {
         console.warn("demo preview unavailable:", previewErr);
       }
-      toast(res.message || "Demo Investor prête — scores et audit disponibles", "success");
+      toast(res.message || "Démo prête — protection et preuve disponibles", "success");
       return;
     }
 
@@ -3869,12 +3886,12 @@ function buildDemoAssistantAnswer(question) {
   const score = currentDemoDocument?.risk?.score ?? currentDemoDocument?.risk?.risk_score ?? 0;
   const entities = currentDemoDocument?.detections_count ?? 0;
   if (q.includes("risque") || q.includes("score") || q.includes("pourquoi")) {
-    return `## Pourquoi ce score\n- Score de risque: ${score}/100, niveau faible.\n- ${entities} entités synthétiques ont été détectées et remplacées par des jetons stables.\n- L'original reste disponible pour contrôle visuel, tandis que l'analyse IA utilise uniquement la version anonymisée.\n\n## Action recommandée\n- Valider le contexte de diffusion avant un partage externe.`;
+    return `## Pourquoi cette décision\n- Risque restant: ${score}/100, niveau faible.\n- ${entities} données de démonstration ont été détectées et masquées.\n- L'original reste disponible pour contrôle visuel. Les questions utilisent uniquement la version masquée.\n\n## Action recommandée\n- Valider le contexte de diffusion avant un partage externe.`;
   }
   if (q.includes("audit")) {
-    return "## Audit trail\n- Document synthétique créé pour démonstration investisseur.\n- Extraction, anonymisation, calcul de risque et préparation export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
+    return "## Preuve\n- Document synthétique créé pour démonstration investisseur.\n- Dépôt, masquage, calcul du risque restant et préparation export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
   }
-  return "## Résumé\n- Document synthétique de démonstration investisseur chargé.\n- Original PDF accessible, aperçu anonymisé disponible, score RGPD calculé et audit exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des jetons.\n- Le workflow illustre original, anonymisé, décision ConfiDoc, explication du score, audit trail et export.";
+  return "## Résumé\n- Document synthétique de démonstration investisseur chargé.\n- Original PDF accessible, version masquée disponible, niveau de protection calculé et preuve exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des repères neutres.\n- Le parcours illustre l'original, la version masquée, la décision ConfiDoc, l'explication du risque et l'export.";
 }
 
 function applyPublicDemoInsights(payload) {
@@ -4225,7 +4242,7 @@ async function anonymize() {
     } else if (res.ok) {
       const data = await res.json();
       showAnonResults(data.preview_text, data.detections_count, data.entity_summary || {}, data.risk || null, data.mode || mode, data);
-      toast(`${data.detections_count ?? 0} entité(s) anonymisée(s) (${mode === "anonymization" ? "anonymisation forte" : "pseudonymisation"})`, "success");
+      toast(`${data.detections_count ?? 0} donnée(s) masquée(s)`, "success");
       currentDocStatus = "ready";
       updateHeaderContext();
       updatePipelineTimeline({ status: "ready", extractDone: true, anonymDone: true });
@@ -4274,7 +4291,7 @@ function pollDocStatus(docId) {
         status: status || "—",
         ocrLength: Number.isFinite(ocrLength) ? ocrLength : "—",
         detections: Number.isFinite(detections) ? detections : "—",
-        nextAction: anonymDone ? "Analyse IA" : "Sécurisation",
+        nextAction: anonymDone ? "Questions" : "Sécurisation",
       });
 
       if (isReadyStatus(status) || anonymDone) {
@@ -4282,7 +4299,7 @@ function pollDocStatus(docId) {
         try {
           const preview = await apiFetch(`/documents/${docId}/preview`);
           showAnonResults(preview.preview_text, preview.detections_count, preview.entity_summary || {});
-          toast(`${preview.detections_count ?? 0} entité(s) anonymisée(s)`, "success");
+          toast(`${preview.detections_count ?? 0} donnée(s) masquée(s)`, "success");
         } catch (e) {
           console.warn("preview load after poll:", e);
           hideAnonLoading();
@@ -4411,14 +4428,14 @@ function startBgPollers(docs) {
 }
 
 function notifyDocReady(filename, docId) {
-  toast(`"${filename}" est pret !`, "success");
+  toast(`"${filename}" est prêt !`, "success");
   const el = document.querySelector(`.doc-item[data-id="${docId}"]`);
   if (el) {
     el.classList.add("doc-item-flash");
     setTimeout(() => el.classList.remove("doc-item-flash"), 2000);
   }
   if ("Notification" in window && Notification.permission === "granted") {
-    try { new Notification("ConfiDoc", { body: `${filename} est pret pour la discussion IA` }); } catch(_e){}
+    try { new Notification("ConfiDoc", { body: `${filename} est prêt pour les questions` }); } catch(_e){}
   }
 }
 
@@ -4501,7 +4518,7 @@ function loadChatHistory(docId) {
       } else {
         const div = document.createElement("div");
         div.className = "msg msg-ai";
-        div.innerHTML = '<div class="msg-label">IA</div><span class="msg-body">' + escapeHtml(m.content) + '</span>';
+        div.innerHTML = '<div class="msg-label">Réponse</div><span class="msg-body">' + escapeHtml(m.content) + '</span>';
         msgs.appendChild(div);
         latestAssistantText = m.content;
       }
@@ -4518,8 +4535,8 @@ function showOnboarding() {
   const steps = [
     { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque pièce à un client, un exercice et un type de document." },
     { target: "#btn-anonymize", title: "Sécuriser la pièce", text: "Les données sensibles sont détectées puis remplacées par des balises." },
-    { target: ".quick-actions", title: "Analyser le dossier", text: "Les questions IA utilisent le texte sécurisé du document sélectionné." },
-    { target: "#btn-export-txt", title: "Exporter", text: "Téléchargez le texte sécurisé, le PDF rédigé ou le rapport d'audit." },
+    { target: ".quick-actions", title: "Poser vos questions", text: "Les questions utilisent la version masquée du document sélectionné." },
+    { target: "#btn-export-txt", title: "Exporter", text: "Téléchargez le texte masqué, le PDF ou la preuve RGPD." },
   ];
   let current = 0;
   const overlay = document.createElement("div");
@@ -4617,7 +4634,7 @@ async function validate() {
     resetChat();
     loadChatHistory(currentDocId);
     await loadDocList();
-    toast("Document anonymisé et prêt pour l’IA", "success");
+    toast("Document protégé et prêt pour vos questions", "success");
   } catch (e) {
     console.error("validate error:", e);
     toast(`Erreur validation: ${e.message}`, "error");
@@ -4657,7 +4674,7 @@ async function saveManualCorrection(maskOptions = {}) {
     );
     await refreshAIDocInsights(currentDocId);
     await loadDocList();
-    toast("Correction enregistrée. Score RGPD recalculé.", "success");
+    toast("Correction enregistrée. Niveau de protection recalculé.", "success");
   } catch (e) {
     toast(`Correction impossible: ${e.message}`, "error");
   }
@@ -4728,7 +4745,7 @@ function appendAssistantMsg() {
   const msgs = $("chat-messages");
   const div = document.createElement("div");
   div.className = "msg msg-ai";
-  div.innerHTML = '<div class="msg-label">IA</div><span class="msg-body"></span>';
+  div.innerHTML = '<div class="msg-label">Réponse</div><span class="msg-body"></span>';
   msgs.appendChild(div);
   msgs.scrollTop = msgs.scrollHeight;
   return div.querySelector(".msg-body");
@@ -5097,7 +5114,7 @@ async function copyLatestAnswer() {
   if (!text) return;
   try {
     await navigator.clipboard.writeText(text);
-    toast("Réponse IA copiée", "success");
+    toast("Réponse copiée", "success");
   } catch (_e) {
     toast("Impossible de copier automatiquement", "error");
   }
@@ -5344,9 +5361,9 @@ function emptyDashboardData() {
       score: null,
       color: "neutral",
       grade: null,
-      status: "Score RGPD non disponible",
+      status: "Protection non calculée",
       recommendations: [
-        "Ajoutez un premier document pour calculer votre posture RGPD.",
+        "Ajoutez un premier document pour calculer le niveau de protection.",
       ],
       breakdown: {},
     },
@@ -5490,7 +5507,7 @@ function filterComplianceRecommendations(recos, totalDocs, riskDistribution) {
 }
 
 /**
- * Score RGPD + recos (panneau Conformité). États vides si aucune pièce ou score absent.
+ * Protection RGPD + recos (panneau Conformité). États vides si aucune pièce ou score absent.
  */
 function renderGdprDashboardSection(gdpr, totalDocs, riskDistribution) {
   const gdprUnavailable =
@@ -5514,11 +5531,11 @@ function renderGdprDashboardSection(gdpr, totalDocs, riskDistribution) {
     }
     const statusElG = $("dash-gdpr-status");
     if (statusElG) {
-      statusElG.textContent = "Score RGPD non disponible";
+      statusElG.textContent = "Protection non calculée";
       statusElG.className = "dash-gdpr-status color-neutral";
     }
     const breakEl = $("dash-gdpr-breakdown");
-    if (breakEl) breakEl.textContent = "Ajoutez un premier document pour calculer votre posture RGPD.";
+    if (breakEl) breakEl.textContent = "Ajoutez un premier document pour calculer le niveau de protection.";
     const recos = ["Aucune recommandation pour le moment."];
     const recosEl = $("dash-gdpr-recos");
     if (recosEl) {
@@ -5572,7 +5589,7 @@ function renderGdprDashboardSection(gdpr, totalDocs, riskDistribution) {
     const parts = [];
     if (b.success_rate != null) parts.push(`Succès ${Math.round(b.success_rate)}%`);
     if (b.risk_score != null) parts.push(`Risque ${Math.round(b.risk_score)}%`);
-    if (b.failure_resilience != null) parts.push(`Resilience ${Math.round(b.failure_resilience)}%`);
+    if (b.failure_resilience != null) parts.push(`Robustesse ${Math.round(b.failure_resilience)}%`);
     if (b.activity_momentum != null) parts.push(`Activité ${Math.round(b.activity_momentum)}%`);
     breakEl.innerHTML = parts.map((p) => `<span>${p}</span>`).join("");
   }
@@ -5600,14 +5617,14 @@ function renderTrustDashboardSection(trust) {
   const el = $("dash-trust-breakdown");
   if (!el) return;
   if (!trust || trust.score == null || trust.score === undefined) {
-    el.innerHTML = "<span>Trust Score —</span>";
+    el.innerHTML = "<span>Niveau de protection —</span>";
     return;
   }
   const score = Math.round(Number(trust.score) || 0);
   const grade = trust.grade ? `Note ${escapeHtml(trust.grade)}` : "Note —";
-  const status = trust.status || "Trust Score";
+  const status = trust.status || "Niveau de protection";
   el.innerHTML = [
-    `<span>Trust ${score}/100</span>`,
+    `<span>Protection ${score}/100</span>`,
     `<span>${grade}</span>`,
     `<span>${escapeHtml(status)}</span>`,
   ].join("");
@@ -5715,14 +5732,14 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
         <div class="kpi-delta${reviewCount > 0 ? " is-warning" : ""}">${reviewCount > 0 ? "à traiter" : "rien à faire"}</div>
       </div>
       <div class="card kpi-card kpi-card--trust">
-        <div class="kpi-label">Trust score moyen</div>
+        <div class="kpi-label">Protection moyenne</div>
         <div class="kpi-value tabular">${trustAvg}<span style="font-size:14px;opacity:.6">%</span></div>
         <div class="kpi-delta">sur ${ready} doc${ready > 1 ? "s" : ""} validés</div>
       </div>
       <div class="card kpi-card">
-        <div class="kpi-label">Entités masquées</div>
+        <div class="kpi-label">Données masquées</div>
         <div class="kpi-value tabular">${entitiesMasked}</div>
-        <div class="kpi-delta">PII protégés</div>
+        <div class="kpi-delta">données protégées</div>
       </div>
     `;
   }
@@ -5783,9 +5800,9 @@ function renderQualityRedesignTab(tab, qualityData = null) {
     c.innerHTML = `
       <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 20px; align-items: start; flex-wrap: wrap; margin-bottom: 20px;">
         <div class="card animate-fade-in" style="padding:24px; margin: 0;">
-          <p class="rail-h" style="margin-top:0; font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Score global de conformité RGPD [Donnée réelle Backend]</p>
+          <p class="rail-h" style="margin-top:0; font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Niveau global de protection RGPD</p>
           <div class="kpi-value tabular" style="color:${score >= 90 ? "var(--accent)" : "var(--warning)"};font-size:42px; font-weight:800; font-family:'Outfit',sans-serif; margin: 10px 0;">${score}%</div>
-          <p class="page-lead" style="margin:8px 0 16px 0; font-size:12px; line-height:1.5;">Calculé sur l'ensemble des documents anonymisés du mois. Ce score atteste de l'excellence de votre posture de protection.</p>
+          <p class="page-lead" style="margin:8px 0 16px 0; font-size:12px; line-height:1.5;">Calculé sur les documents masqués du mois. Il indique si les pièces peuvent être utilisées sereinement.</p>
           <button class="btn btn-primary btn-sm" data-action="download-compliance-cert" style="display:inline-flex; align-items:center; gap:6px;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
             Télécharger le certificat RGPD
@@ -5793,30 +5810,30 @@ function renderQualityRedesignTab(tab, qualityData = null) {
         </div>
 
         <div class="card animate-fade-in" style="padding:24px; margin: 0;">
-          <h3 style="font-family:'Outfit', sans-serif; font-size: 14px; font-weight:700; color:#fff; margin-top:0; margin-bottom:12px;">🛡️ Registre des Traitements & Purge DPO</h3>
+          <h3 style="font-family:'Outfit', sans-serif; font-size: 14px; font-weight:700; color:#fff; margin-top:0; margin-bottom:12px;">Conservation des données</h3>
           <div class="table-container" style="border: 1px solid var(--border); border-radius: var(--radius-md); overflow:hidden; background:rgba(0,0,0,0.15);">
             <table style="width:100%; border-collapse:collapse; font-size:11px; text-align:left;">
               <thead>
                 <tr style="background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border);">
                   <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Donnée</th>
-                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Rétention [Donnée réelle Backend]</th>
-                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Prochaine Purge [Calculé côté Frontend / Simulé pour la démo]</th>
+                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Durée de conservation</th>
+                  <th style="padding:8px 10px; color:var(--text-muted); font-weight:600;">Prochaine purge</th>
                 </tr>
               </thead>
               <tbody>
                 <tr style="border-bottom:1px solid var(--border);">
                   <td style="padding:8px 10px; font-weight:700; color:#fff;">Pièces brutes (Source)</td>
-                  <td style="padding:8px 10px;">90j (Backend)</td>
+	                  <td style="padding:8px 10px;">90 jours</td>
                   <td style="padding:8px 10px; font-family: monospace; font-variant-numeric: tabular-nums; color:#fbbf24;" id="purge-countdown-files">Calcul...</td>
                 </tr>
                 <tr style="border-bottom:1px solid var(--border);">
-                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Mappings Fernet</td>
-                  <td style="padding:8px 10px;">30j (Backend)</td>
+	                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Clés de correspondance</td>
+	                  <td style="padding:8px 10px;">30 jours</td>
                   <td style="padding:8px 10px; font-family: monospace; font-variant-numeric: tabular-nums; color:#fbbf24;" id="purge-countdown-mappings">Calcul...</td>
                 </tr>
                 <tr>
-                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Logs d'audit DPO</td>
-                  <td style="padding:8px 10px;">3 ans (Backend)</td>
+	                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Historique de preuve</td>
+	                  <td style="padding:8px 10px;">3 ans</td>
                   <td style="padding:8px 10px; color:var(--text-muted);">Processus continu</td>
                 </tr>
               </tbody>
@@ -5826,7 +5843,7 @@ function renderQualityRedesignTab(tab, qualityData = null) {
       </div>
 
       <div class="card animate-fade-in" style="padding: 24px; margin-top: 0;">
-        <h3 style="font-family:'Outfit', sans-serif; font-size: 14px; font-weight:700; color:#fff; margin-top:0; margin-bottom:8px;">🔬 Simulateur de Risque CNIL [Simulation Pédagogique Démo, calculé côté Frontend]</h3>
+        <h3 style="font-family:'Outfit', sans-serif; font-size: 14px; font-weight:700; color:#fff; margin-top:0; margin-bottom:8px;">Simulation du risque restant</h3>
         <p class="page-lead" style="margin-bottom:16px; font-size:12px; line-height:1.5;">Décochez ou cochez les quasi-identifiants ci-dessous pour simuler en temps réel la résistance des exports face aux attaques par croisement de données externes.</p>
         <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap:20px;">
           <div>
@@ -5846,7 +5863,7 @@ function renderQualityRedesignTab(tab, qualityData = null) {
             </div>
           </div>
           <div style="background:rgba(0,0,0,0.15); border:1px solid var(--border); border-radius:var(--radius-md); padding:16px; display:flex; flex-direction:column; align-items:center; justify-content:center; text-align:center;">
-            <span style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Indice de Vulnerabilité [Calculé côté Frontend / Simulé]</span>
+            <span style="font-size:9px; font-weight:700; color:var(--text-muted); text-transform:uppercase; letter-spacing:0.05em; margin-bottom:4px;">Risque restant estimé</span>
             <div style="font-size:36px; font-weight:800; font-family:'Outfit',sans-serif; color:#34d399; line-height:1; transition: color 0.2s;" id="sim-prob-score">12%</div>
             <span style="font-size:10px; color:#34d399; font-weight:700; margin-top:8px; text-transform:uppercase; letter-spacing:0.05em; transition: color 0.2s;" id="sim-status-label">FAIBLE RISQUE</span>
           </div>
@@ -5861,19 +5878,19 @@ function renderQualityRedesignTab(tab, qualityData = null) {
   } else if (tab === "tab-golden") {
     c.innerHTML = `
       <div class="card" style="padding:18px">
-        <p class="rail-h"><span class="standard-only">Jeux de contrôle qualité</span><span class="expert-only">Golden sets</span></p>
+        <p class="rail-h">Jeux de contrôle qualité</p>
         <p>Taux de réussite des cas de régression : <strong class="tabular">—</strong></p>
         <p class="page-lead">Branchement <code>/golden/status</code> à venir.</p>
       </div>`;
   } else {
-    // Default: trust scores summary
+    // Default: protection scores summary
     const trust = qualityData?.trust || qualityData?.trust_score || {};
     const mean = clampPct(trust.average ?? trust.mean ?? 0);
     c.innerHTML = `
       <div class="card" style="padding:18px">
-        <p class="rail-h">Trust score moyen (30 jours)</p>
+        <p class="rail-h">Protection moyenne (30 jours)</p>
         <div class="kpi-value tabular" style="color:var(--accent);font-size:32px">${mean}%</div>
-        <p class="page-lead" style="margin-top:8px">Distribution des trust scores sur les documents traités le mois passé.</p>
+        <p class="page-lead" style="margin-top:8px">Répartition des niveaux de protection sur les documents traités le mois passé.</p>
       </div>`;
   }
 }
@@ -5945,10 +5962,10 @@ function renderSettingsRedesignTab(tab) {
   const c = $("settings-tab-content");
   if (!c) return;
   const stubs = {
-    "set-profile": ["Profil", "Email, mot de passe, photo de profil, signature DPO."],
+    "set-profile": ["Profil", "Email, mot de passe, photo de profil, signature."],
     "set-appearance": ["Apparence", "Thème (clair / sombre), densité d'affichage, taille de typo."],
     "set-anonymization": ["Masquage", "Règles de masquage réservées aux administrateurs."],
-    "set-copilot": ["Assistant", "Réglages avancés de l'assistant réservés aux administrateurs."],
+    "set-copilot": ["Questions", "Réglages avancés des questions réservés aux administrateurs."],
     "set-api": ["Connexions", "Accès techniques et intégrations réservés aux administrateurs."],
     "set-team": ["Équipe", "Membres, rôles et invitations."],
   };
@@ -6057,12 +6074,13 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
     const maxEnt = Math.max(1, ...sorted.map(x => x[1]));
     if (!sorted.length || totalDocs <= 0) {
       entityEl.innerHTML =
-        '<div class="dash-chart-empty">Aucune entité détectée pour le moment.</div>';
+        '<div class="dash-chart-empty">Aucune donnée détectée pour le moment.</div>';
     } else {
       entityEl.innerHTML = sorted.map(([type, count]) => {
         const pct = (count / maxEnt) * 100;
+        const label = entityLabelFr(type);
         return `<div class="dash-entity-row">
-          <span class="dash-entity-type">${type}</span>
+          <span class="dash-entity-type">${escapeHtml(label)}</span>
           <div class="dash-entity-bar-bg">
             <div class="dash-entity-bar-fill" style="width:0%" data-target="${pct}"></div>
           </div>
@@ -6081,7 +6099,7 @@ function renderDashboard(data, summary = {}, dossier360 = emptyDossier360()) {
   const statusEl = $("dash-status-chart");
   if (statusEl) {
     const statuses = [
-      { key: "ready", label: "Pret IA", dot: "ready" },
+      { key: "ready", label: "Prêt", dot: "ready" },
       { key: "processing", label: "Traitement", dot: "processing" },
       { key: "uploaded", label: "Ajouté", dot: "uploaded" },
       { key: "failed", label: "Erreur", dot: "failed" },
@@ -6803,7 +6821,7 @@ function prepulateLedger(entityCount) {
   const tr3 = document.createElement("tr");
   tr3.innerHTML = `
     <td><strong>${timeStr3}</strong></td>
-    <td><span style="color: var(--text);">Anonymisation déterministe</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Traitement réussi de ${entityCount} entités sensibles</small></td>
+    <td><span style="color: var(--text);">Masquage automatique</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Traitement réussi de ${entityCount} donnée(s) sensible(s)</small></td>
     <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
     <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
     <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Intègre</span></td>
@@ -6815,7 +6833,7 @@ function prepulateLedger(entityCount) {
   const tr2 = document.createElement("tr");
   tr2.innerHTML = `
     <td><strong>${timeStr2}</strong></td>
-    <td><span style="color: var(--text);">Numérisation & OCR Souverain</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Extraction de texte via modèle de vision local</small></td>
+    <td><span style="color: var(--text);">Lecture du document</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Texte extrait depuis le fichier</small></td>
     <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
     <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
     <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Intègre</span></td>
@@ -6827,7 +6845,7 @@ function prepulateLedger(entityCount) {
   const tr1 = document.createElement("tr");
   tr1.innerHTML = `
     <td><strong>${timeStr1}</strong></td>
-    <td><span style="color: var(--text);">Dépôt sécurisé & Scan de malware</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Fichier vérifié intègre, taille conforme</small></td>
+    <td><span style="color: var(--text);">Dépôt sécurisé</span> <small style="display:block; color: var(--text-dim); font-size: 11px;">Fichier vérifié, taille conforme</small></td>
     <td><span class="badge" style="font-size: 11px; padding: 2px 6px; border-radius: 4px; background: rgba(255,255,255,0.06); border: 1px solid rgba(255,255,255,0.1);">SYSTEM</span></td>
     <td><code class="audit-ledger-hash">${generateSHA256Mock()}</code></td>
     <td><span class="audit-ledger-badge"><svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3" style="margin-right: 2px;"><polyline points="20 6 9 17 4 12"></polyline></svg>Intègre</span></td>
@@ -6912,7 +6930,7 @@ window.updateScores = function() {
   
   const trustScoreEl = document.getElementById("trust-score");
   if (trustScoreEl) {
-    trustScoreEl.textContent = `Confiance ${trustScore}`;
+    trustScoreEl.textContent = `Protection ${trustScore}`;
   }
   const aiScoreEl = document.getElementById("ai-readiness-score");
   if (aiScoreEl) {
@@ -6921,7 +6939,7 @@ window.updateScores = function() {
   
   const trustBreakdownEl = document.getElementById("dash-trust-breakdown");
   if (trustBreakdownEl) {
-    trustBreakdownEl.textContent = `Score de confiance global : ${trustScore}% | Préparation IA : ${aiReadiness}%`;
+    trustBreakdownEl.textContent = `Protection globale : ${trustScore}% | Prêt pour questions : ${aiReadiness}%`;
   }
 };
 
@@ -7023,7 +7041,7 @@ function showAnonContextMenu(tagEl, clickEvent) {
         <line x1="9" y1="9" x2="15" y2="15"></line>
         <line x1="15" y1="9" x2="9" y2="15"></line>
       </svg>
-      Caviarder (Blackout)
+      Masquer totalement
     </button>
     <div class="anon-floating-menu-sep"></div>
     <div class="anon-floating-menu-title">Recatégoriser</div>
@@ -7039,7 +7057,7 @@ function showAnonContextMenu(tagEl, clickEvent) {
   menu.querySelector("#ctx-restore").addEventListener("click", () => {
     const originalVal = window.tagOriginalMap[placeholder] || `[Original non trouvé]`;
     tagEl.replaceWith(document.createTextNode(originalVal));
-    window.addAuditLedgerEntry("Rétablissement d'entité", "DPO (Vous)", `Restauration de la valeur originale de ${placeholder} (${originalVal})`);
+	    window.addAuditLedgerEntry("Rétablissement d'une donnée", "Vous", `Restauration de la valeur originale de ${placeholder} (${originalVal})`);
     window.updateScores();
     toast(`Valeur originale rétablie : ${originalVal}`, "success");
     menu.remove();
@@ -7050,11 +7068,11 @@ function showAnonContextMenu(tagEl, clickEvent) {
     const isBlackedOut = tagEl.classList.contains("anon-tag-blackout");
     window.addAuditLedgerEntry(
       isBlackedOut ? "Caviardage strict" : "Annulation caviardage",
-      "DPO (Vous)", 
-      isBlackedOut ? `Placeholder ${placeholder} masqué par un masque opaque noir` : `Placeholder ${placeholder} repassé en affichage pseudonymisé standard`
+	      "Vous",
+	      isBlackedOut ? `Repère ${placeholder} masqué totalement` : `Repère ${placeholder} remis en masquage standard`
     );
     window.updateScores();
-    toast(isBlackedOut ? `Placeholder masqué` : `Placeholder restauré`, "success");
+	    toast(isBlackedOut ? "Repère masqué" : "Repère restauré", "success");
     menu.remove();
   });
   
@@ -7063,7 +7081,7 @@ function showAnonContextMenu(tagEl, clickEvent) {
       const cat = btn.dataset.cat;
       tagEl.className = "anon-tag";
       tagEl.classList.add(`anon-tag-${cat}`);
-      window.addAuditLedgerEntry("Recatégorisation", "DPO (Vous)", `Placeholder ${placeholder} re-catégorisé en [${cat.toUpperCase()}]`);
+	      window.addAuditLedgerEntry("Catégorie mise à jour", "Vous", `Repère ${placeholder} classé en [${cat.toUpperCase()}]`);
       window.updateScores();
       toast(`Catégorie mise à jour : ${cat.toUpperCase()}`, "success");
       menu.remove();
@@ -8038,7 +8056,7 @@ async function triggerDPOAutopilot() {
   const buttons = document.querySelectorAll('.btn-dpo-autopilot');
   buttons.forEach(btn => {
     btn.disabled = true;
-    btn.innerHTML = '🤖 Autopilote en cours...';
+    btn.innerHTML = 'Contrôle en cours...';
   });
 
   // Create the premium glassmorphic overlay
@@ -8110,7 +8128,7 @@ async function triggerDPOAutopilot() {
     -webkit-background-clip: text;
     -webkit-text-fill-color: transparent;
   `;
-  title.textContent = 'Autopilote DPO intelligent';
+  title.textContent = 'Contrôle automatique';
 
   const subtitle = document.createElement('p');
   subtitle.style.cssText = `
@@ -8118,7 +8136,7 @@ async function triggerDPOAutopilot() {
     font-size: 13px;
     margin-bottom: 24px;
   `;
-  subtitle.textContent = 'Optimisation et réduction des risques de réidentification...';
+  subtitle.textContent = 'Vérification du masquage et réduction du risque restant...';
 
   const logConsole = document.createElement('div');
   logConsole.style.cssText = `
@@ -8143,11 +8161,11 @@ async function triggerDPOAutopilot() {
   document.body.appendChild(overlay);
 
   const logs = [
-    { text: "🤖 [Agent DPO] Démarrage de l'agent de conformité...", delay: 200 },
-    { text: "🔍 [Audit] Scan sémantique des PII résiduels...", delay: 800 },
-    { text: "🛡️ [Caviardage] Aucun résidu critique détecté...", delay: 1600 },
-    { text: "📈 [RGPD] Score RGPD amélioré, risque fortement réduit...", delay: 2400 },
-    { text: "🔒 [Preuve] Signature de la preuve d'intégrité DPO...", delay: 3000 },
+    { text: "Démarrage du contrôle automatique...", delay: 200 },
+    { text: "Recherche des données encore visibles...", delay: 800 },
+    { text: "Aucun résidu critique détecté...", delay: 1600 },
+    { text: "Niveau de protection amélioré, risque fortement réduit...", delay: 2400 },
+    { text: "Préparation de la preuve d'intégrité...", delay: 3000 },
     { text: "✨ [Prêt] Contrôles automatiques réussis. Prêt pour revue.", delay: 3600 }
   ];
 
@@ -8197,18 +8215,18 @@ async function triggerDPOAutopilot() {
     loadChatHistory(currentDocId);
     await loadDocList();
 
-    toast("🤖 Autopilote DPO : Contrôles automatiques réussis — risque fortement réduit !", "success");
+    toast("Contrôle automatique réussi — risque fortement réduit !", "success");
 
   } catch (e) {
     console.error("Autopilot validation error:", e);
-    toast(`Erreur Autopilote: ${e.message}`, "error");
+    toast(`Erreur contrôle automatique: ${e.message}`, "error");
   } finally {
     overlay.classList.add('animate-fade-out');
     setTimeout(() => overlay.remove(), 400);
 
     buttons.forEach(btn => {
       btn.disabled = false;
-      btn.innerHTML = '🤖 Autopilote DPO';
+      btn.innerHTML = 'Contrôle automatique';
     });
   }
 }

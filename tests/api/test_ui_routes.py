@@ -42,7 +42,7 @@ async def test_landing_links_to_trust_center(client):
 
     assert resp.status_code == 200
     assert 'href="/trust"' in resp.text
-    assert "Télécharger la preuve DPO" in resp.text
+    assert "Télécharger la preuve RGPD" in resp.text
     assert 'id="beta-form"' in resp.text
     assert 'id="pilot-proof"' in resp.text
     assert '<meta property="og:title"' in resp.text
@@ -118,8 +118,8 @@ async def test_console_ui_shell_stays_self_hosted_and_well_formed(client):
         'href="/trust" target="_blank" rel="noopener" class="btn btn-ghost btn-sm">Preuve DPO'
         not in resp.text
     )
-    assert "Score RGPD non disponible" in resp.text
-    assert "Ajoutez un premier document pour calculer votre posture RGPD." in resp.text
+    assert "Protection non calculée" in resp.text
+    assert "Ajoutez un premier document pour calculer le niveau de protection." in resp.text
     assert "Aucune recommandation pour le moment." in resp.text
 
     js = await client.get("/static/js/app.js")
@@ -220,14 +220,14 @@ async def test_home_secondary_content_is_progressively_disclosed(client):
 
 @pytest.mark.anyio
 async def test_document_analysis_advanced_blocks_are_collapsed(client):
-    """Analyse IA: advanced config + technical KPIs collapse; chat stays primary."""
+    """Questions: advanced config + technical KPIs collapse; chat stays primary."""
     resp = await client.get("/ui")
     assert resp.status_code == 200
     # Document-analysis collapsibles add to the home ones.
     assert resp.text.count("home-advanced") >= 4
     assert 'class="home-advanced expert-only"' in resp.text
     assert "Outils cabinet" in resp.text
-    assert "Détails techniques du document" in resp.text
+    assert "Détails avancés du document" in resp.text
     # Primary analysis surface + advanced controls remain in the DOM (JS intact).
     assert 'id="chat-messages"' in resp.text
     assert 'id="cabinet-doc-type"' in resp.text
@@ -245,19 +245,27 @@ async def test_ui_is_de_jargonised(client):
         "Distribution des Ajustements",
         "pipeline de production",
         "Trust score",
+        "Trust Score",
+        "Provider IA",
+        "Score RGPD",
         "Golden sets",
+        "audit trail",
+        "Prêt IA",
+        "prêts IA",
         "Audit-Ready",
         "Copilot: OFF",
         "Copilot réfléchit",
         "Mode rapport: OFF",
         "À reviewer",
         "Reviewer",
+        "Maturité IA",
+        "Time-to-Value",
     ):
         assert jargon not in resp.text, jargon
     for plain in (
         "Apprentissage continu",
-        "Indice de confiance",
-        "Preuve RGPD détaillée",
+        "Niveau de protection",
+        "Preuve détaillée",
         "Répartition des risques",
         "Pièces client",
         "Questions sur le document",
@@ -276,7 +284,7 @@ async def test_quality_and_compliance_analytics_are_collapsed(client):
     assert resp.status_code == 200
     assert resp.text.count("home-advanced") >= 6
     assert 'class="home-advanced expert-only"' in resp.text
-    assert "Détails : apprentissage & traitement" in resp.text
+    assert "Détails : corrections & traitement" in resp.text
     assert "Détails de conformité" in resp.text
     # JS-driven analytics still in the DOM.
     assert 'id="dash-risk-chart"' in resp.text

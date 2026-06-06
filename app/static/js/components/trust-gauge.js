@@ -68,7 +68,7 @@ class TrustGauge extends HTMLElement {
               <div data-role="value" class="tabular" style="font-size:${Math.round(size*0.21)}px;font-weight:800;letter-spacing:-0.025em;color:${colorFor(globalScore)};line-height:1">
                 ${globalScore}<span style="font-size:${Math.round(size*0.10)}px;opacity:0.6">%</span>
               </div>
-              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-muted);font-weight:700;margin-top:4px">Trust</div>
+              <div style="font-size:10px;text-transform:uppercase;letter-spacing:0.08em;color:var(--ink-muted);font-weight:700;margin-top:4px">Protection</div>
             </div>
           </div>` : ""}
       </div>

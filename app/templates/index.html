@@ -313,7 +313,7 @@
         </ul>
       </div>
       <div class="nav-group expert-only">
-        <div class="nav-group__label">Confiance</div>
+        <div class="nav-group__label">Sécurité</div>
         <ul class="app-nav-list">
           <li>
             <button class="nav-item" data-nav="quality" type="button">
@@ -324,7 +324,7 @@
                   <line x1="6" y1="20" x2="6" y2="14"/>
                 </svg>
               </span>
-              <span class="nav-item-label">Qualité &amp; RGPD</span>
+              <span class="nav-item-label">Protection</span>
             </button>
           </li>
           <li>
@@ -335,7 +335,7 @@
                   <polyline points="9 12 11 14 15 10"/>
                 </svg>
               </span>
-              <span class="nav-item-label">Journal d'audit</span>
+              <span class="nav-item-label">Preuves</span>
             </button>
           </li>
         </ul>
@@ -439,7 +439,7 @@
     <main id="main-content" class="main-panel glass" style="border:none; border-radius:0;">
       <div id="sensitive-mode-banner" class="sensitive-mode-banner" style="display:none">
         <strong>Mode client sensible</strong>
-        <span>Mode sensible: traitement sans IA externe.</span>
+        <span>Mode sensible : aucune analyse externe.</span>
       </div>
 
       <!-- DOSSIER CLIENTS -->
@@ -729,8 +729,8 @@
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
                 <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">3</div>
-                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">🛡️ Masquage IA & DPO</h4>
-                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">L'IA détecte et caviarde automatiquement les données personnelles (noms, RIB) pour créer un double anonyme.</p>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">Données protégées</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">ConfiDoc repère les noms, RIB et identifiants, puis crée une version masquée utilisable en sécurité.</p>
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
                 <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">4</div>
@@ -743,7 +743,7 @@
           <section class="workspace-overview" aria-label="Parcours principal">
             <div class="workspace-copy">
               <span class="workspace-eyebrow">Parcours principal</span>
-              <h3>Client, exercice, pièces, analyse IA.</h3>
+              <h3>Client, exercice, pièces, questions.</h3>
               <p>Chaque dossier regroupe les documents du client, leur statut de sécurité et les actions restantes.</p>
             </div>
             <div class="workspace-actions">
@@ -772,7 +772,7 @@
                 <span class="workspace-action-index">4</span>
                 <span>
                   <strong>Démo guidée</strong>
-                  <small>Exemple complet : score, analyse, audit</small>
+                  <small>Exemple complet : protection, questions, preuve</small>
                 </span>
               </button>
             </div>
@@ -801,7 +801,7 @@
                 </svg>
               </div>
               <div class="dash-kpi-num" id="dash-total-entities">0</div>
-              <div class="dash-kpi-label">Entités masquées</div>
+              <div class="dash-kpi-label">Données masquées</div>
             </div>
             <div class="dash-kpi-card">
               <div class="dash-kpi-icon kpi-green">
@@ -1050,7 +1050,7 @@
               <button class="btn-privacy-lens-toggle btn-ghost expert-only" data-privacy-lens-toggle>Contrôle visuel <span class="kbd">⌘L</span></button>
               <button class="btn-ghost" data-action="open-export">Exporter…</button>
               <button class="btn btn-accent btn-dpo-autopilot expert-only" data-action="dpo-autopilot" style="border:1px solid var(--accent); background:rgba(4,120,87,0.15); color:var(--accent); font-weight:700; padding:4px 12px; font-size:11px; height:32px; border-radius:var(--radius-md); display:inline-flex; align-items:center; gap:6px;">
-                Assistant DPO
+                Assistant conformité
               </button>
               <button class="btn-primary-ok" data-action="validate-anonymization">
                 ✓ Valider le masquage <span class="kbd">⌘↵</span>
@@ -1084,13 +1084,13 @@
             </section>
 
             <section class="pane pane-anonymized" id="pane-anonymized">
-              <header class="pane-head"><span class="pane-dot pane-dot--accent"></span> Anonymisé <span class="pane-meta" id="pane-anon-meta">— entités</span></header>
+              <header class="pane-head"><span class="pane-dot pane-dot--accent"></span> Version masquée <span class="pane-meta" id="pane-anon-meta">— données</span></header>
               <div class="viewer viewer-anonymized"><div class="viewer-placeholder">En attente du masquage…</div></div>
             </section>
 
             <aside class="rail">
               <section class="rail-section" id="rail-trust">
-                <h2 class="rail-h">Indice de confiance</h2>
+                <h2 class="rail-h">Niveau de protection</h2>
                 <trust-gauge id="detail-trust-gauge" data-size="140" data-pii="0" data-quasi="0" data-coherence="0" data-reversibility="0"></trust-gauge>
                 <ul class="rail-trust__legend" id="detail-trust-legend"></ul>
               </section>
@@ -1114,12 +1114,12 @@
           </div>
 
           <footer class="detail-actionbar">
-            <span class="detail-actionbar__summary" id="detail-summary">— données détectées · <span class="standard-only">— Risque résiduel</span><span class="expert-only">— données résiduelles</span></span>
+            <span class="detail-actionbar__summary" id="detail-summary">— données détectées · <span class="standard-only">— risque restant</span><span class="expert-only">— données restantes</span></span>
             <div class="detail-actionbar__actions">
               <button class="btn-ghost expert-only" data-action="re-anonymize-strict">Re-anonymiser (règles strictes)</button>
               <button class="btn-ghost" data-action="preview-redacted">Aperçu PDF masqué</button>
               <button class="btn btn-accent btn-dpo-autopilot expert-only" data-action="dpo-autopilot" style="border:1px solid var(--accent); background:rgba(4,120,87,0.15); color:var(--accent); font-weight:700; padding:6px 16px; font-size:12px; height:36px; border-radius:var(--radius-md); display:inline-flex; align-items:center; gap:6px;">
-                Assistant DPO
+                Assistant conformité
               </button>
               <button class="btn-primary-ok" data-action="validate-anonymization">Valider le masquage</button>
             </div>
@@ -1152,18 +1152,18 @@
           <div class="pipe-link"></div>
           <div class="pipe-step" data-step="anonymize"><span>4</span> Masquage</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="score"><span>5</span> Score</div>
+          <div class="pipe-step" data-step="score"><span>5</span> Protection</div>
           <div class="pipe-link"></div>
           <div class="pipe-step" data-step="review"><span>6</span> Revue</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="export"><span>7</span> Export / IA</div>
+          <div class="pipe-step" data-step="export"><span>7</span> Questions / export</div>
         </div>
 
         <div class="panel-header">
           <h2>Vérifier le masquage</h2>
           <div class="panel-actions">
             <select id="anon-profile" class="select-sm expert-only" title="But du masquage">
-              <option value="internal_review">Revue interne (prépare l'analyse IA)</option>
+              <option value="internal_review">Revue interne (questions sur document)</option>
               <option value="external_sharing">Partage externe (Sécurité maximale)</option>
               <option value="moderate">Avancé : traitement standard</option>
               <option value="strict">Avancé : traitement renforcé</option>
@@ -1172,7 +1172,7 @@
               <option value="pseudonymization">Masquage réversible (ex. [NOM_1])</option>
               <option value="anonymization">Masquage total (Xxxxx)</option>
             </select>
-            <div class="info-icon-group expert-only" title="Différence des moteurs :&#10;• Standard : Rapide, déterministe (Regex + Dictionnaire). Idéal pour IBAN, SIRET, Emails.&#10;• IA : Lent, contextuel (Mistral Large). Détecte les noms propres en phrase et les adresses complexes.">
+            <div class="info-icon-group expert-only" title="Choix du masquage :&#10;• Standard : rapide pour les identifiants simples.&#10;• Renforcé : plus attentif aux noms, adresses et formulations complexes.">
               <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--text-muted);cursor:help">
                 <circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/>
               </svg>
@@ -1217,7 +1217,7 @@
             </div>
             <div class="processing-metrics">
                 <span id="processing-ocr-metric">Lecture —</span>
-              <span id="processing-entity-metric">Entités —</span>
+              <span id="processing-entity-metric">Données —</span>
               <span id="processing-backend-metric">API</span>
             </div>
           </div>
@@ -1232,7 +1232,7 @@
             </div>
             <div class="decision-score-grid">
               <div><span>Risque restant</span><strong id="decision-risk-score">—</strong></div>
-              <div><span>Confiance</span><strong id="decision-trust-score">—</strong></div>
+              <div><span>Protection</span><strong id="decision-trust-score">—</strong></div>
               <div><span>Prêt pour questions</span><strong id="decision-ai-score">—</strong></div>
             </div>
             <div class="decision-detail-grid">
@@ -1285,7 +1285,7 @@
               <div class="trust-score-badge" id="trust-badge">
                 <span class="risk-label">Questions</span>
                 <span id="ai-readiness-score" class="risk-score">—</span>
-                <span id="trust-score" class="risk-level">Confiance —</span>
+                <span id="trust-score" class="risk-level">Protection —</span>
               </div>
               <p id="trust-status" class="risk-recommendation"></p>
             </div>
@@ -1436,8 +1436,8 @@
           <div class="export-guard-main">
             <span class="export-guard-dot" id="export-guard-dot"></span>
             <div>
-              <strong id="export-guard-title">Export prêt</strong>
-              <span id="export-guard-detail">Document masqué.</span>
+              <strong id="export-guard-title">Document protégé</strong>
+              <span id="export-guard-detail">Vous pouvez poser vos questions ou télécharger la preuve RGPD.</span>
             </div>
           </div>
           <button id="btn-export-approve-inline" type="button" class="btn btn-ghost btn-sm" style="display:none">
@@ -1463,7 +1463,7 @@
             </select>
             <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm">Revue associé</button>
           </div>
-          <p class="cabinet-hint">Le type de pièce enrichit le contexte envoyé à l'IA (chat et Copilot).</p>
+          <p class="cabinet-hint">Le type de pièce aide ConfiDoc à répondre avec le bon contexte métier.</p>
           <div class="cabinet-tools-row cabinet-compare">
             <label class="cabinet-label" for="compare-doc-select">Comparaison N / N-1</label>
             <select id="compare-doc-select" class="select-sm cabinet-select cabinet-select-wide">
@@ -1495,13 +1495,13 @@
 
         <div id="copilot-insights" class="dash-chart-card" style="display:none;margin-bottom:12px">
           <h3>Réponse document</h3>
-          <div><strong>Confiance :</strong> <span id="copilot-confidence">—</span></div>
+          <div><strong>Fiabilité :</strong> <span id="copilot-confidence">—</span></div>
           <div id="copilot-warnings" class="sidebar-stats"></div>
           <div id="copilot-citations" class="dash-entity-list" style="margin-top:10px"></div>
         </div>
 
         <details class="home-advanced expert-only">
-          <summary>Détails techniques du document</summary>
+          <summary>Détails avancés du document</summary>
         <div class="ai-insights">
           <div class="ai-kpi">
             <div class="kpi-label">Statut document</div>
@@ -1520,7 +1520,7 @@
             <div id="kpi-risk-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Confiance</div>
+            <div class="kpi-label">Protection</div>
             <div id="kpi-trust-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
@@ -1528,7 +1528,7 @@
             <div id="kpi-ai-readiness" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Entités détectées</div>
+            <div class="kpi-label">Données détectées</div>
             <div id="kpi-detections" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
@@ -1613,15 +1613,15 @@
         <section data-redesign-quality>
           <header class="panel-head">
             <div>
-              <h1 class="page-title">Qualité &amp; RGPD</h1>
-              <p class="page-lead">Tableau de bord trust pour l'équipe et le DPO.</p>
+              <h1 class="page-title">Protection</h1>
+              <p class="page-lead">Suivi simple des documents protégés.</p>
             </div>
             <div class="panel-actions">
               <button class="btn-ghost" data-action="download-compliance-cert">Télécharger le certificat RGPD</button>
             </div>
           </header>
           <div class="segment" id="quality-redesign-tabs" role="tablist">
-            <button role="tab" data-segment="tab-scores" aria-pressed="true">Indice de confiance</button>
+            <button role="tab" data-segment="tab-scores" aria-pressed="true">Niveau de protection</button>
             <button role="tab" data-segment="tab-rgpd" aria-pressed="false">Conformité RGPD</button>
             <button role="tab" data-segment="tab-golden" aria-pressed="false">Jeux de test qualité</button>
           </div>
@@ -1629,7 +1629,7 @@
         </section>
 
         <div class="panel-header">
-          <h2>Qualité & apprentissage continu</h2>
+          <h2>Qualité du masquage</h2>
           <div class="panel-actions">
             <span id="quality-as-of" class="quality-as-of-badge">Calcul en cours...</span>
             <button id="btn-quality-refresh" class="btn btn-ghost btn-sm" type="button">
@@ -1679,8 +1679,8 @@
               </div>
               <div>
                 <span id="quality-readiness-level" class="badge-ready">—</span>
-                <h4 class="quality-card-title">Maturité IA de l'org</h4>
-                <p class="quality-card-desc">Score global de préparation et d'acceptabilité de vos pièces par les modèles d'IA.</p>
+                <h4 class="quality-card-title">Pièces prêtes</h4>
+                <p class="quality-card-desc">Part des pièces suffisamment protégées pour être utilisées sereinement.</p>
               </div>
             </div>
 
@@ -1692,8 +1692,8 @@
                 </span>
                 <strong id="quality-one-shot-rate">—</strong>
               </div>
-              <h4 class="quality-card-title-sm">Taux de validation direct ("One-shot")</h4>
-              <p class="quality-card-desc-sm">Proportion de pièces validées sans aucune modification humaine du masquage IA.</p>
+              <h4 class="quality-card-title-sm">Validation directe</h4>
+              <p class="quality-card-desc-sm">Proportion de pièces validées sans correction manuelle du masquage.</p>
             </div>
 
             <!-- Time to value (TTV) -->
@@ -1704,7 +1704,7 @@
                 </span>
                 <strong id="quality-avg-time">—</strong>
               </div>
-              <h4 class="quality-card-title-sm">Time-to-Value (TTV) moyen</h4>
+              <h4 class="quality-card-title-sm">Temps moyen jusqu'au résultat</h4>
               <p class="quality-card-desc-sm">Temps moyen écoulé (secondes) entre l'import et la validation finale.</p>
             </div>
 
@@ -1717,20 +1717,20 @@
                 <strong id="quality-avg-overrides">—</strong>
               </div>
               <h4 class="quality-card-title-sm">Ajustements par document</h4>
-              <p class="quality-card-desc-sm">Nombre moyen de corrections DPO manuelles appliquées avant validation.</p>
+              <p class="quality-card-desc-sm">Nombre moyen de corrections manuelles appliquées avant validation.</p>
             </div>
 
           </div>
 
           <details class="home-advanced expert-only">
-            <summary>Détails : apprentissage & traitement</summary>
+            <summary>Détails : corrections & traitement</summary>
           <!-- Apprentissage continu (curation des corrections) -->
           <div class="quality-flywheel-layout">
             
             <!-- Left panel: Learning Pipeline & Drafts Curation -->
             <div class="quality-inner-card">
               <h3>Apprentissage continu</h3>
-              <p class="quality-section-desc">Chaque correction humaine entraîne l'IA locale pour la rendre plus fiable.</p>
+              <p class="quality-section-desc">Chaque correction aide à rendre le masquage plus fiable.</p>
               
               <div class="quality-funnel-container">
                 <div class="quality-funnel-row">
@@ -1770,8 +1770,8 @@
             <!-- Right panel: Grouped Corrections (Field & Error distributions) -->
             <div class="quality-inner-card flex-column">
               <div>
-                <h3>Où l'IA est corrigée</h3>
-                <p class="quality-section-desc">Analyse des zones de friction de l'IA par champ et par type d'erreur.</p>
+                <h3>Corrections les plus fréquentes</h3>
+                <p class="quality-section-desc">Champs qui demandent le plus de reprises.</p>
               </div>
 
               <div class="quality-tab-row">
@@ -1828,8 +1828,8 @@
               </div>
               <div class="dash-gdpr-info">
                 <div class="dash-gdpr-grade" id="dash-gdpr-grade" style="display:none"></div>
-                <div class="dash-gdpr-status color-neutral" id="dash-gdpr-status">Score RGPD non disponible</div>
-                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown">Ajoutez un premier document pour calculer votre posture RGPD.</div>
+                <div class="dash-gdpr-status color-neutral" id="dash-gdpr-status">Protection non calculée</div>
+                <div class="dash-gdpr-breakdown" id="dash-gdpr-breakdown">Ajoutez un premier document pour calculer le niveau de protection.</div>
                 <div class="dash-gdpr-breakdown" id="dash-trust-breakdown"></div>
               </div>
             </div>
@@ -1860,7 +1860,7 @@
           <!-- Journal d'audit -->
           <div class="dash-chart-card audit-ledger-card" style="margin-top: 20px;">
             <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; flex-wrap: wrap; gap: 8px;">
-              <h3 style="margin: 0;">Preuve RGPD détaillée</h3>
+              <h3 style="margin: 0;">Preuve détaillée</h3>
               <span class="audit-ledger-badge" style="background: rgba(99, 102, 241, 0.1); color: #818cf8; border: 1px solid rgba(99, 102, 241, 0.2);">
                 <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" style="margin-right: 4px;">
                   <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
@@ -1869,7 +1869,7 @@
               </span>
             </div>
             <p style="color: var(--text-dim); font-size: 12.5px; margin-bottom: 16px; line-height: 1.5;">
-              Historique détaillé réservé aux contrôles DPO: dépôt, masquage, validation et export.
+              Historique utile : dépôt, masquage, validation et export.
             </p>
             <div class="audit-ledger-container">
               <table class="audit-ledger-table">
@@ -1930,7 +1930,7 @@
             <button role="tab" data-segment="set-profile" aria-pressed="true">Profil</button>
             <button role="tab" data-segment="set-appearance" aria-pressed="false">Apparence</button>
             <button role="tab" data-segment="set-anonymization" aria-pressed="false">Masquage</button>
-            <button role="tab" data-segment="set-copilot" aria-pressed="false">Copilot</button>
+            <button role="tab" data-segment="set-copilot" aria-pressed="false">Questions</button>
             <button role="tab" data-segment="set-api" aria-pressed="false">API &amp; intégrations</button>
             <button role="tab" data-segment="set-team" aria-pressed="false">Équipe</button>
           </div>
@@ -1950,7 +1950,7 @@
             </svg>
           </div>
           <h2>Paramètres</h2>
-          <p class="panel-stub-text">Options avancées réservées aux administrateurs.<br>Profil, thème, règles de masquage, Copilot, comparaison automatique.</p>
+          <p class="panel-stub-text">Options avancées réservées aux administrateurs.<br>Profil, thème, règles de masquage, questions, comparaison automatique.</p>
           <p class="panel-stub-meta">Pour l'instant, le thème est dans l'en-tête et la déconnexion est disponible en haut à droite.</p>
         </div>
       </div>
