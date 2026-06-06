@@ -17,7 +17,7 @@ ConfiDoc doit traiter les documents originaux comme des donnees hautement sensib
 
 ## Flux anonymisation
 
-1. La version `ORIGINAL_TEXT` est traitee par les detecteurs deterministes et/ou par le service LLM optionnel.
+1. La version `ORIGINAL_TEXT` est traitee par les detecteurs deterministes et, uniquement sur opt-in explicite, par le service LLM d'anonymisation.
 2. Une version `PREVIEW_ANONYMIZED` est produite.
 3. Les entites detectees sont stockees avec type, positions et remplacement.
 4. Une version `FINAL_ANONYMIZED` est creee apres validation humaine ou lors de l'export si la preview est disponible.
@@ -38,13 +38,14 @@ Les endpoints qui exposent du contenu original (`raw`, `extracted-text`) exigent
 Selon la configuration:
 
 - Mistral OCR peut recevoir le fichier ou le contenu source necessaire a l'OCR.
-- Mistral LLM peut recevoir du texte brut uniquement si l'anonymisation LLM est activee sur du texte non encore anonymise.
+- Mistral LLM peut recevoir du texte brut pour anonymisation uniquement si `LLM_RAW_ANONYMIZATION_ENABLED=true`, `MISTRAL_ENABLED=true` et une cle API sont configures. Par defaut, ce chemin est desactive et l'anonymisation retombe sur le moteur local deterministe.
 - Les analyses post-anonymisation doivent recevoir une version anonymisee.
 
 En mode client sensible, la recommandation est:
 
 - `SENSITIVE_CLIENT_MODE=true` pour bloquer les appels Mistral OCR/LLM non essentiels au niveau applicatif.
 - `MISTRAL_ENABLED=false` par defaut.
+- `LLM_RAW_ANONYMIZATION_ENABLED=false` pour interdire l'envoi de texte source brut a un LLM externe.
 - OCR local ou fournisseur avec DPA, region UE et retention desactivee contractuellement.
 - Anonymisation deterministe locale pour les documents les plus sensibles.
 - Activation LLM uniquement apres validation DPO/RSSI et documentation du sous-traitant.
@@ -63,6 +64,7 @@ Les contenus, snippets, valeurs originales et mappings sont interdits dans les l
 - RBAC document par document et organisation par organisation.
 - Permissions separees: `documents.read`, `documents.raw`, `documents.process`, `documents.validate`, `exports.download`, `audit.read`.
 - Logs LLM sans extrait brut.
+- AI Firewall sur PII residuelle en prompt sortant et reponse entrante.
 - Audit trail avec sanitization des metadata sensibles et `event_hash`.
 - Export gate sur risque de reidentification critique ou eleve non valide.
 - Content-Disposition securise pour les telechargements.
@@ -70,7 +72,8 @@ Les contenus, snippets, valeurs originales et mappings sont interdits dans les l
 
 ## Risques restants
 
-- Le mode anonymisation LLM peut envoyer du texte brut au fournisseur externe. Il doit rester optionnel et documente par contrat.
+- Le mode anonymisation LLM brut est desactive par defaut. S'il est active pour un environnement controle, il doit etre couvert par DPA, region, retention et validation DPO/RSSI.
+- L'AI Firewall actuel est un controle anti-fuite PII residuelle. Ce n'est pas encore une defense complete contre prompt injection/jailbreak.
 - Le fallback `database` stocke les fichiers en base; acceptable en pilote controle, moins adapte au scale.
 - Le cycle complet de suppression physique depend du backend de stockage.
 - Il faut formaliser DPA, region de traitement, retention fournisseur et clauses de non-entrainement avant clients regulés.

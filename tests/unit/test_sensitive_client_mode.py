@@ -52,3 +52,58 @@ async def test_llm_extraction_uses_sensitive_mode_fallback(monkeypatch):
 
     assert result["source"] == "disabled:sensitive_client_mode"
     assert result["montants_cles"] == []
+
+
+@pytest.mark.asyncio
+async def test_llm_anonymization_raw_text_is_disabled_by_default(monkeypatch):
+    from app.services import llm_anonymization_service
+
+    settings = Settings(
+        SENSITIVE_CLIENT_MODE=False,
+        MISTRAL_ENABLED=True,
+        MISTRAL_API_KEY="test-key",
+        LLM_RAW_ANONYMIZATION_ENABLED=False,
+    )
+    monkeypatch.setattr(llm_anonymization_service, "get_settings", lambda: settings)
+    monkeypatch.setattr(llm_anonymization_service, "_fallback_anonymize", lambda text: "[PERSONNE]")
+
+    async def fail_if_called(*args, **kwargs):  # noqa: ANN002, ANN003
+        raise AssertionError("raw text must not be sent to Mistral without explicit opt-in")
+
+    monkeypatch.setattr(llm_anonymization_service, "_chat_completion", fail_if_called)
+
+    result = await llm_anonymization_service.anonymize_with_llm("Jean Dupont")
+
+    assert result["anonymized_text"] == "[PERSONNE]"
+    assert result["method"] == "fallback:regex_raw_llm_disabled"
+
+
+@pytest.mark.asyncio
+async def test_llm_anonymization_requires_explicit_raw_text_opt_in(monkeypatch):
+    from app.services import llm_anonymization_service
+
+    settings = Settings(
+        SENSITIVE_CLIENT_MODE=False,
+        MISTRAL_ENABLED=True,
+        MISTRAL_API_KEY="test-key",
+        LLM_RAW_ANONYMIZATION_ENABLED=True,
+    )
+    monkeypatch.setattr(llm_anonymization_service, "get_settings", lambda: settings)
+
+    async def fake_chat_completion(prompt: str, temperature: float = 0.1) -> str:
+        assert "Jean Dupont" in prompt
+        assert temperature == 0.1
+        return (
+            '{"texte_anonymise":"[PERSONNE]","entites_detectees":['
+            '{"type":"PERSONNE","valeur_originale":"Jean Dupont",'
+            '"position_debut":0,"position_fin":11,"token":"[PERSONNE]"}],'
+            '"confiance":"high","nb_remplacements":1}'
+        )
+
+    monkeypatch.setattr(llm_anonymization_service, "_chat_completion", fake_chat_completion)
+
+    result = await llm_anonymization_service.anonymize_with_llm("Jean Dupont")
+
+    assert result["anonymized_text"] == "[PERSONNE]"
+    assert result["method"] == "llm:mistral-large"
+    assert result["count"] == 1

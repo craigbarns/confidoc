@@ -30,8 +30,9 @@ Le produit cible les cabinets comptables, avocats, notaires et cabinets de conse
 
 ## Risques techniques
 
-- L'anonymisation LLM peut envoyer du texte brut si activee; a cadrer contractuellement.
+- L'anonymisation LLM brute est desactivee par defaut (`LLM_RAW_ANONYMIZATION_ENABLED=false`); si activee, elle doit etre cadree contractuellement.
 - Pas encore de Row Level Security PostgreSQL.
+- L'AI Firewall couvre la PII residuelle en prompt/reponse; le volet anti-prompt-injection complet reste a durcir.
 - La gestion fine des invitations et changements de role doit etre industrialisee.
 - Le stockage `database` est un compromis pilote, pas la cible scale.
 - Observabilite cout OCR/LLM encore basique.

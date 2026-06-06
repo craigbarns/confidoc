@@ -1,7 +1,4 @@
-"""ConfiDoc — Anonymisation 100% LLM (Mistral Large).
-
-Pas de regex, pas de patterns — uniquement un LLM qui identifie et remplace les PII.
-"""
+"""ConfiDoc — Optional external-LLM anonymization with deterministic fallback."""
 
 # ruff: noqa: E501
 
@@ -117,7 +114,7 @@ def _fallback_anonymize(text: str) -> str:
 
 
 async def anonymize_with_llm(text: str) -> dict[str, Any]:
-    """Anonymise un texte via Mistral Large.
+    """Anonymise un texte via Mistral Large only when raw-LLM opt-in is enabled.
 
     Args:
         text: Texte brut à anonymiser
@@ -140,6 +137,16 @@ async def anonymize_with_llm(text: str) -> dict[str, Any]:
             "confidence": "low",
             "count": 0,
             "method": "fallback:regex_sensitive_client_mode",
+        }
+
+    if not getattr(settings, "LLM_RAW_ANONYMIZATION_ENABLED", False):
+        logger.info("llm_anonymization_skipped", reason="raw_llm_anonymization_disabled")
+        return {
+            "anonymized_text": _fallback_anonymize(text),
+            "entities": [],
+            "confidence": "low",
+            "count": 0,
+            "method": "fallback:regex_raw_llm_disabled",
         }
 
     if not settings.MISTRAL_ENABLED or not settings.MISTRAL_API_KEY:

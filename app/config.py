@@ -151,6 +151,9 @@ class Settings(BaseSettings):
 
     # Contraintes RGPD / minimisation
     SENSITIVE_CLIENT_MODE: bool = False
+    # External LLM anonymization receives raw source text. Keep disabled unless
+    # explicitly approved for a controlled environment.
+    LLM_RAW_ANONYMIZATION_ENABLED: bool = False
 
     # ---- AI Firewall (inspection prompt sortant + réponse entrante) ----
     # Défense en profondeur sur le texte réellement échangé avec les LLM.

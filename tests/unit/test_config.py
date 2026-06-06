@@ -12,6 +12,7 @@ def test_settings_defaults():
     settings = get_settings()
     assert settings.APP_NAME == "ConfiDoc"
     assert settings.API_V1_PREFIX == "/api/v1"
+    assert settings.LLM_RAW_ANONYMIZATION_ENABLED is False
 
 
 def test_settings_max_upload():

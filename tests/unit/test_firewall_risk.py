@@ -46,6 +46,39 @@ def test_residual_email_is_blocked_in_sensitive_mode():
     assert scan.blocked is True
 
 
+def test_person_without_title_is_redacted_in_normal_mode():
+    """A bare first-name/last-name leak should not require M./Mme to be caught."""
+    text = "Contactez Jean Dupont avant envoi."
+    scan = scan_text(text, sensitive_mode=False)
+
+    assert any(f.entity_type == "PERSONNE" for f in scan.findings)
+    assert scan.verdict == REDACT
+    assert "Jean Dupont" not in scan.sanitized_text
+    assert "Dupont" not in scan.sanitized_text
+    assert "[PERSONNE]" in scan.sanitized_text
+
+
+def test_accounting_labels_are_not_redacted_as_person_names():
+    """The person-name recall should not mask common accounting labels."""
+    text = "TOTAL ACTIF 1000\nRESULTAT NET 120\nBILAN PASSIF 1000"
+    scan = scan_text(text, sensitive_mode=False)
+
+    assert scan.verdict == ALLOW
+    assert scan.findings == []
+    assert scan.sanitized_text == text
+
+
+def test_ocr_confused_siret_with_label_is_redacted():
+    """SIRET values with OCR O/0 confusion should be caught when explicitly labeled."""
+    text = "SIRET 552 10O 554 00021"
+    scan = scan_text(text, sensitive_mode=False)
+
+    assert any(f.entity_type == "SIRET" for f in scan.findings)
+    assert scan.verdict == REDACT
+    assert "552 10O 554 00021" not in scan.sanitized_text
+    assert "[SIRET]" in scan.sanitized_text
+
+
 def test_iban_is_critical_and_blocked_in_all_modes():
     """A direct financial identifier (IBAN) is critical -> block even in normal mode."""
     text = "Virement sur FR76 3000 4000 0500 0012 3456 789 avant lundi."

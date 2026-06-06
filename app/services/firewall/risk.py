@@ -10,6 +10,8 @@ from __future__ import annotations
 import re
 from dataclasses import dataclass, field
 
+from app.core.tokens import TOKEN_PERSONNE, TOKEN_SIRET
+from app.services.anonymization.detector import is_false_positive
 from app.services.anonymization.patterns import PATTERNS
 
 # ── Verdicts ────────────────────────────────────────────────────────────
@@ -49,18 +51,57 @@ _PATTERN_NAME_TO_TYPE: list[tuple[str, str]] = [
     ("iban", "IBAN"),
     ("iban_compact", "IBAN"),
     ("vat_fr", "TVA"),
+    ("siret_ocr_labeled", "SIRET"),
     ("siret", "SIRET"),
     ("phone_fr", "TELEPHONE"),
     ("phone_intl", "TELEPHONE"),
     ("email", "EMAIL"),
     ("siren", "SIREN"),
     ("person_title", "PERSONNE"),
+    ("person_name_common", "PERSONNE"),
+    ("person_uppercase_labeled", "PERSONNE"),
     ("address_line", "ADRESSE"),
     ("postal_city", "VILLE"),
 ]
 
+_COMMON_FIRST_NAMES_RE = (
+    r"Alexandre|Alexis|Alice|Amandine|Anais|Anaïs|André|Anne|Antoine|Arthur|Camille|"
+    r"Caroline|Catherine|Charlotte|Chloé|Claire|Clément|David|Emilie|Émilie|Emma|"
+    r"Eric|Éric|François|Gabriel|Gregory|Grégory|Guillaume|Hugo|Isabelle|Jacques|"
+    r"Jean|Julie|Julien|Laurent|Luc|Lucas|Manon|Marc|Marie|Mathieu|Michel|Nathalie|"
+    r"Nicolas|Olivier|Paul|Philippe|Pierre|Sophie|Thomas|Valérie|Victor"
+)
+
+_FIREWALL_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
+    (
+        "siret_ocr_labeled",
+        re.compile(
+            r"\bSIRET\s*(?:n[°o]\s*)?[:\-]?\s*"
+            r"[0-9O]{3}[\s.\-]?[0-9O]{3}[\s.\-]?[0-9O]{3}[\s.\-]?[0-9O]{5}\b",
+            re.IGNORECASE,
+        ),
+        TOKEN_SIRET,
+    ),
+    (
+        "person_name_common",
+        re.compile(
+            rf"\b(?i:{_COMMON_FIRST_NAMES_RE})"
+            r"(?:[-\s]+[A-ZÀ-ÖØ-Ý][A-Za-zÀ-ÖØ-öø-ÿ''\-]{2,}){1,3}\b"
+        ),
+        TOKEN_PERSONNE,
+    ),
+    (
+        "person_uppercase_labeled",
+        re.compile(
+            r"(?i)\b(?:nom|pr[ée]nom|client|dirigeant|g[ée]rant|b[ée]n[ée]ficiaire|titulaire)"
+            r"\s*[:\-]\s*[A-ZÀ-ÖØ-Ý]{2,}(?:[ \t]+[A-ZÀ-ÖØ-Ý]{2,}){1,3}\b"
+        ),
+        TOKEN_PERSONNE,
+    ),
+]
+
 _PATTERNS_BY_NAME: dict[str, tuple[re.Pattern[str], str]] = {
-    name: (pattern, token) for name, pattern, token in PATTERNS
+    name: (pattern, token) for name, pattern, token in [*PATTERNS, *_FIREWALL_ONLY_PATTERNS]
 }
 
 
@@ -77,6 +118,19 @@ def _firewall_patterns() -> list[tuple[str, re.Pattern[str], str]]:
 
 
 _FIREWALL_PATTERNS = _firewall_patterns()
+
+
+def _skip_firewall_match(entity_type: str, value: str) -> bool:
+    if entity_type != "PERSONNE":
+        return False
+    if is_false_positive(value):
+        return True
+    return bool(
+        re.match(
+            r"(?i)\b(?:d[ée]nomination|nom\s+complet|naissance|total|r[ée]sultat|bilan|actif|passif)\b",
+            value,
+        )
+    )
 
 
 @dataclass
@@ -162,10 +216,19 @@ def scan_text(
     tokens: dict[str, str] = {}
 
     for entity_type, pattern, token in _FIREWALL_PATTERNS:
-        working, n = pattern.subn(token, working)
-        if n:
-            counts[entity_type] = counts.get(entity_type, 0) + n
-            tokens.setdefault(entity_type, token)
+        def replace(
+            match: re.Match[str],
+            current_entity_type: str = entity_type,
+            current_token: str = token,
+        ) -> str:
+            value = match.group(0)
+            if _skip_firewall_match(current_entity_type, value):
+                return value
+            counts[current_entity_type] = counts.get(current_entity_type, 0) + 1
+            tokens.setdefault(current_entity_type, current_token)
+            return current_token
+
+        working = pattern.sub(replace, working)
 
     findings = [
         FirewallFinding(

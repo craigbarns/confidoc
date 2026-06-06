@@ -7,6 +7,7 @@ import argparse
 import asyncio
 import json
 import sys
+from datetime import UTC, datetime
 from pathlib import Path
 from typing import Any
 
@@ -82,8 +83,96 @@ def _map_llm_to_golden(llm_out: dict[str, Any], original_filename: str) -> dict[
     }
 
 
-async def _run_case(case_dir: Path) -> tuple[str, bool, list[str]]:
-    from app.golden.compare_v2 import compare_minimal_expected
+def _rate(passed: int, total: int) -> float:
+    return (passed / total * 100) if total else 100.0
+
+
+def _empty_bucket() -> dict[str, int]:
+    return {"total": 0, "passed": 0, "failed": 0}
+
+
+def _add_check(bucket: dict[str, int], *, passed: bool) -> None:
+    bucket["total"] += 1
+    if passed:
+        bucket["passed"] += 1
+    else:
+        bucket["failed"] += 1
+
+
+def _public_bucket(bucket: dict[str, int]) -> dict[str, float | int]:
+    return {
+        "total": bucket["total"],
+        "passed": bucket["passed"],
+        "failed": bucket["failed"],
+        "pass_rate": round(_rate(bucket["passed"], bucket["total"]), 1),
+    }
+
+
+def _aggregate_metrics(results: list[dict[str, Any]]) -> dict[str, Any]:
+    case_bucket = _empty_bucket()
+    all_checks = _empty_bucket()
+    critical_fields = _empty_bucket()
+    quality_checks = _empty_bucket()
+    doc_type_checks = _empty_bucket()
+    extractor_checks = _empty_bucket()
+    by_critical_field: dict[str, dict[str, int]] = {}
+    by_doc_type: dict[str, dict[str, int]] = {}
+
+    for result in results:
+        passed_case = bool(result.get("pass"))
+        _add_check(case_bucket, passed=passed_case)
+
+        doc_type = str(result.get("doc_type") or "unknown")
+        doc_bucket = by_doc_type.setdefault(doc_type, _empty_bucket())
+        _add_check(doc_bucket, passed=passed_case)
+
+        for check in result.get("checks") or []:
+            passed = bool(check.get("passed"))
+            category = str(check.get("category") or "")
+            name = str(check.get("name") or "unknown")
+            _add_check(all_checks, passed=passed)
+
+            if category == "critical_field":
+                _add_check(critical_fields, passed=passed)
+                field_bucket = by_critical_field.setdefault(name, _empty_bucket())
+                _add_check(field_bucket, passed=passed)
+            elif category == "quality":
+                _add_check(quality_checks, passed=passed)
+            elif category == "doc_type":
+                _add_check(doc_type_checks, passed=passed)
+            elif category == "extractor_name":
+                _add_check(extractor_checks, passed=passed)
+
+    return {
+        "case_pass_rate": round(_rate(case_bucket["passed"], case_bucket["total"]), 1),
+        "case_total": case_bucket["total"],
+        "case_passed": case_bucket["passed"],
+        "case_failed": case_bucket["failed"],
+        "check_pass_rate": round(_rate(all_checks["passed"], all_checks["total"]), 1),
+        "critical_field_exact_match_rate": round(
+            _rate(critical_fields["passed"], critical_fields["total"]), 1
+        ),
+        "quality_check_pass_rate": round(_rate(quality_checks["passed"], quality_checks["total"]), 1),
+        "doc_type_check_pass_rate": round(_rate(doc_type_checks["passed"], doc_type_checks["total"]), 1),
+        "extractor_check_pass_rate": round(
+            _rate(extractor_checks["passed"], extractor_checks["total"]), 1
+        ),
+        "checks": {
+            "all": _public_bucket(all_checks),
+            "critical_fields": _public_bucket(critical_fields),
+            "quality": _public_bucket(quality_checks),
+            "doc_type": _public_bucket(doc_type_checks),
+            "extractor_name": _public_bucket(extractor_checks),
+        },
+        "by_critical_field": {
+            key: _public_bucket(bucket) for key, bucket in sorted(by_critical_field.items())
+        },
+        "by_doc_type": {key: _public_bucket(bucket) for key, bucket in sorted(by_doc_type.items())},
+    }
+
+
+async def _run_case(case_dir: Path) -> dict[str, Any]:
+    from app.golden.compare_v2 import score_minimal_expected
     from app.services.llm_extraction_service import extract_with_llm
 
     input_path = case_dir / "input.txt"
@@ -91,7 +180,14 @@ async def _run_case(case_dir: Path) -> tuple[str, bool, list[str]]:
     meta_path = case_dir / "meta.json"
 
     if not input_path.exists() or not expected_path.exists() or not meta_path.exists():
-        return case_dir.name, False, ["fichiers requis manquants (input/expected/meta)"]
+        return {
+            "case_id": case_dir.name,
+            "pass": False,
+            "doc_type": "unknown",
+            "diffs": ["fichiers requis manquants (input/expected/meta)"],
+            "checks": [],
+            "check_pass_rate": 0.0,
+        }
 
     text = input_path.read_text(encoding="utf-8")
     expected = _load_json(expected_path)
@@ -104,10 +200,24 @@ async def _run_case(case_dir: Path) -> tuple[str, bool, list[str]]:
         llm_out = await extract_with_llm(text)
         actual = _map_llm_to_golden(llm_out, source_filename)
 
-        diffs = compare_minimal_expected(expected, actual)
-        return case_dir.name, len(diffs) == 0, diffs
+        score = score_minimal_expected(expected, actual)
+        return {
+            "case_id": case_dir.name,
+            "pass": bool(score["pass"]),
+            "doc_type": expected.get("doc_type") or "unknown",
+            "diffs": score["diffs"],
+            "checks": score["checks"],
+            "check_pass_rate": round(float(score["check_pass_rate"]), 1),
+        }
     except Exception as exc:
-        return case_dir.name, False, [f"Erreur d'exécution: {str(exc)}"]
+        return {
+            "case_id": case_dir.name,
+            "pass": False,
+            "doc_type": expected.get("doc_type") or "unknown",
+            "diffs": [f"Erreur d'exécution: {str(exc)}"],
+            "checks": [],
+            "check_pass_rate": 0.0,
+        }
 
 
 async def async_main() -> int:
@@ -170,8 +280,11 @@ async def async_main() -> int:
 
     # Exécution séquentielle pour éviter de saturer le rate limit LLM
     for case_dir in case_dirs:
-        cid, ok, diffs = await _run_case(case_dir)
-        results.append({"case_id": cid, "pass": ok, "diffs": diffs})
+        result = await _run_case(case_dir)
+        cid = str(result["case_id"])
+        ok = bool(result["pass"])
+        diffs = list(result["diffs"])
+        results.append(result)
 
         if ok:
             print(f"PASS {cid}")
@@ -188,12 +301,14 @@ async def async_main() -> int:
 
     if args.json_report:
         report_path = ROOT / "golden" / "latest_quality_report.json"
+        metrics = _aggregate_metrics(results)
         report = {
-            "timestamp": Path(ROOT).stat().st_mtime,  # Simplifié
+            "timestamp": datetime.now(UTC).isoformat(),
             "total": total,
             "passed": total - failed,
             "failed": failed,
             "pass_rate": pass_rate,
+            "metrics": metrics,
             "results": results,
         }
         report_path.write_text(json.dumps(report, indent=2), encoding="utf-8")
