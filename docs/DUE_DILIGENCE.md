@@ -32,7 +32,7 @@ Le produit cible les cabinets comptables, avocats, notaires et cabinets de conse
 
 - L'anonymisation LLM brute est desactivee par defaut (`LLM_RAW_ANONYMIZATION_ENABLED=false`); si activee, elle doit etre cadree contractuellement.
 - Pas encore de Row Level Security PostgreSQL.
-- L'AI Firewall couvre la PII residuelle en prompt/reponse; le volet anti-prompt-injection complet reste a durcir.
+- L'AI Firewall couvre la PII residuelle en prompt/reponse et bloque les injections explicites; le volet adversarial complet doit continuer a s'enrichir avec des cas terrain.
 - La gestion fine des invitations et changements de role doit etre industrialisee.
 - Le stockage `database` est un compromis pilote, pas la cible scale.
 - Observabilite cout OCR/LLM encore basique.

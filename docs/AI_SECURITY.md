@@ -65,6 +65,7 @@ Les contenus, snippets, valeurs originales et mappings sont interdits dans les l
 - Permissions separees: `documents.read`, `documents.raw`, `documents.process`, `documents.validate`, `exports.download`, `audit.read`.
 - Logs LLM sans extrait brut.
 - AI Firewall sur PII residuelle en prompt sortant et reponse entrante.
+- Socle anti-prompt-injection cote prompt: blocage des tentatives explicites de contournement, revelation du prompt systeme ou mode developpeur/jailbreak.
 - Audit trail avec sanitization des metadata sensibles et `event_hash`.
 - Export gate sur risque de reidentification critique ou eleve non valide.
 - Content-Disposition securise pour les telechargements.
@@ -73,7 +74,7 @@ Les contenus, snippets, valeurs originales et mappings sont interdits dans les l
 ## Risques restants
 
 - Le mode anonymisation LLM brut est desactive par defaut. S'il est active pour un environnement controle, il doit etre couvert par DPA, region, retention et validation DPO/RSSI.
-- L'AI Firewall actuel est un controle anti-fuite PII residuelle. Ce n'est pas encore une defense complete contre prompt injection/jailbreak.
+- L'AI Firewall inclut un socle deterministe anti-prompt-injection. Ce n'est pas une defense exhaustive contre toutes les variantes adversariales; les cas pilotes doivent alimenter les tests de regression.
 - Le fallback `database` stocke les fichiers en base; acceptable en pilote controle, moins adapte au scale.
 - Le cycle complet de suppression physique depend du backend de stockage.
 - Il faut formaliser DPA, region de traitement, retention fournisseur et clauses de non-entrainement avant clients regulés.

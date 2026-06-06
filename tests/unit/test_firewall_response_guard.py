@@ -38,3 +38,12 @@ def test_response_leaking_pii_is_blocked_in_sensitive_mode():
 
     assert scan.verdict == BLOCK
     assert scan.blocked is True
+
+
+def test_response_side_does_not_treat_injection_phrase_as_prompt_attack():
+    answer = "Le document contient la phrase: ignore previous instructions."
+    scan = inspect_response(answer, sensitive_mode=False)
+
+    assert scan.verdict == ALLOW
+    assert scan.findings == []
+    assert scan.sanitized_text == answer

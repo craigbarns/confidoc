@@ -1,4 +1,4 @@
-"""AI Firewall — residual-PII detection, risk scoring, verdict and redaction.
+"""AI Firewall — PII and prompt-injection detection, risk scoring and verdicts.
 
 This module is deterministic and dependency-light. It reuses the existing
 anonymization regex patterns (single source of truth) instead of duplicating
@@ -24,6 +24,7 @@ BLOCK = "block"
 # high:     strong direct identifiers
 # medium:   quasi-identifiers
 _SEVERITY: dict[str, str] = {
+    "PROMPT_INJECTION": "critical",
     "NSS": "critical",
     "IBAN": "critical",
     "EMAIL": "high",
@@ -100,6 +101,42 @@ _FIREWALL_ONLY_PATTERNS: list[tuple[str, re.Pattern[str], str]] = [
     ),
 ]
 
+_PROMPT_INJECTION_TOKEN = "[PROMPT_INJECTION]"
+_PROMPT_INJECTION_PATTERNS: list[re.Pattern[str]] = [
+    re.compile(
+        r"\b(?:ignore|disregard|forget|bypass|override)\s+"
+        r"(?:all\s+)?(?:previous|prior|above|system|developer)\s+"
+        r"(?:instructions?|rules?|directives?|prompts?)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:ignore|ignorez|oublie|oubliez|contourne|contournez|remplace|remplacez)\s+"
+        r"(?:toutes?\s+les\s+)?(?:instructions|directives|r[eè]gles|prompts?)\s+"
+        r"(?:pr[eé]c[eé]dentes?|ci-dessus|syst[eè]me|d[eé]veloppeur)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:reveal|show|print|display|leak|dump)\s+"
+        r"(?:the\s+)?(?:system|developer|hidden)\s+(?:prompt|instructions?|message)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:r[eé]v[eè]le|r[eé]v[eè]lez|affiche|affichez|montre|montrez|imprime|imprimez)\s+"
+        r"(?:le\s+)?(?:prompt|message|instructions?)\s+"
+        r"(?:syst[eè]me|d[eé]veloppeur|cach[eé])\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:developer\s+mode|mode\s+d[eé]veloppeur|jailbreak|act\s+as\s+DAN|DAN\s+mode)\b",
+        re.IGNORECASE,
+    ),
+    re.compile(
+        r"\b(?:do\s+not\s+follow|don't\s+follow|ne\s+suis\s+pas|ne\s+suivez\s+pas)\s+"
+        r"(?:the\s+)?(?:system|developer|previous|prior|above|instructions?|directives?)",
+        re.IGNORECASE,
+    ),
+]
+
 _PATTERNS_BY_NAME: dict[str, tuple[re.Pattern[str], str]] = {
     name: (pattern, token) for name, pattern, token in [*PATTERNS, *_FIREWALL_ONLY_PATTERNS]
 }
@@ -131,6 +168,17 @@ def _skip_firewall_match(entity_type: str, value: str) -> bool:
             value,
         )
     )
+
+
+def _scan_prompt_injection(working: str, counts: dict[str, int], tokens: dict[str, str]) -> str:
+    def replace(match: re.Match[str]) -> str:
+        counts["PROMPT_INJECTION"] = counts.get("PROMPT_INJECTION", 0) + 1
+        tokens.setdefault("PROMPT_INJECTION", _PROMPT_INJECTION_TOKEN)
+        return _PROMPT_INJECTION_TOKEN
+
+    for pattern in _PROMPT_INJECTION_PATTERNS:
+        working = pattern.sub(replace, working)
+    return working
 
 
 @dataclass
@@ -185,13 +233,16 @@ def decide_verdict(
 ) -> str:
     """Context-aware verdict.
 
-    - no residual PII            -> allow
+    - no residual PII / injection -> allow
+    - prompt-injection attempt    -> block
     - critical risk              -> block (every mode)
     - SENSITIVE_CLIENT_MODE      -> block
     - otherwise (normal / demo)  -> redact + log
     """
     if not findings:
         return ALLOW
+    if any(f.entity_type == "PROMPT_INJECTION" for f in findings):
+        return BLOCK
     if risk_level == "critical":
         return BLOCK
     if sensitive_mode:
@@ -229,6 +280,9 @@ def scan_text(
             return current_token
 
         working = pattern.sub(replace, working)
+
+    if direction == "prompt":
+        working = _scan_prompt_injection(working, counts, tokens)
 
     findings = [
         FirewallFinding(
