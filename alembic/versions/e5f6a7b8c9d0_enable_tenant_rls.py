@@ -130,7 +130,11 @@ def upgrade() -> None:
             RETURN NULL;
         END;
         $$;
+        """
+    )
 
+    op.execute(
+        """
         CREATE OR REPLACE FUNCTION public.confidoc_rls_current_user_id()
         RETURNS uuid
         LANGUAGE plpgsql
@@ -148,7 +152,11 @@ def upgrade() -> None:
             RETURN NULL;
         END;
         $$;
+        """
+    )
 
+    op.execute(
+        """
         CREATE OR REPLACE FUNCTION public.confidoc_rls_bypass()
         RETURNS boolean
         LANGUAGE sql
