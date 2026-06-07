@@ -2,11 +2,12 @@
 
 from __future__ import annotations
 
-import importlib
+import importlib.util
 import os
 import re
 import uuid
 from collections.abc import Iterable
+from pathlib import Path
 
 import pytest
 from alembic.operations import Operations
@@ -52,7 +53,18 @@ async def _execute_many(conn: AsyncConnection, statements: Iterable[str]) -> Non
 
 
 def _run_rls_migration(sync_conn) -> None:
-    migration = importlib.import_module("alembic.versions.e5f6a7b8c9d0_enable_tenant_rls")
+    migration_path = (
+        Path(__file__).resolve().parents[2]
+        / "alembic"
+        / "versions"
+        / "e5f6a7b8c9d0_enable_tenant_rls.py"
+    )
+    spec = importlib.util.spec_from_file_location("confidoc_rls_migration", migration_path)
+    if spec is None or spec.loader is None:
+        raise AssertionError(f"Unable to load RLS migration from {migration_path}")
+    migration = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(migration)
+
     context = MigrationContext.configure(sync_conn)
     with Operations.context(context):
         migration.upgrade()
