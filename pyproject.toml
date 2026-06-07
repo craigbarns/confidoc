@@ -110,6 +110,9 @@ ignore = ["E501", "B008"]
 testpaths = ["tests"]
 asyncio_mode = "auto"
 filterwarnings = ["ignore::DeprecationWarning"]
+markers = [
+    "postgres: requires a live PostgreSQL database",
+]
 
 [tool.mypy]
 python_version = "3.11"
