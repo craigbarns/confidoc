@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import importlib
 import os
+import re
 import uuid
 from collections.abc import Iterable
 
@@ -18,6 +19,8 @@ pytestmark = pytest.mark.postgres
 
 APP_ROLE = "confidoc_rls_test_app"
 APP_PASSWORD = "confidoc_rls_test_password"
+SAFE_DATABASE_NAME = re.compile(r"^[A-Za-z0-9_]+$")
+SYSTEM_DATABASES = {"postgres", "template0", "template1"}
 
 
 def _database_url() -> str:
@@ -30,6 +33,17 @@ def _database_url() -> str:
 def _app_database_url(admin_url: str) -> str:
     url = make_url(admin_url)
     return url.set(username=APP_ROLE, password=APP_PASSWORD).render_as_string(hide_password=False)
+
+
+def _database_name(admin_url: str) -> str:
+    database = make_url(admin_url).database
+    if not database or database in SYSTEM_DATABASES or not SAFE_DATABASE_NAME.fullmatch(database):
+        raise AssertionError(f"Unsafe PostgreSQL test database name: {database!r}")
+    return database
+
+
+def _url_for_database(admin_url: str, database: str) -> str:
+    return make_url(admin_url).set(database=database).render_as_string(hide_password=False)
 
 
 async def _execute_many(conn: AsyncConnection, statements: Iterable[str]) -> None:
@@ -45,18 +59,27 @@ def _run_rls_migration(sync_conn) -> None:
 
 
 async def _reset_database(admin_url: str) -> None:
+    database = _database_name(admin_url)
+    maintenance_engine = create_async_engine(
+        _url_for_database(admin_url, "postgres"),
+        isolation_level="AUTOCOMMIT",
+        pool_pre_ping=True,
+    )
+    try:
+        async with maintenance_engine.connect() as conn:
+            await conn.execute(text(f'DROP DATABASE IF EXISTS "{database}" WITH (FORCE)'))
+            await conn.execute(text(f"DROP ROLE IF EXISTS {APP_ROLE}"))
+            await conn.execute(text(f'CREATE DATABASE "{database}"'))
+            await conn.execute(text(f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}'"))
+    finally:
+        await maintenance_engine.dispose()
+
     engine = create_async_engine(admin_url, pool_pre_ping=True)
     try:
         async with engine.begin() as conn:
             await _execute_many(
                 conn,
-                (
-                    "DROP SCHEMA IF EXISTS public CASCADE",
-                    "CREATE SCHEMA public",
-                    f"DROP ROLE IF EXISTS {APP_ROLE}",
-                    f"CREATE ROLE {APP_ROLE} LOGIN PASSWORD '{APP_PASSWORD}'",
-                    "GRANT USAGE ON SCHEMA public TO public",
-                ),
+                ("GRANT USAGE ON SCHEMA public TO public",),
             )
 
             await _execute_many(

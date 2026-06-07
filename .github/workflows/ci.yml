@@ -76,7 +76,8 @@ jobs:
           --health-timeout 5s
           --health-retries 10
     env:
-      TEST_POSTGRES_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/confidoc_test
+      DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/confidoc_test
+      TEST_POSTGRES_DATABASE_URL: postgresql+asyncpg://postgres:postgres@localhost:5432/confidoc_rls_test
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-python@v5
