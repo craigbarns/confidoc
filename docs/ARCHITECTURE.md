@@ -40,7 +40,7 @@ PostgreSQL porte:
 - `audit_logs`
 - tables d'integration, qualite et golden drafts
 
-Le multi-tenant est centre sur `org_id`. Les documents B2B doivent etre rattaches a une organisation et les acces passent par membership actif + role.
+Le multi-tenant est centre sur `org_id`. Les documents B2B doivent etre rattaches a une organisation et les acces passent par membership actif + role. Une couche RLS PostgreSQL forcee protege les tables metier tenantées via un contexte transactionnel `app.current_org_id`.
 
 ## Roles B2B
 

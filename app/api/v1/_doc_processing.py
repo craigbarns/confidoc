@@ -19,6 +19,7 @@ from app.api.v1._doc_shared import (
 )
 from app.core.exceptions import http_400, http_404, http_500
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context
 from app.core.text_sanitize import postgres_safe_text
 from app.models.document import DocumentStatus
 from app.models.document_version import DocumentVersion, DocumentVersionType
@@ -112,7 +113,7 @@ async def extract_document(
     )
 
     document.status = DocumentStatus.PROCESSING
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=document.org_id, user_id=current_user.id)
 
     from app.workers.tasks import (
         extract_document_task,
@@ -625,7 +626,7 @@ async def validate_document(
         )
     except Exception as exc:
         logger.warning("audit_validate_event_failed", doc_id=str(document.id), error=str(exc))
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=document.org_id, user_id=current_user.id)
 
     # --- Auto-Golden Webhook ---
     if args.corrected_data and args.doc_type:

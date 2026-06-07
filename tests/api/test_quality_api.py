@@ -178,7 +178,7 @@ class _FakeAsyncSession:
         from app.models.document import Document
         from app.models.golden_case_draft import GoldenCaseDraft
 
-        descs = stmt.column_descriptions or []
+        descs = getattr(stmt, "column_descriptions", None) or []
         target = descs[0].get("entity") if descs else None
         target_type = descs[0].get("type") if descs else None
 

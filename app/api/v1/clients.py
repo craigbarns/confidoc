@@ -5,12 +5,12 @@ from __future__ import annotations
 import uuid
 
 from fastapi import APIRouter, Query, status
-from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
+from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_404
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context
 from app.models.client import Client
 from app.schemas.client import ClientCreate, ClientResponse, ClientUpdate
 
@@ -55,7 +55,7 @@ async def create_client(
     """Crée un nouveau client rattaché à l'organisation."""
     client = Client(**client_in.model_dump(), org_id=current_user.org_id)
     db.add(client)
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=current_user.org_id, user_id=current_user.id)
     await db.refresh(client)
     logger.info("client_created", client_id=str(client.id), user_id=str(current_user.id))
     return client
@@ -114,7 +114,7 @@ async def update_client(
     for field, value in update_data.items():
         setattr(client, field, value)
 
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=current_user.org_id, user_id=current_user.id)
     await db.refresh(client)
     logger.info("client_updated", client_id=str(client.id), user_id=str(current_user.id))
     return client

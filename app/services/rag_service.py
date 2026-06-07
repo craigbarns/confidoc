@@ -153,7 +153,7 @@ async def embed_document(
         for c, emb in zip(chunks, embeddings, strict=True)
     ]
     await db.execute(insert(DocumentChunk), rows)
-    await db.commit()
+    await db.flush()
 
     logger.info(
         "rag_document_embedded",

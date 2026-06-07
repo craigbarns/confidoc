@@ -13,6 +13,7 @@ from sqlalchemy import select
 from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context
 from app.models.document import Document
 from app.models.golden_case_draft import (
     CORRECTED_VALUE_MAX_CHARS,
@@ -89,7 +90,11 @@ async def create_golden_draft(
     )
     db.add(draft)
     if commit:
-        await db.commit()
+        await commit_and_restore_rls_context(
+            db,
+            org_id=org_id,
+            user_id=created_by_user_id,
+        )
         await db.refresh(draft)
     else:
         await db.flush()
@@ -150,7 +155,11 @@ async def create_drafts_from_corrections(
         drafts.append(draft)
 
     if drafts:
-        await db.commit()
+        await commit_and_restore_rls_context(
+            db,
+            org_id=org_id,
+            user_id=created_by_user_id,
+        )
         for draft in drafts:
             await db.refresh(draft)
 

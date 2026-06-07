@@ -10,6 +10,7 @@ from sqlalchemy import desc, select
 from app.api.deps import CurrentUser, DbSession
 from app.api.v1._doc_shared import _get_user_document_or_404
 from app.core.exceptions import http_404
+from app.core.rls import commit_and_restore_rls_context
 from app.models.client import Client
 from app.models.document import Document, DocumentStatus
 from app.models.dossier import Dossier
@@ -176,6 +177,6 @@ async def patch_document_metadata(
     if patch.doc_category is not None:
         doc.doc_category = patch.doc_category
 
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=doc.org_id, user_id=current_user.id)
     await db.refresh(doc)
     return doc

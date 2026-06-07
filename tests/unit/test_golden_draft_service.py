@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import uuid
+from types import SimpleNamespace
 from typing import Any
 
 import pytest
@@ -14,6 +15,10 @@ class _CapturingDb:
     def __init__(self) -> None:
         self.added: list[Any] = []
         self.committed = False
+        self._bind = SimpleNamespace(dialect=SimpleNamespace(name="sqlite"))
+
+    def get_bind(self):
+        return self._bind
 
     def add(self, obj: Any) -> None:
         if obj.id is None:

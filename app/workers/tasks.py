@@ -11,6 +11,7 @@ from sqlalchemy import select
 
 from app.core.database import async_session_factory
 from app.core.logging import get_logger
+from app.core.rls import rls_bypass, set_rls_context
 from app.models.document import Document, DocumentStatus
 from app.services.audit_trail_service import record_document_audit_event
 from app.services.document_processing_service import (
@@ -131,12 +132,25 @@ def _run_async(coro):
         loop.close()
 
 
+async def _load_document_with_rls_context(db, doc_id: str) -> Document | None:
+    """Load a document by id, then switch the transaction to its tenant context."""
+    async with rls_bypass(db):
+        result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
+        document = result.scalar_one_or_none()
+    if document is not None:
+        await set_rls_context(
+            db,
+            org_id=document.org_id,
+            user_id=document.uploaded_by_user_id,
+        )
+    return document
+
+
 async def _set_document_status(doc_id: str, status: DocumentStatus) -> None:
     """Set document status after a background failure."""
     try:
         async with async_session_factory() as db:
-            result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
-            document = result.scalar_one_or_none()
+            document = await _load_document_with_rls_context(db, doc_id)
             if not document:
                 return
             document.status = status
@@ -197,14 +211,18 @@ def extract_document_task(self, doc_id: str) -> dict[str, Any]:
 
 async def _extract_document_async(doc_id: str) -> dict[str, Any]:
     async with async_session_factory() as db:
-        result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
-        document = result.scalar_one_or_none()
+        document = await _load_document_with_rls_context(db, doc_id)
         if not document:
             return {"error": "document_not_found"}
 
         # Checkpoint: EXTRACTING
         document.status = DocumentStatus.EXTRACTING
         await db.commit()
+        await set_rls_context(
+            db,
+            org_id=document.org_id,
+            user_id=document.uploaded_by_user_id,
+        )
 
         content = read_document_bytes(document)
         text, meta = await build_extraction_ocr(db, document, content)
@@ -260,14 +278,18 @@ async def _anonymize_document_async_v2(
     from app.services.reidentification_risk_service import analyze_reidentification_risk
 
     async with async_session_factory() as db:
-        result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
-        document = result.scalar_one_or_none()
+        document = await _load_document_with_rls_context(db, doc_id)
         if not document:
             return {"error": "document_not_found"}
 
         # Checkpoint: ANONYMIZING
         document.status = DocumentStatus.ANONYMIZING
         await db.commit()
+        await set_rls_context(
+            db,
+            org_id=document.org_id,
+            user_id=document.uploaded_by_user_id,
+        )
 
         # Check if original text exists
         result = await db.execute(
@@ -281,10 +303,20 @@ async def _anonymize_document_async_v2(
             # Fallback: extract first
             document.status = DocumentStatus.EXTRACTING
             await db.commit()
+            await set_rls_context(
+                db,
+                org_id=document.org_id,
+                user_id=document.uploaded_by_user_id,
+            )
             content = read_document_bytes(document)
             original_text, _ = await build_extraction_ocr(db, document, content)
             document.status = DocumentStatus.ANONYMIZING
             await db.commit()
+            await set_rls_context(
+                db,
+                org_id=document.org_id,
+                user_id=document.uploaded_by_user_id,
+            )
         else:
             original_text = original_version.content_text
 
@@ -409,8 +441,7 @@ async def _process_document_legacy_async(
     document_type: str,
 ) -> None:
     async with async_session_factory() as db:
-        result = await db.execute(select(Document).where(Document.id == uuid.UUID(doc_id)))
-        document = result.scalar_one_or_none()
+        document = await _load_document_with_rls_context(db, doc_id)
         if not document:
             return
         file_content = read_document_bytes(document)

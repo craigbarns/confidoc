@@ -19,6 +19,7 @@ from app.api.v1._doc_shared import _get_anonymized_text
 from app.config import get_settings
 from app.core.exceptions import http_404
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context, set_rls_context
 from app.core.security import decode_access_token, get_password_hash
 from app.core.text_sanitize import postgres_safe_text
 from app.models.document import Document, DocumentStatus
@@ -131,19 +132,23 @@ async def _get_public_demo_document_or_404(
     except ValueError as exc:
         raise http_404("Document de démo introuvable") from exc
 
+    result = await db.execute(select(User).where(User.email == PUBLIC_DEMO_USER_EMAIL))
+    user = result.scalar_one_or_none()
+    if not user:
+        raise http_404("Document de démo introuvable")
+
+    await set_rls_context(db, org_id=None, user_id=user.id)
+
     result = await db.execute(
-        select(Document, User)
-        .join(User, User.id == Document.uploaded_by_user_id)
-        .where(
+        select(Document).where(
             Document.id == doc_uuid,
             Document.is_deleted.is_(False),
-            User.email == PUBLIC_DEMO_USER_EMAIL,
+            Document.uploaded_by_user_id == user.id,
         )
     )
-    row = result.first()
-    if not row:
+    document = result.scalar_one_or_none()
+    if not document:
         raise http_404("Document de démo introuvable")
-    document, user = row
     if not _is_public_demo_document(document, user):
         raise http_404("Document de démo introuvable")
     return document, user
@@ -405,7 +410,11 @@ async def _materialize_demo_snapshot(db: DbSession, document: Document) -> bool:
             details=details,
         )
 
-    await db.commit()
+    await commit_and_restore_rls_context(
+        db,
+        org_id=document.org_id,
+        user_id=document.uploaded_by_user_id,
+    )
     await db.refresh(document)
     return True
 
@@ -518,6 +527,7 @@ async def _create_investor_demo_document(
     content = DEMO_DOC_PATH.read_bytes()
     sha256 = hashlib.sha256(content).hexdigest()
     org_id = None if public_demo else await _resolve_demo_org_id(db, current_user)
+    await set_rls_context(db, org_id=org_id, user_id=current_user.id)
 
     try:
         storage_backend, storage_key = store_bytes(content=content, extension="pdf")
@@ -548,7 +558,7 @@ async def _create_investor_demo_document(
         doc_category="bilan",
     )
     db.add(document)
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
     await db.refresh(document)
 
     doc_id = str(document.id)
@@ -602,10 +612,11 @@ async def _create_investor_demo_document(
                 ],
             },
         )
-        await db.commit()
+        await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
     except Exception as exc:
         logger.warning("demo_document_audit_failed", doc_id=doc_id, error=str(exc))
         await db.rollback()
+        await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
 
     payload = await _demo_document_payload(db, document, public_urls=public_demo)
     payload.update(

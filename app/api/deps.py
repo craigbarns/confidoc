@@ -9,6 +9,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.core.database import get_db
 from app.core.exceptions import http_401, http_403
+from app.core.rls import set_rls_context
 from app.core.security import decode_access_token
 from app.models.membership import Membership
 from app.models.user import User
@@ -43,6 +44,7 @@ async def get_current_user(
         request.state.api_key = api_key
         request.state.auth_type = "api_key"
         user.org_id = api_key.org_id
+        await set_rls_context(db, org_id=api_key.org_id, user_id=user.id)
         return user
 
     if not token:
@@ -86,6 +88,7 @@ async def get_current_user(
     request.state.membership = membership
     request.state.auth_type = "jwt"
     user.org_id = org_id
+    await set_rls_context(db, org_id=org_id, user_id=user.id)
 
     return user
 

@@ -14,6 +14,7 @@ from sqlalchemy.ext.asyncio import AsyncSession
 from app.config import get_settings
 from app.core.exceptions import http_400, http_401, http_403, http_409
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context, rls_bypass, set_rls_context
 from app.core.security import generate_opaque_token, hash_token
 from app.models.document import Document
 from app.models.integration import ApiKey, IdempotencyRecord, WebhookDelivery, WebhookEndpoint
@@ -54,15 +55,18 @@ def public_app_base_url(request_base_url: str | None = None) -> str:
 async def authenticate_api_key(db: AsyncSession, raw_key: str) -> tuple[User, ApiKey, Membership]:
     """Authenticate a raw API key and return its user, key and active membership."""
     key_hash = hash_token(raw_key.strip())
-    result = await db.execute(
-        select(ApiKey).where(
-            ApiKey.key_hash == key_hash,
-            ApiKey.is_active.is_(True),
+    async with rls_bypass(db):
+        result = await db.execute(
+            select(ApiKey).where(
+                ApiKey.key_hash == key_hash,
+                ApiKey.is_active.is_(True),
+            )
         )
-    )
     api_key = result.scalar_one_or_none()
     if not api_key:
         raise http_401("Cle API invalide")
+
+    await set_rls_context(db, org_id=api_key.org_id)
 
     now = datetime.now(UTC)
     if api_key.revoked_at is not None:
@@ -74,6 +78,8 @@ async def authenticate_api_key(db: AsyncSession, raw_key: str) -> tuple[User, Ap
     user = result.scalar_one_or_none()
     if not user or not user.is_active:
         raise http_403("Utilisateur API desactive")
+
+    await set_rls_context(db, org_id=api_key.org_id, user_id=user.id)
 
     result = await db.execute(
         select(Membership).where(
@@ -208,10 +214,16 @@ async def dispatch_document_event(document_id: str, event: str) -> None:
     from app.services.webhook_notify import notify_json_webhook
 
     async with async_session_factory() as db:
-        result = await db.execute(select(Document).where(Document.id == UUID(document_id)))
-        document = result.scalar_one_or_none()
+        async with rls_bypass(db):
+            result = await db.execute(select(Document).where(Document.id == UUID(document_id)))
+            document = result.scalar_one_or_none()
         if not document or not document.org_id:
             return
+        await set_rls_context(
+            db,
+            org_id=document.org_id,
+            user_id=document.uploaded_by_user_id,
+        )
 
         result = await db.execute(
             select(WebhookEndpoint).where(
@@ -237,7 +249,11 @@ async def dispatch_document_event(document_id: str, event: str) -> None:
                 payload=payload,
             )
             db.add(delivery)
-            await db.commit()
+            await commit_and_restore_rls_context(
+                db,
+                org_id=document.org_id,
+                user_id=document.uploaded_by_user_id,
+            )
             delivered, status_code, error, attempts, response_preview = await notify_json_webhook(
                 event=event,
                 payload=payload,
@@ -256,4 +272,8 @@ async def dispatch_document_event(document_id: str, event: str) -> None:
             else:
                 endpoint.last_failure_at = now
                 endpoint.failure_count = (endpoint.failure_count or 0) + 1
-            await db.commit()
+            await commit_and_restore_rls_context(
+                db,
+                org_id=document.org_id,
+                user_id=document.uploaded_by_user_id,
+            )

@@ -151,6 +151,9 @@ class AuditLogMiddleware(BaseHTTPMiddleware):
         actor_type = "api_key" if getattr(request.state, "auth_type", "") == "api_key" else "user"
 
         async with async_session_factory() as session:
+            from app.core.rls import set_rls_context
+
+            await set_rls_context(session, org_id=org_id, user_id=user_id)
             await record_audit_event(
                 session,
                 user_id=user_id,

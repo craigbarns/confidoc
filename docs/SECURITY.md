@@ -135,7 +135,12 @@ Les endpoints d'export renvoient des messages generiques en cas d'erreur serveur
 
 ## Limites actuelles
 
-- La separation org est applicative; une isolation RLS PostgreSQL serait un renforcement futur.
+- RLS PostgreSQL est active sur les donnees metier et documentaires tenantées
+  (`documents`, versions, detections, mappings, clients/dossiers, integrations,
+  audit logs, golden drafts). Les tables de decouverte auth (`users`,
+  `memberships`, `roles`, `organizations`) restent hors de cette premiere couche
+  pour permettre la resolution de l'organisation courante avant pose du contexte
+  DB transactionnel.
 - Les permissions sont centralisees en code; une UI de gestion fine reste a construire.
 - Les integrations IA externes doivent etre contractualisees client par client.
 - La rotation de cles et les backups chiffrés doivent etre formalises pour clients pilotes.

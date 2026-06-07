@@ -14,6 +14,7 @@ from sqlalchemy import desc, select
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context
 from app.models.golden_case_draft import GoldenCaseDraft, GoldenDraftStatus
 from app.schemas.golden_draft import (
     GoldenDraftCreate,
@@ -136,7 +137,7 @@ async def update_golden_draft_status(
         raise http_404("Golden draft introuvable")
 
     draft.status = payload.status
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=current_user.org_id, user_id=current_user.id)
     await db.refresh(draft)
     logger.info(
         "golden_draft_status_updated",

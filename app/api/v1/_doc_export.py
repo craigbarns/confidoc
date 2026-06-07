@@ -33,6 +33,7 @@ from app.api.v1._doc_shared import (
 from app.api.v1._privacy_gate import privacy_gate_public_summary, require_privacy_gate
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context
 from app.models.document import DocumentStatus
 from app.models.entity_detection import EntityDetection
 from app.services.agents.privacy_gate import evaluate_document_privacy_gate
@@ -112,7 +113,7 @@ async def export_document(document_id: str, current_user: CurrentUser, db: DbSes
             "export",
             anonymized_text=text_content,
         )
-        await db.commit()
+        await commit_and_restore_rls_context(db, org_id=_org_id, user_id=_user_id)
 
         try:
             await record_audit_event(

@@ -28,8 +28,12 @@ class _Result:
 class _Db:
     def __init__(self, *values):
         self.results = [_Result(value) for value in values]
+        self.executed = []
 
     async def execute(self, _stmt):
+        self.executed.append(_stmt)
+        if not self.results:
+            return _Result(None)
         return self.results.pop(0)
 
 

@@ -39,7 +39,7 @@ Le produit cible les cabinets comptables, avocats, notaires et cabinets de conse
 
 ## Roadmap de renforcement
 
-- RLS PostgreSQL par org.
+- Etendre RLS aux tables de decouverte auth avec un modele de contexte user/org plus avance.
 - Invitations B2B avec expiration, audit et role.
 - S3/R2 avec chiffrement serveur et lifecycle policies.
 - Quotas par org et budget OCR/LLM.

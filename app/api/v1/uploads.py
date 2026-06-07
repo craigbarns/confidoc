@@ -27,6 +27,7 @@ from app.api.deps import CurrentUser, DbSession
 from app.config import get_settings
 from app.core.exceptions import http_400, http_404, http_413
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context, set_rls_context
 from app.core.sandbox import SandboxError, scan_file_for_malware
 from app.models.client import Client
 from app.models.document import Document, DocumentStatus
@@ -403,7 +404,7 @@ async def _upload_document_body(
         doc_category=resolved_doc_category,
     )
     db.add(document)
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
     await db.refresh(document)
     try:
         await record_document_audit_event(
@@ -422,10 +423,11 @@ async def _upload_document_body(
                 "sensitive_client_mode": settings.SENSITIVE_CLIENT_MODE,
             },
         )
-        await db.commit()
+        await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
     except Exception as exc:
         logger.warning("upload_audit_event_failed", doc_id=str(document.id), error=str(exc))
         await db.rollback()
+        await set_rls_context(db, org_id=org_id, user_id=current_user.id)
 
     logger.info(
         "document_uploaded",

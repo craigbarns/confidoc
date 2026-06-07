@@ -6,14 +6,14 @@ import uuid
 
 from fastapi import APIRouter, Query, status
 from sqlalchemy import desc, select
-from sqlalchemy.ext.asyncio import AsyncSession
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_404
 from app.core.logging import get_logger
+from app.core.rls import commit_and_restore_rls_context
 from app.models.client import Client
 from app.models.dossier import Dossier
-from app.schemas.dossier import DossierCreate, DossierResponse, DossierUpdate
+from app.schemas.dossier import DossierCreate, DossierResponse
 
 router = APIRouter()
 logger = get_logger(__name__)
@@ -79,7 +79,7 @@ async def create_dossier(
 
     dossier = Dossier(**dossier_in.model_dump(), org_id=current_user.org_id)
     db.add(dossier)
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=current_user.org_id, user_id=current_user.id)
     await db.refresh(dossier)
     logger.info("dossier_created", dossier_id=str(dossier.id), client_id=str(dossier.client_id))
     return dossier

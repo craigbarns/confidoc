@@ -8,6 +8,7 @@ from sqlalchemy import select
 
 from app.api.deps import CurrentUser, DbSession
 from app.core.exceptions import http_400, http_403, http_404
+from app.core.rls import commit_and_restore_rls_context, set_rls_context
 from app.core.security import generate_opaque_token, hash_token
 from app.models.integration import ApiKey, WebhookEndpoint
 from app.models.membership import Membership
@@ -89,6 +90,8 @@ async def _current_org_id(request: Request, current_user: CurrentUser, db: DbSes
     await db.commit()
     request.state.org_id = organization.id
     request.state.membership = membership
+    current_user.org_id = organization.id
+    await set_rls_context(db, org_id=organization.id, user_id=current_user.id)
     return organization.id
 
 
@@ -150,7 +153,7 @@ async def create_api_key(
         expires_at=payload.expires_at,
     )
     db.add(api_key)
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
     await db.refresh(api_key)
     return ApiKeyCreateResponse(
         id=api_key.id,
@@ -231,7 +234,7 @@ async def create_webhook(
         events=payload.events,
     )
     db.add(endpoint)
-    await db.commit()
+    await commit_and_restore_rls_context(db, org_id=org_id, user_id=current_user.id)
     await db.refresh(endpoint)
     base = _webhook_response(endpoint).model_dump()
     return WebhookCreateResponse(**base, signing_secret=secret)
