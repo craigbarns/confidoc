@@ -432,6 +432,24 @@
     .btn { display: inline-flex; align-items: center; gap: 8px; padding: 12px 24px; border-radius: 10px; font-size: 14px; font-weight: 600; cursor: pointer; text-decoration: none; border: none; transition: all .2s; }
     .btn-outline { background: transparent; color: #a5b4fc; border: 1px solid rgba(124, 116, 255, 0.4); }
     .btn-outline:hover { background: rgba(124, 116, 255, 0.08); border-color: #a5b4fc; }
+
+    /* ── MOBILE RESPONSIVE — passe ciblée (desktop inchangé) ───────────── */
+    @media (max-width: 768px) {
+      /* Nav : 5 ancres + bouton débordaient. On garde logo + CTA console,
+         on masque les ancres secondaires (l'utilisateur scrolle de toute façon). */
+      .nav { padding: 16px 20px; }
+      .nav-links { gap: 14px; }
+      .nav-links a:not(.btn-nav) { display: none; }
+      .btn-nav { padding: 8px 16px; font-size: 12px; }
+    }
+    @media (max-width: 640px) {
+      /* 4 colonnes de stats → 2x2, sinon chaque chiffre est écrasé */
+      .stats { grid-template-columns: repeat(2, 1fr); gap: 14px; margin: 32px auto 56px; }
+      /* Moins d'air mort en haut du hero sur petit écran */
+      .hero { padding: 64px 20px 48px; }
+      .hero p { font-size: 1.05rem; }
+      .section-title { margin-bottom: 40px; padding: 0 20px; }
+    }
   </style>
 </head>
 <body>
