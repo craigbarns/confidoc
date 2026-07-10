@@ -1,58 +1,96 @@
-# ConfiDoc — Plan pilotes (objectif : 3–5 LOI)
+# ConfiDoc — Plan pilotes et LOI
 
-Objectif de levée : **3–5 pilotes/LOI** de cabinets réglementés en ‹8–12 semaines›.
-Pour un fondateur solo : viser la **profondeur** (5 bons contacts engagés) plutôt que le
-volume, et automatiser le minimum (un parcours démo self-serve existe déjà).
+Objectif avant ou pendant la levee : **3 a 5 pilotes payants ou LOI** sur le cas d'usage
+"anonymiser un document puis discuter avec une IA sur la version securisee".
 
-## ICP (Ideal Customer Profile)
-**Cœur de cible (wedge)** — petites/moyennes structures, décideur accessible, douleur RGPD vive :
-1. **Cabinets d'expertise comptable** (5–50 collaborateurs) — bilans, liasses, paie.
-2. **DAF externalisés / cabinets de conseil financier** — beaucoup de données clients.
-3. **Avocats fiscalistes / d'affaires** — secret professionnel, contrats sensibles.
-4. **Notaires** (secondaire) — actes, données patrimoniales.
+## ICP prioritaire
 
-**Signaux d'achat** : déjà tentés par l'IA mais bloqués par la conformité ; DPO/associé
-sensibilisé RGPD ; volume documentaire élevé ; clientèle exigeante.
+Choisir des prospects qui comprennent deja le risque et peuvent dire oui vite :
 
-## Proposition pilote (offre)
-- **Pilote gratuit ‹4–6 semaines›** sur un périmètre limité (1 type de doc, 2–3 users).
-- Engagement réciproque : le cabinet fournit ‹N› documents réels (sous leur contrôle,
-  ou synthétiques) + 2 points de feedback ; ConfiDoc fournit onboarding + support direct.
-- **Sortie** : LOI / intention d'achat au tarif ‹€/siège/mois› si critères de succès atteints.
+1. Cabinets comptables 5-50 collaborateurs.
+2. DAF externalises / cabinets finance.
+3. Avocats fiscalistes ou affaires.
+4. Assurance, fintech, compliance.
+5. DPO/RSSI de PME/ETI qui encadrent les usages IA.
 
-**Critères de succès (à co-définir)** : ‹temps gagné / document, % documents traités sans
-incident, satisfaction DPO, intention de payer›.
+Signaux forts :
 
-## Canaux d'acquisition (solo, faible budget)
-1. **Réseau direct** : ‹contacts comptables/avocats existants›, recommandations.
-2. **Ordres & associations** : antennes régionales OEC, barreaux, clubs DAF.
-3. **LinkedIn ciblé** : associés de cabinets + DPO ; contenu « IA + RGPD pour cabinets ».
-4. **Démo publique** comme aimant : envoyer le lien `/firewall` (sans login) en cold outreach.
-5. **Partenaires** : éditeurs comptables, intégrateurs, DPO externes (prescripteurs).
+- ils utilisent deja ChatGPT/Claude/Mistral de facon informelle ;
+- ils ont interdit l'upload de documents clients dans l'IA ;
+- ils produisent beaucoup de resumes, notes, audits, contrats ou analyses ;
+- ils ont un DPO, un associe ou un client qui demande des garanties.
 
-## Message d'approche (gabarit)
-> Objet : *Utiliser l'IA sur vos dossiers clients — sans risque RGPD*
-> Bonjour ‹Prénom›, vous aimeriez sûrement faire gagner du temps à votre cabinet avec
-> l'IA, mais envoyer un dossier client dans une IA publique est un risque RGPD/secret pro.
-> J'ai construit **ConfiDoc**, un firewall qui pseudonymise et contrôle chaque échange IA,
-> avec preuve d'audit. Démo en 2 min, sans inscription : ‹lien /firewall›.
-> Ouvert à un pilote gratuit de 4 semaines ? 15 min cette semaine ?
+## Offre pilote
 
-## Pipeline (à tenir — simple tableur/CRM léger)
-| Cabinet | Type | Contact | Statut | Prochaine action | Date |
+**Pilote 30 jours — Secure AI Chat**
+
+- setup : `2-5 k€` ;
+- abonnement pilote : `500-2 000 €/mois` selon volume ;
+- perimetre : 1 equipe, 1 type de document, 2-5 utilisateurs ;
+- livrable : rapport pilote avec temps gagne, risques detectes, fuites bloquees,
+  satisfaction utilisateur, decision d'achat.
+
+Si le prospect refuse de payer le pilote, demander une LOI signee et un vrai calendrier.
+
+## Criteres de succes
+
+Co-definir 3 criteres maximum :
+
+- temps gagne par document ;
+- aucun document brut envoye a une IA externe ;
+- % de documents IA-safe apres controle ;
+- nombre de fuites detectees/masquees/bloquees ;
+- validation DPO/RSSI ;
+- intention de payer.
+
+## Message d'approche
+
+Objet : `Utiliser l'IA sur vos documents clients sans les exposer`
+
+> Bonjour ‹Prenom›,  
+> Vous avez probablement des collaborateurs qui aimeraient resumer des bilans, contrats
+> ou dossiers clients avec l'IA. Le blocage est evident : impossible d'envoyer le brut
+> dans ChatGPT/Claude sans risque RGPD ou secret professionnel.  
+> J'ai construit ConfiDoc : on anonymise le document, puis l'utilisateur discute avec une
+> IA qui ne voit que la version securisee. Chaque prompt/reponse est audite.  
+> Je cherche 3 a 5 pilotes avec des cabinets/equipes sensibles. 20 minutes cette semaine
+> pour voir si le cas vous concerne ?
+
+## Script rendez-vous 20 minutes
+
+1. "Comment vos equipes utilisent l'IA aujourd'hui ?"
+2. "Quels documents sont interdits ou trop sensibles ?"
+3. "Qui decide si un outil IA est autorise ?"
+4. Demo 7 minutes.
+5. "Si on traite un type de document pendant 30 jours, quel critere vous ferait payer ?"
+6. Proposer pilote ou LOI.
+
+## Modele de LOI
+
+> **Lettre d'intention — ConfiDoc Secure AI Chat**  
+> ‹Organisation› confirme son interet pour tester ConfiDoc sur le cas d'usage suivant :
+> anonymiser/pseudonymiser des documents confidentiels puis permettre une discussion IA
+> uniquement sur la version securisee.  
+> Si le pilote de ‹duree› atteint les criteres suivants : ‹criteres›, ‹Organisation› a
+> l'intention de souscrire pour ‹N› utilisateurs ou ‹volume› documents, au tarif indicatif
+> de ‹montant›, sous reserve de contractualisation, securite et validation interne.  
+> Non contraignant. Date, signature.
+
+## Pipeline a tenir
+
+| Compte | Segment | Contact | Statut | Prochaine action | Date |
 |---|---|---|---|---|---|
-| ‹…› | ‹EC/avocat/DAF› | ‹nom/rôle› | ‹contacté/démo/pilote/LOI› | ‹…› | ‹…› |
+| ‹...› | Comptable / juridique / DPO | ‹...› | Contacte / demo / pilote / LOI | ‹...› | ‹...› |
 
-Objectif hebdo : ‹X contacts → Y démos → Z pilotes›.
+Cadence hebdomadaire minimale :
 
-## Modèle de LOI (Lettre d'Intention) — gabarit
-> **Lettre d'intention — ConfiDoc**
-> ‹Cabinet›, représenté par ‹nom›, confirme son intérêt pour la solution ConfiDoc
-> (firewall de confidentialité IA). À l'issue d'un pilote de ‹durée› jugé concluant
-> (critères : ‹…›), ‹Cabinet› a l'intention de souscrire pour ‹N› utilisateurs au tarif
-> indicatif de ‹€/siège/mois›, sous réserve de ‹conditions / contractualisation›.
-> Non contraignant. Fait à ‹lieu›, le ‹date›. Signatures.
+- 50 messages cibles ;
+- 10 reponses ;
+- 5 rendez-vous ;
+- 2 demos ;
+- 1 pilote/LOI en negociation.
 
-> ⚠️ Données pilote : privilégier des **documents synthétiques** ou un **DPA signé** +
-> hébergement UE. Ne jamais traiter de vraies données clients sans cadre contractuel
-> (cf. [05_RGPD_POSITIONING.md](05_RGPD_POSITIONING.md), [06_SECURITY_ROADMAP.md](06_SECURITY_ROADMAP.md)).
+## Donnees pilote
+
+Traiter de vrais documents seulement avec cadre contractuel : DPA, hebergement, accord
+ecrit, retention, suppression. Sinon utiliser des documents synthetiques realistes.

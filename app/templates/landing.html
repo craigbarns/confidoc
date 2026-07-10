@@ -465,7 +465,7 @@
       <a href="#how-it-works">Fonctionnement</a>
       <a href="#solution">Architecture</a>
       <a href="#pricing">Tarifs</a>
-      <a href="/trust" id="pilot-proof" style="color: #34d399; font-weight: 600;">Télécharger la preuve RGPD</a>
+      <a href="/trust" id="pilot-proof" style="color: #34d399; font-weight: 600;">Voir la preuve DPO/RSSI</a>
       <a href="/ui" class="btn-nav">
         Accéder à la console 
         <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polyline points="9 18 15 12 9 6"/></svg>
@@ -476,10 +476,10 @@
   <section class="hero">
     <div class="badge">
       <span class="badge-dot"></span>
-      Masquage automatique des données sensibles
+      Secure AI Chat pour documents confidentiels
     </div>
-    <h1>Sécurisez l'IA pour vos<br><span>liasses et pièces comptables</span></h1>
-    <p>ConfiDoc caviarde instantanément les données nominatives et bancaires de vos bilans et contrats avant tout envoi à l'IA. Préservez le secret professionnel en toute simplicité.</p>
+    <h1>Discutez avec vos documents sensibles<br><span>sans exposer le brut à l'IA</span></h1>
+    <p>ConfiDoc anonymise ou pseudonymise vos bilans, contrats et dossiers clients avant toute analyse IA. Vous posez vos questions sur la version sécurisée, puis vous exportez une preuve d'audit.</p>
     <div class="hero-actions">
       <a href="#demo-sandbox" class="btn-primary">
         <svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><polygon points="5 3 19 12 5 21 5 3"/></svg>
@@ -493,7 +493,7 @@
     <div class="stat"><h3>100%</h3><p>Données chiffrées localement</p></div>
     <div class="stat"><h3>&lt; 5s</h3><p>Lecture et masquage</p></div>
     <div class="stat"><h3>DORA</h3><p>Alignement réglementaire</p></div>
-    <div class="stat"><h3>Anti-fuite</h3><p>Pas de document brut envoyé à l'IA</p></div>
+    <div class="stat"><h3>IA-safe</h3><p>Pas de document brut envoyé à l'IA</p></div>
   </section>
 
   <!-- INTERACTIVE SANDBOX DEMO -->
@@ -582,24 +582,24 @@
   <!-- 3 STEPS WORKFLOW -->
   <section id="how-it-works">
      <div class="section-title">
-       <h2>Sécurisation en 3 étapes simples</h2>
-       <p>Un flux conçu pour la réalité opérationnelle des cabinets comptables.</p>
+       <h2>Anonymisez, questionnez, prouvez</h2>
+       <p>Un flux conçu pour utiliser l'IA sur des documents confidentiels sans exposer le document brut.</p>
      </div>
      <div class="workflow-steps">
         <div class="step-card">
            <div class="step-number">1</div>
-           <h3>Dépôt crypté</h3>
-           <p>Glissez-déposez vos liasses ou bilans comptables (PDF, Scans ou Images) dans l'espace sécurisé du cabinet.</p>
+           <h3>Dépôt sécurisé</h3>
+           <p>Glissez-déposez vos bilans, contrats ou dossiers clients dans un espace auditable.</p>
         </div>
         <div class="step-card">
            <div class="step-number">2</div>
-           <h3>Caviardage à la source</h3>
-           <p>ConfiDoc lit le document, repère les données sensibles et applique un masquage fort avant les questions.</p>
+           <h3>Version IA-safe</h3>
+           <p>ConfiDoc lit le document, repère les données sensibles et applique un masquage avant les questions.</p>
         </div>
         <div class="step-card">
            <div class="step-number">3</div>
            <h3>Questions &amp; preuve</h3>
-           <p>Posez vos questions sur la version masquée et téléchargez une preuve RGPD claire.</p>
+           <p>Posez vos questions sur la version masquée et téléchargez une preuve DPO/RSSI claire.</p>
         </div>
      </div>
   </section>
@@ -654,12 +654,12 @@
   <section class="architecture" id="solution">
     <div class="arch-container">
       <div class="arch-content">
-        <h2>La "Muraille de Chine" Logicielle</h2>
-        <p>Transmettre des pièces confidentielles brutes à des IA tierces pose des risques de sécurité et de conformité civile. ConfiDoc résout cette impasse logicielle :</p>
+        <h2>La couche de confiance entre vos documents et l'IA</h2>
+        <p>Transmettre des pièces confidentielles brutes à des IA tierces pose des risques de sécurité, de confidentialité et de conformité. ConfiDoc résout cette impasse logicielle :</p>
         <ul>
           <li><strong>Traitement Hermétique :</strong> Les PDF sont lus en local sur votre serveur. Aucune donnée personnelle ne part en clair sur internet.</li>
-          <li><strong>Filtre Censeur :</strong> Le dictionnaire dynamique neutralise SIRET, IBAN, noms, emails et montants avant l'envoi au moteur d'IA.</li>
-          <li><strong>Aucune conservation par l'IA :</strong> Les réponses sont rédigées à partir d'une version masquée, sans donnée client lisible.</li>
+          <li><strong>Data Firewall :</strong> Le moteur neutralise SIRET, IBAN, noms, emails et données critiques avant l'envoi au moteur d'IA.</li>
+          <li><strong>Chat sur version sécurisée :</strong> Les réponses sont rédigées à partir d'une version masquée, sans donnée client lisible.</li>
           <li><strong>Rembobinage :</strong> Vos documents de sortie réintègrent automatiquement les données d'origine grâce au déchiffrement client.</li>
         </ul>
       </div>
@@ -689,8 +689,8 @@
              <svg viewBox="0 0 24 24" fill="none"><rect x="7" y="8" width="10" height="8" rx="2" stroke="currentColor" stroke-width="2"/></svg>
            </span>
            <div>
-             <h4 style="margin-bottom:4px; font-weight:700;">Génération d'Audits IA</h4>
-             <small style="color:var(--text-muted)">Génération d'analyses sans aucune fuite aux tiers.</small>
+             <h4 style="margin-bottom:4px; font-weight:700;">Chat IA auditable</h4>
+             <small style="color:var(--text-muted)">Questions, réponses et preuves sans exposition du brut.</small>
            </div>
         </div>
       </div>
@@ -710,7 +710,7 @@
         <ul>
           <li>10 documents inclus</li>
           <li>Démo de masquage</li>
-          <li>Preuve RGPD simplifiée</li>
+          <li>Preuve DPO/RSSI simplifiée</li>
         </ul>
       </div>
       <div class="plan-card featured">
@@ -720,7 +720,7 @@
           <li>Documents illimités</li>
           <li>Lecture avancée des documents</li>
           <li>Réponses avec sources</li>
-          <li>Preuve RGPD &amp; PDF d'audit</li>
+          <li>Preuve DPO/RSSI &amp; PDF d'audit</li>
         </ul>
       </div>
       <div class="plan-card">

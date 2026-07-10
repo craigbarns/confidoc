@@ -18,7 +18,7 @@
         <img src="/static/confidoc-mark.svg?v={{ASSET_VERSION}}" alt="ConfiDoc" />
         ConfiDoc
         <span class="sep"></span>
-        <span class="tag">Protection anti-fuite IA</span>
+        <span class="tag">Secure AI Chat</span>
       </a>
       <nav class="nav">
         <a class="nav-back" href="/ui">← ConfiDoc</a>
@@ -32,13 +32,13 @@
     <!-- 1 ─ Hero -->
     <section class="hero">
       <div class="reveal">
-        <span class="live-badge"><span class="live-dot"></span>Protection IA · active</span>
-        <h1>Protection<br /><em>anti-fuite IA</em></h1>
-        <p class="lede"><b>Chaque prompt et chaque réponse sont vérifiés en temps réel</b>.
-          Les emails résiduels sont masqués, les IBAN sont bloqués, et les événements sont
-          tracés sans exposer de donnée brute.</p>
+        <span class="live-badge"><span class="live-dot"></span>Document IA-safe · actif</span>
+        <h1>Discutez avec vos documents<br /><em>sans exposer le brut</em></h1>
+        <p class="lede"><b>ConfiDoc anonymise/pseudonymise le document avant l'IA</b>.
+          Les prompts et réponses sont vérifiés en temps réel, les données résiduelles
+          sont masquées ou bloquées, et chaque décision est auditée.</p>
         <div class="cta-row">
-          <button class="btn btn-primary" id="demo-btn" type="button">Lancer la démonstration</button>
+          <button class="btn btn-primary" id="demo-btn" type="button">Voir le contrôle IA</button>
           <a class="btn btn-ghost" href="/trust">Voir le Trust Center</a>
         </div>
       </div>
@@ -49,8 +49,8 @@
           <span class="led ok" id="led-fw"></span>
         </div>
         <div class="sys-rows">
-          <div class="sys-row"><span class="k"><span class="led ok" id="led-fw2"></span>Protection IA</span><span class="v ok" id="fw-state">ACTIF</span></div>
-          <div class="sys-row"><span class="k">Mode de protection</span><span class="v ok sk" id="v-mode">Normal · masquage</span></div>
+          <div class="sys-row"><span class="k"><span class="led ok" id="led-fw2"></span>Chat IA sécurisé</span><span class="v ok" id="fw-state">ACTIF</span></div>
+          <div class="sys-row"><span class="k">Mode de protection</span><span class="v ok sk" id="v-mode">Document sécurisé · masquage</span></div>
           <div class="sys-row"><span class="k"><span class="led" id="led-api"></span>API</span><span class="v" id="v-api">…</span></div>
           <div class="sys-row"><span class="k"><span class="led" id="led-db"></span>Base de données</span><span class="v" id="v-db">…</span></div>
           <div class="sys-row"><span class="k"><span class="led" id="led-redis"></span>Cache / Redis</span><span class="v" id="v-redis">…</span></div>
@@ -84,7 +84,7 @@
     </section>
 
     <!-- 3+4 ─ AI flow + Risk center -->
-    <div class="sec-h reveal"><span class="idx">02</span><h2>Contrôle avant restitution</h2><span class="desc">Le flux s'arrête si une donnée critique ressort</span></div>
+    <div class="sec-h reveal"><span class="idx">02</span><h2>Contrôle avant et après l'IA</h2><span class="desc">Le flux s'arrête si une donnée critique ressort</span></div>
     <div class="grid-2">
       <section class="panel reveal">
         <div class="panel-head"><span class="t">Flux IA inspecté</span><span class="meta">7 contrôles</span></div>
@@ -104,7 +104,7 @@
             <div class="connector" id="c6"><span class="pulse"></span></div>
             <div class="node" id="n-audit"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><div class="nm">Audit</div></div>
           </div>
-          <div class="flow-caption" id="flow-caption">Cliquez « Lancer la démonstration » pour voir un échange traverser le firewall.</div>
+          <div class="flow-caption" id="flow-caption">Cliquez « Voir le contrôle IA » pour voir un échange traverser le firewall.</div>
         </div>
       </section>
 
@@ -131,7 +131,7 @@
     </div>
 
     <!-- 7 ─ Demo orchestration -->
-    <div class="sec-h reveal"><span class="idx">03</span><h2>Démonstration live</h2><span class="desc">Prompt propre autorisé · email masqué · fuite IBAN bloquée</span></div>
+    <div class="sec-h reveal"><span class="idx">03</span><h2>Démonstration live</h2><span class="desc">Document sécurisé · prompt autorisé · email masqué · fuite IBAN bloquée</span></div>
     <div class="demo-grid" id="demo-seq">
       <div class="panel"><div class="empty">
         <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 3l14 9-14 9z"/></svg></div>
@@ -155,7 +155,7 @@
 
     <footer>
       <span>ConfiDoc · <span class="mono">{{UI_VERSION_LABEL}}</span></span>
-      <span>« Utilisez l'IA sur vos données confidentielles sans risque de fuite RGPD. »</span>
+      <span>« Utilisez l'IA sur vos documents confidentiels sans exposer les données brutes. »</span>
     </footer>
   </main>
 

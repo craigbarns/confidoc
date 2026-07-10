@@ -1,60 +1,89 @@
-# ConfiDoc — Plan de levée & trajectoire 5 ans
+# ConfiDoc — Plan de levee
 
-> *Bpifrance : un deck ne vise pas que le tour actuel, mais la trajectoire future.*
-> https://admin.bpifrance.fr/nos-actualites/4-conseils-dinvestisseurs-pour-reussir-sa-levee-de-fonds
->
-> Montants `‹…›` à fixer par le fondateur. Fondateur **solo** : le plan finance d'abord
-> la **désolitudinisation** (premières recrues) et la **traction**.
+## Tour recommande
 
-## Le tour visé (pre-seed)
-- **Montant** : ‹250–600 k€› (à calibrer sur 18–24 mois de runway).
-- **Instrument** : ‹BSA-AIR / SAFE / equity› — ‹+ Bpifrance (Bourse French Tech, prêt d'amorçage), subventions›.
-- **Objectif du tour** : passer de **produit en prod** à **traction prouvée** (premiers
-  revenus récurrents) et **équipe initiale**.
+**500 k€ pre-seed pour 18 mois.**
 
-## Emploi des fonds (indicatif)
-| Poste | Part | Pourquoi |
-|---|---|---|
-| 1er **GTM / commercial cabinets** | ‹30 %› | dé-risquer le solo, signer pilotes → contrats |
-| 1 **dev produit** | ‹25 %› | accélérer, réduire le bus-factor |
-| **Conformité / sécurité** (DPA, pen test, ISO 27001) | ‹15 %› | prérequis d'achat enterprise |
-| **Fondateur + opérations** | ‹20 %› | runway 18–24 mois |
-| **Marketing/contenu + divers** | ‹10 %› | génération de pipeline |
+Pourquoi ce montant :
 
-## Jalons par tour (trajectoire)
+- assez petit pour etre credible avec un fondateur solo ;
+- assez grand pour recruter le premier binome GTM/produit ;
+- suffisant pour obtenir 3-5 pilotes payants, durcir le produit et preparer un seed.
 
-**Pre-seed (maintenant → 18-24 mois)** — *prouver la demande*
-- 3–5 pilotes → ‹X› cabinets payants, ‹MRR cible›.
-- DPA + hébergement UE + pen test ; SSO ; début ISO 27001.
-- 2 premières recrues. Métriques de valeur instrumentées.
+Instrument a discuter avec conseil : BSA-AIR / SAFE / equity. Complements possibles :
+Bourse French Tech, pret d'amorcage, subventions cyber/IA, credits innovation.
 
-**Seed (~M18-24)** — *prouver le modèle*
-- ‹N› cabinets payants, ARR ‹…›, rétention prouvée, CAC/payback sains.
-- Attestation ISO 27001 ; SSO/SAML ; multi-tenant durci.
-- Élargir à avocats/DAF ; premiers partenaires prescripteurs.
+## Objectif du tour
 
-**Série A (~M36-48)** — *passage à l'échelle + plateforme*
-- Leader FR du firewall de confidentialité IA pour professions réglementées.
-- Début de l'**offre horizontale** : firewall IA + **gouvernance d'agents** pour
-  l'entreprise EU (agent registry, permissions, approval workflow) — la grande vision.
-- Expansion EU (verticalisée par pays/règlementation).
+Passer de :
 
-**Horizon 5 ans** — *la couche de gouvernance IA pour l'entreprise*
-- De « firewall pour cabinets » à **infrastructure de confiance** pour tout déploiement
-  IA/agents sur données sensibles en Europe. TAM horizontal.
+> produit technique en production
 
-## Pourquoi ConfiDoc, pourquoi maintenant (résumé investisseur)
-1. **Problème urgent** : IA bloquée à la porte des professions à secret pro.
-2. **Marché clair** : wedge cabinets réglementés FR → firewall IA horizontal EU.
-3. **Produit réel en prod** (preuve d'exécution, livré solo).
-4. **Timing** : AI Act + RGPD + souveraineté + arrivée des agents IA.
-5. **Défendabilité** : RGPD-by-design, preuve d'audit, qualité mesurée, flywheel.
+a :
 
-## Risques & mitigations (à présenter franchement)
-| Risque | Mitigation |
+> produit commercial avec pilotes payants, preuves d'usage et pipeline seed.
+
+## Emploi des fonds
+
+| Poste | Part | But |
+|---|---:|---|
+| GTM / acquisition pilotes | 35 % | signer pilotes, LOI, premiers revenus |
+| Produit / engineering | 30 % | chat IA securise, UX, audit, packaging |
+| Securite / legal / compliance | 15 % | DPA, pentest, durcissement, preparation ISO |
+| Runway fondateur / operations | 20 % | 18 mois d'execution disciplinee |
+
+## Jalons pre-seed
+
+Dans les 90 jours :
+
+- 30 entretiens clients ;
+- 3 pilotes/LOI ;
+- deck + demo + one-pager stabilises ;
+- pricing pilote valide.
+
+Dans les 6 mois :
+
+- 3 pilotes payants ;
+- premiers cas d'usage repetables ;
+- metriques temps gagne / fuites bloquees / intention de payer ;
+- UX "Anonymize -> Ask -> Prove" propre.
+
+Dans les 18 mois :
+
+- `‹objectif ARR/MRR a fixer›` ;
+- 1-2 segments qui convertissent ;
+- securite enterprise basique : DPA, logs, SSO si demande, pentest ;
+- premiere version Agent Firewall / MCP Gateway si le wedge document est valide.
+
+## These investisseur
+
+1. Les agents et assistants IA vont lire les documents internes.
+2. Les entreprises ne peuvent pas exposer les donnees brutes.
+3. Le besoin n'est pas seulement de chatter : c'est de controler ce que l'IA voit.
+4. ConfiDoc a deja le coeur technique : anonymisation, scoring, audit.
+5. Le wedge documents sensibles permet d'entrer vite, puis d'etendre vers les agents IA.
+
+## Risques et reponses
+
+| Risque | Reponse |
 |---|---|
-| **Fondateur solo** (exécution/bus-factor) | produit déjà livré en prod ; 2 recrues prioritaires sur le tour ; advisors |
-| Cycle de vente cabinets long | pilote gratuit court + démo self-serve + prescripteurs (OEC/barreaux) |
-| Dépendance modèle IA externe | mode souverain (local/0 appel externe) déjà en place |
-| Sur-promesse RGPD | discipline pseudonymisation (cf. [05_RGPD_POSITIONING.md](05_RGPD_POSITIONING.md)) |
-| Concurrence « IA d'abord » | moat conformité/audit dur à rétro-fitter |
+| Marche trop horizontal | Wedge strict : documents confidentiels + chat IA + audit |
+| Fondateur solo | Produit deja livre ; tour finance GTM + dev produit |
+| Cycle de vente long | Pilote 30 jours avec ROI simple et LOI |
+| Concurrents cyber/identity | Ne pas remplacer l'IAM ; proteger le contenu documentaire IA |
+| Surpromesse RGPD | Discipline : anonymisation/pseudonymisation selon score de risque |
+| Produit trop technique | Demo narrative : upload, anonymize, ask, prove |
+
+## Ce qu'il faut obtenir avant d'ouvrir largement la levee
+
+- 10 rendez-vous utilisateurs termines ;
+- 3 prospects qui acceptent un pilote ;
+- 1 LOI ou pilote payant ;
+- une demo de 7 minutes sans friction ;
+- un deck PPTX propre ;
+- une liste de 50 investisseurs/angels seed cyber/IA/vertical SaaS.
+
+## Phrase de cloture
+
+> Nous levons 500 k€ pour devenir la couche de confiance qui permet aux entreprises
+> d'utiliser l'IA sur leurs documents confidentiels sans exposer les donnees brutes.

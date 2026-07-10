@@ -1,44 +1,67 @@
-# ConfiDoc — One-pager
+# ConfiDoc — One-pager pre-seed
 
-**Le firewall de confidentialité IA pour les cabinets réglementés.**
-*Utilisez l'IA sur vos dossiers clients sans jamais exposer une donnée confidentielle.*
+**Secure AI Chat for confidential documents.**  
+*Anonymisez vos documents sensibles, discutez avec l'IA sur la version securisee, prouvez
+ce qui a ete expose.*
 
----
+## Probleme
 
-**Problème.** Experts-comptables, DAF externalisés, avocats fiscalistes et notaires
-veulent l'IA pour gagner des heures sur bilans, liasses et contrats — mais envoyer un
-dossier client dans une IA publique viole le RGPD et le secret professionnel. L'IA reste
-bloquée à la porte des cabinets.
+Les entreprises veulent utiliser l'IA sur leurs bilans, contrats, liasses, dossiers
+clients et documents juridiques. Mais envoyer le document brut a un modele externe cree
+un risque de fuite, de non-conformite RGPD, de violation du secret professionnel et
+d'absence de preuve.
 
-**Solution.** ConfiDoc s'intercale entre les documents et l'IA : pseudonymisation des
-données identifiantes, **Privacy Gate** déterministe (autorise / validation humaine /
-bloque, fail-closed), **AI Firewall** qui inspecte le prompt **et** la réponse sur tous
-les flux IA, score RGPD/risque de réidentification et **journal d'audit cryptographique**
-opposable. En mode souverain, aucun appel IA externe.
+Les documents les plus utiles restent donc les moins exploitables par IA.
 
-**Pourquoi maintenant.** Adoption IA massive mais interdite de fait sur données clients ;
-AI Act + RGPD + souveraineté EU font de la conformité un prérequis d'achat ; les agents
-IA arrivent et exigent une couche de contrôle.
+## Solution
 
-**Produit (déjà en production).** FastAPI/PostgreSQL/Redis, déployé ; firewall sur tous
-les chemins IA ; isolation multi-tenant RBAC + RLS PostgreSQL ; dashboard DPO/RSSI temps
-réel ; **démo publique sans login** ; golden sets + benchmarks OCR (qualité mesurée).
-Démo : `confidoc-production.up.railway.app/firewall`.
+ConfiDoc s'intercale entre le document et l'IA :
 
-**Marché.** Wedge : cabinets réglementés FR (secret pro + volume documentaire). Expansion :
-firewall IA horizontal pour toute entreprise EU déployant l'IA/les agents.
+- detection des donnees sensibles ;
+- version anonymisee/pseudonymisee avec score de risque ;
+- chat IA uniquement sur cette version securisee ;
+- inspection des prompts et reponses ;
+- blocage des fuites residuelles ;
+- rapport d'audit exportable pour DPO/RSSI/client.
 
-**Modèle.** SaaS par siège + tier gouvernance DPO/RSSI ; option par volume de documents.
+## Produit
 
-**Défendabilité.** RGPD-by-design (dur à rétro-fitter), qualité mesurée (golden sets),
-preuve d'audit cryptographique opposable, boucle d'apprentissage.
+**Anonymize** : detection, masquage, pseudonymisation, risk score.  
+**Ask** : chat IA avec citations sur document securise.  
+**Prove** : audit trail, preuve d'exposition IA, rapport de conformite.
 
-**Équipe.** Fondateur solo — a livré la plateforme complète **en production, seul**
-(preuve d'exécution). Levée = premiers recrutements (GTM + dev) + conformité (ISO 27001).
+## Pourquoi maintenant
 
-**Demande.** ‹montant› € en ‹pre-seed› (‹18–24 mois›) pour : ‹3–5 pilotes → premiers
-revenus, GTM cabinets, certif sécurité›.
+Les entreprises passent de l'experimentation IA a l'industrialisation. Les agents IA vont
+acceder aux documents et outils internes. Les DPO/RSSI exigent des controles avant
+d'autoriser ces usages. OWASP, NIST et l'ecosysteme MCP confirment que la securite des
+agents et workflows IA devient une categorie a part entiere.
 
-> Wording RGPD : **pseudonymisation + maîtrise du risque de réidentification** (cf. position CNIL), pas « anonymisation garantie ».
+## Wedge marche
 
-**Contact.** ‹nom · email · téléphone · LinkedIn›
+Premier marche : cabinets comptables, DAF externalises, avocats, assurance/fintech,
+equipes compliance. Expansion : gateway de securite pour agents IA sur donnees sensibles.
+
+## Statut
+
+Produit deja construit : upload, OCR/extraction, anonymisation, scoring, audit,
+dashboard DPO/RSSI, demo publique, backend FastAPI/PostgreSQL/Redis, modes IA externe et
+client sensible.
+
+## Business model
+
+Pilotes payants (`2-5 k€` setup + `500-2 000 €/mois`), puis SaaS par siege + volume
+documentaire + tier gouvernance enterprise.
+
+## Levee
+
+Recommandation : `500 k€ pre-seed` pour 18 mois. Objectif : 3-5 pilotes payants,
+premiere recrue GTM, un dev produit, durcissement securite/compliance, passage de demo a
+produit vendable.
+
+## Contact
+
+`‹Gregory Baranes · email · telephone · LinkedIn · demo›`
+
+> Discipline RGPD : dire "version anonymisee/pseudonymisee selon le risque", pas
+> "anonymisation garantie".

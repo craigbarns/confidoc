@@ -167,10 +167,10 @@ async def landing_page(request: Request) -> HTMLResponse:
     nonce = getattr(request.state, "csp_nonce", "")
     context = _build_meta_context(
         request,
-        title="ConfiDoc | IA documentaire RGPD pour experts-comptables et avocats",
+        title="ConfiDoc | Secure AI Chat pour documents confidentiels",
         description=(
-            "Analysez bilans, liasses et contrats avec l'IA sans exposer les donnees "
-            "sensibles. Demo publique, Trust Center et preuve DPO telechargeable."
+            "Anonymisez vos documents sensibles, discutez avec l'IA sur la version "
+            "securisee et exportez une preuve d'audit DPO/RSSI."
         ),
         path="/",
     )
@@ -247,10 +247,10 @@ async def firewall_dashboard_page(request: Request) -> HTMLResponse:
     nonce = getattr(request.state, "csp_nonce", "")
     context = _build_meta_context(
         request,
-        title="ConfiDoc | AI Firewall — Tableau de bord DPO/RSSI",
+        title="ConfiDoc | AI Firewall et Secure AI Chat",
         description=(
-            "Tous les échanges IA sont inspectés en temps réel par l'AI Firewall : "
-            "prompts, réponses, redactions, blocages et risques critiques en direct."
+            "Discutez avec vos documents confidentiels via une IA qui ne voit que la "
+            "version anonymisee/pseudonymisee, avec prompts, reponses et blocages audites."
         ),
         path="/firewall",
     )

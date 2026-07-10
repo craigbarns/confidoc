@@ -1,71 +1,148 @@
-# ConfiDoc — Script de démo investisseur (7 minutes)
+# ConfiDoc — Script demo investisseur 7 minutes
 
-**Objectif** : faire comprendre en 7 min que ConfiDoc protège réellement les données
-sensibles **avant, pendant et après** l'IA. Parcours réel :
-`upload → pseudonymisation → AI firewall → score DPO → export audit`.
+**Objectif** : montrer une histoire simple et fundable :
 
-**Préparer** : un faux bilan PDF (`Bilan_Dupont_2024.pdf`) contenant noms, SIRET, IBAN,
-email, montants. Avoir deux onglets : `/firewall` (Control Tower) et `/ui` (console).
-**Règle de langage** : dire « pseudonymisé / risque de réidentification maîtrisé »,
-jamais « anonymisé à 100 % ».
+`document confidentiel -> version IA-safe -> chat IA -> preuve d'audit`
 
----
+Preparer un faux document PDF : `Bilan_Dupont_2024.pdf` ou `Contrat_Martin_SAS.pdf`,
+avec nom, email, adresse, SIRET, IBAN, montants, clauses sensibles.
 
-## 0:00 — Accroche (45 s)
-> « Un expert-comptable veut résumer un bilan avec l'IA. S'il le colle dans ChatGPT, il
-> viole le RGPD et le secret professionnel. Donc il ne le fait pas — et perd le gain de
-> l'IA. ConfiDoc est le **firewall de confidentialité** qui débloque ça. Regardez. »
-
-## 0:45 — La vitrine : AI Security Control Tower (1 min)
-Ouvrir **`/firewall`** (sans login).
-- Montrer « AI Firewall · Active », les compteurs (prompts/réponses inspectés,
-  redactions, blocages, risques critiques), le pipeline 7 points de contrôle.
-- Cliquer **« Lancer la démonstration »** → montrer l'interception en direct :
-  prompt propre **autorisé**, email résiduel **masqué**, fuite IBAN **bloquée**.
-> « Tout échange IA passe par ce firewall. Rien n'est restitué avant le feu vert. »
-
-## 1:45 — Upload d'un vrai document (1 min)
-Passer sur **`/ui`** → glisser `Bilan_Dupont_2024.pdf`, saisir le nom du client.
-> « On charge un bilan réel. Le pipeline fait l'OCR, détecte les données identifiantes
-> (noms, SIRET, IBAN, email) et crée un double **pseudonymisé**. »
-Montrer le statut OCR → pseudonymisation.
-
-## 2:45 — Le cœur : pseudonymisation + Privacy Gate (1 min 30)
-- Ouvrir l'aperçu pseudonymisé : montrer les entités masquées (`[PERSONNE]`, `[IBAN]`,
-  `[SIRET]`…) **côte à côte** avec l'original.
-- Montrer la **décision du Privacy Gate** (autorise / validation humaine / bloque) et le
-  **score de risque de réidentification**.
-> « Le mapping est réversible et chiffré : c'est de la **pseudonymisation**, pas de la
-> magie. La valeur, c'est qu'on **mesure et maîtrise le risque de réidentification** —
-> exactement ce que la CNIL demande de regarder. »
-
-## 4:15 — L'IA sous firewall (1 min 15)
-- Lancer une analyse IA (synthèse / Copilot) sur le document.
-- Montrer que **seul le texte pseudonymisé+firewallé** part vers le modèle ; afficher le
-  bloc `payload_policy.firewall` (prompt inspecté / réponse inspectée).
-- Mentionner le **mode client sensible** : zéro appel IA externe (souveraineté totale).
-> « L'IA ne voit jamais la donnée brute. Et la réponse est ré-inspectée avant de
-> revenir à l'utilisateur. »
-
-## 5:30 — Score DPO + preuve d'audit (1 min)
-- Montrer le **Trust Score / AI-readiness** et « pourquoi ce score ».
-- Ouvrir le **journal d'audit** : chaque étape (upload, OCR, pseudonymisation, scoring,
-  validation, export) horodatée + **empreinte SHA-256** (preuve d'intégrité).
-> « En cas de contrôle CNIL ou de litige, le cabinet a une **preuve opposable**. »
-
-## 6:30 — Export & clôture (30 s)
-- Exporter le rapport / certificat de conformité.
-> « Résultat : le cabinet utilise l'IA, gagne des heures, **et** garde une conformité
-> démontrable. C'est l'IA débloquée pour ceux qui manipulent le plus de données
-> sensibles. »
+Regle de langage : "version anonymisee/pseudonymisee selon le niveau de risque", jamais
+"zero risque".
 
 ---
 
-### Plan B (si réseau/IA externe indisponible)
-- Rester sur `/firewall` + « Lancer la démonstration » (synthétique, sans dépendance).
-- Mode client sensible : montrer que tout fonctionne **sans** IA externe.
+## 0:00 — Accroche
 
-### Ce qu'il NE faut PAS dire
-- ❌ « anonymisation garantie / irréversible » → dire **pseudonymisation**.
-- ❌ « zéro risque » → dire **risque de réidentification mesuré et maîtrisé**.
-- ❌ promettre des certifications non obtenues (cf. [06_SECURITY_ROADMAP.md](06_SECURITY_ROADMAP.md)).
+> "Tout le monde veut utiliser l'IA sur ses documents clients. Le probleme, c'est que
+> les documents vraiment utiles contiennent des donnees confidentielles. ConfiDoc permet
+> d'en discuter avec une IA sans que l'IA voie le document brut."
+
+Message :
+
+> "Nous ne vendons pas un chatbot. Nous vendons une zone de securite pour utiliser l'IA
+> sur des documents confidentiels."
+
+---
+
+## 0:45 — Montrer le risque
+
+Ouvrir le document brut.
+
+Montrer rapidement :
+
+- nom client ;
+- email ;
+- IBAN ;
+- SIRET ;
+- montants ;
+- donnees contractuelles ou financieres.
+
+> "C'est exactement le type de document que personne ne devrait coller tel quel dans une
+> IA externe."
+
+---
+
+## 1:30 — Upload et anonymisation
+
+Dans `/ui`, uploader le document.
+
+Montrer :
+
+- detection ;
+- anonymisation/pseudonymisation ;
+- score de risque ;
+- entites masquees.
+
+Phrase cle :
+
+> "ConfiDoc cree une version exploitable par IA, mais retire les identifiants qui n'ont
+> pas besoin d'etre vus par le modele."
+
+---
+
+## 2:45 — Chat IA sur version securisee
+
+Lancer une question :
+
+> "Resume ce document en 10 lignes et liste les 3 risques principaux."
+
+Puis :
+
+> "Prepare une note client avec les points d'attention."
+
+Montrer que la reponse est utile, mais que les identifiants restent masques.
+
+Phrase cle :
+
+> "Le modele travaille sur le contenu utile, pas sur l'identite du client."
+
+---
+
+## 4:15 — Firewall sur prompts et reponses
+
+Ouvrir `/firewall`.
+
+Cliquer "Lancer la demonstration".
+
+Montrer :
+
+- prompt propre autorise ;
+- email residuel masque ;
+- IBAN bloque ;
+- compteurs d'evenements ;
+- journal sans donnee brute.
+
+Phrase cle :
+
+> "La securite n'est pas seulement avant l'IA. On controle aussi ce qui sort de l'IA."
+
+---
+
+## 5:30 — Preuve d'audit
+
+Ouvrir le rapport / journal d'audit.
+
+Montrer :
+
+- horodatage ;
+- hash document ;
+- donnees masquees par type ;
+- prompts/reponses inspectes ;
+- decisions autoriser/masquer/bloquer.
+
+Phrase cle :
+
+> "Un DPO ou un client peut verifier ce qui a ete expose a l'IA. C'est la difference
+> entre usage sauvage et usage gouverne."
+
+---
+
+## 6:30 — Cloture levee
+
+> "Nous commencons par les documents reglementes, car la douleur est immediate. Ensuite,
+> la meme couche devient un Agent Firewall : chaque agent IA devra prouver qui il est,
+> ce qu'il peut lire, ce qu'il peut envoyer et ce qui a ete audite."
+
+Finir sur la demande :
+
+> "Nous levons 500 k€ pour transformer cette demo en produit commercial, signer 3 a 5
+> pilotes payants et recruter le premier binome GTM/produit."
+
+---
+
+## Plan B
+
+Si l'IA externe ou le reseau est instable :
+
+- rester sur `/firewall` ;
+- utiliser un document deja traite ;
+- montrer le rapport d'audit ;
+- presenter le mode client sensible : aucun appel IA externe.
+
+## Ne pas dire
+
+- "anonymisation garantie" ;
+- "zero risque" ;
+- "certifie ISO" si non obtenu ;
+- "on fait toute la securite des agents IA" avant les pilotes.
