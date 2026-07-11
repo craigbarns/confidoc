@@ -1,4 +1,4 @@
-/* ConfiDoc — Pipeline 3 étapes : Upload → Version IA-safe → Chat IA */
+/* ConfiDoc — Pipeline 3 étapes : import → version masquée → questions IA */
 
 const API = "/api/v1";
 let token = sessionStorage.getItem("confidoc_token") || "";
@@ -623,7 +623,7 @@ function showAuditPanel() {
   const panel = $("panel-audit");
   if (panel) panel.classList.add("active");
   setActiveNav("audit");
-  setPageTitle("Preuves DPO/RSSI");
+  setPageTitle("Preuves");
   closeAppNavDrawer();
   syncLegacySidebarVisibility();
 }
@@ -1061,13 +1061,16 @@ function setPageTitle(section) {
   const titleEl = $("page-title");
   if (!titleEl) return;
   const titles = {
-    "": "ConfiDoc — Secure AI Chat",
+    "": "ConfiDoc — Documents IA protégés",
     "Accueil": "ConfiDoc — Accueil",
     "Ajouter": "ConfiDoc — Ajouter un document",
-    "Sécuriser": "ConfiDoc — Version IA-safe",
-    "Analyser": "ConfiDoc — Chat IA sécurisé",
+    "Sécuriser": "ConfiDoc — Version protégée",
+    "Analyser": "ConfiDoc — Questions sur le document",
     "Clients": "ConfiDoc — Dossiers clients",
     "Dossier": "ConfiDoc — Dossier client",
+    "Preuves": "ConfiDoc — Preuves",
+    "Qualité": "ConfiDoc — Protection",
+    "Conformité": "ConfiDoc — Conformité",
   };
   titleEl.textContent = titles[section] || titles[""];
   if (currentDocName && section) {
@@ -1142,7 +1145,7 @@ function renderInvestorDemoBanner(payload = null) {
   if (banner) {
     const text = $("investor-demo-banner-text");
     if (text) {
-      text.textContent = `Document synthétique. ${detections} donnée${plural ? "s" : ""} détectée${plural ? "s" : ""} et masquée${plural ? "s" : ""} · ${riskText} · preuve DPO/RSSI prête.`;
+      text.textContent = `Document de démonstration. ${detections} donnée${plural ? "s" : ""} cachée${plural ? "s" : ""} avant l'IA · ${riskText} · preuve prête.`;
     }
     banner.style.display = "";
   }
@@ -1169,60 +1172,60 @@ function renderInvestorDemoConsole(payload = {}) {
   const original = compactDemoExcerpt(payload.original_excerpt || "", 1200);
   const safe = compactDemoExcerpt(payload.preview_text || payload.anonymized_excerpt || "", 1200);
   const answer = [
-    `Le document peut être questionné sans exposer le brut.`,
-    `${detections} données sensibles sont remplacées par des repères neutres.`,
-    `Risque restant: ${score === null ? "non disponible" : `${score}/100`}.`,
-    `Preuve DPO/RSSI exportable avec journal du traitement.`,
+    `Voici le résumé sans identifiants visibles.`,
+    `${detections} données sensibles ont été remplacées avant l'IA.`,
+    `Le document brut n'est pas envoyé au modèle.`,
+    `Une preuve simple peut être téléchargée.`,
   ].join(" ");
   root.innerHTML = `
     <div class="investor-demo-console__head">
       <div>
-        <p class="investor-demo-console__eyebrow">Console de démo</p>
-        <h2 class="investor-demo-console__title">Un document confidentiel devient exploitable par l'IA</h2>
-        <p class="investor-demo-console__subtitle">La valeur est visible immédiatement: l'original reste contrôlable, la version IA-safe alimente le chat, et la preuve d'audit est prête pour DPO/RSSI.</p>
+        <p class="investor-demo-console__eyebrow">Démo en 3 étapes</p>
+        <h2 class="investor-demo-console__title">Le client voit exactement ce que l'IA reçoit</h2>
+        <p class="investor-demo-console__subtitle">À gauche le brut, au centre la version masquée, à droite les questions. Le message est simple: l'IA travaille sans voir les données sensibles.</p>
       </div>
       <div class="investor-demo-metrics" aria-label="Indicateurs de sécurité">
-        <div class="investor-demo-metric"><span>Données détectées</span><strong>${detections}</strong></div>
-        <div class="investor-demo-metric is-safe"><span>Risque restant</span><strong>${score === null ? "—" : `${score}/100`}</strong></div>
+        <div class="investor-demo-metric"><span>Données cachées</span><strong>${detections}</strong></div>
+        <div class="investor-demo-metric is-safe"><span>Brut envoyé à l'IA</span><strong>0</strong></div>
         <div class="investor-demo-metric is-safe"><span>Preuve</span><strong>${escapeHtml(proofState)}</strong></div>
       </div>
     </div>
     <div class="investor-demo-grid">
       <article class="investor-demo-pane">
         <div class="investor-demo-pane__head">
-          <h3>Original confidentiel</h3>
-          <span class="investor-demo-pill raw">Brut</span>
+          <h3>1. Document brut</h3>
+          <span class="investor-demo-pill raw">Jamais envoyé</span>
         </div>
         <pre class="investor-demo-text">${escapeHtml(original)}</pre>
       </article>
       <article class="investor-demo-pane">
         <div class="investor-demo-pane__head">
-          <h3>Version IA-safe</h3>
-          <span class="investor-demo-pill safe">${detections} masquées</span>
+          <h3>2. Version masquée</h3>
+          <span class="investor-demo-pill safe">Envoyée à l'IA</span>
         </div>
         <pre class="investor-demo-text safe">${escapeHtml(safe)}</pre>
       </article>
       <article class="investor-demo-pane">
         <div class="investor-demo-pane__head">
-          <h3>Chat IA sécurisé</h3>
-          <span class="investor-demo-pill ai">Source anonymisée</span>
+          <h3>3. Questions à l'IA</h3>
+          <span class="investor-demo-pill ai">Protégé</span>
         </div>
         <div class="investor-demo-chat">
-          <div class="investor-demo-bubble user">Résume le document sans révéler les identifiants.</div>
+          <div class="investor-demo-bubble user">Résume ce document sans révéler les identifiants.</div>
           <div class="investor-demo-bubble ai">${escapeHtml(answer)}</div>
         </div>
       </article>
     </div>
     <div class="investor-demo-proof">
       <div>
-        <strong>Audit prêt pour comité sécurité</strong>
-        <span>Dépôt, version IA-safe, risque restant, chat et export sont traçables. Types détectés: ${escapeHtml(entityText)}.</span>
+        <strong>Ce que le client retient</strong>
+        <span>L'IA ne voit pas le brut. Les données sensibles sont cachées. La preuve se télécharge. Types détectés: ${escapeHtml(entityText)}.</span>
       </div>
       <div class="investor-demo-actions">
-        <button type="button" class="btn btn-primary btn-sm" data-demo-action="focus-chat">Chat IA</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="firewall">AI Firewall</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="proof">Preuve DPO/RSSI</button>
-        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="original">Original</button>
+        <button type="button" class="btn btn-primary btn-sm" data-demo-action="focus-chat">Poser une question</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="firewall">Protection IA</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="proof">Preuve</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="original">Voir le brut</button>
       </div>
     </div>`;
   root.style.display = "";
@@ -1245,7 +1248,7 @@ function renderTrustIndicator(payload = {}) {
   const statusEl = $("trust-status");
   const level = String(trust.ai_readiness_level || payload.ai_readiness_level || "");
   const labels = {
-    ready_for_ai: "Prêt pour chat IA",
+    ready_for_ai: "Prêt pour questions",
     internal_review: "Usage interne",
     human_review_required: "Revue humaine",
     needs_review: "À contrôler",
@@ -1271,7 +1274,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Le traitement n'a pas pu être terminé. Relancez ou contactez l'administrateur.",
       recommended_action: "Relancer le traitement",
       reasons: ["Traitement incomplet"],
-      actions: ["Relancer le masquage", "Voir la preuve DPO/RSSI"],
+      actions: ["Relancer le masquage", "Voir la preuve"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1286,7 +1289,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Le document est en cours de lecture et de masquage.",
       recommended_action: "Patienter",
       reasons: ["Traitement en cours"],
-      actions: ["Voir la preuve DPO/RSSI"],
+      actions: ["Voir la preuve"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1301,7 +1304,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Des données sensibles critiques semblent encore présentes.",
       recommended_action: "Corriger les risques",
       reasons: ["Risque critique"],
-      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger la preuve DPO/RSSI"],
+      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger la preuve"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1314,7 +1317,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       severity: "warning",
       decision: "Vous devez vérifier avant export",
       explanation: "Certaines données sensibles ou quasi-identifiants peuvent encore permettre une réidentification.",
-      recommended_action: validated ? "Télécharger la preuve DPO/RSSI" : "Valider manuellement",
+      recommended_action: validated ? "Télécharger la preuve" : "Valider manuellement",
       reasons: ["Contrôle recommandé avant export"],
       actions: ["Corriger le masquage", "Valider manuellement", "Voir pourquoi"],
       risk_score: score,
@@ -1324,15 +1327,15 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
   }
   return {
     code: validated ? "human_validated" : "ready_for_ai",
-    label: validated ? "Validé manuellement" : "Prêt pour chat IA",
+    label: validated ? "Validé manuellement" : "Prêt pour questions",
     severity: "success",
-    decision: "Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI",
+    decision: "Vous pouvez poser vos questions ou télécharger la preuve",
     explanation: validated
       ? "Le document masqué a été relu et validé par un utilisateur autorisé."
-      : "La version IA-safe ne présente pas de risque évident. Elle peut être utilisée pour le chat IA ou vos exports.",
+      : "La version masquée ne présente pas de risque évident. Elle peut être utilisée pour les questions ou vos exports.",
     recommended_action: "Poser une question",
     reasons: ["Aucun risque évident détecté"],
-    actions: ["Poser une question", "PDF IA-safe", "Télécharger la preuve DPO/RSSI"],
+    actions: ["Poser une question", "PDF masqué", "Télécharger la preuve"],
     risk_score: score,
     risk_level: level,
     human_validated: validated,
@@ -1405,11 +1408,12 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
     const actionLabelMap = {
       "Analyser avec IA": "Poser une question",
       "Relancer anonymisation": "Relancer le masquage",
-      "Voir audit trail": "Voir la preuve DPO/RSSI",
-      "Voir la preuve": "Voir la preuve DPO/RSSI",
+      "Voir audit trail": "Voir la preuve",
+      "Voir la preuve DPO/RSSI": "Voir la preuve",
       "Corriger l'anonymisation": "Corriger le masquage",
-      "Télécharger rapport DPO": "Télécharger la preuve DPO/RSSI",
-      "Télécharger la preuve": "Télécharger la preuve DPO/RSSI",
+      "PDF IA-safe": "PDF masqué",
+      "Télécharger rapport DPO": "Télécharger la preuve",
+      "Télécharger la preuve DPO/RSSI": "Télécharger la preuve",
     };
     actions.innerHTML = (decision.actions || []).slice(0, 4).map(label => {
       const action = actionMap[label] || "why";
@@ -1492,17 +1496,17 @@ function renderExportGuard(payload = {}) {
   const detailEl = $("export-guard-detail");
   let state = "ready";
   let title = "Document protégé";
-  let detail = `${residualText}Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI.`;
+  let detail = `${residualText}Vous pouvez poser vos questions ou télécharger la preuve.`;
   let canApprove = false;
 
   if (!ready) {
     state = "watch";
     title = "Masquage en attente";
-    detail = "Le document doit être sécurisé avant le chat IA ou les exports.";
+    detail = "Le document doit être masqué avant les questions ou les exports.";
   } else if (level === "critical") {
     state = "blocked";
     title = "Utilisation bloquée";
-    detail = `${residualText}Certaines données peuvent encore identifier le client. Vérifiez la version IA-safe.`;
+    detail = `${residualText}Certaines données peuvent encore identifier le client. Vérifiez la version masquée.`;
   } else if (level === "high" && !validated) {
     state = "watch";
     title = "Revue humaine requise";
@@ -1681,7 +1685,7 @@ function updateProcessingConsole(payload = {}) {
     upload: "Ajout sécurisé",
     ocr: "Lecture du document en cours",
     detect: "Détection des données sensibles",
-    mask: "Version IA-safe",
+    mask: "Version masquée",
     ready: "Document prêt",
     failed: "Traitement interrompu",
   };
@@ -3345,7 +3349,7 @@ function renderAIReadySummary(details = {}) {
   const entities = details.entitiesText || formatEntitySummary(details.entitySummary);
   const exportTitle = $("export-guard-title")?.textContent || "Document protégé";
   const exportDetail = $("export-guard-detail")?.textContent
-    || "Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI.";
+    || "Vous pouvez poser vos questions ou télécharger la preuve.";
   const previewNote = details.previewError
     ? `<p class="ai-ready-note">${escapeHtml(details.previewError)}</p>`
     : "";
@@ -3353,8 +3357,8 @@ function renderAIReadySummary(details = {}) {
   card.innerHTML = `
     <div class="ai-ready-copy">
       <p class="ai-ready-eyebrow">${details.justValidated ? "Validation terminée" : "Document sélectionné"}</p>
-      <h3>Document prêt pour le chat IA sécurisé</h3>
-      <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve DPO/RSSI ou revenir à la revue.</p>
+      <h3>Document prêt pour les questions</h3>
+      <p>L'IA lit uniquement la version masquée. Vous pouvez poser vos questions ou télécharger la preuve.</p>
       ${previewNote}
     </div>
     <dl class="ai-ready-meta">
@@ -3363,14 +3367,14 @@ function renderAIReadySummary(details = {}) {
       <div><dt>Statut</dt><dd>${escapeHtml(status)}</dd></div>
       <div><dt>Taille</dt><dd>${escapeHtml(size)}</dd></div>
       <div><dt>Original</dt><dd>${escapeHtml(fileKind)} · source disponible</dd></div>
-      <div><dt>Données masquées</dt><dd>${escapeHtml(entities)}</dd></div>
+      <div><dt>Données cachées</dt><dd>${escapeHtml(entities)}</dd></div>
       <div><dt>Utilisation</dt><dd>${escapeHtml(exportTitle)} · ${escapeHtml(exportDetail)}</dd></div>
     </dl>
     <div class="ai-ready-actions">
       <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Poser une question</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="original">Ouvrir l’original</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger la preuve DPO/RSSI</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir l’anonymisation</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger la preuve</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir le masquage</button>
     </div>`;
   card.style.display = "";
 }
@@ -3392,7 +3396,7 @@ async function loadOriginalTextInto(target, fallback) {
       text = (data && data.text) ? data.text : "";
     }
     if (!text) {
-      target.innerHTML = '<div class="viewer-placeholder">Texte original non disponible — lancez l\'anonymisation pour extraire le texte.</div>';
+      target.innerHTML = '<div class="viewer-placeholder">Texte original non disponible — lancez le masquage pour extraire le texte.</div>';
       if (fallback) fallback.hidden = false;
       return;
     }
@@ -3509,7 +3513,7 @@ function renderDocumentDetailShell(details = {}) {
   if (auditLog) {
     auditLog.innerHTML = `
       <li><span class="ts">now</span><span class="what"><strong>Original chargé</strong><br>${escapeHtml(fileKind)} · ${escapeHtml(size || "taille inconnue")}</span></li>
-      <li><span class="ts">IA-safe</span><span class="what"><strong>Version sécurisée</strong><br>${Number(count || 0)} donnée(s) suivie(s)</span></li>
+      <li><span class="ts">Masqué</span><span class="what"><strong>Version protégée</strong><br>${Number(count || 0)} donnée(s) suivie(s)</span></li>
     `;
   }
 }
@@ -3962,7 +3966,7 @@ async function createDemoDocument() {
       }
       if (copy) {
         copy.innerHTML =
-          `<strong>${res.original_filename}</strong> créé.<br>Démo: dépôt → version IA-safe → chat → preuve → export.`;
+          `<strong>${res.original_filename}</strong> créé.<br>Démo: document brut → version masquée → questions → preuve.`;
       }
     }
 
@@ -3977,10 +3981,10 @@ async function createDemoDocument() {
       return;
     }
 
-    showAnonLoading("Demo Investor : OCR et anonymisation en cours…");
+    showAnonLoading("Démo : lecture et masquage en cours…");
     pollDocStatus(currentDocId);
 
-    toast(res.message || "Demo Investor chargée — sécurisation lancée", "success");
+    toast(res.message || "Démo chargée — masquage lancé", "success");
   } catch (e) {
     console.error("demo error:", e);
     const msg = e.message || "Erreur inconnue";
@@ -3997,12 +4001,12 @@ function buildDemoAssistantAnswer(question) {
   const score = currentDemoDocument?.risk?.score ?? currentDemoDocument?.risk?.risk_score ?? 0;
   const entities = currentDemoDocument?.detections_count ?? 0;
   if (q.includes("risque") || q.includes("score") || q.includes("pourquoi")) {
-    return `## Pourquoi cette décision\n- Risque restant: ${score}/100, niveau faible.\n- ${entities} données de démonstration ont été détectées et masquées.\n- L'original reste disponible pour contrôle visuel. Le chat IA utilise uniquement la version sécurisée.\n\n## Action recommandée\n- Présenter la preuve DPO/RSSI avant tout partage externe.`;
+    return `## Pourquoi c'est prêt\n- Risque restant: ${score}/100.\n- ${entities} données de démonstration ont été cachées avant l'IA.\n- Le document brut reste disponible pour contrôle, mais l'IA lit uniquement la version masquée.\n\n## Action recommandée\n- Poser vos questions, puis télécharger la preuve si vous partagez le résultat.`;
   }
   if (q.includes("audit")) {
-    return "## Preuve DPO/RSSI\n- Document synthétique créé pour démonstration investisseur.\n- Dépôt, version IA-safe, calcul du risque restant, chat et export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
+    return "## Preuve\n- Document synthétique créé pour la démonstration.\n- Dépôt, version masquée, questions et export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
   }
-  return "## Résumé\n- Document synthétique de démonstration investisseur chargé.\n- Original PDF accessible, version IA-safe disponible, niveau de protection calculé et preuve exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des repères neutres.\n- Le parcours illustre l'original, la version IA-safe, le chat IA sécurisé, l'explication du risque et la preuve.";
+  return "## Résumé\n- Document de démonstration chargé.\n- Original accessible, version masquée disponible, preuve exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des repères neutres.\n- Le parcours montre simplement: document brut, version masquée, questions à l'IA, preuve.";
 }
 
 function applyPublicDemoInsights(payload) {
@@ -4427,7 +4431,7 @@ function pollDocStatus(docId) {
         updateProcessingConsole({ status: "failed", ocrLength, detections });
         stopProcessingTimer();
         $("btn-anonymize").disabled = false;
-        toast("L'anonymisation a échoué. Veuillez réessayer.", "error");
+        toast("Le masquage a échoué. Veuillez réessayer.", "error");
         updatePipelineTimeline({ status: "failed", extractDone, anonymDone: false });
         await loadDocList();
       }
@@ -4436,7 +4440,7 @@ function pollDocStatus(docId) {
       console.error("pollDocStatus error:", e);
       clearInterval(interval);
       hideAnonLoading();
-      toast("Erreur de connexion pendant l'anonymisation.", "error");
+      toast("Erreur de connexion pendant le masquage.", "error");
       await loadDocList().catch(err => console.warn(err));
     }
   }, 2000);
@@ -4466,7 +4470,7 @@ async function loadOriginalText(docId) {
     originalTextEl.textContent = text;
   } catch (e) {
     console.warn("loadOriginalText error:", e);
-    originalTextEl.textContent = "(Texte original non disponible — lancez l'anonymisation d'abord)";
+    originalTextEl.textContent = "(Texte original non disponible — lancez le masquage d'abord)";
   } finally {
     if (originalLoadingEl) originalLoadingEl.style.display = "none";
   }
@@ -4647,9 +4651,9 @@ function showOnboarding() {
   dismissOnboardingOverlay();
   const steps = [
     { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque document à un client, un exercice et un type de document." },
-    { target: "#btn-anonymize", title: "Créer la version IA-safe", text: "Les données sensibles sont détectées puis remplacées par des balises." },
-    { target: ".quick-actions", title: "Chat IA sécurisé", text: "Le chat utilise la version sécurisée du document sélectionné." },
-    { target: "#btn-export-txt", title: "Prouver", text: "Téléchargez le texte sécurisé, le PDF ou la preuve DPO/RSSI." },
+    { target: "#btn-anonymize", title: "Créer la version masquée", text: "Les données sensibles sont détectées puis remplacées par des repères neutres." },
+    { target: ".quick-actions", title: "Poser des questions", text: "L'IA utilise uniquement la version masquée du document sélectionné." },
+    { target: "#btn-export-txt", title: "Prouver", text: "Téléchargez le PDF masqué ou la preuve." },
   ];
   let current = 0;
   const overlay = document.createElement("div");
@@ -5103,7 +5107,7 @@ async function sendCopilotMessage(question, inputEl) {
 function copilotFriendlyErrorMessage(message = "") {
   const raw = String(message || "");
   if (raw.includes("Aucun texte anonymisé") || raw.includes("document n'est pas prêt")) {
-    return "Créez d'abord la version IA-safe avant de poser une question.";
+    return "Créez d'abord la version masquée avant de poser une question.";
   }
   if (
     raw.includes("Risque élevé") ||
@@ -5113,10 +5117,10 @@ function copilotFriendlyErrorMessage(message = "") {
     raw.includes("validation humaine") ||
     raw.includes("usage externe")
   ) {
-    return "Par sécurité, ConfiDoc demande une revue humaine légère. Vérifiez la version IA-safe, validez le document, puis relancez votre question.";
+    return "Par sécurité, ConfiDoc demande une vérification rapide. Relisez la version masquée, validez le document, puis relancez votre question.";
   }
   if (raw.includes("Contrôle RGPD") || raw.includes("Privacy Gate")) {
-    return "La protection DPO/RSSI bloque temporairement la réponse. Vérifiez la version IA-safe, puis relancez la question.";
+    return "La protection bloque temporairement la réponse. Vérifiez la version masquée, puis relancez la question.";
   }
   return "La réponse n'est pas disponible pour le moment. Vérifiez le document, puis réessayez.";
 }
@@ -5359,7 +5363,7 @@ function renderAuditInsights(data) {
 async function showApproveExportPrompt() {
   if (!currentDocId) return;
   const ok = await confirm(
-    "Risque de réidentification élevé détecté. Confirmez-vous avoir vérifié manuellement que l'anonymisation est suffisante pour un export externe ? Cette action sera journalisée.",
+    "Risque de réidentification élevé détecté. Confirmez-vous avoir vérifié manuellement que le masquage est suffisant pour un export externe ? Cette action sera journalisée.",
     "Validation humaine requise",
     "Confirmer l'export"
   );
@@ -5380,7 +5384,7 @@ async function showApproveExportPrompt() {
 
 async function downloadAuditReport() {
   if (!currentDocId) {
-    toast("Sélectionnez un document validé pour télécharger sa preuve DPO/RSSI.", "info");
+    toast("Sélectionnez un document validé pour télécharger sa preuve.", "info");
     openDocumentWorkspace();
     return;
   }
@@ -5392,19 +5396,19 @@ async function downloadAuditReport() {
     const contentType = resp.headers.get("content-type") || "";
     if (!contentType.includes("application/pdf")) {
       const message = await readApiError(resp);
-      throw new Error(message.message || "La preuve DPO/RSSI n'est pas encore prête.");
+      throw new Error(message.message || "La preuve n'est pas encore prête.");
     }
     const blob = await resp.blob();
-    if (!blob.size) throw new Error("La preuve DPO/RSSI est vide.");
+    if (!blob.size) throw new Error("La preuve est vide.");
     triggerDownload(blob, `preuve_dpo_rssi_${currentDocId.slice(0, 8)}.pdf`);
-    toast("Preuve DPO/RSSI téléchargée", "success");
+    toast("Preuve téléchargée", "success");
   } catch (e) {
     const rawMessage = e.message || "";
     const friendlyMessage =
       e.status >= 500 || /internal server error/i.test(rawMessage)
-        ? "La preuve DPO/RSSI est temporairement indisponible. Réessayez dans quelques instants."
-        : rawMessage || "La preuve DPO/RSSI n'est pas disponible.";
-    toast(`Preuve DPO/RSSI indisponible : ${friendlyMessage}`, "error");
+        ? "La preuve est temporairement indisponible. Réessayez dans quelques instants."
+        : rawMessage || "La preuve n'est pas disponible.";
+    toast(`Preuve indisponible : ${friendlyMessage}`, "error");
   }
 }
 
@@ -5824,7 +5828,7 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
     const uploaded24 = Number(summary.recent_uploads_24h ?? summary.uploads_24h ?? 0);
     if (uploaded24 > 0) events.push(`<div class="ev"><span class="ts">24 h</span> · ${uploaded24} document${uploaded24 > 1 ? "s" : ""} déposé${uploaded24 > 1 ? "s" : ""}</div>`);
     const ready = Number(summary.ready ?? sc.ready ?? 0) + Number(summary.anonymized ?? sc.anonymized ?? 0);
-    if (ready > 0) events.push(`<div class="ev"><span class="ts">Cumulé</span> · ${ready} anonymisation${ready > 1 ? "s" : ""} validée${ready > 1 ? "s" : ""}</div>`);
+    if (ready > 0) events.push(`<div class="ev"><span class="ts">Cumulé</span> · ${ready} document${ready > 1 ? "s" : ""} protégé${ready > 1 ? "s" : ""}</div>`);
     const failed = Number(summary.failed ?? sc.failed ?? 0);
     if (failed > 0) events.push(`<div class="ev" style="color:var(--warning)"><span class="ts">À voir</span> · ${failed} document${failed > 1 ? "s en" : " en"} échec à reprendre</div>`);
     tl.innerHTML = events.length > 0
@@ -5923,7 +5927,7 @@ function renderQualityRedesignTab(tab, qualityData = null) {
           <p class="page-lead" style="margin:8px 0 16px 0; font-size:12px; line-height:1.5;">Calculé sur les documents sécurisés du mois. Il indique si les documents peuvent être utilisés sereinement.</p>
           <button class="btn btn-primary btn-sm" data-action="download-compliance-cert" style="display:inline-flex; align-items:center; gap:6px;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Télécharger le certificat DPO/RSSI
+            Télécharger le certificat
           </button>
         </div>
 
@@ -6293,14 +6297,14 @@ function renderMissionControl(payload = emptyDossier360()) {
   };
   const actionItems = mission.next_best_actions?.length
     ? mission.next_best_actions
-    : ["Importer les pieces client et lancer l'anonymisation."];
+    : ["Importer les pièces client et lancer le masquage."];
   const portfolio = payload.portfolio || {};
   const docCount = portfolio.documents_count ?? 0;
   const focusItems = mission.audit_focus?.length
     ? mission.audit_focus
     : docCount === 0
       ? ["Aucune recommandation pour le moment."]
-      : ["Completeness des pieces", "Qualite OCR et anonymisation"];
+      : ["Complétude des pièces", "Qualité de lecture et de masquage"];
 
   headline.textContent = mission.headline || "Dossiers a qualifier";
   summary.textContent = mission.summary || "Priorites cabinet en attente.";
