@@ -1126,20 +1126,105 @@ function normalizeRiskPercent(value) {
 
 function renderInvestorDemoBanner(payload = null) {
   const banner = $("investor-demo-banner");
-  if (!banner) return;
+  const consoleEl = $("investor-demo-console");
   if (!publicDemoMode || !payload) {
-    banner.style.display = "none";
+    if (banner) banner.style.display = "none";
+    if (consoleEl) {
+      consoleEl.style.display = "none";
+      consoleEl.innerHTML = "";
+    }
     return;
   }
   const detections = Number(payload.detections_count ?? payload.detections ?? 0);
   const score = normalizeRiskPercent(payload.risk?.risk_score ?? payload.risk?.score ?? payload.score ?? 0);
   const riskText = score === null ? "risque restant non disponible" : `risque restant ${score}/100`;
   const plural = detections > 1;
-  const text = $("investor-demo-banner-text");
-  if (text) {
-    text.textContent = `Document synthétique. ${detections} donnée${plural ? "s" : ""} détectée${plural ? "s" : ""} et masquée${plural ? "s" : ""} · ${riskText} · preuve DPO/RSSI prête.`;
+  if (banner) {
+    const text = $("investor-demo-banner-text");
+    if (text) {
+      text.textContent = `Document synthétique. ${detections} donnée${plural ? "s" : ""} détectée${plural ? "s" : ""} et masquée${plural ? "s" : ""} · ${riskText} · preuve DPO/RSSI prête.`;
+    }
+    banner.style.display = "";
   }
-  banner.style.display = "";
+  renderInvestorDemoConsole(payload);
+}
+
+function compactDemoExcerpt(text = "", maxChars = 1100) {
+  const normalized = String(text || "")
+    .replace(/\r/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+  if (!normalized) return "Extrait non disponible.";
+  if (normalized.length <= maxChars) return normalized;
+  return `${normalized.slice(0, maxChars).trim()}\n\n…`;
+}
+
+function renderInvestorDemoConsole(payload = {}) {
+  const root = $("investor-demo-console");
+  if (!root) return;
+  const detections = Number(payload.detections_count ?? 0);
+  const score = normalizeRiskPercent(payload.risk?.risk_score ?? payload.risk?.score ?? 0);
+  const entityText = formatEntitySummary(payload.entity_summary, { limit: 4 });
+  const proofState = score === null || score > 0 ? "À vérifier" : "Prête";
+  const original = compactDemoExcerpt(payload.original_excerpt || "", 1200);
+  const safe = compactDemoExcerpt(payload.preview_text || payload.anonymized_excerpt || "", 1200);
+  const answer = [
+    `Le document peut être questionné sans exposer le brut.`,
+    `${detections} données sensibles sont remplacées par des repères neutres.`,
+    `Risque restant: ${score === null ? "non disponible" : `${score}/100`}.`,
+    `Preuve DPO/RSSI exportable avec journal du traitement.`,
+  ].join(" ");
+  root.innerHTML = `
+    <div class="investor-demo-console__head">
+      <div>
+        <p class="investor-demo-console__eyebrow">Console de démo</p>
+        <h2 class="investor-demo-console__title">Un document confidentiel devient exploitable par l'IA</h2>
+        <p class="investor-demo-console__subtitle">La valeur est visible immédiatement: l'original reste contrôlable, la version IA-safe alimente le chat, et la preuve d'audit est prête pour DPO/RSSI.</p>
+      </div>
+      <div class="investor-demo-metrics" aria-label="Indicateurs de sécurité">
+        <div class="investor-demo-metric"><span>Données détectées</span><strong>${detections}</strong></div>
+        <div class="investor-demo-metric is-safe"><span>Risque restant</span><strong>${score === null ? "—" : `${score}/100`}</strong></div>
+        <div class="investor-demo-metric is-safe"><span>Preuve</span><strong>${escapeHtml(proofState)}</strong></div>
+      </div>
+    </div>
+    <div class="investor-demo-grid">
+      <article class="investor-demo-pane">
+        <div class="investor-demo-pane__head">
+          <h3>Original confidentiel</h3>
+          <span class="investor-demo-pill raw">Brut</span>
+        </div>
+        <pre class="investor-demo-text">${escapeHtml(original)}</pre>
+      </article>
+      <article class="investor-demo-pane">
+        <div class="investor-demo-pane__head">
+          <h3>Version IA-safe</h3>
+          <span class="investor-demo-pill safe">${detections} masquées</span>
+        </div>
+        <pre class="investor-demo-text safe">${escapeHtml(safe)}</pre>
+      </article>
+      <article class="investor-demo-pane">
+        <div class="investor-demo-pane__head">
+          <h3>Chat IA sécurisé</h3>
+          <span class="investor-demo-pill ai">Source anonymisée</span>
+        </div>
+        <div class="investor-demo-chat">
+          <div class="investor-demo-bubble user">Résume le document sans révéler les identifiants.</div>
+          <div class="investor-demo-bubble ai">${escapeHtml(answer)}</div>
+        </div>
+      </article>
+    </div>
+    <div class="investor-demo-proof">
+      <div>
+        <strong>Audit prêt pour comité sécurité</strong>
+        <span>Dépôt, version IA-safe, risque restant, chat et export sont traçables. Types détectés: ${escapeHtml(entityText)}.</span>
+      </div>
+      <div class="investor-demo-actions">
+        <button type="button" class="btn btn-primary btn-sm" data-demo-action="focus-chat">Chat IA</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="proof">Preuve DPO/RSSI</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="original">Original</button>
+      </div>
+    </div>`;
+  root.style.display = "";
 }
 
 function renderTrustIndicator(payload = {}) {
@@ -7720,6 +7805,26 @@ document.addEventListener("DOMContentLoaded", () => {
         openCurrentOriginal(false);
       } else if (action === "review") {
         openAnonReviewForCurrentDocument();
+      }
+    });
+  }
+
+  if ($("investor-demo-console")) {
+    $("investor-demo-console").addEventListener("click", e => {
+      const btn = e.target.closest("[data-demo-action]");
+      if (!btn) return;
+      const action = btn.dataset.demoAction;
+      if (action === "focus-chat") {
+        const input = $("chat-input");
+        if (input) {
+          input.value = "Quels sont les points clés sans exposer les données sensibles ?";
+          input.focus();
+        }
+        document.querySelector(".chat-input-zone")?.scrollIntoView({ behavior: "smooth", block: "nearest" });
+      } else if (action === "proof") {
+        downloadAuditReport();
+      } else if (action === "original") {
+        openCurrentOriginal(false);
       }
     });
   }
