@@ -18,7 +18,7 @@
         <img src="/static/confidoc-mark.svg?v={{ASSET_VERSION}}" alt="ConfiDoc" />
         ConfiDoc
         <span class="sep"></span>
-        <span class="tag">Secure AI Chat</span>
+        <span class="tag">AI Firewall</span>
       </a>
       <nav class="nav">
         <a class="nav-back" href="/ui">← ConfiDoc</a>
@@ -32,34 +32,58 @@
     <!-- 1 ─ Hero -->
     <section class="hero">
       <div class="reveal">
-        <span class="live-badge"><span class="live-dot"></span>Document IA-safe · actif</span>
-        <h1>Discutez avec vos documents<br /><em>sans exposer le brut</em></h1>
-        <p class="lede"><b>ConfiDoc anonymise/pseudonymise le document avant l'IA</b>.
-          Les prompts et réponses sont vérifiés en temps réel, les données résiduelles
-          sont masquées ou bloquées, et chaque décision est auditée.</p>
+        <span class="live-badge"><span class="live-dot"></span>AI Firewall · inspection temps réel</span>
+        <h1>Le pare-feu entre vos documents confidentiels<br /><em>et tous les agents IA</em></h1>
+        <p class="lede"><b>ConfiDoc ne laisse jamais l'IA travailler sur le brut.</b>
+          Le document devient IA-safe, les prompts sortants et réponses entrantes sont inspectés,
+          les fuites sont masquées ou bloquées, puis chaque décision devient une preuve DPO/RSSI.</p>
         <div class="cta-row">
-          <button class="btn btn-primary" id="demo-btn" type="button">Voir le contrôle IA</button>
-          <a class="btn btn-ghost" href="/trust">Voir le Trust Center</a>
+          <button class="btn btn-primary" id="demo-btn" type="button">Lancer la preuve live</button>
+          <a class="btn btn-ghost" href="/ui">Ouvrir la console</a>
         </div>
       </div>
 
-      <aside class="sys-panel reveal" style="animation-delay:.08s">
-        <div class="sys-head">
-          <span class="t">État du système</span>
+      <aside class="zero-card reveal" style="animation-delay:.08s">
+        <div class="zero-card__top">
+          <span class="t">Contrat de sécurité</span>
           <span class="led ok" id="led-fw"></span>
         </div>
-        <div class="sys-rows">
-          <div class="sys-row"><span class="k"><span class="led ok" id="led-fw2"></span>Chat IA sécurisé</span><span class="v ok" id="fw-state">ACTIF</span></div>
-          <div class="sys-row"><span class="k">Mode de protection</span><span class="v ok sk" id="v-mode">Document sécurisé · masquage</span></div>
-          <div class="sys-row"><span class="k"><span class="led" id="led-api"></span>API</span><span class="v" id="v-api">…</span></div>
-          <div class="sys-row"><span class="k"><span class="led" id="led-db"></span>Base de données</span><span class="v" id="v-db">…</span></div>
-          <div class="sys-row"><span class="k"><span class="led" id="led-redis"></span>Cache / Redis</span><span class="v" id="v-redis">…</span></div>
+        <div class="zero-card__num" id="raw-ai-state">0</div>
+        <p>donnée brute envoyée à l'IA</p>
+        <div class="zero-card__grid">
+          <div><span>Prompt</span><strong>inspecté</strong></div>
+          <div><span>Réponse</span><strong>inspectée</strong></div>
+          <div><span>Fuite</span><strong>bloquée</strong></div>
+          <div><span>Preuve</span><strong>DPO/RSSI</strong></div>
         </div>
       </aside>
     </section>
 
+    <section class="proof-strip reveal" style="animation-delay:.12s" aria-label="Contrat sécurité AI Firewall">
+      <article class="proof-card">
+        <span class="proof-k">Données brutes envoyées</span>
+        <strong id="c-raw-leaks">0</strong>
+        <p>Le modèle IA ne reçoit que la version IA-safe.</p>
+      </article>
+      <article class="proof-card">
+        <span class="proof-k">Couverture inspection</span>
+        <strong id="c-safe-rate">100%</strong>
+        <p>Prompt sortant + réponse entrante contrôlés.</p>
+      </article>
+      <article class="proof-card">
+        <span class="proof-k">Règles actives</span>
+        <strong>PII · IBAN · Email</strong>
+        <p>Noms, sociétés, adresses, téléphones et identifiants.</p>
+      </article>
+      <article class="proof-card">
+        <span class="proof-k">Audit exportable</span>
+        <strong>Prêt</strong>
+        <p>Décision, verdict, risque, timestamp, preuve.</p>
+      </article>
+    </section>
+
     <!-- 2 ─ Metrics -->
-    <div class="sec-h reveal"><span class="idx">01</span><h2>Ce qui est vérifié en direct</h2><span class="desc">Prompts, réponses, masquages et blocages</span></div>
+    <div class="sec-h reveal"><span class="idx">01</span><h2>Inspection live du trafic IA</h2><span class="desc">Prompts, réponses, masquages et blocages</span></div>
     <section class="metrics reveal" style="animation-delay:.05s">
       <div class="metric ok">
         <div class="label"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8"><path d="M7 17 17 7M9 7h8v8"/></svg>Prompts scannés</div>
@@ -84,17 +108,17 @@
     </section>
 
     <!-- 3+4 ─ AI flow + Risk center -->
-    <div class="sec-h reveal"><span class="idx">02</span><h2>Contrôle avant et après l'IA</h2><span class="desc">Le flux s'arrête si une donnée critique ressort</span></div>
+    <div class="sec-h reveal"><span class="idx">02</span><h2>Le flux sécurisé de bout en bout</h2><span class="desc">Le flux s'arrête si une donnée critique ressort</span></div>
     <div class="grid-2">
       <section class="panel reveal">
         <div class="panel-head"><span class="t">Flux IA inspecté</span><span class="meta">7 contrôles</span></div>
         <div class="panel-body">
           <div class="flow">
-            <div class="node" id="n-doc"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/></svg></div><div class="nm">Document</div></div>
+            <div class="node" id="n-doc"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M6 2h8l4 4v16H6z"/><path d="M14 2v4h4"/></svg></div><div class="nm">Document brut</div></div>
             <div class="connector" id="c1"><span class="pulse"></span></div>
-            <div class="node" id="n-anon"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/><path d="M3 3l18 18" opacity=".5"/></svg></div><div class="nm">Anonymisation</div></div>
+            <div class="node" id="n-anon"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><circle cx="12" cy="8" r="3.2"/><path d="M5 20a7 7 0 0 1 14 0"/><path d="M3 3l18 18" opacity=".5"/></svg></div><div class="nm">Version IA-safe</div></div>
             <div class="connector" id="c2"><span class="pulse"></span></div>
-            <div class="node" id="n-gate"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 4v5c0 4.5-3 7.5-8 9-5-1.5-8-4.5-8-9V7z"/></svg></div><div class="nm">Contrôle RGPD</div></div>
+            <div class="node" id="n-gate"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M12 3l8 4v5c0 4.5-3 7.5-8 9-5-1.5-8-4.5-8-9V7z"/></svg></div><div class="nm">Privacy gate</div></div>
             <div class="connector" id="c3"><span class="pulse"></span></div>
             <div class="node fw" id="n-fwin"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><rect x="3" y="4" width="18" height="16" rx="2"/><path d="M3 9h18M8 4v5M16 4v5"/></svg></div><div class="nm">Prompt vérifié</div></div>
             <div class="connector" id="c4"><span class="pulse"></span></div>
@@ -104,7 +128,7 @@
             <div class="connector" id="c6"><span class="pulse"></span></div>
             <div class="node" id="n-audit"><div class="ico"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.7"><path d="M4 5h16M4 12h16M4 19h10"/></svg></div><div class="nm">Audit</div></div>
           </div>
-          <div class="flow-caption" id="flow-caption">Cliquez « Voir le contrôle IA » pour voir un échange traverser le firewall.</div>
+          <div class="flow-caption" id="flow-caption">Cliquez « Lancer la preuve live » pour voir un échange traverser l'AI Firewall.</div>
         </div>
       </section>
 
@@ -130,18 +154,31 @@
       </section>
     </div>
 
+    <section class="control-plane reveal" style="animation-delay:.08s">
+      <div class="control-plane__copy">
+        <span class="idx">03</span>
+        <h2>Règles actives pour agents IA</h2>
+        <p>ConfiDoc applique une double inspection autour des appels LLM. L'app peut parler à l'IA, mais l'IA ne récupère pas le brut.</p>
+      </div>
+      <div class="control-grid">
+        <div class="control-card"><span>01</span><strong>Blocage critique</strong><p>IBAN, NSS, RIB et identifiants directs ne sont pas restitués.</p></div>
+        <div class="control-card"><span>02</span><strong>Masquage résiduel</strong><p>Emails, noms et téléphones détectés en réponse sont neutralisés.</p></div>
+        <div class="control-card"><span>03</span><strong>Audit continu</strong><p>Chaque verdict garde direction, risque, type d'entité et timestamp.</p></div>
+      </div>
+    </section>
+
     <!-- 7 ─ Demo orchestration -->
-    <div class="sec-h reveal"><span class="idx">03</span><h2>Démonstration live</h2><span class="desc">Document sécurisé · prompt autorisé · email masqué · fuite IBAN bloquée</span></div>
+    <div class="sec-h reveal"><span class="idx">04</span><h2>Démonstration live</h2><span class="desc">Document sécurisé · prompt autorisé · email masqué · fuite IBAN bloquée</span></div>
     <div class="demo-grid" id="demo-seq">
       <div class="panel"><div class="empty">
         <div class="glyph"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.6"><path d="M5 3l14 9-14 9z"/></svg></div>
-        <p>Aucune démonstration lancée. Le firewall va inspecter un prompt propre,
+        <p>Aucune démonstration lancée. L'AI Firewall va inspecter un prompt propre,
           masquer un email résiduel, puis bloquer une fuite de RIB (IBAN).</p>
       </div></div>
     </div>
 
     <!-- 3 + 6 ─ Event stream + Audit timeline -->
-    <div class="sec-h reveal"><span class="idx">04</span><h2>Preuve d'inspection</h2><span class="desc">Types de données et compteurs uniquement — jamais de donnée brute</span></div>
+    <div class="sec-h reveal"><span class="idx">05</span><h2>Preuve d'inspection</h2><span class="desc">Types de données et compteurs uniquement — jamais de donnée brute</span></div>
     <div class="grid-stream">
       <section class="panel reveal">
         <div class="panel-head"><span class="t">Événements de protection</span><span class="meta">temps réel</span></div>

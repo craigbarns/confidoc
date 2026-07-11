@@ -1220,6 +1220,7 @@ function renderInvestorDemoConsole(payload = {}) {
       </div>
       <div class="investor-demo-actions">
         <button type="button" class="btn btn-primary btn-sm" data-demo-action="focus-chat">Chat IA</button>
+        <button type="button" class="btn btn-ghost btn-sm" data-demo-action="firewall">AI Firewall</button>
         <button type="button" class="btn btn-ghost btn-sm" data-demo-action="proof">Preuve DPO/RSSI</button>
         <button type="button" class="btn btn-ghost btn-sm" data-demo-action="original">Original</button>
       </div>
@@ -7825,6 +7826,8 @@ document.addEventListener("DOMContentLoaded", () => {
         downloadAuditReport();
       } else if (action === "original") {
         openCurrentOriginal(false);
+      } else if (action === "firewall") {
+        window.location.href = "/firewall";
       }
     });
   }

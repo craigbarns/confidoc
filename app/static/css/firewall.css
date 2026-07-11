@@ -140,7 +140,75 @@ h1 em { font-style: italic; color: var(--ok); }
 .btn .spinner { width: 14px; height: 14px; border: 2px solid rgba(4, 33, 24, .35); border-top-color: #042118; border-radius: 50%; animation: spin .7s linear infinite; }
 @keyframes spin { to { transform: rotate(360deg); } }
 
-/* Hero status panel */
+/* Hero zero-leak contract */
+.zero-card {
+  background:
+    linear-gradient(180deg, rgba(20, 24, 36, .96), rgba(8, 10, 16, .98));
+  border: 1px solid rgba(62, 224, 166, .2);
+  border-radius: var(--r-lg);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.zero-card__top {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 16px 18px;
+  border-bottom: 1px solid var(--line-2);
+}
+.zero-card__top .t {
+  font-size: 12px;
+  letter-spacing: 1.4px;
+  text-transform: uppercase;
+  color: var(--ink-3);
+  font-family: var(--mono);
+}
+.zero-card__num {
+  padding: 24px 18px 0;
+  color: var(--ok);
+  font-family: var(--mono);
+  font-size: clamp(76px, 10vw, 124px);
+  line-height: .9;
+  font-weight: 600;
+  letter-spacing: -5px;
+  text-shadow: 0 0 34px rgba(62, 224, 166, .24);
+}
+.zero-card > p {
+  margin: 8px 18px 24px;
+  color: var(--ink);
+  font-size: 18px;
+  font-weight: 650;
+}
+.zero-card__grid {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  border-top: 1px solid var(--line-2);
+}
+.zero-card__grid div {
+  min-width: 0;
+  padding: 14px 16px;
+  border-right: 1px solid var(--line-2);
+  border-bottom: 1px solid var(--line-2);
+  background: rgba(255, 255, 255, .018);
+}
+.zero-card__grid div:nth-child(2n) { border-right: 0; }
+.zero-card__grid div:nth-last-child(-n+2) { border-bottom: 0; }
+.zero-card__grid span {
+  display: block;
+  color: var(--ink-4);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  text-transform: uppercase;
+  letter-spacing: .06em;
+}
+.zero-card__grid strong {
+  display: block;
+  margin-top: 3px;
+  color: var(--ink);
+  font-size: 14px;
+  overflow-wrap: anywhere;
+}
+
 .sys-panel { background: linear-gradient(180deg, var(--bg-2), var(--bg-1)); border: 1px solid var(--line); border-radius: var(--r-lg); box-shadow: var(--shadow); overflow: hidden; }
 .sys-head { display: flex; align-items: center; justify-content: space-between; padding: 16px 18px; border-bottom: 1px solid var(--line-2); }
 .sys-head .t { font-size: 12px; letter-spacing: 1.4px; text-transform: uppercase; color: var(--ink-3); font-family: var(--mono); }
@@ -154,6 +222,60 @@ h1 em { font-style: italic; color: var(--ok); }
 .led.warn { background: var(--warn); box-shadow: 0 0 9px rgba(246, 184, 91, .6); }
 .led.bad { background: var(--bad); box-shadow: 0 0 9px rgba(255, 107, 128, .6); }
 .v.ok { color: var(--ok); } .v.warn { color: var(--warn); } .v.bad { color: var(--bad); }
+
+/* Security contract strip */
+.proof-strip {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 14px;
+  margin: 8px 0 40px;
+}
+@media (max-width: 980px) { .proof-strip { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+@media (max-width: 560px) { .proof-strip { grid-template-columns: 1fr; } }
+.proof-card {
+  position: relative;
+  min-height: 146px;
+  padding: 18px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, .035), rgba(255, 255, 255, .012)),
+    var(--bg-1);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.proof-card::before {
+  content: "";
+  position: absolute;
+  left: 18px;
+  right: 18px;
+  top: 0;
+  height: 2px;
+  background: linear-gradient(90deg, var(--ok), transparent);
+  opacity: .75;
+}
+.proof-k {
+  display: block;
+  color: var(--ink-3);
+  font-family: var(--mono);
+  font-size: 10.5px;
+  letter-spacing: .08em;
+  text-transform: uppercase;
+}
+.proof-card strong {
+  display: block;
+  margin-top: 10px;
+  color: var(--ink);
+  font-size: 26px;
+  line-height: 1.05;
+  letter-spacing: -.7px;
+}
+.proof-card p {
+  margin: 10px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
 
 /* ── Section heading ─────────────────────────────────────────────────── */
 .sec-h { display: flex; align-items: baseline; gap: 14px; margin: 42px 0 18px; }
@@ -226,6 +348,80 @@ h1 em { font-style: italic; color: var(--ok); }
 .risk-row .swatch { width: 9px; height: 9px; border-radius: 3px; }
 .risk-row .val { font-family: var(--mono); font-size: 13.5px; font-weight: 600; }
 .sw-crit { background: var(--bad); } .sw-high { background: #ff9466; } .sw-med { background: var(--warn); }
+
+/* ── Control plane ─────────────────────────────────────────────────────── */
+.control-plane {
+  display: grid;
+  grid-template-columns: .72fr 1.28fr;
+  gap: 18px;
+  margin: 42px 0 8px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: var(--r-lg);
+  background:
+    linear-gradient(135deg, rgba(62, 224, 166, .07), transparent 38%),
+    linear-gradient(180deg, var(--bg-2), var(--bg-1));
+  box-shadow: var(--shadow);
+}
+@media (max-width: 900px) { .control-plane { grid-template-columns: 1fr; } }
+.control-plane__copy .idx {
+  display: block;
+  margin-bottom: 10px;
+  color: var(--ink-4);
+  font-family: var(--mono);
+  font-size: 12px;
+}
+.control-plane__copy h2 {
+  margin: 0;
+  font-family: var(--display);
+  font-size: 30px;
+  line-height: 1.05;
+  letter-spacing: -.8px;
+}
+.control-plane__copy p {
+  margin: 12px 0 0;
+  color: var(--ink-2);
+  font-size: 15px;
+}
+.control-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+}
+@media (max-width: 680px) { .control-grid { grid-template-columns: 1fr; } }
+.control-card {
+  min-width: 0;
+  padding: 16px;
+  border: 1px solid var(--line);
+  border-radius: var(--r);
+  background: rgba(255, 255, 255, .024);
+}
+.control-card span {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 30px;
+  height: 30px;
+  margin-bottom: 16px;
+  border: 1px solid rgba(62, 224, 166, .24);
+  border-radius: 10px;
+  color: var(--ok);
+  background: var(--ok-soft);
+  font-family: var(--mono);
+  font-size: 11px;
+}
+.control-card strong {
+  display: block;
+  color: var(--ink);
+  font-size: 16px;
+  line-height: 1.2;
+}
+.control-card p {
+  margin: 8px 0 0;
+  color: var(--ink-3);
+  font-size: 13px;
+  line-height: 1.45;
+}
 
 /* ── Event stream + audit timeline ───────────────────────────────────── */
 .grid-stream { display: grid; grid-template-columns: 1.15fr .85fr; gap: 18px; }

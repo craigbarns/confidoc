@@ -57,11 +57,18 @@
     countUp($("c-redactions"), c.redactions || 0);
     countUp($("c-blocks"), c.blocks || 0);
     countUp($("c-critical"), c.critical_risks || 0);
+    countUp($("c-raw-leaks"), 0);
+    var safeRate = $("c-safe-rate");
+    if (safeRate) safeRate.textContent = "100%";
+    var rawState = $("raw-ai-state");
+    if (rawState) rawState.textContent = "0";
 
     var fw = (d && d.firewall) || {};
     var enabled = fw.enabled !== false;
-    $("fw-state").textContent = enabled ? "ACTIF" : "HORS LIGNE";
-    $("led-fw").className = "led " + (enabled ? "ok" : "bad");
+    var fwState = $("fw-state");
+    if (fwState) fwState.textContent = enabled ? "ACTIF" : "HORS LIGNE";
+    var fwLed = $("led-fw");
+    if (fwLed) fwLed.className = "led " + (enabled ? "ok" : "bad");
     var modeEl = $("v-mode");
     if (modeEl) {
       modeEl.textContent = fw.mode === "strict" ? "Strict (cabinet sensible)" : "Normal · masquage";
@@ -221,6 +228,7 @@
 
   function runDemo() {
     var btn = $("demo-btn");
+    if (!btn) return;
     btn.disabled = true;
     btn.innerHTML = '<span class="spinner"></span> Inspection…';
     getJSON("/api/v1/firewall/demo", { method: "POST" })
