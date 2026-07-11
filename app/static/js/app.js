@@ -1,4 +1,4 @@
-/* ConfiDoc — Pipeline 3 étapes : Upload → Anonymisation → Discussion IA */
+/* ConfiDoc — Pipeline 3 étapes : Upload → Version IA-safe → Chat IA */
 
 const API = "/api/v1";
 let token = sessionStorage.getItem("confidoc_token") || "";
@@ -623,7 +623,7 @@ function showAuditPanel() {
   const panel = $("panel-audit");
   if (panel) panel.classList.add("active");
   setActiveNav("audit");
-  setPageTitle("Preuves RGPD");
+  setPageTitle("Preuves DPO/RSSI");
   closeAppNavDrawer();
   syncLegacySidebarVisibility();
 }
@@ -699,7 +699,7 @@ function renderQualityDashboard(data) {
     if (fill) fill.setAttribute("stroke-dasharray", `${score}, 100`);
 
     const levels = {
-      ready_for_ai: { text: "Prêt pour questions", color: "var(--success)" },
+      ready_for_ai: { text: "Prêt pour chat IA", color: "var(--success)" },
       internal_review: { text: "Revue interne", color: "var(--warning)" },
       needs_review: { text: "Revue requise", color: "var(--warning)" },
       not_ready: { text: "Non prêt", color: "var(--danger)" },
@@ -946,7 +946,7 @@ function resumeWorkspaceReview() {
     return;
   }
   openDocumentWorkspace();
-  toast("Sélectionnez une pièce prête pour poser vos questions.", "warning");
+  toast("Sélectionnez un document prêt pour le chat IA.", "warning");
 }
 
 // ── Auth ───────────────────────────────────────────────────────────────
@@ -977,6 +977,7 @@ function logout() {
   currentProvider = "—";
   sensitiveClientMode = false;
   latestAssistantText = "";
+  renderInvestorDemoBanner(null);
   renderExportGuard({});
   originalTextCache = {};
   Object.values(bgPollers).forEach(id => clearInterval(id));
@@ -1004,6 +1005,7 @@ function logout() {
 async function initApp(email) {
   publicDemoMode = false;
   currentDemoDocument = null;
+  renderInvestorDemoBanner(null);
   $("screen-auth").style.display = "none";
   $("screen-app").style.display = "";
   $("btn-logout").style.display = "";
@@ -1059,11 +1061,11 @@ function setPageTitle(section) {
   const titleEl = $("page-title");
   if (!titleEl) return;
   const titles = {
-    "": "ConfiDoc — Pièces client sécurisées",
+    "": "ConfiDoc — Secure AI Chat",
     "Accueil": "ConfiDoc — Accueil",
-    "Ajouter": "ConfiDoc — Ajouter une pièce",
-    "Sécuriser": "ConfiDoc — Vérifier le masquage",
-    "Analyser": "ConfiDoc — Questions sur le document",
+    "Ajouter": "ConfiDoc — Ajouter un document",
+    "Sécuriser": "ConfiDoc — Version IA-safe",
+    "Analyser": "ConfiDoc — Chat IA sécurisé",
     "Clients": "ConfiDoc — Dossiers clients",
     "Dossier": "ConfiDoc — Dossier client",
   };
@@ -1122,6 +1124,24 @@ function normalizeRiskPercent(value) {
   return Math.round(numeric <= 1 ? numeric * 100 : numeric);
 }
 
+function renderInvestorDemoBanner(payload = null) {
+  const banner = $("investor-demo-banner");
+  if (!banner) return;
+  if (!publicDemoMode || !payload) {
+    banner.style.display = "none";
+    return;
+  }
+  const detections = Number(payload.detections_count ?? payload.detections ?? 0);
+  const score = normalizeRiskPercent(payload.risk?.risk_score ?? payload.risk?.score ?? payload.score ?? 0);
+  const riskText = score === null ? "risque restant non disponible" : `risque restant ${score}/100`;
+  const plural = detections > 1;
+  const text = $("investor-demo-banner-text");
+  if (text) {
+    text.textContent = `Document synthétique. ${detections} donnée${plural ? "s" : ""} détectée${plural ? "s" : ""} et masquée${plural ? "s" : ""} · ${riskText} · preuve DPO/RSSI prête.`;
+  }
+  banner.style.display = "";
+}
+
 function renderTrustIndicator(payload = {}) {
   const box = $("trust-indicator");
   if (!box) return;
@@ -1139,7 +1159,7 @@ function renderTrustIndicator(payload = {}) {
   const statusEl = $("trust-status");
   const level = String(trust.ai_readiness_level || payload.ai_readiness_level || "");
   const labels = {
-    ready_for_ai: "Prêt pour questions",
+    ready_for_ai: "Prêt pour chat IA",
     internal_review: "Usage interne",
     human_review_required: "Revue humaine",
     needs_review: "À contrôler",
@@ -1165,7 +1185,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Le traitement n'a pas pu être terminé. Relancez ou contactez l'administrateur.",
       recommended_action: "Relancer le traitement",
       reasons: ["Traitement incomplet"],
-      actions: ["Relancer le masquage", "Voir la preuve"],
+      actions: ["Relancer le masquage", "Voir la preuve DPO/RSSI"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1180,7 +1200,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Le document est en cours de lecture et de masquage.",
       recommended_action: "Patienter",
       reasons: ["Traitement en cours"],
-      actions: ["Voir la preuve"],
+      actions: ["Voir la preuve DPO/RSSI"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1195,7 +1215,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       explanation: "Des données sensibles critiques semblent encore présentes.",
       recommended_action: "Corriger les risques",
       reasons: ["Risque critique"],
-      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger la preuve"],
+      actions: ["Corriger les risques", "Voir les données détectées", "Télécharger la preuve DPO/RSSI"],
       risk_score: score,
       risk_level: level,
       human_validated: validated,
@@ -1208,7 +1228,7 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
       severity: "warning",
       decision: "Vous devez vérifier avant export",
       explanation: "Certaines données sensibles ou quasi-identifiants peuvent encore permettre une réidentification.",
-      recommended_action: validated ? "Télécharger la preuve" : "Valider manuellement",
+      recommended_action: validated ? "Télécharger la preuve DPO/RSSI" : "Valider manuellement",
       reasons: ["Contrôle recommandé avant export"],
       actions: ["Corriger le masquage", "Valider manuellement", "Voir pourquoi"],
       risk_score: score,
@@ -1218,15 +1238,15 @@ function fallbackDecisionFromRisk(risk = {}, status = currentDocStatus) {
   }
   return {
     code: validated ? "human_validated" : "ready_for_ai",
-    label: validated ? "Validé manuellement" : "Prêt pour questions",
+    label: validated ? "Validé manuellement" : "Prêt pour chat IA",
     severity: "success",
-    decision: "Vous pouvez poser vos questions ou télécharger la preuve",
+    decision: "Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI",
     explanation: validated
       ? "Le document masqué a été relu et validé par un utilisateur autorisé."
-      : "Le document masqué ne présente pas de risque évident. Il peut être utilisé pour vos questions ou vos exports.",
+      : "La version IA-safe ne présente pas de risque évident. Elle peut être utilisée pour le chat IA ou vos exports.",
     recommended_action: "Poser une question",
     reasons: ["Aucun risque évident détecté"],
-    actions: ["Poser une question", "PDF masqué", "Télécharger la preuve"],
+    actions: ["Poser une question", "PDF IA-safe", "Télécharger la preuve DPO/RSSI"],
     risk_score: score,
     risk_level: level,
     human_validated: validated,
@@ -1272,7 +1292,7 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
   $("decision-main-reason").textContent = (decision.reasons || [])[0] || "Aucun risque évident détecté";
   $("decision-action-text").textContent = decision.recommended_action || "—";
   $("decision-notice").textContent = decision.decision_notice
-    || "Ce résultat aide à décider si la pièce peut être utilisée ou doit être relue.";
+    || "Ce résultat aide à décider si le document peut être questionné par l'IA ou doit être relu.";
   const actions = $("decision-actions");
   if (actions) {
     const actionMap = {
@@ -1281,8 +1301,10 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
       "Poser une question": "analyze",
       "Exporter rapport": "report",
       "PDF masqué": "report",
+      "PDF IA-safe": "report",
       "Voir audit trail": "audit",
       "Voir la preuve": "audit",
+      "Voir la preuve DPO/RSSI": "audit",
       "Corriger l'anonymisation": "correct",
       "Corriger les risques": "correct",
       "Valider manuellement": "validate",
@@ -1292,13 +1314,16 @@ function renderDecisionCard(risk = {}, status = currentDocStatus) {
       "Voir les données détectées": "why",
       "Télécharger rapport DPO": "report",
       "Télécharger la preuve": "report",
+      "Télécharger la preuve DPO/RSSI": "report",
     };
     const actionLabelMap = {
       "Analyser avec IA": "Poser une question",
       "Relancer anonymisation": "Relancer le masquage",
-      "Voir audit trail": "Voir la preuve",
+      "Voir audit trail": "Voir la preuve DPO/RSSI",
+      "Voir la preuve": "Voir la preuve DPO/RSSI",
       "Corriger l'anonymisation": "Corriger le masquage",
-      "Télécharger rapport DPO": "Télécharger la preuve",
+      "Télécharger rapport DPO": "Télécharger la preuve DPO/RSSI",
+      "Télécharger la preuve": "Télécharger la preuve DPO/RSSI",
     };
     actions.innerHTML = (decision.actions || []).slice(0, 4).map(label => {
       const action = actionMap[label] || "why";
@@ -1381,21 +1406,21 @@ function renderExportGuard(payload = {}) {
   const detailEl = $("export-guard-detail");
   let state = "ready";
   let title = "Document protégé";
-  let detail = `${residualText}Vous pouvez poser vos questions ou télécharger la preuve RGPD.`;
+  let detail = `${residualText}Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI.`;
   let canApprove = false;
 
   if (!ready) {
     state = "watch";
     title = "Masquage en attente";
-    detail = "Le document doit être masqué avant les questions ou les exports.";
+    detail = "Le document doit être sécurisé avant le chat IA ou les exports.";
   } else if (level === "critical") {
     state = "blocked";
     title = "Utilisation bloquée";
-    detail = `${residualText}Certaines données peuvent encore identifier le client. Vérifiez le masquage.`;
+    detail = `${residualText}Certaines données peuvent encore identifier le client. Vérifiez la version IA-safe.`;
   } else if (level === "high" && !validated) {
     state = "watch";
     title = "Revue humaine requise";
-    detail = `${residualText}Validez la pièce avant de l'utiliser ou de la diffuser.`;
+    detail = `${residualText}Validez le document avant de l'utiliser ou de le diffuser.`;
     canApprove = true;
   } else if (level === "high" && validated) {
     state = "ready";
@@ -1570,7 +1595,7 @@ function updateProcessingConsole(payload = {}) {
     upload: "Ajout sécurisé",
     ocr: "Lecture du document en cours",
     detect: "Détection des données sensibles",
-    mask: "Masquage RGPD",
+    mask: "Version IA-safe",
     ready: "Document prêt",
     failed: "Traitement interrompu",
   };
@@ -1785,8 +1810,8 @@ function renderDocList(docs) {
       failed: "risk-dot-red",
     }[d.status] || "risk-dot-orange";
     const riskDotTitle = {
-      ready: "Prêt pour vos questions",
-      anonymized: "Prêt pour vos questions",
+      ready: "Prêt pour chat IA",
+      anonymized: "Prêt pour chat IA",
       processing: "Masquage en cours…",
       extracting: "Lecture en cours…",
       extracted: "Lecture terminée",
@@ -1967,7 +1992,7 @@ function renderDocumentsRedesign(docs) {
   }
 
   if (summary) {
-    summary.textContent = `${counts.all} pièce${counts.all > 1 ? "s" : ""} · ${counts.review} à vérifier · ${counts.anon} prête${counts.anon > 1 ? "s" : ""}`;
+    summary.textContent = `${counts.all} document${counts.all > 1 ? "s" : ""} · ${counts.review} à vérifier · ${counts.anon} prêt${counts.anon > 1 ? "s" : ""}`;
   }
 
   // Filter according to segment + search
@@ -2889,7 +2914,7 @@ async function batchAnonymizeSelected() {
     return d && (d.status === "uploaded" || d.status === "failed");
   });
   if (!ids.length) {
-    toast("Aucune pièce à masquer", "error");
+    toast("Aucun document à sécuriser", "error");
     return;
   }
   const ok = await confirm(
@@ -2905,7 +2930,7 @@ async function batchAnonymizeSelected() {
       launched++;
     } catch (_e) { /* continue */ }
   }
-  toast(`${launched} masquage(s) lancé(s)`, "success");
+  toast(`${launched} sécurisation(s) lancée(s)`, "success");
   selectedDocIds.clear();
   batchMode = false;
   const btn = $("btn-batch-toggle");
@@ -3137,8 +3162,8 @@ function buildAIChatIntroHtml() {
     '<svg aria-hidden="true" focusable="false" width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">' +
     '<rect x="3" y="11" width="18" height="11" rx="2" ry="2"/><path d="M7 11V7a5 5 0 0 1 10 0v4"/></svg>' +
     '</div>' +
-    '<h3>Document prêt pour vos questions</h3>' +
-    '<p>Les données sensibles sont masquées. Vous pouvez poser vos questions en sécurité.</p>' +
+    '<h3>Chat IA sur version sécurisée</h3>' +
+    '<p>Les données sensibles sont masquées avant l’IA. Vous pouvez poser vos questions sans exposer le brut.</p>' +
     `<div class="chat-suggestions" aria-label="Suggestions de questions">${suggestions}</div>` +
     '</div>';
 }
@@ -3234,7 +3259,7 @@ function renderAIReadySummary(details = {}) {
   const entities = details.entitiesText || formatEntitySummary(details.entitySummary);
   const exportTitle = $("export-guard-title")?.textContent || "Document protégé";
   const exportDetail = $("export-guard-detail")?.textContent
-    || "Vous pouvez poser vos questions ou télécharger la preuve RGPD.";
+    || "Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI.";
   const previewNote = details.previewError
     ? `<p class="ai-ready-note">${escapeHtml(details.previewError)}</p>`
     : "";
@@ -3242,8 +3267,8 @@ function renderAIReadySummary(details = {}) {
   card.innerHTML = `
     <div class="ai-ready-copy">
       <p class="ai-ready-eyebrow">${details.justValidated ? "Validation terminée" : "Document sélectionné"}</p>
-      <h3>Document prêt pour vos questions</h3>
-      <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve RGPD ou revenir à la revue.</p>
+      <h3>Document prêt pour le chat IA sécurisé</h3>
+      <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve DPO/RSSI ou revenir à la revue.</p>
       ${previewNote}
     </div>
     <dl class="ai-ready-meta">
@@ -3258,7 +3283,7 @@ function renderAIReadySummary(details = {}) {
     <div class="ai-ready-actions">
       <button type="button" class="btn btn-primary btn-sm" data-ai-ready-action="analyze">Poser une question</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="original">Ouvrir l’original</button>
-      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger la preuve RGPD</button>
+      <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="proof">Télécharger la preuve DPO/RSSI</button>
       <button type="button" class="btn btn-ghost btn-sm" data-ai-ready-action="review">Revoir l’anonymisation</button>
     </div>`;
   card.style.display = "";
@@ -3398,7 +3423,7 @@ function renderDocumentDetailShell(details = {}) {
   if (auditLog) {
     auditLog.innerHTML = `
       <li><span class="ts">now</span><span class="what"><strong>Original chargé</strong><br>${escapeHtml(fileKind)} · ${escapeHtml(size || "taille inconnue")}</span></li>
-      <li><span class="ts">RGPD</span><span class="what"><strong>Masquage</strong><br>${Number(count || 0)} donnée(s) suivie(s)</span></li>
+      <li><span class="ts">IA-safe</span><span class="what"><strong>Version sécurisée</strong><br>${Number(count || 0)} donnée(s) suivie(s)</span></li>
     `;
   }
 }
@@ -3748,7 +3773,7 @@ async function uploadFile(file) {
           }
         }
         if (autoAnon) {
-          showAnonLoading("Lecture et masquage en cours…");
+          showAnonLoading("Lecture et sécurisation en cours…");
           updateProcessingConsole({
             status: currentDocStatus,
             backend: (data.processing?.background_processing || "api").toUpperCase(),
@@ -3851,7 +3876,7 @@ async function createDemoDocument() {
       }
       if (copy) {
         copy.innerHTML =
-          `<strong>${res.original_filename}</strong> créé.<br>Démo: dépôt → lecture → masquage → protection → preuve → export.`;
+          `<strong>${res.original_filename}</strong> créé.<br>Démo: dépôt → version IA-safe → chat → preuve → export.`;
       }
     }
 
@@ -3886,12 +3911,12 @@ function buildDemoAssistantAnswer(question) {
   const score = currentDemoDocument?.risk?.score ?? currentDemoDocument?.risk?.risk_score ?? 0;
   const entities = currentDemoDocument?.detections_count ?? 0;
   if (q.includes("risque") || q.includes("score") || q.includes("pourquoi")) {
-    return `## Pourquoi cette décision\n- Risque restant: ${score}/100, niveau faible.\n- ${entities} données de démonstration ont été détectées et masquées.\n- L'original reste disponible pour contrôle visuel. Les questions utilisent uniquement la version masquée.\n\n## Action recommandée\n- Valider le contexte de diffusion avant un partage externe.`;
+    return `## Pourquoi cette décision\n- Risque restant: ${score}/100, niveau faible.\n- ${entities} données de démonstration ont été détectées et masquées.\n- L'original reste disponible pour contrôle visuel. Le chat IA utilise uniquement la version sécurisée.\n\n## Action recommandée\n- Présenter la preuve DPO/RSSI avant tout partage externe.`;
   }
   if (q.includes("audit")) {
-    return "## Preuve\n- Document synthétique créé pour démonstration investisseur.\n- Dépôt, masquage, calcul du risque restant et préparation export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
+    return "## Preuve DPO/RSSI\n- Document synthétique créé pour démonstration investisseur.\n- Dépôt, version IA-safe, calcul du risque restant, chat et export sont tracés.\n- Aucun document réel n'est utilisé dans ce parcours.";
   }
-  return "## Résumé\n- Document synthétique de démonstration investisseur chargé.\n- Original PDF accessible, version masquée disponible, niveau de protection calculé et preuve exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des repères neutres.\n- Le parcours illustre l'original, la version masquée, la décision ConfiDoc, l'explication du risque et l'export.";
+  return "## Résumé\n- Document synthétique de démonstration investisseur chargé.\n- Original PDF accessible, version IA-safe disponible, niveau de protection calculé et preuve exportable.\n\n## Points clés\n- Données personnelles, coordonnées, identifiants société et IBAN remplacés par des repères neutres.\n- Le parcours illustre l'original, la version IA-safe, le chat IA sécurisé, l'explication du risque et la preuve.";
 }
 
 function applyPublicDemoInsights(payload) {
@@ -3915,7 +3940,7 @@ function applyPublicDemoInsights(payload) {
     detections: payload.detections_count ?? 0,
     exportStatus: "Export autorisé",
     lastAudit: "document:demo_investor_loaded",
-    nextAction: "Présenter le workflow",
+    nextAction: "Démontrer le chat IA",
   });
   renderExportGuard({
     ...risk,
@@ -3932,6 +3957,7 @@ function applyPublicDemoInsights(payload) {
     ai_readiness_score: trust.ai_readiness_score ?? payload.ai_readiness_score ?? 85,
   }, status);
   renderTrustIndicator(trust.trust_score ? trust : { trust_score: 85, ai_readiness_score: 85, grade: "A" });
+  renderInvestorDemoBanner(payload);
 }
 
 async function launchPublicInvestorDemo() {
@@ -3975,6 +4001,7 @@ async function launchPublicInvestorDemo() {
       payload,
     );
     applyPublicDemoInsights(payload);
+    setStep(3);
     toast("Démo investisseur prête", "success");
   } catch (e) {
     console.error("public investor demo error:", e);
@@ -4435,7 +4462,7 @@ function notifyDocReady(filename, docId) {
     setTimeout(() => el.classList.remove("doc-item-flash"), 2000);
   }
   if ("Notification" in window && Notification.permission === "granted") {
-    try { new Notification("ConfiDoc", { body: `${filename} est prêt pour les questions` }); } catch(_e){}
+    try { new Notification("ConfiDoc", { body: `${filename} est prêt pour le chat IA` }); } catch(_e){}
   }
 }
 
@@ -4533,10 +4560,10 @@ function loadChatHistory(docId) {
 function showOnboarding() {
   dismissOnboardingOverlay();
   const steps = [
-    { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque pièce à un client, un exercice et un type de document." },
-    { target: "#btn-anonymize", title: "Sécuriser la pièce", text: "Les données sensibles sont détectées puis remplacées par des balises." },
-    { target: ".quick-actions", title: "Poser vos questions", text: "Les questions utilisent la version masquée du document sélectionné." },
-    { target: "#btn-export-txt", title: "Exporter", text: "Téléchargez le texte masqué, le PDF ou la preuve RGPD." },
+    { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque document à un client, un exercice et un type de document." },
+    { target: "#btn-anonymize", title: "Créer la version IA-safe", text: "Les données sensibles sont détectées puis remplacées par des balises." },
+    { target: ".quick-actions", title: "Chat IA sécurisé", text: "Le chat utilise la version sécurisée du document sélectionné." },
+    { target: "#btn-export-txt", title: "Prouver", text: "Téléchargez le texte sécurisé, le PDF ou la preuve DPO/RSSI." },
   ];
   let current = 0;
   const overlay = document.createElement("div");
@@ -4634,7 +4661,7 @@ async function validate() {
     resetChat();
     loadChatHistory(currentDocId);
     await loadDocList();
-    toast("Document protégé et prêt pour vos questions", "success");
+    toast("Document protégé et prêt pour le chat IA", "success");
   } catch (e) {
     console.error("validate error:", e);
     toast(`Erreur validation: ${e.message}`, "error");
@@ -4990,7 +5017,7 @@ async function sendCopilotMessage(question, inputEl) {
 function copilotFriendlyErrorMessage(message = "") {
   const raw = String(message || "");
   if (raw.includes("Aucun texte anonymisé") || raw.includes("document n'est pas prêt")) {
-    return "Masquez d'abord la pièce avant de poser une question.";
+    return "Créez d'abord la version IA-safe avant de poser une question.";
   }
   if (
     raw.includes("Risque élevé") ||
@@ -5000,12 +5027,12 @@ function copilotFriendlyErrorMessage(message = "") {
     raw.includes("validation humaine") ||
     raw.includes("usage externe")
   ) {
-    return "Par sécurité, ConfiDoc demande une revue humaine légère. Vérifiez le masquage, validez la pièce, puis relancez votre question.";
+    return "Par sécurité, ConfiDoc demande une revue humaine légère. Vérifiez la version IA-safe, validez le document, puis relancez votre question.";
   }
   if (raw.includes("Contrôle RGPD") || raw.includes("Privacy Gate")) {
-    return "La protection RGPD bloque temporairement la réponse. Vérifiez le masquage, puis relancez la question.";
+    return "La protection DPO/RSSI bloque temporairement la réponse. Vérifiez la version IA-safe, puis relancez la question.";
   }
-  return "La réponse n'est pas disponible pour le moment. Vérifiez la pièce, puis réessayez.";
+  return "La réponse n'est pas disponible pour le moment. Vérifiez le document, puis réessayez.";
 }
 
 function sleep(ms) {
@@ -5141,7 +5168,7 @@ async function exportText() {
   } catch (e) {
     console.error("exportText error:", e);
     if (e.message && e.message.includes("bloqu")) {
-      toast("Export bloqué par sécurité. Vérifiez ou validez la pièce avant diffusion.", "warning");
+      toast("Export bloqué par sécurité. Vérifiez ou validez le document avant diffusion.", "warning");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
       }
@@ -5168,7 +5195,7 @@ async function exportPdf() {
   } catch (e) {
     console.error("exportPdf error:", e);
     if (e.message && e.message.includes("bloqu")) {
-      toast("PDF bloqué par sécurité. Vérifiez ou validez la pièce avant diffusion.", "warning");
+      toast("PDF bloqué par sécurité. Vérifiez ou validez le document avant diffusion.", "warning");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
       }
@@ -5189,7 +5216,7 @@ async function exportFec() {
   } catch (e) {
     console.error("exportFec error:", e);
     if (e.message && e.message.includes("bloqu")) {
-      toast("Export FEC bloqué par sécurité. Vérifiez ou validez la pièce avant diffusion.", "warning");
+      toast("Export FEC bloqué par sécurité. Vérifiez ou validez le document avant diffusion.", "warning");
       if (e.message.includes("validation humaine")) {
         showApproveExportPrompt();
       }
@@ -5267,7 +5294,7 @@ async function showApproveExportPrompt() {
 
 async function downloadAuditReport() {
   if (!currentDocId) {
-    toast("Sélectionnez une pièce validée pour télécharger sa preuve RGPD.", "info");
+    toast("Sélectionnez un document validé pour télécharger sa preuve DPO/RSSI.", "info");
     openDocumentWorkspace();
     return;
   }
@@ -5279,19 +5306,19 @@ async function downloadAuditReport() {
     const contentType = resp.headers.get("content-type") || "";
     if (!contentType.includes("application/pdf")) {
       const message = await readApiError(resp);
-      throw new Error(message.message || "La preuve RGPD n'est pas encore prête.");
+      throw new Error(message.message || "La preuve DPO/RSSI n'est pas encore prête.");
     }
     const blob = await resp.blob();
-    if (!blob.size) throw new Error("La preuve RGPD est vide.");
-    triggerDownload(blob, `audit_rgpd_${currentDocId.slice(0, 8)}.pdf`);
-    toast("Preuve RGPD téléchargée", "success");
+    if (!blob.size) throw new Error("La preuve DPO/RSSI est vide.");
+    triggerDownload(blob, `preuve_dpo_rssi_${currentDocId.slice(0, 8)}.pdf`);
+    toast("Preuve DPO/RSSI téléchargée", "success");
   } catch (e) {
     const rawMessage = e.message || "";
     const friendlyMessage =
       e.status >= 500 || /internal server error/i.test(rawMessage)
-        ? "La preuve RGPD est temporairement indisponible. Réessayez dans quelques instants."
-        : rawMessage || "La preuve RGPD n'est pas disponible.";
-    toast(`Preuve RGPD indisponible : ${friendlyMessage}`, "error");
+        ? "La preuve DPO/RSSI est temporairement indisponible. Réessayez dans quelques instants."
+        : rawMessage || "La preuve DPO/RSSI n'est pas disponible.";
+    toast(`Preuve DPO/RSSI indisponible : ${friendlyMessage}`, "error");
   }
 }
 
@@ -5658,9 +5685,9 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
   const leadEl = $("home-hero-lead");
   if (leadEl) {
     if (reviewCount === 0 && totalDocs === 0) {
-      leadEl.textContent = "Aucune pièce n'a encore été déposée. Déposez une première pièce pour démarrer.";
+      leadEl.textContent = "Aucun document n'a encore été déposé. Déposez un premier document pour démarrer.";
     } else if (reviewCount === 0) {
-      leadEl.textContent = "Aucune pièce n'attend votre vérification.";
+      leadEl.textContent = "Aucun document n'attend votre vérification.";
     } else {
       const failed = Number(summary.failed ?? sc.failed ?? 0);
       leadEl.textContent = failed > 0
@@ -5677,7 +5704,7 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
       list.innerHTML = `
         <li>
           <div></div>
-          <div><div class="name">Aucune pièce à vérifier.</div><div class="meta">Déposez une pièce client pour démarrer.</div></div>
+          <div><div class="name">Aucun document à vérifier.</div><div class="meta">Déposez un document client pour démarrer.</div></div>
           <div></div>
           <button class="btn-ghost" data-action="open-upload">Ajouter</button>
         </li>`;
@@ -5807,10 +5834,10 @@ function renderQualityRedesignTab(tab, qualityData = null) {
         <div class="card animate-fade-in" style="padding:24px; margin: 0;">
           <p class="rail-h" style="margin-top:0; font-size:11px; text-transform:uppercase; color:var(--text-muted); font-weight:700;">Niveau global de protection RGPD</p>
           <div class="kpi-value tabular" style="color:${score >= 90 ? "var(--accent)" : "var(--warning)"};font-size:42px; font-weight:800; font-family:'Outfit',sans-serif; margin: 10px 0;">${score}%</div>
-          <p class="page-lead" style="margin:8px 0 16px 0; font-size:12px; line-height:1.5;">Calculé sur les documents masqués du mois. Il indique si les pièces peuvent être utilisées sereinement.</p>
+          <p class="page-lead" style="margin:8px 0 16px 0; font-size:12px; line-height:1.5;">Calculé sur les documents sécurisés du mois. Il indique si les documents peuvent être utilisés sereinement.</p>
           <button class="btn btn-primary btn-sm" data-action="download-compliance-cert" style="display:inline-flex; align-items:center; gap:6px;">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
-            Télécharger le certificat RGPD
+            Télécharger le certificat DPO/RSSI
           </button>
         </div>
 
@@ -5827,7 +5854,7 @@ function renderQualityRedesignTab(tab, qualityData = null) {
               </thead>
               <tbody>
                 <tr style="border-bottom:1px solid var(--border);">
-                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Pièces brutes (Source)</td>
+                  <td style="padding:8px 10px; font-weight:700; color:#fff;">Documents bruts (source)</td>
 	                  <td style="padding:8px 10px;">90 jours</td>
                   <td style="padding:8px 10px; font-family: monospace; font-variant-numeric: tabular-nums; color:#fbbf24;" id="purge-countdown-files">Calcul...</td>
                 </tr>
@@ -5970,7 +5997,7 @@ function renderSettingsRedesignTab(tab) {
     "set-profile": ["Profil", "Email, mot de passe, photo de profil, signature."],
     "set-appearance": ["Apparence", "Thème (clair / sombre), densité d'affichage, taille de typo."],
     "set-anonymization": ["Masquage", "Règles de masquage réservées aux administrateurs."],
-    "set-copilot": ["Questions", "Réglages avancés des questions réservés aux administrateurs."],
+    "set-copilot": ["Chat IA", "Réglages avancés du chat IA réservés aux administrateurs."],
     "set-api": ["Connexions", "Accès techniques et intégrations réservés aux administrateurs."],
     "set-team": ["Équipe", "Membres, rôles et invitations."],
   };
@@ -6377,7 +6404,7 @@ function renderReviewResult(data) {
 
   html += block("3", "Demandes formelles", listOrEmpty(demandes, "Aucune demande formelle explicite identifiee."));
 
-  html += block("4", "Pièces et vérifications à obtenir", listOrEmpty(pieces, "Aucune piece ou verification listee."));
+  html += block("4", "Documents et vérifications à obtenir", listOrEmpty(pieces, "Aucun document ou vérification listé."));
 
   html += block("5", "Prochaines actions", listOrEmpty(nextActions, "Aucune action listee."));
 
@@ -6944,7 +6971,7 @@ window.updateScores = function() {
   
   const trustBreakdownEl = document.getElementById("dash-trust-breakdown");
   if (trustBreakdownEl) {
-    trustBreakdownEl.textContent = `Protection globale : ${trustScore}% | Prêt pour questions : ${aiReadiness}%`;
+    trustBreakdownEl.textContent = `Protection globale : ${trustScore}% | Prêt pour chat IA : ${aiReadiness}%`;
   }
 };
 

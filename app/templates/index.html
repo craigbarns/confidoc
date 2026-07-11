@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-  <title id="page-title">ConfiDoc — Pièces client sécurisées</title>
+  <title id="page-title">ConfiDoc — Secure AI Chat</title>
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
   <link href="https://fonts.googleapis.com/css2?family=Fraunces:ital,opsz,wght@0,9..144,500;0,9..144,600;1,9..144,600&family=Hanken+Grotesk:wght@400;500;600;700;800&family=JetBrains+Mono:wght@500;600;700&display=swap" rel="stylesheet">
@@ -136,17 +136,17 @@
       <span class="kbd" aria-hidden="true">⌘K</span>
     </button>
     <div class="header-actions">
-      <a href="/firewall" class="topbar__firewall-link expert-only" title="Protection anti-fuite">
+      <a href="/firewall" class="topbar__firewall-link expert-only" title="Secure AI Chat">
         <svg aria-hidden="true" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
         </svg>
-        <span class="topbar__firewall-label">Anti-fuite IA</span>
+        <span class="topbar__firewall-label">Secure AI Chat</span>
         <span class="fw-badge"><span class="fw-dot"></span>Active</span>
       </a>
       <span id="header-doc-pill" class="context-pill" style="display:none"></span>
       <span id="header-provider-pill" class="context-pill muted" style="display:none"></span>
 
-      <button type="button" class="btn-ghost topbar__copilot-btn expert-only" data-action="open-copilot" aria-label="Ouvrir les questions document">
+      <button type="button" class="btn-ghost topbar__copilot-btn expert-only" data-action="open-copilot" aria-label="Ouvrir le chat IA sécurisé">
         Questions <span class="kbd" aria-hidden="true">⌘J</span>
       </button>
       <label class="expert-mode-switch" style="display: inline-flex; align-items: center; gap: 8px; font-size: 11px; color: var(--text-muted); cursor: pointer; user-select: none; margin-right: 12px; background: rgba(255,255,255,0.03); border: 1px solid var(--border); padding: 4px 10px; border-radius: 99px; transition: all 0.2s;" id="label-expert-mode">
@@ -177,7 +177,7 @@
       </div>
     </div>
     <h1>ConfiDoc</h1>
-    <p class="auth-subtitle">Déposez une pièce, vérifiez le masquage, téléchargez la preuve.</p>
+    <p class="auth-subtitle">Anonymisez un document, discutez avec l'IA, prouvez ce qui a été exposé.</p>
 
     <form id="form-login" autocomplete="off">
       <div class="field">
@@ -211,7 +211,7 @@
         <span id="btn-login-text">Se connecter</span>
       </button>
       <button type="button" class="btn btn-secondary btn-full auth-demo-btn" id="btn-public-investor-demo">
-        Lancer la démo investisseur
+        Voir la démo Secure AI Chat
       </button>
       <p id="auth-error" class="error-msg" style="display:none"></p>
     </form>
@@ -293,7 +293,7 @@
                   <line x1="16" y1="17" x2="8" y2="17"/>
                 </svg>
               </span>
-              <span class="nav-item-label">Pièces</span>
+              <span class="nav-item-label">Documents</span>
               <span class="badge" id="nav-documents-badge" hidden></span>
             </button>
           </li>
@@ -551,26 +551,26 @@
         <div class="standard-only standard-dashboard animate-fade-in" style="padding: 24px;">
           <header class="panel-head" style="margin-bottom:24px;">
             <div>
-              <h1 class="page-title" style="font-family:'Fraunces',serif; font-size:34px; font-weight:600; letter-spacing:-0.5px; color:var(--text);">Déposez une pièce client</h1>
-              <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">ConfiDoc protège la pièce, puis vous guide jusqu'aux questions et à la preuve RGPD.</p>
+              <h1 class="page-title" style="font-family:'Fraunces',serif; font-size:34px; font-weight:600; letter-spacing:-0.5px; color:var(--text);">Secure AI Chat pour documents confidentiels</h1>
+              <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">ConfiDoc crée une version IA-safe, puis vous permet de questionner le document sans exposer le brut.</p>
             </div>
           </header>
 
           <div class="simple-flow" aria-label="Parcours ConfiDoc">
             <div class="simple-flow-step is-current">
               <span>1</span>
-              <strong>Déposer</strong>
+              <strong>Importer</strong>
               <small>PDF ou image</small>
             </div>
             <div class="simple-flow-step">
               <span>2</span>
-              <strong>Vérifier</strong>
-              <small>Données masquées</small>
+              <strong>Sécuriser</strong>
+              <small>Version IA-safe</small>
             </div>
             <div class="simple-flow-step">
               <span>3</span>
-              <strong>Utiliser</strong>
-              <small>Questions + preuve</small>
+              <strong>Questionner</strong>
+              <small>Chat + preuve</small>
             </div>
           </div>
 
@@ -588,7 +588,7 @@
                 <polyline points="17 8 12 3 7 8"/>
                 <line x1="12" y1="3" x2="12" y2="15"/>
               </svg>
-              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-bottom:6px;">Déposez la pièce à protéger</h4>
+              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:16px; font-weight:700; color:#fff; margin-bottom:6px;">Déposez le document à sécuriser</h4>
               <p style="color:var(--text-muted); font-size:11px; margin:0 0 16px;">PDF ou image, jusqu'à 50 Mo</p>
               <label class="btn btn-primary btn-sm" for="std-file-input" style="cursor:pointer; display:inline-flex; align-items:center; gap:6px;">
                 <span>+</span> Choisir un fichier
@@ -625,7 +625,7 @@
                 <span class="badge badge-success" id="std-kpi-ready-count" style="font-size:12px; font-weight:700;">0</span>
               </div>
               <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Prêts à télécharger</h4>
-              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Pièces protégées et validées pour vos questions ou exports.</p>
+              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Documents sécurisés, prêts pour le chat IA et la preuve d'audit.</p>
             </div>
 
             <!-- Carte : Accès dossiers clients -->
@@ -635,7 +635,7 @@
                 <span style="font-size:11px; color:var(--text-muted); font-weight:600;">Accès rapide</span>
               </div>
               <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Mes dossiers clients</h4>
-              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les pièces organisées par client et exercice.</p>
+              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les documents organisés par client et exercice.</p>
             </div>
           </div>
           </details>
@@ -743,14 +743,14 @@
           <section class="workspace-overview" aria-label="Parcours principal">
             <div class="workspace-copy">
               <span class="workspace-eyebrow">Parcours principal</span>
-              <h3>Client, exercice, pièces, questions.</h3>
+              <h3>Client, documents, chat IA, preuve.</h3>
               <p>Chaque dossier regroupe les documents du client, leur statut de sécurité et les actions restantes.</p>
             </div>
             <div class="workspace-actions">
               <button id="btn-work-upload" class="workspace-action primary" type="button" data-action="new-document">
                 <span class="workspace-action-index">1</span>
                 <span>
-                  <strong>Ajouter une pièce</strong>
+                  <strong>Ajouter un document</strong>
                   <small>Client, exercice, type</small>
                 </span>
               </button>
@@ -772,7 +772,7 @@
                 <span class="workspace-action-index">4</span>
                 <span>
                   <strong>Démo guidée</strong>
-                  <small>Exemple complet : protection, questions, preuve</small>
+                  <small>Exemple complet : version IA-safe, chat, preuve</small>
                 </span>
               </button>
             </div>
@@ -868,7 +868,7 @@
             <div class="dash-section-head">
               <div>
                 <h3>Synthèse client</h3>
-                <p>Priorités client, pièces manquantes et préparation cabinet</p>
+                <p>Priorités client, documents manquants et préparation cabinet</p>
               </div>
               <div class="dash-section-actions">
                 <span id="dash-d360-clients" class="dash-section-pill">0 client</span>
@@ -892,7 +892,7 @@
 
           <div class="dash-charts-row">
             <div class="dash-chart-card" style="flex:1">
-              <h3>Statut des documents</h3>
+              <h3>Statut IA-safe des documents</h3>
               <div id="dash-status-chart" class="dash-status-pills"></div>
             </div>
           </div>
@@ -911,12 +911,12 @@
       <div id="panel-documents" class="panel active" data-redesign-documents>
         <header class="panel-head">
           <div>
-            <h1 class="page-title">Pièces client</h1>
-            <p class="page-lead" id="documents-summary">Ajoutez une pièce, vérifiez le masquage, puis posez vos questions.</p>
+            <h1 class="page-title">Documents confidentiels</h1>
+            <p class="page-lead" id="documents-summary">Ajoutez un document, créez sa version IA-safe, puis posez vos questions.</p>
           </div>
           <div class="panel-actions">
             <button class="btn-ghost expert-only" data-action="open-batch-upload">Importer un dossier</button>
-            <button class="btn-primary" data-action="open-upload"><span aria-hidden="true">+</span> Ajouter une pièce</button>
+            <button class="btn-primary" data-action="open-upload"><span aria-hidden="true">+</span> Ajouter un document</button>
           </div>
         </header>
 
@@ -929,7 +929,7 @@
         </div>
 
         <div class="filter-bar">
-          <input type="search" class="input" id="documents-search" placeholder="⌕ Rechercher une pièce ou un client…">
+          <input type="search" class="input" id="documents-search" placeholder="⌕ Rechercher un document ou un client…">
           <button class="chip" data-filter="filter-dossier">Client · Tous ▾</button>
           <button class="chip expert-only" data-filter="filter-type">Type · Tous ▾</button>
           <button class="chip expert-only" data-filter="filter-trust">Sécurité ▾</button>
@@ -952,16 +952,16 @@
         </table>
 
         <div class="drop-zone" id="documents-dropzone" tabindex="0">
-          <p><strong>Déposez une pièce ici</strong> pour masquer les données sensibles, ou <button class="link" data-action="open-upload">choisissez un fichier</button>.</p>
+          <p><strong>Déposez un document ici</strong> pour créer une version IA-safe, ou <button class="link" data-action="open-upload">choisissez un fichier</button>.</p>
         </div>
       </div>
 
       <!-- AJOUT -->
       <div id="panel-upload" class="panel">
-        <h2>Ajouter une pièce client</h2>
+        <h2>Ajouter un document confidentiel</h2>
         <div class="simple-panel-intro">
           <strong>Deux informations suffisent.</strong>
-          <span>Indiquez le client, choisissez le fichier. Le masquage démarre automatiquement.</span>
+          <span>Indiquez le client, choisissez le fichier. La sécurisation démarre automatiquement.</span>
         </div>
         <div class="field-inline">
           <label for="upload-client-name">Nom du client</label>
@@ -1008,7 +1008,7 @@
                 <path d="M20.39 18.39A5 5 0 0 0 18 9h-1.26A8 8 0 1 0 3 16.3"/>
               </svg>
             </div>
-            <p class="upload-main">Déposez la pièce ici</p>
+            <p class="upload-main">Déposez le document ici</p>
             <label class="btn btn-secondary" for="file-input" style="cursor:pointer">Choisir un fichier</label>
             <input id="file-input" type="file" multiple accept=".pdf,.png,.jpg,.jpeg,.tiff" style="display:none" />
             <p class="upload-hint">PDF ou image, jusqu'à 50 Mo</p>
@@ -1053,7 +1053,7 @@
                 Assistant conformité
               </button>
               <button class="btn-primary-ok" data-action="validate-anonymization">
-                ✓ Valider le masquage <span class="kbd">⌘↵</span>
+                ✓ Valider la version IA-safe <span class="kbd">⌘↵</span>
               </button>
             </div>
           </header>
@@ -1072,7 +1072,7 @@
             <div style="flex:1; max-width:80px; height:2px; background:var(--border); transition:all 0.2s;" id="std-step-line-2"></div>
             <div class="step-item" id="std-step-3" style="display:flex; align-items:center; gap:8px; font-weight:600; color:var(--text-muted); transition:all 0.2s;">
               <span class="step-num" id="std-step-num-3" style="width:20px; height:20px; border-radius:50%; background:var(--border); color:var(--text-muted); display:inline-flex; align-items:center; justify-content:center; font-size:10px; font-weight:800;">3</span>
-              <span>Télécharger</span>
+              <span>Prouver</span>
             </div>
           </div>
 
@@ -1085,7 +1085,7 @@
 
             <section class="pane pane-anonymized" id="pane-anonymized">
               <header class="pane-head"><span class="pane-dot pane-dot--accent"></span> Version masquée <span class="pane-meta" id="pane-anon-meta">— données</span></header>
-              <div class="viewer viewer-anonymized"><div class="viewer-placeholder">En attente du masquage…</div></div>
+              <div class="viewer viewer-anonymized"><div class="viewer-placeholder">En attente de la version IA-safe…</div></div>
             </section>
 
             <aside class="rail">
@@ -1101,9 +1101,9 @@
               </section>
 
               <section class="rail-section" id="rail-copilot">
-                <h2 class="rail-h">Questions</h2>
+                <h2 class="rail-h">Chat IA</h2>
                 <div id="detail-copilot-alerts"></div>
-                <button class="rail-copilot-ask" data-action="open-copilot">Questionner la pièce… <span class="kbd">⌘J</span></button>
+                <button class="rail-copilot-ask" data-action="open-copilot">Questionner la version sécurisée… <span class="kbd">⌘J</span></button>
               </section>
 
               <section class="rail-section" id="rail-audit">
@@ -1121,7 +1121,7 @@
               <button class="btn btn-accent btn-dpo-autopilot expert-only" data-action="dpo-autopilot" style="border:1px solid var(--accent); background:rgba(4,120,87,0.15); color:var(--accent); font-weight:700; padding:6px 16px; font-size:12px; height:36px; border-radius:var(--radius-md); display:inline-flex; align-items:center; gap:6px;">
                 Assistant conformité
               </button>
-              <button class="btn-primary-ok" data-action="validate-anonymization">Valider le masquage</button>
+              <button class="btn-primary-ok" data-action="validate-anonymization">Valider la version IA-safe</button>
             </div>
           </footer>
         </section>
@@ -1140,7 +1140,7 @@
         <div id="anon-context-actions" class="doc-context-actions" style="display:none" aria-label="Actions document">
           <button type="button" id="btn-context-anonymize" class="btn btn-primary btn-sm">Masquer</button>
           <button type="button" id="btn-context-ai" class="btn btn-ghost btn-sm">Questions</button>
-          <button type="button" id="btn-context-proof" class="btn btn-ghost btn-sm">Preuve RGPD</button>
+          <button type="button" id="btn-context-proof" class="btn btn-ghost btn-sm">Preuve DPO/RSSI</button>
         </div>
 
         <div id="pipeline-timeline" class="pipeline-timeline expert-only" style="display:none">
@@ -1156,14 +1156,14 @@
           <div class="pipe-link"></div>
           <div class="pipe-step" data-step="review"><span>6</span> Revue</div>
           <div class="pipe-link"></div>
-          <div class="pipe-step" data-step="export"><span>7</span> Questions / export</div>
+          <div class="pipe-step" data-step="export"><span>7</span> Chat / preuve</div>
         </div>
 
         <div class="panel-header">
-          <h2>Vérifier le masquage</h2>
+          <h2>Sécuriser le document</h2>
           <div class="panel-actions">
             <select id="anon-profile" class="select-sm expert-only" title="But du masquage">
-              <option value="internal_review">Revue interne (questions sur document)</option>
+              <option value="internal_review">Revue interne (chat sur document)</option>
               <option value="external_sharing">Partage externe (Sécurité maximale)</option>
               <option value="moderate">Avancé : traitement standard</option>
               <option value="strict">Avancé : traitement renforcé</option>
@@ -1194,7 +1194,7 @@
               <polyline points="14 2 14 8 20 8"/>
             </svg>
           </div>
-          <p>Sélectionnez une pièce dans la liste<br>ou ajoutez-en une nouvelle.</p>
+          <p>Sélectionnez un document dans la liste<br>ou ajoutez-en un nouveau.</p>
         </div>
 
         <div id="anon-loading" class="loading-state" style="display:none">
@@ -1227,13 +1227,13 @@
           <section id="decision-card" class="decision-card" aria-live="polite">
             <div class="decision-card-main">
               <span id="decision-status-pill" class="decision-status-pill neutral">Traitement en cours</span>
-              <h3>Résultat du masquage</h3>
+              <h3>Version IA-safe</h3>
               <p id="decision-explanation">Le document est en cours d'analyse.</p>
             </div>
             <div class="decision-score-grid">
               <div><span>Risque restant</span><strong id="decision-risk-score">—</strong></div>
               <div><span>Protection</span><strong id="decision-trust-score">—</strong></div>
-              <div><span>Prêt pour questions</span><strong id="decision-ai-score">—</strong></div>
+              <div><span>Prêt pour chat IA</span><strong id="decision-ai-score">—</strong></div>
             </div>
             <div class="decision-detail-grid">
               <div>
@@ -1250,7 +1250,7 @@
               </div>
             </div>
             <p class="decision-notice" id="decision-notice">
-              Ce résultat aide à décider si la pièce peut être utilisée ou doit être relue.
+              Ce résultat aide à décider si le document peut être questionné par l'IA ou doit être relu.
             </p>
             <div id="decision-actions" class="decision-actions"></div>
           </section>
@@ -1260,7 +1260,7 @@
               <h3>Pourquoi cette décision ?</h3>
               <button type="button" id="btn-toggle-score-details" class="btn btn-ghost btn-sm">Voir le détail</button>
             </div>
-            <p id="why-score-summary">Le score sera détaillé après masquage.</p>
+            <p id="why-score-summary">Le score sera détaillé après sécurisation.</p>
             <div id="why-score-details" class="why-score-details" style="display:none">
               <ul id="why-score-list"></ul>
               <div id="decision-timeline" class="decision-timeline"></div>
@@ -1359,7 +1359,7 @@
         <div class="copilot-drawer">
           <p class="rail-h">Questionner le document</p>
           <p style="margin: 0 0 10px; font-size: 11px; color: var(--text-muted); font-style: italic;">
-            Réponses basées sur la version masquée du document.
+            Réponses basées uniquement sur la version sécurisée du document.
           </p>
           <textarea class="input" rows="6" style="width:100%" placeholder="Pose une question sur le document ouvert…"></textarea>
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
@@ -1387,15 +1387,23 @@
         </div>
 
         <div id="ai-context-actions" class="doc-context-actions" style="display:none;margin-bottom:12px" aria-label="Raccourcis document">
-          <button type="button" id="btn-ai-back-anon" class="btn btn-ghost btn-sm">Revoir le masquage</button>
-          <button type="button" id="btn-ai-audit-shortcut" class="btn btn-ghost btn-sm">Preuve RGPD</button>
+          <button type="button" id="btn-ai-back-anon" class="btn btn-ghost btn-sm">Revoir la version IA-safe</button>
+          <button type="button" id="btn-ai-audit-shortcut" class="btn btn-ghost btn-sm">Preuve DPO/RSSI</button>
         </div>
+
+        <section id="investor-demo-banner" class="ai-ready-summary" aria-live="polite" style="display:none; margin-bottom:12px; border-left:4px solid var(--accent);">
+          <div class="ai-ready-copy">
+            <p class="ai-ready-eyebrow">Démo investisseur · document synthétique</p>
+            <h3>Original → version IA-safe → chat → preuve</h3>
+            <p id="investor-demo-banner-text">Aucune donnée réelle. Les données détectées sont masquées avant le chat IA.</p>
+          </div>
+        </section>
 
         <section id="ai-ready-summary" class="ai-ready-summary" aria-live="polite" style="display:none">
           <div class="ai-ready-copy">
             <p class="ai-ready-eyebrow">Document sélectionné</p>
-            <h3>Document prêt pour vos questions</h3>
-            <p>Le document est sécurisé. Vous pouvez l’analyser, télécharger la preuve RGPD ou revenir à la revue.</p>
+            <h3>Document prêt pour le chat IA sécurisé</h3>
+            <p>Le document est sécurisé. Vous pouvez l'analyser, télécharger la preuve DPO/RSSI ou revenir à la revue.</p>
           </div>
         </section>
 
@@ -1404,7 +1412,7 @@
         </div>
 
         <div class="panel-header">
-          <h2>Questions sur le document</h2>
+          <h2>Chat IA sécurisé</h2>
           <div class="panel-actions">
             <button id="btn-export-txt" class="btn btn-ghost btn-sm expert-only">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="7 10 12 15 17 10"/><line x1="12" y1="15" x2="12" y2="3"/></svg>
@@ -1416,18 +1424,18 @@
             </button>
             <button id="btn-audit-report" class="btn btn-ghost btn-sm">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="9" y="9" width="13" height="13" rx="2" ry="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
-              Preuve RGPD
+              Preuve DPO/RSSI
             </button>
             <button id="btn-compliance-report" class="btn btn-ghost btn-sm expert-only">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
               Conformité
             </button>
-            <button id="btn-compliance-certificate" class="btn btn-ghost btn-sm expert-only" title="Télécharger le certificat de preuve RGPD">
+            <button id="btn-compliance-certificate" class="btn btn-ghost btn-sm expert-only" title="Télécharger le certificat de preuve DPO/RSSI">
               <svg aria-hidden="true" focusable="false" width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                 <circle cx="12" cy="8" r="7"></circle>
                 <polyline points="8.21 13.89 7 23 12 20 17 23 15.79 13.88"></polyline>
               </svg>
-              Certificat RGPD
+              Certificat DPO/RSSI
             </button>
           </div>
         </div>
@@ -1437,7 +1445,7 @@
             <span class="export-guard-dot" id="export-guard-dot"></span>
             <div>
               <strong id="export-guard-title">Document protégé</strong>
-              <span id="export-guard-detail">Vous pouvez poser vos questions ou télécharger la preuve RGPD.</span>
+              <span id="export-guard-detail">Vous pouvez poser vos questions ou télécharger la preuve DPO/RSSI.</span>
             </div>
           </div>
           <button id="btn-export-approve-inline" type="button" class="btn btn-ghost btn-sm" style="display:none">
@@ -1449,10 +1457,10 @@
         </div>
 
         <details class="home-advanced expert-only">
-          <summary>Outils cabinet — type de pièce, comparaison N/N-1</summary>
+          <summary>Outils cabinet — type de document, comparaison N/N-1</summary>
         <div class="cabinet-tools dash-chart-card">
           <div class="cabinet-tools-row">
-            <label class="cabinet-label" for="cabinet-doc-type">Type de pièce</label>
+            <label class="cabinet-label" for="cabinet-doc-type">Type de document</label>
             <select id="cabinet-doc-type" class="select-sm cabinet-select">
               <option value="generique">Générique</option>
               <option value="bilan">Bilan / comptes annuels</option>
@@ -1463,7 +1471,7 @@
             </select>
             <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm">Revue associé</button>
           </div>
-          <p class="cabinet-hint">Le type de pièce aide ConfiDoc à répondre avec le bon contexte métier.</p>
+          <p class="cabinet-hint">Le type de document aide ConfiDoc à répondre avec le bon contexte métier.</p>
           <div class="cabinet-tools-row cabinet-compare">
             <label class="cabinet-label" for="compare-doc-select">Comparaison N / N-1</label>
             <select id="compare-doc-select" class="select-sm cabinet-select cabinet-select-wide">
@@ -1516,7 +1524,7 @@
             <div id="kpi-anonymization-status" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label" title="Ce résultat aide à décider si la pièce peut être utilisée ou doit être relue.">Risque restant</div>
+            <div class="kpi-label" title="Ce résultat aide à décider si le document peut être questionné par l'IA ou doit être relu.">Risque restant</div>
             <div id="kpi-risk-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
@@ -1524,7 +1532,7 @@
             <div id="kpi-trust-score" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
-            <div class="kpi-label">Prêt pour questions</div>
+            <div class="kpi-label">Prêt pour chat IA</div>
             <div id="kpi-ai-readiness" class="kpi-value">—</div>
           </div>
           <div class="ai-kpi">
@@ -1554,8 +1562,8 @@
               <path d="M7 11V7a5 5 0 0 1 10 0v4"/>
             </svg>
           </div>
-            <h3>Document prêt pour vos questions</h3>
-            <p>Les données sensibles sont masquées. Vous pouvez poser vos questions en sécurité.</p>
+            <h3>Chat IA sur version sécurisée</h3>
+            <p>Les données sensibles sont masquées avant l'IA. Vous pouvez poser vos questions sans exposer le brut.</p>
             <div class="chat-suggestions" aria-label="Suggestions de questions">
               <button type="button" data-chat-suggestion="Résumer le document">Résumer le document</button>
               <button type="button" data-chat-suggestion="Identifier les points clés">Identifier les points clés</button>
@@ -1587,7 +1595,7 @@
         </div>
 
         <div class="chat-input-zone">
-          <textarea id="chat-input" class="chat-input" placeholder="Posez une question sur le document…" rows="2"></textarea>
+          <textarea id="chat-input" class="chat-input" placeholder="Posez une question sur la version sécurisée…" rows="2"></textarea>
           <div class="chat-controls">
             <span class="input-hint">Entrée pour envoyer · Maj+Entrée pour saut de ligne</span>
             <button id="btn-copy-answer" class="btn btn-ghost btn-sm" disabled>
@@ -1617,7 +1625,7 @@
               <p class="page-lead">Suivi simple des documents protégés.</p>
             </div>
             <div class="panel-actions">
-              <button class="btn-ghost" data-action="download-compliance-cert">Télécharger le certificat RGPD</button>
+              <button class="btn-ghost" data-action="download-compliance-cert">Télécharger le certificat DPO/RSSI</button>
             </div>
           </header>
           <div class="segment" id="quality-redesign-tabs" role="tablist">
@@ -1629,7 +1637,7 @@
         </section>
 
         <div class="panel-header">
-          <h2>Qualité du masquage</h2>
+          <h2>Qualité de la version IA-safe</h2>
           <div class="panel-actions">
             <span id="quality-as-of" class="quality-as-of-badge">Calcul en cours...</span>
             <button id="btn-quality-refresh" class="btn btn-ghost btn-sm" type="button">
@@ -1679,8 +1687,8 @@
               </div>
               <div>
                 <span id="quality-readiness-level" class="badge-ready">—</span>
-                <h4 class="quality-card-title">Pièces prêtes</h4>
-                <p class="quality-card-desc">Part des pièces suffisamment protégées pour être utilisées sereinement.</p>
+                <h4 class="quality-card-title">Documents prêts</h4>
+                <p class="quality-card-desc">Part des documents suffisamment protégés pour être utilisés sereinement.</p>
               </div>
             </div>
 
@@ -1693,7 +1701,7 @@
                 <strong id="quality-one-shot-rate">—</strong>
               </div>
               <h4 class="quality-card-title-sm">Validation directe</h4>
-              <p class="quality-card-desc-sm">Proportion de pièces validées sans correction manuelle du masquage.</p>
+              <p class="quality-card-desc-sm">Proportion de documents validés sans correction manuelle de la version IA-safe.</p>
             </div>
 
             <!-- Time to value (TTV) -->
@@ -1869,7 +1877,7 @@
               </span>
             </div>
             <p style="color: var(--text-dim); font-size: 12.5px; margin-bottom: 16px; line-height: 1.5;">
-              Historique utile : dépôt, masquage, validation et export.
+              Historique utile : dépôt, version IA-safe, validation et export.
             </p>
             <div class="audit-ledger-container">
               <table class="audit-ledger-table">
@@ -1901,16 +1909,16 @@
       <div id="panel-audit" class="panel">
         <header class="panel-head">
           <div>
-            <h1 class="page-title">Preuves RGPD</h1>
+            <h1 class="page-title">Preuves DPO/RSSI</h1>
             <p class="page-lead">La preuve se télécharge depuis chaque document validé.</p>
           </div>
           <div class="panel-actions">
-            <button class="btn btn-ghost btn-sm" type="button" data-action="open-documents">Ouvrir les pièces</button>
+            <button class="btn btn-ghost btn-sm" type="button" data-action="open-documents">Ouvrir les documents</button>
           </div>
         </header>
         <div class="card" style="padding:22px">
           <h3 style="margin-top:0">Ce qui est prouvé</h3>
-          <p class="page-lead">ConfiDoc conserve les étapes utiles: dépôt, masquage, validation et export. Le détail technique reste disponible dans les rapports, pas dans le parcours quotidien.</p>
+          <p class="page-lead">ConfiDoc conserve les étapes utiles: dépôt, version IA-safe, validation, chat et export. Le détail technique reste disponible dans les rapports, pas dans le parcours quotidien.</p>
         </div>
       </div>
 
@@ -1950,7 +1958,7 @@
             </svg>
           </div>
           <h2>Paramètres</h2>
-          <p class="panel-stub-text">Options avancées réservées aux administrateurs.<br>Profil, thème, règles de masquage, questions, comparaison automatique.</p>
+          <p class="panel-stub-text">Options avancées réservées aux administrateurs.<br>Profil, thème, règles de masquage, chat IA, comparaison automatique.</p>
           <p class="panel-stub-meta">Pour l'instant, le thème est dans l'en-tête et la déconnexion est disponible en haut à droite.</p>
         </div>
       </div>
