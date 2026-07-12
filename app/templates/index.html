@@ -168,6 +168,42 @@
 
 <!-- ════════════ AUTH ════════════ -->
 <div id="screen-auth" class="screen">
+  <div class="auth-stage">
+    <section class="auth-showcase" aria-label="Démonstration ConfiDoc">
+      <div class="auth-showcase__copy">
+        <span class="auth-showcase__badge">0 donnée brute envoyée à l'IA</span>
+        <h2>Le coffre-fort avant chaque question IA.</h2>
+        <p>Le client voit immédiatement ce qui compte: le document brut reste protégé, l'IA reçoit uniquement une version masquée, et la preuve est prête.</p>
+      </div>
+      <div class="auth-product-shot" aria-hidden="true">
+        <div class="auth-doc auth-doc--raw">
+          <span>Document brut</span>
+          <strong>Contrat SCI Les Pins</strong>
+          <i></i><i></i><i></i>
+        </div>
+        <div class="auth-shield">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+            <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+            <path d="M9 12l2 2 4-5"/>
+          </svg>
+        </div>
+        <div class="auth-doc auth-doc--safe">
+          <span>Version masquée</span>
+          <strong>[CLIENT] · [IBAN] · [EMAIL]</strong>
+          <i></i><i></i><i></i>
+        </div>
+        <div class="auth-ai-answer">
+          <span>Réponse IA</span>
+          <strong>Résumé sans identifiants visibles.</strong>
+        </div>
+      </div>
+      <div class="auth-proof-row" aria-hidden="true">
+        <div><strong>3 étapes</strong><span>Importer · masquer · questionner</span></div>
+        <div><strong>Preuve</strong><span>Téléchargeable</span></div>
+        <div><strong>Brut</strong><span>Hors IA</span></div>
+      </div>
+    </section>
+
   <div class="auth-card">
     <div class="auth-logo">
       <div class="auth-logo-icon">
@@ -259,6 +295,7 @@
       Le document brut reste séparé de l'IA.
     </p>
     <div id="ui-version" class="ui-version" data-version="{{UI_VERSION_LABEL}}">v{{UI_VERSION_LABEL}}</div>
+  </div>
   </div>
 </div>
 
@@ -555,6 +592,42 @@
               <p class="page-lead" style="color:var(--text-muted); font-size:14px; margin-top:4px;">ConfiDoc masque les noms, emails, RIB et identifiants avant toute question à l'IA.</p>
             </div>
           </header>
+
+          <section class="wow-workbench" aria-label="Promesse ConfiDoc">
+            <div class="wow-copy">
+              <span class="wow-kicker">Console client</span>
+              <h2>Votre document devient exploitable par l'IA sans exposer le brut.</h2>
+              <p>Un seul écran pour comprendre: ce qui est sensible est caché, ce que l'IA reçoit est visible, et la preuve est prête.</p>
+              <div class="wow-actions">
+                <label class="btn btn-primary" for="std-file-input" style="cursor:pointer">Protéger un document</label>
+                <button class="btn btn-secondary" type="button" data-action="demo-investor">Voir la démo 60 secondes</button>
+              </div>
+            </div>
+            <div class="wow-route" aria-hidden="true">
+              <div class="wow-route-card wow-route-card--raw">
+                <span>Brut</span>
+                <strong>Contrat, bilan, dossier client</strong>
+                <i></i><i></i><i></i>
+              </div>
+              <div class="wow-route-gate">
+                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">
+                  <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"/>
+                  <path d="M8 12h8"/>
+                  <path d="M12 8v8"/>
+                </svg>
+                <span>Protection</span>
+              </div>
+              <div class="wow-route-card wow-route-card--safe">
+                <span>IA</span>
+                <strong>[CLIENT] · [IBAN] · [EMAIL]</strong>
+                <i></i><i></i><i></i>
+              </div>
+              <div class="wow-zero">
+                <strong>0</strong>
+                <span>donnée brute envoyée à l'IA</span>
+              </div>
+            </div>
+          </section>
 
           <div class="simple-flow" aria-label="Parcours ConfiDoc">
             <div class="simple-flow-step is-current">

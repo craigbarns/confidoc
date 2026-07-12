@@ -311,6 +311,9 @@ body {
   display: flex;
   align-items: center;
   justify-content: center;
+  position: relative;
+  overflow: hidden;
+  padding: 32px 20px;
   background: var(--bg);
   background: radial-gradient(ellipse at 50% 0%, rgba(124,116,255,0.1) 0%, transparent 60%), var(--bg);
 }
@@ -325,7 +328,186 @@ body {
   pointer-events: none;
 }
 
+.auth-stage {
+  position: relative;
+  z-index: 1;
+  width: min(1120px, 100%);
+  display: grid;
+  grid-template-columns: minmax(0, 1.12fr) minmax(360px, 420px);
+  gap: 22px;
+  align-items: center;
+}
+
+.auth-showcase {
+  min-height: 560px;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+  gap: 24px;
+  padding: 28px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(16,185,129,0.12), rgba(14,165,233,0.06) 42%, rgba(251,191,36,0.06)),
+    linear-gradient(180deg, rgba(15,23,42,0.82), rgba(7,10,18,0.94));
+  box-shadow: 0 28px 72px rgba(0,0,0,0.42);
+  overflow: hidden;
+}
+
+.auth-showcase__badge,
+.wow-kicker {
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  border: 1px solid rgba(52,211,153,0.28);
+  border-radius: 999px;
+  padding: 6px 10px;
+  color: #a7f3d0;
+  background: rgba(16,185,129,0.1);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.auth-showcase__copy h2 {
+  max-width: 620px;
+  margin: 16px 0 10px;
+  color: var(--text);
+  font-family: 'Fraunces', serif;
+  font-size: 42px;
+  line-height: 1.02;
+  font-weight: 600;
+}
+
+.auth-showcase__copy p {
+  max-width: 560px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.auth-product-shot {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 74px minmax(0, 1fr);
+  gap: 14px;
+  align-items: center;
+}
+
+.auth-doc,
+.auth-ai-answer,
+.wow-route-card,
+.wow-zero {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background: rgba(255,255,255,0.045);
+  box-shadow: inset 0 1px 0 rgba(255,255,255,0.06);
+}
+
+.auth-doc {
+  min-height: 168px;
+  padding: 18px;
+}
+
+.auth-doc span,
+.auth-ai-answer span,
+.wow-route-card span,
+.wow-zero span {
+  display: block;
+  color: var(--text-dim);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.auth-doc strong,
+.auth-ai-answer strong,
+.wow-route-card strong {
+  display: block;
+  margin-top: 10px;
+  color: var(--text);
+  font-size: 15px;
+  line-height: 1.35;
+}
+
+.auth-doc i,
+.wow-route-card i {
+  display: block;
+  height: 8px;
+  margin-top: 14px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.12);
+}
+
+.auth-doc i:nth-of-type(2),
+.wow-route-card i:nth-of-type(2) { width: 78%; }
+.auth-doc i:nth-of-type(3),
+.wow-route-card i:nth-of-type(3) { width: 52%; }
+
+.auth-doc--raw {
+  border-color: rgba(251,191,36,0.22);
+}
+
+.auth-doc--safe {
+  border-color: rgba(52,211,153,0.24);
+  background: rgba(16,185,129,0.08);
+}
+
+.auth-shield {
+  width: 74px;
+  height: 74px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border: 1px solid rgba(52,211,153,0.28);
+  border-radius: 8px;
+  color: #34d399;
+  background: rgba(16,185,129,0.1);
+  box-shadow: 0 0 28px rgba(16,185,129,0.2);
+}
+
+.auth-shield svg { width: 34px; height: 34px; }
+
+.auth-ai-answer {
+  grid-column: 1 / -1;
+  padding: 16px 18px;
+  border-color: rgba(125,211,252,0.22);
+  background: rgba(14,165,233,0.07);
+}
+
+.auth-proof-row {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 10px;
+}
+
+.auth-proof-row div {
+  min-width: 0;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 8px;
+  padding: 12px;
+  background: rgba(0,0,0,0.18);
+}
+
+.auth-proof-row strong {
+  display: block;
+  color: var(--text);
+  font-size: 14px;
+}
+
+.auth-proof-row span {
+  display: block;
+  margin-top: 3px;
+  color: var(--text-muted);
+  font-size: 12px;
+}
+
 .auth-card {
+  position: relative;
   background: var(--bg-card, rgba(13,13,24,0.92));
   border: 1px solid rgba(255,255,255,0.08);
   border-radius: var(--radius-xl);
@@ -5988,6 +6170,128 @@ body.mode-expert .standard-only {
   display: none !important;
 }
 
+.wow-workbench {
+  display: grid;
+  grid-template-columns: minmax(0, 0.92fr) minmax(420px, 1.08fr);
+  gap: 20px;
+  align-items: stretch;
+  margin: -4px 0 18px;
+  padding: 20px;
+  border: 1px solid rgba(255,255,255,0.1);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(16,185,129,0.12), rgba(99,102,241,0.06) 48%, rgba(251,191,36,0.05)),
+    var(--bg-card);
+  box-shadow: var(--shadow-md);
+  overflow: hidden;
+}
+
+.wow-copy {
+  min-width: 0;
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+}
+
+.wow-copy h2 {
+  margin: 14px 0 10px;
+  color: var(--text);
+  font-family: 'Fraunces', serif;
+  font-size: 30px;
+  line-height: 1.08;
+  font-weight: 600;
+}
+
+.wow-copy p {
+  max-width: 520px;
+  margin: 0;
+  color: var(--text-muted);
+  font-size: 14px;
+  line-height: 1.55;
+}
+
+.wow-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-top: 18px;
+}
+
+.wow-route {
+  min-width: 0;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 86px minmax(0, 1fr);
+  gap: 12px;
+  align-items: center;
+  padding: 12px;
+  border: 1px solid rgba(255,255,255,0.09);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255,255,255,0.04), rgba(255,255,255,0.015)),
+    rgba(0,0,0,0.18);
+}
+
+.wow-route-card {
+  min-height: 150px;
+  padding: 16px;
+}
+
+.wow-route-card--raw {
+  border-color: rgba(251,191,36,0.22);
+}
+
+.wow-route-card--safe {
+  border-color: rgba(52,211,153,0.24);
+  background: rgba(16,185,129,0.08);
+}
+
+.wow-route-gate {
+  min-width: 0;
+  display: grid;
+  justify-items: center;
+  gap: 8px;
+  color: #34d399;
+}
+
+.wow-route-gate svg {
+  width: 54px;
+  height: 54px;
+  padding: 10px;
+  border: 1px solid rgba(52,211,153,0.28);
+  border-radius: 8px;
+  background: rgba(16,185,129,0.1);
+  box-shadow: 0 0 28px rgba(16,185,129,0.18);
+}
+
+.wow-route-gate span {
+  color: var(--text-muted);
+  font-size: 11px;
+  font-weight: 800;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+
+.wow-zero {
+  grid-column: 1 / -1;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 12px 14px;
+  border-color: rgba(52,211,153,0.26);
+  background: rgba(16,185,129,0.075);
+}
+
+.wow-zero strong {
+  color: #34d399;
+  font-size: 34px;
+  line-height: 1;
+  font-family: 'JetBrains Mono', monospace;
+}
+
+.wow-zero span {
+  color: var(--text);
+}
+
 .simple-flow {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
@@ -6065,7 +6369,49 @@ body.mode-expert .standard-only {
   font-size: 13px;
 }
 
+@media (max-width: 980px) {
+  .auth-stage,
+  .wow-workbench {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-showcase {
+    min-height: auto;
+    padding: 18px;
+  }
+
+  .auth-showcase__copy h2 {
+    font-size: 30px;
+  }
+
+  .auth-product-shot,
+  .wow-route {
+    grid-template-columns: 1fr;
+  }
+
+  .auth-shield,
+  .wow-route-gate {
+    width: 100%;
+  }
+
+  .auth-proof-row {
+    grid-template-columns: 1fr;
+  }
+}
+
 @media (max-width: 720px) {
+  #screen-auth {
+    padding: 20px 14px;
+  }
+
+  .wow-workbench {
+    padding: 16px;
+  }
+
+  .wow-copy h2 {
+    font-size: 24px;
+  }
+
   .simple-flow {
     grid-template-columns: 1fr;
   }
