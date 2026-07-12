@@ -22,11 +22,15 @@ let currentDocValidated = false;
 
 const CABINET_DOC_TYPE_PREFIX = {
   generique: "",
-  bilan: "[Contexte cabinet — document de type bilan / comptes annuels.] ",
-  liasse: "[Contexte cabinet — document de type liasse fiscale.] ",
-  urssaf: "[Contexte cabinet — document URSSAF ou social.] ",
-  banque: "[Contexte cabinet — relevé ou document bancaire.] ",
-  paie: "[Contexte cabinet — paie, bulletin ou DSN.] ",
+  bilan: "[Contexte finance — comptes, bilan ou reporting.] ",
+  liasse: "[Contexte fiscal ou déclaratif.] ",
+  urssaf: "[Contexte social ou organisme public.] ",
+  banque: "[Contexte bancaire ou trésorerie.] ",
+  paie: "[Contexte RH, paie ou salarié.] ",
+  contrat: "[Contexte juridique ou contrat.] ",
+  juridique: "[Contexte juridique.] ",
+  rh: "[Contexte RH ou salarié.] ",
+  finance: "[Contexte finance.] ",
 };
 
 function applyCabinetDocTypePrefix(text) {
@@ -1066,8 +1070,8 @@ function setPageTitle(section) {
     "Ajouter": "ConfiDoc — Ajouter un document",
     "Sécuriser": "ConfiDoc — Version protégée",
     "Analyser": "ConfiDoc — Questions sur le document",
-    "Clients": "ConfiDoc — Dossiers clients",
-    "Dossier": "ConfiDoc — Dossier client",
+    "Clients": "ConfiDoc — Dossiers",
+    "Dossier": "ConfiDoc — Dossier",
     "Preuves": "ConfiDoc — Preuves",
     "Qualité": "ConfiDoc — Protection",
     "Conformité": "ConfiDoc — Conformité",
@@ -1181,7 +1185,7 @@ function renderInvestorDemoConsole(payload = {}) {
     <div class="investor-demo-console__head">
       <div>
         <p class="investor-demo-console__eyebrow">Démo en 3 étapes</p>
-        <h2 class="investor-demo-console__title">Le client voit exactement ce que l'IA reçoit</h2>
+        <h2 class="investor-demo-console__title">L'utilisateur voit exactement ce que l'IA reçoit</h2>
         <p class="investor-demo-console__subtitle">À gauche le brut, au centre la version masquée, à droite les questions. Le message est simple: l'IA travaille sans voir les données sensibles.</p>
       </div>
       <div class="investor-demo-metrics" aria-label="Indicateurs de sécurité">
@@ -1218,7 +1222,7 @@ function renderInvestorDemoConsole(payload = {}) {
     </div>
     <div class="investor-demo-proof">
       <div>
-        <strong>Ce que le client retient</strong>
+        <strong>Ce que l'utilisateur retient</strong>
         <span>L'IA ne voit pas le brut. Les données sensibles sont cachées. La preuve se télécharge. Types détectés: ${escapeHtml(entityText)}.</span>
       </div>
       <div class="investor-demo-actions">
@@ -1506,7 +1510,7 @@ function renderExportGuard(payload = {}) {
   } else if (level === "critical") {
     state = "blocked";
     title = "Utilisation bloquée";
-    detail = `${residualText}Certaines données peuvent encore identifier le client. Vérifiez la version masquée.`;
+    detail = `${residualText}Certaines données peuvent encore identifier une personne ou une organisation. Vérifiez la version masquée.`;
   } else if (level === "high" && !validated) {
     state = "watch";
     title = "Revue humaine requise";
@@ -2157,7 +2161,7 @@ function setSidebarMode(mode) {
     openDossierOverview();
     loadDossierTree();
     setActiveNav("clients");
-    setPageTitle("Dossiers clients");
+    setPageTitle("Dossiers");
     closeAppNavDrawer();
   } else {
     if (filters) filters.style.display = "";
@@ -2186,7 +2190,7 @@ function renderDossierTree(dossiers) {
   const list = $("doc-list");
   if (!list) return;
   if (!dossiers || dossiers.length === 0) {
-    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun client. Ajoutez un document avec un nom client.</p>`;
+    list.innerHTML = `<p style="padding:12px;color:var(--text-muted);font-size:12px">Aucun dossier. Ajoutez un document avec une organisation ou un dossier.</p>`;
     return;
   }
   list.innerHTML = dossiers.map(client => `
@@ -2218,7 +2222,7 @@ function renderDossierExerciceTree(clientName, ex) {
     <div class="dossier-exercice-tree">
       <div class="dossier-exercice-header" data-action="toggle-dossier-exercice">
         <svg width="9" height="9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" class="chevron-icon" style="transition:transform 0.2s;transform:rotate(-90deg)"><polyline points="6 9 12 15 18 9"/></svg>
-        <span class="dossier-exercice-year">${escapeHtml(ex.exercice || "Sans exercice")}</span>
+        <span class="dossier-exercice-year">${escapeHtml(ex.exercice || "Sans période")}</span>
         <span class="dossier-status-dot ${allReady ? "green" : "orange"}"></span>
         <span style="font-size:10px;color:var(--text-muted)">${ex.ready_count}/${ex.doc_count}</span>
       </div>
@@ -2269,7 +2273,7 @@ async function submitCreateClient() {
   const name = $("new-client-name").value.trim();
   const external_id = $("new-client-ext-id").value.trim();
   if (!name) {
-    toast("Le nom du client est requis", "error");
+    toast("Le nom du dossier est requis", "error");
     return;
   }
   try {
@@ -2277,7 +2281,7 @@ async function submitCreateClient() {
       method: "POST",
       body: JSON.stringify({ name, external_id })
     });
-    toast(`Client "${name}" créé`, "success");
+    toast(`Dossier "${name}" créé`, "success");
     closeClientModal();
     await loadClientSuggestions();
     if (sidebarMode === "dossier") {
@@ -2297,7 +2301,7 @@ function openDossierOverview() {
   if (overview) overview.style.display = "flex";
   if (detail) detail.style.display = "none";
   document.querySelectorAll(".dossier-client.selected").forEach(el => el.classList.remove("selected"));
-  setPageTitle("Clients");
+  setPageTitle("Dossiers");
   loadDossierOverview();
 }
 
@@ -2309,7 +2313,7 @@ async function loadDossierOverview() {
     const data = await apiFetch("/documents/dossiers");
     renderDossierClientGrid(data);
   } catch (e) {
-    grid.innerHTML = `<div class="panel-empty-hint" style="grid-column:1/-1"><p>Erreur chargement clients</p></div>`;
+    grid.innerHTML = `<div class="panel-empty-hint" style="grid-column:1/-1"><p>Erreur chargement dossiers</p></div>`;
   }
 }
 
@@ -2321,12 +2325,12 @@ function renderDossierClientGrid(dossiers) {
     if (statsEl) statsEl.textContent = "";
     grid.innerHTML = `
       <div class="panel-empty-hint" style="grid-column:1/-1">
-        <p>Aucun client pour l'instant.</p>
+        <p>Aucun dossier pour l'instant.</p>
         <button class="btn btn-primary btn-sm" style="margin-top:12px" data-action="new-document">+ Ajouter un premier document</button>
       </div>`;
     return;
   }
-  if (statsEl) statsEl.textContent = `${dossiers.length} client${dossiers.length > 1 ? "s" : ""}`;
+  if (statsEl) statsEl.textContent = `${dossiers.length} dossier${dossiers.length > 1 ? "s" : ""}`;
 
   // ── Redesign Dossiers table (spec §5.4) — runs in parallel with the legacy
   // grid. The new table lives above the existing client cards via the
@@ -2349,7 +2353,7 @@ function renderDossierClientGrid(dossiers) {
         </div>
         <div class="dossier-client-card-body">
           <div class="dossier-client-card-name">${escapeHtml(client.client_name)}</div>
-          <div class="dossier-client-card-meta">${total} doc${total > 1 ? "s" : ""} · ${exCount} exercice${exCount > 1 ? "s" : ""}${lastActivity ? " · " + lastActivity : ""}</div>
+          <div class="dossier-client-card-meta">${total} doc${total > 1 ? "s" : ""} · ${exCount} période${exCount > 1 ? "s" : ""}${lastActivity ? " · " + lastActivity : ""}</div>
           <div class="dossier-client-card-progress">
             <div class="progress-bar-track"><div class="progress-bar-fill${pct === 100 ? " green" : ""}" style="width:${pct}%"></div></div>
             <span class="progress-bar-label">${readyCount}/${total} prêts</span>
@@ -2409,14 +2413,14 @@ async function loadDossierClientPage(clientName) {
     const data = await apiFetch(`/documents/dossiers?client_name=${encodeURIComponent(clientName)}`);
     const client = Array.isArray(data) ? data.find(c => c.client_name === clientName) || data[0] : null;
     if (!client) {
-      exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Aucun document trouvé pour ce client.</p>`;
+      exercicesEl.innerHTML = `<p style="padding:20px;color:var(--text-muted)">Aucun document trouvé pour ce dossier.</p>`;
       return;
     }
     const exercices = client.exercices || [];
     const readyCount = exercices.reduce((acc, ex) => acc + (ex.ready_count || 0), 0);
     const totalDocs = client.total_docs || 0;
     if (statsEl) {
-      statsEl.textContent = `${totalDocs} document${totalDocs > 1 ? "s" : ""} · ${exercices.length} exercice${exercices.length > 1 ? "s" : ""} · ${readyCount} prêt${readyCount > 1 ? "s" : ""} IA`;
+      statsEl.textContent = `${totalDocs} document${totalDocs > 1 ? "s" : ""} · ${exercices.length} période${exercices.length > 1 ? "s" : ""} · ${readyCount} prêt${readyCount > 1 ? "s" : ""} IA`;
     }
     exercicesEl.innerHTML = [
       renderDossierClientSummary(client, readyCount),
@@ -2481,7 +2485,7 @@ async function initDossierComparisonTab() {
   if (placeholderEl) {
     placeholderEl.style.display = "block";
     if (placeholderTextEl) {
-      placeholderTextEl.innerHTML = "Chargement des documents du client...";
+      placeholderTextEl.innerHTML = "Chargement des documents du dossier...";
     }
   }
   
@@ -2489,34 +2493,31 @@ async function initDossierComparisonTab() {
     const data = await apiFetch(`/documents/dossiers?client_name=${encodeURIComponent(currentDossierClient)}`);
     const client = Array.isArray(data) ? data.find(c => c.client_name === currentDossierClient) || data[0] : null;
     if (!client) {
-      if (placeholderTextEl) placeholderTextEl.innerHTML = "Aucun document trouvé pour ce client.";
+      if (placeholderTextEl) placeholderTextEl.innerHTML = "Aucun document trouvé pour ce dossier.";
       return;
     }
     
     const exercices = client.exercices || [];
     const eligibleDocs = [];
     exercices.forEach(ex => {
-      const year = ex.exercice || "Sans exercice";
+      const year = ex.exercice || "Sans période";
       (ex.documents || []).forEach(doc => {
-        const cat = (doc.doc_category || "").toLowerCase();
-        if (cat === "bilan" || cat === "liasse_fiscale" || cat.includes("bilan") || cat.includes("liasse")) {
-          eligibleDocs.push({
-            id: doc.id,
-            name: doc.original_filename,
-            year: year,
-            status: doc.status,
-            created_at: doc.created_at
-          });
-        }
+        eligibleDocs.push({
+          id: doc.id,
+          name: doc.original_filename,
+          year: year,
+          status: doc.status,
+          created_at: doc.created_at
+        });
       });
     });
     
     if (eligibleDocs.length < 2) {
       if (placeholderTextEl) {
         placeholderTextEl.innerHTML = `
-          <div style="font-weight: 700; color: #fff; margin-bottom: 8px; font-size: 14px;">📈 Postes comptables insuffisants</div>
-          Pour analyser l'évolution pluriannuelle, ConfiDoc requiert au moins <strong>deux bilans ou liasses fiscales</strong> (exercice N et exercice N-1) pour ce client.<br>
-          <span style="font-size: 12px; color: var(--text-muted); display: block; margin-top: 6px;">Veuillez téléverser un autre exercice pour <strong>${escapeHtml(currentDossierClient)}</strong>.</span>
+          <div style="font-weight: 700; color: #fff; margin-bottom: 8px; font-size: 14px;">Documents comparables insuffisants</div>
+          Pour comparer l'évolution, ConfiDoc requiert au moins <strong>deux documents ou deux périodes comparables</strong> dans ce dossier.<br>
+          <span style="font-size: 12px; color: var(--text-muted); display: block; margin-top: 6px;">Ajoutez un autre document pour <strong>${escapeHtml(currentDossierClient)}</strong>.</span>
         `;
       }
       return;
@@ -2530,7 +2531,7 @@ async function initDossierComparisonTab() {
     });
     
     eligibleDocs.forEach((doc) => {
-      const optionHtml = `<option value="${doc.id}">Exercice ${escapeHtml(doc.year)} — ${escapeHtml(doc.name)} (${documentStatusLabel(doc.status)})</option>`;
+      const optionHtml = `<option value="${doc.id}">Période ${escapeHtml(doc.year)} — ${escapeHtml(doc.name)} (${documentStatusLabel(doc.status)})</option>`;
       selectN.insertAdjacentHTML("beforeend", optionHtml);
       selectN1.insertAdjacentHTML("beforeend", optionHtml);
     });
@@ -2540,7 +2541,7 @@ async function initDossierComparisonTab() {
     else if (selectN1.options.length > 0) selectN1.selectedIndex = 0;
     
     if (placeholderTextEl) {
-      placeholderTextEl.innerHTML = "Sélectionnez deux exercices distincts (ex. Bilan 2024 vs Bilan 2023) et cliquez sur \"Comparer\".";
+      placeholderTextEl.innerHTML = "Sélectionnez deux périodes ou documents comparables, puis cliquez sur \"Comparer\".";
     }
   } catch (e) {
     console.error("initDossierComparisonTab error:", e);
@@ -2595,12 +2596,12 @@ function generateComparisonSVGChart(variations) {
       <g>
         <!-- N-1 Bar -->
         <rect x="${x}" y="${yN1}" width="${barWidth}" height="${hN1}" rx="3" fill="rgba(255,255,255,0.06)" stroke="rgba(255,255,255,0.12)" stroke-width="1">
-          <title>Exercice N-1 : ${v.previous_value.toLocaleString()} €</title>
+          <title>Période précédente : ${v.previous_value.toLocaleString()} €</title>
         </rect>
         
         <!-- N Bar -->
         <rect x="${x + barWidth + 6}" y="${yN}" width="${barWidth}" height="${hN}" rx="3" fill="${barColor}" stroke="rgba(255,255,255,0.15)" stroke-width="1">
-          <title>Exercice N : ${v.current_value.toLocaleString()} €</title>
+          <title>Période récente : ${v.current_value.toLocaleString()} €</title>
         </rect>
 
         <!-- Label below -->
@@ -2612,7 +2613,7 @@ function generateComparisonSVGChart(variations) {
   return `
     <div class="comparison-chart-card animate-fade-in" style="background: rgba(255,255,255,0.01); border: 1px solid var(--border); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.15);">
       <h4 style="font-family: 'Outfit', sans-serif; font-size: 13px; font-weight: 700; color: #fff; margin-top: 0; margin-bottom: 15px; display: flex; align-items: center; gap: 8px;">
-        📊 Représentation Graphique des Ratios (N vs N-1)
+        Comparaison des variations
       </h4>
       <div style="display:flex; justify-content:center; align-items:center;">
         <svg width="100%" height="${chartHeight}" viewBox="0 0 ${chartWidth} ${chartHeight}" style="max-width: ${chartWidth}px; overflow: visible;">
@@ -2635,10 +2636,10 @@ function generateComparisonSVGChart(variations) {
           <!-- Legend -->
           <g transform="translate(${chartWidth - 110}, 15)">
             <rect x="0" y="0" width="8" height="8" rx="1.5" fill="rgba(255,255,255,0.08)" />
-            <text x="12" y="8" fill="var(--text-muted)" font-size="9">Exercice N-1</text>
+            <text x="12" y="8" fill="var(--text-muted)" font-size="9">Précédent</text>
             
             <rect x="0" y="12" width="8" height="8" rx="1.5" fill="url(#grad-up)" />
-            <text x="12" y="20" fill="var(--text-muted)" font-size="9">Exercice N</text>
+            <text x="12" y="20" fill="var(--text-muted)" font-size="9">Récent</text>
           </g>
         </svg>
       </div>
@@ -2658,7 +2659,7 @@ async function runDossierComparison() {
   }
   
   if (docIdN === docIdN1) {
-    toast("Veuillez sélectionner deux exercices distincts.", "warning");
+    toast("Veuillez sélectionner deux documents distincts.", "warning");
     return;
   }
   
@@ -2685,7 +2686,7 @@ async function runDossierComparison() {
     let resultsHtml = `
       <div class="comparison-summary-card animate-fade-in" style="background: rgba(99, 102, 241, 0.04); border: 1px solid rgba(99, 102, 241, 0.15); border-radius: var(--radius-md); padding: 18px; margin-bottom: 20px; box-shadow: 0 4px 20px rgba(0,0,0,0.2);">
         <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom: 12px; flex-wrap:wrap; gap:8px;">
-          <h4 style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700; color: #fff; margin:0;">📊 Synthèse d'Évolution Pluriannuelle</h4>
+          <h4 style="font-family: 'Outfit', sans-serif; font-size: 15px; font-weight: 700; color: #fff; margin:0;">Synthèse de comparaison</h4>
           <span class="auto-badge" style="background: linear-gradient(135deg, var(--accent) 0%, #a855f7 100%); color: #fff; font-weight:700; padding: 4px 10px; border-radius: 20px; font-size: 11px;">Tendance globale : ${escapeHtml(globalTrend)}</span>
         </div>
         <p style="color: var(--text-muted); font-size: 13px; line-height: 1.6; margin:0;">${escapeHtml(summary)}</p>
@@ -2697,7 +2698,7 @@ async function runDossierComparison() {
       const alertsHtml = coherenceFlags.map(flag => `
         <div class="coherence-alert animate-fade-in" style="display: flex; align-items: center; gap: 10px; padding: 12px 16px; background: rgba(239, 68, 68, 0.08); border: 1px solid rgba(239, 68, 68, 0.25); border-radius: var(--radius-md); color: #fca5a5; font-size: 13px; margin-bottom: 16px; font-weight: 500; box-shadow: 0 0 15px rgba(239, 68, 68, 0.1);">
           <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round" style="flex-shrink:0;"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"/><line x1="12" y1="9" x2="12" y2="13"/><line x1="12" y1="17" x2="12.01" y2="17"/></svg>
-          <span><strong>Alerte Cohérence Bilan :</strong> ${escapeHtml(flag)}</span>
+          <span><strong>Alerte de cohérence :</strong> ${escapeHtml(flag)}</span>
         </div>
       `).join("");
       resultsHtml += alertsHtml;
@@ -2706,7 +2707,7 @@ async function runDossierComparison() {
     if (variations.length === 0) {
       resultsHtml += `
         <div style="padding: 30px; text-align: center; color: var(--text-muted); font-size: 13px; border: 1px dashed var(--border); border-radius: var(--radius-md); background: rgba(255,255,255,0.01);">
-          Aucune variation comptable significative détectée entre ces deux exercices.
+          Aucune variation significative détectée entre ces deux documents.
         </div>
       `;
     } else {
@@ -2715,9 +2716,9 @@ async function runDossierComparison() {
           <table style="width: 100%; border-collapse: collapse; font-size: 13px; text-align: left;">
             <thead>
               <tr style="background: rgba(255,255,255,0.02); border-bottom: 1px solid var(--border);">
-                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif;">Poste Comptable</th>
-                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Exercice Précédent</th>
-                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Exercice Récent</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif;">Champ analysé</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Période précédente</th>
+                <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Période récente</th>
                 <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif; text-align: right;">Variation</th>
                 <th style="padding: 14px 16px; color: var(--text-muted); font-weight: 600; font-family: 'Outfit', sans-serif;">Analyse & Seuil d'Alerte</th>
               </tr>
@@ -2796,11 +2797,11 @@ function renderDossierClientSummary(client, readyCount) {
   const categories = [...new Set(exercices.flatMap(ex => ex.doc_categories || []).filter(Boolean))];
   const lastActivity = client.last_activity ? formatDate(client.last_activity) : "—";
   return `
-    <section class="dossier-client-summary" aria-label="Synthèse du dossier client">
+    <section class="dossier-client-summary" aria-label="Synthèse du dossier">
       <div class="dossier-summary-main">
-        <span class="dossier-summary-label">Vue client</span>
-        <strong>${escapeHtml(client.client_name || currentDossierClient || "Client")}</strong>
-        <span>${totalDocs} document${totalDocs > 1 ? "s" : ""} réparti${totalDocs > 1 ? "s" : ""} sur ${exercices.length} exercice${exercices.length > 1 ? "s" : ""}</span>
+        <span class="dossier-summary-label">Vue dossier</span>
+        <strong>${escapeHtml(client.client_name || currentDossierClient || "Dossier")}</strong>
+        <span>${totalDocs} document${totalDocs > 1 ? "s" : ""} réparti${totalDocs > 1 ? "s" : ""} sur ${exercices.length} période${exercices.length > 1 ? "s" : ""}</span>
       </div>
       <div class="dossier-summary-metrics">
         <span><strong>${readyCount}</strong> prêt${readyCount > 1 ? "s" : ""}</span>
@@ -2830,7 +2831,7 @@ function renderDossierExerciceSection(ex) {
     <div class="dossier-exercice-section">
       <div class="dossier-exercice-section-header">
         <div class="dossier-exercice-title">
-          <h3>Exercice ${escapeHtml(ex.exercice || "Sans exercice")}</h3>
+          <h3>Période ${escapeHtml(ex.exercice || "Sans période")}</h3>
           <span>${docs.length} document${docs.length > 1 ? "s" : ""}${catsText ? " · " + catsText : ""}</span>
         </div>
         <div class="dossier-exercice-actions">${statusBadge}</div>
@@ -2876,7 +2877,7 @@ function openUploadForDossierClient() {
 }
 
 async function openEditMetadataModal(docId) {
-  const newExercice = window.prompt("Exercice (4 chiffres, ex: 2024) :");
+  const newExercice = window.prompt("Période ou référence (ex: 2026, Q2, Projet Alpha) :");
   if (newExercice === null) return;
   const body = {};
   if (newExercice.trim()) body.exercice = newExercice.trim();
@@ -2899,7 +2900,7 @@ function initExerciceSelect() {
   const sel = $("upload-exercice");
   if (!sel) return;
   const currentYear = new Date().getFullYear();
-  const opts = ['<option value="">— Année —</option>'];
+  const opts = ['<option value="">— Optionnel —</option>'];
   for (let y = currentYear; y >= 2020; y--) {
     opts.push(`<option value="${y}">${y}</option>`);
   }
@@ -2939,7 +2940,7 @@ function prefillUploadMetadata(suggestions) {
     clientBadge.onclick = () => {
       clientInput.value = suggestedName;
       clientBadge.style.display = "none";
-      toast("Client accepté", "success");
+      toast("Dossier accepté", "success");
     };
   }
 }
@@ -3306,7 +3307,7 @@ function entityLabelFr(type) {
   if (key.includes("city") || key.includes("ville") || key.includes("postal")) return "Ville / code postal";
   if (key.includes("company") || key.includes("societe") || key.includes("denomination")) return "Société";
   if (key.includes("person") || key.includes("personne") || key.includes("name") || key.includes("identity")) return "Personne / identité";
-  if (key.includes("accounting") || key.includes("account")) return "Donnée comptable";
+  if (key.includes("accounting") || key.includes("account")) return "Donnée financière";
   return "Autre donnée détectée";
 }
 
@@ -3342,7 +3343,7 @@ function renderAIReadySummary(details = {}) {
   }
 
   const name = details.name || currentDocName || "Document";
-  const client = details.client || getDocClientLabel(currentDocId) || "Client non renseigné";
+  const client = details.client || getDocClientLabel(currentDocId) || "Dossier non renseigné";
   const status = documentStatusLabel(details.status || currentDocStatus || "ready");
   const size = formatBytes(details.sizeBytes ?? currentDocSize);
   const fileKind = documentFileKind();
@@ -3363,7 +3364,7 @@ function renderAIReadySummary(details = {}) {
     </div>
     <dl class="ai-ready-meta">
       <div><dt>Fichier</dt><dd>${escapeHtml(name)}</dd></div>
-      <div><dt>Client</dt><dd>${escapeHtml(client)}</dd></div>
+      <div><dt>Dossier</dt><dd>${escapeHtml(client)}</dd></div>
       <div><dt>Statut</dt><dd>${escapeHtml(status)}</dd></div>
       <div><dt>Taille</dt><dd>${escapeHtml(size)}</dd></div>
       <div><dt>Original</dt><dd>${escapeHtml(fileKind)} · source disponible</dd></div>
@@ -3422,7 +3423,7 @@ function renderDocumentDetailShell(details = {}) {
 
   const doc = getCurrentDocRecord();
   const name = details.name || currentDocName || doc?.original_filename || "Document";
-  const client = details.client || getDocClientLabel(currentDocId) || "Client non renseigné";
+  const client = details.client || getDocClientLabel(currentDocId) || "Dossier non renseigné";
   const statusRaw = details.status || currentDocStatus || doc?.status || "uploaded";
   const status = documentStatusLabel(statusRaw);
   const size = formatBytes(details.sizeBytes ?? currentDocSize ?? doc?.size_bytes);
@@ -3482,7 +3483,7 @@ function renderDocumentDetailShell(details = {}) {
   if (metadata) {
     metadata.innerHTML = [
       documentDetailRow("Fichier", name),
-      documentDetailRow("Client", client),
+      documentDetailRow("Dossier", client),
       documentDetailRow("Format", fileKind),
       documentDetailRow("Taille", size || "—"),
       documentDetailRow("Statut", status),
@@ -3687,7 +3688,7 @@ function renderUploadQueue() {
         ${isFinished 
           ? `<p style="font-size:11px; color:var(--success); margin-top: 4px; display:flex; align-items:center; gap:4px;">
               <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
-              ${totalDone} document${totalDone > 1 ? "s" : ""} ajouté${totalDone > 1 ? "s" : ""} au dossier client.
+              ${totalDone} document${totalDone > 1 ? "s" : ""} ajouté${totalDone > 1 ? "s" : ""} au dossier.
              </p>` 
           : `<div class="progress-bar-track" style="margin-top: 6px; height: 4px; background: rgba(255,255,255,0.04);"><div class="progress-bar-fill" style="width: ${Math.round(completedBatchItems.length / totalItems * 100)}%; height: 100%; background: var(--accent); transition: width 0.3s;"></div></div>`
         }
@@ -3711,7 +3712,7 @@ function renderUploadQueue() {
 function enqueueUpload(files) {
   const clientName = getUploadClientName();
   if (!clientName) {
-    toast("Le nom client est obligatoire à l'upload.", "error");
+    toast("Indiquez une organisation ou un dossier avant l'ajout.", "error");
     const activeInput = document.body.classList.contains("mode-expert")
       ? $("upload-client-name")
       : $("std-upload-client-name");
@@ -3789,7 +3790,7 @@ async function uploadFile(file) {
     if (stdProgress) stdProgress.style.display = "none";
     if (stdFill) stdFill.style.width = "0";
 
-    toast("Le nom client est obligatoire à l'upload.", "error");
+    toast("Indiquez une organisation ou un dossier avant l'ajout.", "error");
     const clientInput = document.body.classList.contains("mode-expert")
       ? $("upload-client-name")
       : $("std-upload-client-name");
@@ -4650,7 +4651,7 @@ function loadChatHistory(docId) {
 function showOnboarding() {
   dismissOnboardingOverlay();
   const steps = [
-    { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque document à un client, un exercice et un type de document." },
+    { target: ".upload-zone", title: "Ajouter un document", text: "Associez chaque document à une organisation, un dossier ou une équipe." },
     { target: "#btn-anonymize", title: "Créer la version masquée", text: "Les données sensibles sont détectées puis remplacées par des repères neutres." },
     { target: ".quick-actions", title: "Poser des questions", text: "L'IA utilise uniquement la version masquée du document sélectionné." },
     { target: "#btn-export-txt", title: "Prouver", text: "Téléchargez le PDF masqué ou la preuve." },
@@ -5192,7 +5193,7 @@ async function runCopilotCompare() {
     return;
   }
   if (!otherId) {
-    toast("Choisissez un second document (de préférence le même client).", "error");
+    toast("Choisissez un second document du même dossier de préférence.", "error");
     return;
   }
   const customQ = ($("chat-input") && $("chat-input").value.trim()) || "";
@@ -5508,8 +5509,8 @@ function emptyDossier360() {
     },
     mission_control: {
       urgency: "neutral",
-      headline: "Aucun dossier client charge.",
-      summary: "Ajoutez les premieres pieces pour lancer la revue cabinet.",
+      headline: "Aucun dossier charge.",
+      summary: "Ajoutez les premiers documents pour lancer la revue securisee.",
       next_best_actions: [],
       audit_focus: [],
     },
@@ -5794,7 +5795,7 @@ function renderHomeBriefing(data = {}, summary = {}, dossier360 = {}) {
       list.innerHTML = `
         <li>
           <div></div>
-          <div><div class="name">Aucun document à vérifier.</div><div class="meta">Déposez un document client pour démarrer.</div></div>
+          <div><div class="name">Aucun document à vérifier.</div><div class="meta">Déposez un document sensible pour démarrer.</div></div>
           <div></div>
           <button class="btn-ghost" data-action="open-upload">Ajouter</button>
         </li>`;
@@ -5887,11 +5888,11 @@ function renderDossiersRedesign(dossiers) {
 
   const list = Array.isArray(dossiers) ? dossiers : [];
   if (summary) {
-    summary.textContent = `${list.length} client${list.length > 1 ? "s" : ""}`;
+    summary.textContent = `${list.length} dossier${list.length > 1 ? "s" : ""}`;
   }
 
   if (list.length === 0) {
-    tbody.innerHTML = `<tr><td colspan="5" class="page-lead" style="text-align:center;padding:18px;color:var(--ink-muted)">Aucun dossier client pour le moment.</td></tr>`;
+    tbody.innerHTML = `<tr><td colspan="5" class="page-lead" style="text-align:center;padding:18px;color:var(--ink-muted)">Aucun dossier pour le moment.</td></tr>`;
     return;
   }
 
@@ -6297,7 +6298,7 @@ function renderMissionControl(payload = emptyDossier360()) {
   };
   const actionItems = mission.next_best_actions?.length
     ? mission.next_best_actions
-    : ["Importer les pièces client et lancer le masquage."];
+    : ["Importer les documents sensibles et lancer le masquage."];
   const portfolio = payload.portfolio || {};
   const docCount = portfolio.documents_count ?? 0;
   const focusItems = mission.audit_focus?.length
@@ -6307,7 +6308,7 @@ function renderMissionControl(payload = emptyDossier360()) {
       : ["Complétude des pièces", "Qualité de lecture et de masquage"];
 
   headline.textContent = mission.headline || "Dossiers a qualifier";
-  summary.textContent = mission.summary || "Priorites cabinet en attente.";
+  summary.textContent = mission.summary || "Priorites dossier en attente.";
   urgency.textContent = urgencyLabels[urgencyKey];
   urgency.className = `dash-mission-urgency urgency-${urgencyKey}`;
   actions.innerHTML = actionItems
@@ -6330,7 +6331,7 @@ function renderDossier360(payload = emptyDossier360()) {
   const clients = portfolio.clients_count || 0;
 
   if ($("dash-d360-clients")) {
-    $("dash-d360-clients").textContent = `${clients} client${clients > 1 ? "s" : ""}`;
+    $("dash-d360-clients").textContent = `${clients} dossier${clients > 1 ? "s" : ""}`;
   }
   animateNumber($("dash-d360-score"), portfolio.average_score || 0);
   animateNumber($("dash-d360-ready"), portfolio.ready_dossiers || 0);
@@ -6338,7 +6339,7 @@ function renderDossier360(payload = emptyDossier360()) {
   animateNumber($("dash-d360-actions"), portfolio.critical_actions || 0);
 
   if (!dossiers.length) {
-    list.innerHTML = '<div class="empty-state" style="padding:16px">Aucun dossier client à analyser.</div>';
+    list.innerHTML = '<div class="empty-state" style="padding:16px">Aucun dossier à analyser.</div>';
     return;
   }
 
@@ -6353,7 +6354,7 @@ function renderDossier360(payload = emptyDossier360()) {
     return `<div class="dash-d360-card">
       <div class="dash-d360-top">
         <div>
-          <strong>${escapeHtml(dossier.client_name || "Sans client")}</strong>
+          <strong>${escapeHtml(dossier.client_name || "Sans dossier")}</strong>
           <span>${readyCount}/${docCount} prêts · ${escapeHtml(dossier.readiness || "")}</span>
         </div>
         <span class="dash-risk-chip risk-${escapeHtml(risk)}">${escapeHtml(riskLabel(risk))}</span>
@@ -6607,7 +6608,7 @@ async function startReview() {
             renderReviewSteps(null, completedSteps);
             reviewResult = allData;
             renderReviewResult(allData);
-            toast(allData.degraded ? "Analyse limitee disponible" : "Synthese cabinet terminee", allData.degraded ? "warning" : "success");
+            toast(allData.degraded ? "Analyse limitee disponible" : "Synthese terminee", allData.degraded ? "warning" : "success");
           } else if (status === "error") {
             renderReviewSteps(null, completedSteps);
             const msg = event.data?.message || event.data?.error || "Analyse indisponible.";
@@ -6757,7 +6758,7 @@ function handleDelegatedAction(e) {
     let q = "";
     if (action === "copilot-summarize") q = "Résumer le document";
     else if (action === "copilot-risks") q = "Lister les risques RGPD";
-    else if (action === "copilot-audit") q = "Audit comptable";
+    else if (action === "copilot-audit") q = "Identifier les points à vérifier";
     
     const drawerInput = document.querySelector(".copilot-drawer textarea");
     if (drawerInput) drawerInput.value = q;
@@ -6815,7 +6816,7 @@ const fallbackTagOriginalMap = {
   "[PERSONNE_2]": "Marie Martin",
   "[PERSONNE_3]": "Pierre Durand",
   "[SOCIETE_1]": "Acme Corp",
-  "[SOCIETE_2]": "Cabinet Audit Partners",
+  "[SOCIETE_2]": "Legal Partners",
   "[SOCIETE_3]": "Société Générale",
   "[ADRESSE_1]": "12 rue de la Paix, 75002 Paris",
   "[ADRESSE_2]": "45 avenue Foch, 75116 Paris",
@@ -6825,7 +6826,7 @@ const fallbackTagOriginalMap = {
   "[MONTANT_3]": "8 500 €",
   "[DATE_1]": "15 mai 2026",
   "[DATE_2]": "31 décembre 2025",
-  "[EMAIL_1]": "contact@cabinet-audit.fr",
+  "[EMAIL_1]": "contact@entreprise.fr",
   "[EMAIL_2]": "j.dupont@acme.com",
   "[TELEPHONE_1]": "01 42 68 53 00",
   "[SIRET_1]": "123 456 789 00012",

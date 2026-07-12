@@ -132,7 +132,7 @@
     </div>
     <button type="button" class="topbar__search" data-action="open-cmd-palette" aria-label="Recherche globale">
       <span aria-hidden="true">⌕</span>
-      <span class="topbar__search-label">Rechercher un document ou un client…</span>
+      <span class="topbar__search-label">Rechercher un document ou un dossier…</span>
       <span class="kbd" aria-hidden="true">⌘K</span>
     </button>
     <div class="header-actions">
@@ -173,12 +173,12 @@
       <div class="auth-showcase__copy">
         <span class="auth-showcase__badge">0 donnée brute envoyée à l'IA</span>
         <h2>Le coffre-fort avant chaque question IA.</h2>
-        <p>Le client voit immédiatement ce qui compte: le document brut reste protégé, l'IA reçoit uniquement une version masquée, et la preuve est prête.</p>
+        <p>L'utilisateur voit immédiatement ce qui compte: le document brut reste protégé, l'IA reçoit uniquement une version masquée, et la preuve est prête.</p>
       </div>
       <div class="auth-product-shot" aria-hidden="true">
         <div class="auth-doc auth-doc--raw">
           <span>Document brut</span>
-          <strong>Contrat SCI Les Pins</strong>
+          <strong>Contrat confidentiel</strong>
           <i></i><i></i><i></i>
         </div>
         <div class="auth-shield">
@@ -218,7 +218,7 @@
     <form id="form-login" autocomplete="off">
       <div class="field">
         <label for="email">Adresse email</label>
-        <input id="email" type="email" placeholder="vous@cabinet.com" required autocomplete="email" />
+        <input id="email" type="email" placeholder="vous@entreprise.com" required autocomplete="email" />
       </div>
       <div class="field">
         <label for="password">Mot de passe</label>
@@ -279,7 +279,7 @@
       <p class="auth-subtitle" style="margin-bottom:20px">Entrez votre email pour recevoir un lien de réinitialisation.</p>
       <div class="field">
         <label for="forgot-email">Email</label>
-        <input id="forgot-email" type="email" placeholder="vous@cabinet.com" autocomplete="email" />
+        <input id="forgot-email" type="email" placeholder="vous@entreprise.com" autocomplete="email" />
       </div>
       <button id="btn-forgot-submit" class="btn btn-primary btn-full">Envoyer le lien</button>
       <p id="forgot-msg" class="error-msg" style="display:none"></p>
@@ -344,7 +344,7 @@
                   <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
                 </svg>
               </span>
-              <span class="nav-item-label">Clients</span>
+              <span class="nav-item-label">Dossiers</span>
             </button>
           </li>
         </ul>
@@ -427,7 +427,7 @@
       </div>
 
       <div id="dossier-client-search-row" style="display:none;padding:8px 12px 0">
-        <input id="dossier-filter-client" class="input-sm" type="text" placeholder="Rechercher un client…" />
+        <input id="dossier-filter-client" class="input-sm" type="text" placeholder="Rechercher un dossier…" />
       </div>
 
       <div id="sidebar-batch-row" class="sidebar-batch-row">
@@ -435,7 +435,7 @@
       </div>
 
       <div id="sidebar-filters" class="sidebar-filters">
-        <input id="filter-client" list="clients-suggestions" class="input-sm" type="text" placeholder="Filtrer par client…" />
+        <input id="filter-client" list="clients-suggestions" class="input-sm" type="text" placeholder="Filtrer par organisation…" />
         <input id="filter-search" class="input-sm mt-8" type="text" placeholder="Rechercher un document…" />
         <select id="filter-status" class="input-sm mt-8">
           <option value="">Tous les statuts</option>
@@ -475,7 +475,7 @@
     <!-- ── MAIN ── -->
     <main id="main-content" class="main-panel glass" style="border:none; border-radius:0;">
       <div id="sensitive-mode-banner" class="sensitive-mode-banner" style="display:none">
-        <strong>Mode client sensible</strong>
+        <strong>Mode sensible</strong>
         <span>Mode sensible : aucune analyse externe.</span>
       </div>
 
@@ -496,13 +496,13 @@
           </header>
 
           <div class="filter-bar">
-            <input type="search" class="input" id="dossiers-search" placeholder="⌕ Filtrer par nom de client…">
+            <input type="search" class="input" id="dossiers-search" placeholder="⌕ Filtrer par organisation ou dossier…">
           </div>
 
           <table class="table" id="dossiers-table">
             <thead>
               <tr>
-                <th>Client</th>
+                <th>Organisation</th>
                 <th>Documents</th>
                 <th>Sécurité moyenne</th>
                 <th>Dernière activité</th>
@@ -513,15 +513,15 @@
           </table>
         </section>
 
-        <!-- Vue 1 : grille de tous les clients -->
+        <!-- Vue 1 : grille de tous les dossiers -->
         <div id="dossier-overview">
           <div class="dossier-overview-header">
             <div>
-              <h2>Dossiers clients</h2>
+              <h2>Dossiers</h2>
               <span class="dossier-overview-subtitle" id="dossier-overview-stats"></span>
             </div>
             <div style="display:flex;gap:8px">
-              <button class="btn btn-ghost btn-sm" data-action="create-client">+ Nouveau client</button>
+              <button class="btn btn-ghost btn-sm" data-action="create-client">+ Nouveau dossier</button>
               <button class="btn btn-primary btn-sm" data-action="new-document">+ Nouveau document</button>
             </div>
           </div>
@@ -530,10 +530,10 @@
           </div>
         </div>
 
-        <!-- Vue 2 : dossier d'un client -->
+        <!-- Vue 2 : détail d'un dossier -->
         <div id="dossier-detail">
           <div class="dossier-page-header">
-            <button class="btn btn-ghost btn-sm" data-action="dossier-overview" style="flex-shrink:0">← Clients</button>
+            <button class="btn btn-ghost btn-sm" data-action="dossier-overview" style="flex-shrink:0">← Dossiers</button>
             <div class="dossier-page-title">
               <h2 id="dossier-page-client-name"></h2>
               <span class="dossier-page-stats" id="dossier-page-stats"></span>
@@ -556,16 +556,16 @@
           <div id="dossier-page-comparison" class="dossier-page-comparison" style="display: none; padding: 20px; background: rgba(255, 255, 255, 0.01); border: 1px solid var(--border); border-radius: var(--radius-lg); backdrop-filter: blur(10px);">
             <div class="comparison-selectors-row" style="display: flex; align-items: flex-end; gap: 16px; margin-bottom: 24px; flex-wrap: wrap;">
               <div class="field" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
-                <label for="compare-doc-n" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Exercice Récent (N)</label>
+                <label for="compare-doc-n" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Période récente</label>
                 <select id="compare-doc-n" class="btn btn-secondary btn-sm" style="min-width: 200px; text-align: left; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;"></select>
               </div>
               <div class="field" style="margin: 0; display: flex; flex-direction: column; gap: 6px;">
-                <label for="compare-doc-n1" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Exercice Précédent (N-1)</label>
+                <label for="compare-doc-n1" style="font-size: 11px; text-transform: uppercase; letter-spacing: 0.05em; color: var(--text-muted); font-weight: 600;">Période précédente</label>
                 <select id="compare-doc-n1" class="btn btn-secondary btn-sm" style="min-width: 200px; text-align: left; background: var(--bg); border: 1px solid var(--border); color: var(--text); padding: 8px 12px; border-radius: var(--radius-sm); font-size: 13px; font-family: inherit;"></select>
               </div>
               <button id="btn-run-comparison" class="btn btn-primary" style="height: 38px; display: flex; align-items: center; gap: 8px;">
                 <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><line x1="18" y1="20" x2="18" y2="10"/><line x1="12" y1="20" x2="12" y2="4"/><line x1="6" y1="20" x2="6" y2="14"/></svg>
-                Comparer les exercices
+                Comparer les périodes
               </button>
             </div>
             
@@ -574,7 +574,7 @@
             </div>
             <div id="comparison-placeholder" class="empty-state" style="padding: 40px 20px; text-align: center; color: var(--text-muted); border: 1px dashed var(--border); border-radius: var(--radius-md); background: rgba(0,0,0,0.1);">
               <svg width="32" height="32" viewBox="0 0 24 24" fill="none" stroke="var(--text-muted)" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round" style="margin-bottom:12px; opacity:0.6;"><circle cx="12" cy="12" r="10"/><line x1="12" y1="16" x2="12" y2="12"/><line x1="12" y1="8" x2="12.01" y2="8"/></svg>
-              <div id="comparison-placeholder-text">Veuillez sélectionner deux exercices distincts (ex. Bilan 2024 vs Bilan 2023) et cliquer sur "Comparer".</div>
+              <div id="comparison-placeholder-text">Veuillez sélectionner deux périodes ou documents comparables et cliquer sur "Comparer".</div>
             </div>
           </div>
         </div>
@@ -595,7 +595,7 @@
 
           <section class="wow-workbench" aria-label="Promesse ConfiDoc">
             <div class="wow-copy">
-              <span class="wow-kicker">Console client</span>
+              <span class="wow-kicker">Console universelle</span>
               <h2>Votre document devient exploitable par l'IA sans exposer le brut.</h2>
               <p>Un seul écran pour comprendre: ce qui est sensible est caché, ce que l'IA reçoit est visible, et la preuve est prête.</p>
               <div class="wow-actions">
@@ -606,7 +606,7 @@
             <div class="wow-route" aria-hidden="true">
               <div class="wow-route-card wow-route-card--raw">
                 <span>Brut</span>
-                <strong>Contrat, bilan, dossier client</strong>
+                <strong>Contrat, RH, juridique, finance</strong>
                 <i></i><i></i><i></i>
               </div>
               <div class="wow-route-gate">
@@ -651,8 +651,8 @@
           <div class="card drag-zone-card animate-fade-in" style="background:linear-gradient(135deg, rgba(16,185,129,0.08) 0%, rgba(16,185,129,0.02) 100%); border: 1px solid rgba(16,185,129,0.18); border-radius:var(--radius-lg); padding:32px 24px; margin-bottom:28px; transition:all 0.2s;">
             
             <div style="max-width: 480px; margin: 0 auto; text-align: left; margin-bottom: 20px;">
-              <label for="std-upload-client-name" style="display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Nom du client</label>
-              <input id="std-upload-client-name" list="clients-suggestions" class="input-md" type="text" placeholder="ex: SCI Les Pins" style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; color:#fff; font-size:14px; font-family:'Hanken Grotesk',sans-serif;" />
+              <label for="std-upload-client-name" style="display:block; font-size:12px; font-weight:700; color:var(--text-muted); margin-bottom:8px; text-transform:uppercase; letter-spacing:0.05em;">Organisation ou dossier</label>
+              <input id="std-upload-client-name" list="clients-suggestions" class="input-md" type="text" placeholder="ex: RH, Legal, Acme Corp" style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:var(--radius-md); padding:10px 14px; color:#fff; font-size:14px; font-family:'Hanken Grotesk',sans-serif;" />
             </div>
 
             <div class="upload-zone" id="std-upload-zone" style="border: 2px dashed rgba(16,185,129,0.3); border-radius:var(--radius-md); padding:32px 20px; text-align:center; cursor:pointer; background:rgba(255,255,255,0.01); transition:all 0.2s;">
@@ -707,8 +707,8 @@
                 <span style="font-size:24px;">🏢</span>
                 <span style="font-size:11px; color:var(--text-muted); font-weight:600;">Accès rapide</span>
               </div>
-              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Mes dossiers clients</h4>
-              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les documents organisés par client et exercice.</p>
+              <h4 style="font-family:'Hanken Grotesk',sans-serif; font-size:15px; font-weight:700; color:#fff; margin-bottom:6px;">Mes dossiers</h4>
+              <p style="color:var(--text-muted); font-size:11px; line-height:1.4; margin:0;">Consulter l'historique et les documents organisés par organisation, équipe ou projet.</p>
             </div>
           </div>
           </details>
@@ -752,7 +752,7 @@
         </section>
 
         <div class="panel-header expert-only">
-          <h2>Accueil cabinet</h2>
+          <h2>Accueil</h2>
           <div class="panel-actions">
             <button id="btn-dash-upload" class="btn btn-primary btn-sm">
               <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
@@ -761,7 +761,7 @@
               </svg>
               Ajouter
             </button>
-            <button id="btn-dash-clients" class="btn btn-secondary btn-sm">Clients</button>
+            <button id="btn-dash-clients" class="btn btn-secondary btn-sm">Dossiers</button>
             <button id="btn-dash-list" class="btn btn-ghost btn-sm">Documents</button>
             <button id="btn-dash-demo" class="btn btn-primary btn-sm" type="button">Charger une démo</button>
             <button id="btn-dash-refresh" class="btn btn-ghost btn-sm">
@@ -785,15 +785,15 @@
               <div>
                 <span class="auto-badge" style="background: var(--accent); color: #fff; margin-bottom: 8px; font-weight: 700; display: inline-block;">🚀 NOUVEAU</span>
                 <h3 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 18px; font-weight: 700; color: var(--text); margin: 0;">Guide de Démarrage Rapide</h3>
-                <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Comprendre ConfiDoc et sécuriser vos premiers dossiers clients en 4 étapes simples.</p>
+                <p style="color: var(--text-muted); font-size: 13px; margin-top: 4px;">Comprendre ConfiDoc et sécuriser vos premiers dossiers sensibles en 4 étapes simples.</p>
               </div>
               <button id="btn-hide-onboarding" class="btn btn-ghost btn-sm" style="padding: 4px 8px; font-size: 12px; color: var(--text-muted); cursor: pointer;" title="Masquer définitivement">Masquer</button>
             </div>
             <div class="onboarding-grid" style="display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 16px;">
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
                 <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">1</div>
-                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📂 Groupe Client & Dossier</h4>
-                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Créez ou sélectionnez un client (ex: <em>SCI Les Pins</em>) pour y rattacher vos documents par année d'exercice.</p>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📂 Organisation & dossier</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Créez ou sélectionnez une organisation, une équipe ou un projet pour y rattacher vos documents.</p>
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
                 <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">2</div>
@@ -807,8 +807,8 @@
               </div>
               <div class="onboarding-step-card" style="background: var(--bg-sidebar); border: 1px solid var(--border); border-radius: 10px; padding: 16px; transition: transform 0.2s, border-color 0.2s; cursor: pointer;">
                 <div style="width: 32px; height: 32px; border-radius: 50%; background: rgba(99, 102, 241, 0.15); display: flex; align-items: center; justify-content: center; color: var(--accent); font-weight: 700; font-family: 'Hanken Grotesk', sans-serif; margin-bottom: 12px; font-size: 14px;">4</div>
-                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📈 Évolutions Pluriannuelles</h4>
-                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Consultez les dossiers clients pour comparer l'année N avec N-1 et repérer les variations comptables.</p>
+                <h4 style="font-family: 'Hanken Grotesk', sans-serif; font-size: 14px; font-weight: 600; color: var(--text); margin-bottom: 6px;">📈 Comparaisons</h4>
+                <p style="color: var(--text-muted); font-size: 11px; line-height: 1.4;">Consultez les dossiers pour comparer deux versions, deux périodes ou deux documents proches.</p>
               </div>
             </div>
           </div>
@@ -817,7 +817,7 @@
             <div class="workspace-copy">
               <span class="workspace-eyebrow">Parcours simple</span>
               <h3>Un document protégé, puis des questions à l'IA.</h3>
-              <p>Le client comprend le parcours sans réglage technique: importer, masquer, questionner, prouver.</p>
+              <p>L'utilisateur comprend le parcours sans réglage technique: importer, masquer, questionner, prouver.</p>
             </div>
             <div class="workspace-actions">
               <button id="btn-work-upload" class="workspace-action primary" type="button" data-action="new-document">
@@ -830,8 +830,8 @@
               <button id="btn-work-clients" class="workspace-action" type="button" data-action="open-clients">
                 <span class="workspace-action-index">2</span>
                 <span>
-                  <strong>Voir les clients</strong>
-                  <small>Documents par client</small>
+                  <strong>Voir les dossiers</strong>
+                  <small>Documents par organisation</small>
                 </span>
               </button>
               <button id="btn-work-review" class="workspace-action" type="button" data-action="resume-review">
@@ -921,7 +921,7 @@
               <div>
                 <span class="dash-mission-eyebrow">Priorités</span>
                 <h3 id="dash-mission-headline">Dossiers à qualifier</h3>
-                <p id="dash-mission-summary">Priorités expert-comptable, audit et conformité en attente.</p>
+                <p id="dash-mission-summary">Priorités, documents sensibles et conformité en attente.</p>
               </div>
               <span id="dash-mission-urgency" class="dash-mission-urgency urgency-neutral">À cadrer</span>
             </div>
@@ -940,11 +940,11 @@
           <div class="dash-dossier360" id="dash-dossier360">
             <div class="dash-section-head">
               <div>
-                <h3>Synthèse client</h3>
-                <p>Priorités client, documents manquants et préparation cabinet</p>
+                <h3>Synthèse dossier</h3>
+                <p>Priorités, documents manquants et préparation équipe</p>
               </div>
               <div class="dash-section-actions">
-                <span id="dash-d360-clients" class="dash-section-pill">0 client</span>
+                <span id="dash-d360-clients" class="dash-section-pill">0 dossier</span>
                 <button id="btn-d360-pdf" class="btn btn-ghost btn-sm" type="button">
                   <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
                     <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
@@ -1002,9 +1002,9 @@
         </div>
 
         <div class="filter-bar">
-          <input type="search" class="input" id="documents-search" placeholder="⌕ Rechercher un document ou un client…">
-          <button class="chip" data-filter="filter-dossier">Client · Tous ▾</button>
-          <button class="chip expert-only" data-filter="filter-type">Type · Tous ▾</button>
+          <input type="search" class="input" id="documents-search" placeholder="⌕ Rechercher un document ou un dossier…">
+          <button class="chip" data-filter="filter-dossier">Dossier · Tous ▾</button>
+          <button class="chip expert-only" data-filter="filter-type">Catégorie · Tous ▾</button>
           <button class="chip expert-only" data-filter="filter-trust">Sécurité ▾</button>
           <button class="chip expert-only" data-filter="filter-date">Date ▾</button>
         </div>
@@ -1015,7 +1015,7 @@
               <th data-col="check" aria-label=""></th>
               <th data-col="name">Document</th>
               <th data-col="status">Statut</th>
-              <th data-col="dossier">Client</th>
+              <th data-col="dossier">Dossier</th>
               <th data-col="trust">Sécurité</th>
               <th data-col="modified">Date</th>
               <th data-col="actions" aria-label=""></th>
@@ -1034,33 +1034,36 @@
         <h2>Ajouter un document confidentiel</h2>
         <div class="simple-panel-intro">
           <strong>Deux informations suffisent.</strong>
-          <span>Indiquez le client, choisissez le fichier. La sécurisation démarre automatiquement.</span>
+          <span>Indiquez l'organisation ou le dossier, choisissez le fichier. La sécurisation démarre automatiquement.</span>
         </div>
         <div class="field-inline">
-          <label for="upload-client-name">Nom du client</label>
+          <label for="upload-client-name">Organisation / dossier</label>
           <div style="flex:1;position:relative;display:flex;align-items:center">
-            <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: SCI Les Pins" style="flex:1" />
+            <input id="upload-client-name" list="clients-suggestions" class="input-sm" type="text" placeholder="ex: RH, Legal, Acme Corp" style="flex:1" />
             <span class="auto-badge" id="badge-client" style="display:none;position:absolute;right:8px;cursor:pointer" title="Cliquer pour accepter la suggestion IA">✨ Suggéré</span>
           </div>
         </div>
         <div class="upload-meta-row expert-only">
           <div class="upload-meta-field">
-            <label>Exercice</label>
+            <label>Période / référence</label>
             <select id="upload-exercice" class="input-sm">
-              <option value="">— Année —</option>
+              <option value="">— Optionnel —</option>
             </select>
             <span class="auto-badge" id="badge-exercice" style="display:none">✨ Auto</span>
           </div>
           <div class="upload-meta-field">
-            <label>Type doc</label>
+            <label>Catégorie</label>
             <select id="upload-doc-category" class="input-sm">
-              <option value="">— Type —</option>
-              <option value="bilan">Bilan</option>
-              <option value="liasse_fiscale">Liasse fiscale</option>
-              <option value="releve_bancaire">Relevé bancaire</option>
-              <option value="grand_livre">Grand livre</option>
+              <option value="">— Catégorie —</option>
               <option value="contrat">Contrat</option>
+              <option value="juridique">Juridique</option>
+              <option value="rh">RH / salarié</option>
+              <option value="finance">Finance</option>
+              <option value="releve_bancaire">Banque</option>
               <option value="facture">Facture</option>
+              <option value="due_diligence">Due diligence</option>
+              <option value="bilan">Comptes / bilan</option>
+              <option value="liasse_fiscale">Fiscal / déclaratif</option>
               <option value="autre">Autre</option>
             </select>
             <span class="auto-badge" id="badge-doc-category" style="display:none">✨ Auto</span>
@@ -1443,7 +1446,7 @@
           <div style="display:flex;gap:8px;margin-top:10px;flex-wrap:wrap">
             <button class="btn-ghost" data-action="copilot-summarize">Résumer le document</button>
             <button class="btn-ghost" data-action="copilot-risks">Risques à vérifier</button>
-            <button class="btn-ghost" data-action="copilot-audit">Audit comptable</button>
+            <button class="btn-ghost" data-action="copilot-audit">Points à vérifier</button>
           </div>
           <p class="rail-h" style="margin-top:18px">Réponses récentes</p>
           <div id="copilot-recent" style="font-size:12px;color:var(--ink-muted)">Aucune question posée pour l'instant.</div>
@@ -1542,23 +1545,24 @@
         </div>
 
         <details class="home-advanced expert-only">
-          <summary>Outils cabinet — type de document, comparaison N/N-1</summary>
+          <summary>Contexte métier — catégorie, comparaison</summary>
         <div class="cabinet-tools dash-chart-card">
           <div class="cabinet-tools-row">
-            <label class="cabinet-label" for="cabinet-doc-type">Type de document</label>
+            <label class="cabinet-label" for="cabinet-doc-type">Catégorie</label>
             <select id="cabinet-doc-type" class="select-sm cabinet-select">
               <option value="generique">Générique</option>
-              <option value="bilan">Bilan / comptes annuels</option>
-              <option value="liasse">Liasse fiscale</option>
-              <option value="urssaf">URSSAF / social</option>
-              <option value="banque">Relevé bancaire</option>
-              <option value="paie">Paie / bulletin</option>
+              <option value="contrat">Contrat</option>
+              <option value="juridique">Juridique</option>
+              <option value="rh">RH / salarié</option>
+              <option value="finance">Finance</option>
+              <option value="banque">Banque</option>
+              <option value="bilan">Comptes / bilan</option>
             </select>
-            <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm">Revue associé</button>
+            <button type="button" id="btn-revue-associe" class="btn btn-primary btn-sm">Revue guidée</button>
           </div>
-          <p class="cabinet-hint">Le type de document aide ConfiDoc à répondre avec le bon contexte métier.</p>
+          <p class="cabinet-hint">La catégorie aide ConfiDoc à répondre avec le bon contexte métier.</p>
           <div class="cabinet-tools-row cabinet-compare">
-            <label class="cabinet-label" for="compare-doc-select">Comparaison N / N-1</label>
+            <label class="cabinet-label" for="compare-doc-select">Comparaison</label>
             <select id="compare-doc-select" class="select-sm cabinet-select cabinet-select-wide">
               <option value="">Deuxième document…</option>
             </select>
@@ -2070,21 +2074,21 @@
 <div id="modal-client-overlay" class="confirm-overlay" style="display:none">
   <div class="confirm-card">
     <div class="confirm-header">
-      <h3 id="modal-client-title">Nouveau client</h3>
+      <h3 id="modal-client-title">Nouveau dossier</h3>
     </div>
     <div class="confirm-body">
       <div class="form-group" style="margin-bottom:12px">
-        <label for="new-client-name" style="display:block;margin-bottom:4px;font-size:12px">Nom du client</label>
-        <input type="text" id="new-client-name" class="input-sm" style="width:100%" placeholder="ex: Cabinet Durand" />
+        <label for="new-client-name" style="display:block;margin-bottom:4px;font-size:12px">Organisation ou dossier</label>
+        <input type="text" id="new-client-name" class="input-sm" style="width:100%" placeholder="ex: RH, Legal, Acme Corp" />
       </div>
       <div class="form-group">
         <label for="new-client-ext-id" style="display:block;margin-bottom:4px;font-size:12px">Identifiant externe (optionnel)</label>
-        <input type="text" id="new-client-ext-id" class="input-sm" style="width:100%" placeholder="ex: COMPTA-42" />
+        <input type="text" id="new-client-ext-id" class="input-sm" style="width:100%" placeholder="ex: LEGAL-42" />
       </div>
     </div>
     <div class="confirm-footer">
       <button class="btn btn-ghost btn-sm" data-action="close-client-modal">Annuler</button>
-      <button class="btn btn-primary btn-sm" data-action="submit-client-modal">Créer le client</button>
+      <button class="btn btn-primary btn-sm" data-action="submit-client-modal">Créer le dossier</button>
     </div>
   </div>
 </div>
